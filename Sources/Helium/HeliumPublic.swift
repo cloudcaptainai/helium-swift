@@ -27,6 +27,16 @@ public class Helium {
         self.baseTemplateViewType = baseTemplateView
     }
     
+    public func initializeAndFetchVariants(
+        apiKey: String,
+        heliumPaywallDelegate: HeliumPaywallDelegate,
+        baseTemplateView: any BaseTemplateView.Type,
+        useCache: Bool
+    ) async {
+        self.configure(apiKey: apiKey, heliumPaywallDelegate: heliumPaywallDelegate, baseTemplateView: baseTemplateView);
+        await self.downloadVariants(useCache: useCache);
+    }
+    
     public func downloadVariants(
         useCache: Bool
     ) async {
