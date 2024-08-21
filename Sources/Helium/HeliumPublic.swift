@@ -15,6 +15,10 @@ public class Helium {
     
     public static let shared = Helium()
     
+    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
+    }
+    
     public func configure(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
