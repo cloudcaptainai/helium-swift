@@ -19,32 +19,18 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
-    public func configure(
-        apiKey: String,
-        heliumPaywallDelegate: HeliumPaywallDelegate,
-        baseTemplateView: any BaseTemplateView.Type
-    ) {
-        self.controller = HeliumController(
-            apiKey: apiKey
-        )
-        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate)
-        self.baseTemplateViewType = baseTemplateView
-    }
-    
     public func initializeAndFetchVariants(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
         baseTemplateView: any BaseTemplateView.Type,
         useCache: Bool
     ) async {
-        self.configure(apiKey: apiKey, heliumPaywallDelegate: heliumPaywallDelegate, baseTemplateView: baseTemplateView);
-        await self.downloadVariants(useCache: useCache);
-    }
-    
-    public func downloadVariants(
-        useCache: Bool
-    ) async {
-        await self.controller!.downloadConfig(useCache: useCache)
+        self.controller = HeliumController(
+            apiKey: apiKey
+        )
+        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate)
+        self.baseTemplateViewType = baseTemplateView
+        await self.controller!.downloadConfig()
     }
     
     public func downloadStatus() -> HeliumFetchedConfigStatus {
@@ -59,7 +45,7 @@ public class Helium {
     }
 }
 
-@available(iOS 16.0, *)
+@available(iOS 15.0, *)
 struct DynamicPaywallModifier: ViewModifier {
     @Binding var isPresented: Bool
     let trigger: String
@@ -89,7 +75,7 @@ struct DynamicPaywallModifier: ViewModifier {
 }
 
 // Extension to make DynamicPaywallModifier easier to use
-@available(iOS 16.0, *)
+@available(iOS 15.0, *)
 public extension View {
     func triggerUpsell(isPresented: Binding<Bool>, trigger: String) -> some View {
         self.modifier(DynamicPaywallModifier(isPresented: isPresented, trigger: trigger))

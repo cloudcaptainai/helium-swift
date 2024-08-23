@@ -27,12 +27,8 @@ public class HeliumController {
         self.apiKey = apiKey
     }
     
-    public func downloadConfig(useCache: Bool) async {
+    public func downloadConfig() async {
         do {
-            // Check if config is already fetched
-            if (useCache && UserDefaults.standard.object(forKey: "heliumFetchedConfig") != nil) {
-                return
-            }
             
             var payload: [String: Any]
             do {
@@ -51,10 +47,6 @@ public class HeliumController {
             HeliumFetchedConfigManager.shared.fetchConfig(endpoint: fetchEndpoint, params: payload) { result in
                 switch result {
                 case .success(let fetchedConfig):
-                    if let data = try? JSONEncoder().encode(fetchedConfig) {
-                        UserDefaults.standard.setValue(data, forKey: "heliumFetchedConfig")
-                    }
-                    
                     let configuration = Configuration(writeKey: fetchedConfig.segmentBrowserWriteKey)
                         .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
                         .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)

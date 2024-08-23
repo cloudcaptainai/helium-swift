@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "helium-swift",
     platforms: [
-        .iOS(.v16), .macOS(.v11)
+        .iOS(.v15), .macOS(.v11)
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
@@ -23,7 +23,8 @@ let package = Package(
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
         .package(url: "https://github.com/getsentry/sentry-cocoa", from: "8.34.0"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.9.1")),
-        .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11"))
+        .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
+        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", from: "4.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -35,7 +36,8 @@ let package = Package(
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Segment", package: "analytics-swift"),
                 .product(name: "AnyCodable", package: "AnyCodable"),
-                .product(name: "Alamofire", package: "Alamofire")
+                .product(name: "Alamofire", package: "Alamofire"),
+                .product(name: "SwiftyJSON", package: "SwiftyJSON")
             ]
         ),
         .target(

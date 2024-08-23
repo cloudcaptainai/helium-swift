@@ -20,6 +20,7 @@ public enum HeliumPaywallTransactionStatus {
 }
 
 public protocol HeliumPaywallDelegate: AnyObject {
+    
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
 }
 
