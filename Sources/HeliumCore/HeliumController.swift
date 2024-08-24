@@ -16,7 +16,7 @@ public protocol BaseTemplateView: View {
 }
 
 public class HeliumController {
-    let fetchEndpoint = "https://modal.com/apps/cloudcaptainai/main/deployed/helium-prod"
+    let fetchEndpoint = "https://cloudcaptainai--helium-prod-fastapi-app.modal.run/serve_template"
     
     let userContext = CodableUserContext.create()
     let userId: UUID = createHeliumUserId()
