@@ -1,5 +1,5 @@
 {
-  "originHash" : "ed32d728474bf26c8716f931673b62cdb832e0b68cf0b3a0e9c3ac445af372d9",
+  "originHash" : "8cf7671bfec39ab9b97066763e4961eb6970b4730cf7e4f089fc42167ce34e9c",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -26,6 +26,24 @@
       "state" : {
         "revision" : "862808b2070cd908cb04f9aafe7de83d35f81b05",
         "version" : "0.6.7"
+      }
+    },
+    {
+      "identity" : "helium-locket-templates",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:cloudcaptainai/helium-locket-templates.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "d7abbcaead4447cfb1b1be62ad77a2bd042c9cfc"
+      }
+    },
+    {
+      "identity" : "helium-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cloudcaptainai/helium-swift",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ddfdc1cf1bdff837b612c8da06f1efc0dbd52d3e"
       }
     },
     {
@@ -80,6 +98,15 @@
       "state" : {
         "revision" : "a53a7e8f858902659d4784322bede34f4e49097e",
         "version" : "3.6.1"
+      }
+    },
+    {
+      "identity" : "swiftyjson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SwiftyJSON/SwiftyJSON.git",
+      "state" : {
+        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
+        "version" : "5.0.2"
       }
     },
     {

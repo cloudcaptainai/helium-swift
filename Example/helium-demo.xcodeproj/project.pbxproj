@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,6 +13,9 @@
 		C79817642C658B8B009AEEA9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79817632C658B8B009AEEA9 /* ContentView.swift */; };
 		C79817692C658B8C009AEEA9 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C79817682C658B8C009AEEA9 /* Preview Assets.xcassets */; };
 		C79817712C658BC4009AEEA9 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = C79817702C658BC4009AEEA9 /* Helium */; };
+		C79B8D962C7A98DF00770158 /* HeliumTemplatesLocket in Frameworks */ = {isa = PBXBuildFile; productRef = C79B8D952C7A98DF00770158 /* HeliumTemplatesLocket */; };
+		C79B8D992C7A98EF00770158 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = C79B8D982C7A98EF00770158 /* Helium */; };
+		C79B8D9B2C7A98EF00770158 /* HeliumCore in Frameworks */ = {isa = PBXBuildFile; productRef = C79B8D9A2C7A98EF00770158 /* HeliumCore */; };
 		C7B418CE2C759FEC00AE6A31 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = C7B418CD2C759FEC00AE6A31 /* Helium */; };
 		C7B418D02C759FEC00AE6A31 /* HeliumCore in Frameworks */ = {isa = PBXBuildFile; productRef = C7B418CF2C759FEC00AE6A31 /* HeliumCore */; };
 		C7B418D62C75A00600AE6A31 /* HeliumTemplatesLocket in Frameworks */ = {isa = PBXBuildFile; productRef = C7B418D52C75A00600AE6A31 /* HeliumTemplatesLocket */; };
@@ -35,8 +38,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C79B8D9B2C7A98EF00770158 /* HeliumCore in Frameworks */,
+				C79B8D992C7A98EF00770158 /* Helium in Frameworks */,
 				C7B418D02C759FEC00AE6A31 /* HeliumCore in Frameworks */,
 				C7B418CE2C759FEC00AE6A31 /* Helium in Frameworks */,
+				C79B8D962C7A98DF00770158 /* HeliumTemplatesLocket in Frameworks */,
 				C7B418D62C75A00600AE6A31 /* HeliumTemplatesLocket in Frameworks */,
 				C79817712C658BC4009AEEA9 /* Helium in Frameworks */,
 			);
@@ -104,6 +110,9 @@
 				C7B418CD2C759FEC00AE6A31 /* Helium */,
 				C7B418CF2C759FEC00AE6A31 /* HeliumCore */,
 				C7B418D52C75A00600AE6A31 /* HeliumTemplatesLocket */,
+				C79B8D952C7A98DF00770158 /* HeliumTemplatesLocket */,
+				C79B8D982C7A98EF00770158 /* Helium */,
+				C79B8D9A2C7A98EF00770158 /* HeliumCore */,
 			);
 			productName = "helium-demo";
 			productReference = C798175E2C658B8B009AEEA9 /* helium-demo.app */;
@@ -134,8 +143,8 @@
 			);
 			mainGroup = C79817552C658B8B009AEEA9;
 			packageReferences = (
-				C7B418CC2C759FEC00AE6A31 /* XCLocalSwiftPackageReference "../helium-swift" */,
-				C7B418D42C75A00600AE6A31 /* XCLocalSwiftPackageReference "../helium-locket-templates" */,
+				C79B8D942C7A98DF00770158 /* XCRemoteSwiftPackageReference "helium-locket-templates" */,
+				C79B8D972C7A98EF00770158 /* XCRemoteSwiftPackageReference "helium-swift" */,
 			);
 			productRefGroup = C798175F2C658B8B009AEEA9 /* Products */;
 			projectDirPath = "";
@@ -381,21 +390,44 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		C7B418CC2C759FEC00AE6A31 /* XCLocalSwiftPackageReference "../helium-swift" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../helium-swift";
+/* Begin XCRemoteSwiftPackageReference section */
+		C79B8D942C7A98DF00770158 /* XCRemoteSwiftPackageReference "helium-locket-templates" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "git@github.com:cloudcaptainai/helium-locket-templates.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-		C7B418D42C75A00600AE6A31 /* XCLocalSwiftPackageReference "../helium-locket-templates" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../helium-locket-templates";
+		C79B8D972C7A98EF00770158 /* XCRemoteSwiftPackageReference "helium-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cloudcaptainai/helium-swift";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		C79817702C658BC4009AEEA9 /* Helium */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Helium;
+		};
+		C79B8D952C7A98DF00770158 /* HeliumTemplatesLocket */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C79B8D942C7A98DF00770158 /* XCRemoteSwiftPackageReference "helium-locket-templates" */;
+			productName = HeliumTemplatesLocket;
+		};
+		C79B8D982C7A98EF00770158 /* Helium */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C79B8D972C7A98EF00770158 /* XCRemoteSwiftPackageReference "helium-swift" */;
+			productName = Helium;
+		};
+		C79B8D9A2C7A98EF00770158 /* HeliumCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C79B8D972C7A98EF00770158 /* XCRemoteSwiftPackageReference "helium-swift" */;
+			productName = HeliumCore;
 		};
 		C7B418CD2C759FEC00AE6A31 /* Helium */ = {
 			isa = XCSwiftPackageProductDependency;
