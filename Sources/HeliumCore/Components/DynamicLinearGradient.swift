@@ -38,12 +38,24 @@ public struct DynamicLinearGradient: View {
         )
         
         self.ignoresSafeArea = json["ignoresSafeArea"].boolValue
-        self.ignoredSafeAreaEdges = .all;
-//        if let edges = json["ignoredSafeAreaEdges"].arrayObject as? [String] {
-//            self.ignoredSafeAreaEdges = Edge.Set(edges.compactMap { Edge(rawValue: $0) })
-//        } else {
-//            self.ignoredSafeAreaEdges = .all
-//        }
+        if let edges = json["ignoredSafeAreaEdges"].arrayObject as? [String] {
+            self.ignoredSafeAreaEdges = Edge.Set(edges.compactMap { stringValue in
+                switch stringValue.lowercased() {
+                case "leading":
+                    return .leading
+                case "trailing":
+                    return .trailing
+                case "top":
+                    return .top
+                case "bottom":
+                    return .bottom
+                default:
+                    return nil
+                }
+            })
+        } else {
+            self.ignoredSafeAreaEdges = .all
+        }
     }
     
     public var body: some View {

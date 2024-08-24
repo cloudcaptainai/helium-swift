@@ -62,8 +62,6 @@ struct DynamicViewModifier: ViewModifier {
     }
     
     init(json: JSON) {
-        print("~~~HERE");
-        print(json);
         if let frameWidth = json["frame"]["width"].double,
            let frameHeight = json["frame"]["height"].double {
             self.frame = CGSize(width: frameWidth, height: frameHeight)
@@ -114,7 +112,7 @@ struct DynamicViewModifier: ViewModifier {
             self.overlay = OverlayConfig(
                 cornerRadius: CGFloat(overlayJSON["cornerRadius"] as? Double ?? 0),
                 inset: CGFloat(overlayJSON["inset"] as? Double ?? 0),
-                strokeColor: Color(hex: overlayJSON["strokeColor"] as? String ?? "#000000") ?? .black,
+                strokeColor: Color(hex: overlayJSON["strokeColor"] as? String ?? "#000000"),
                 strokeWidth: CGFloat(overlayJSON["strokeWidth"] as? Double ?? 1)
             )
         } else {

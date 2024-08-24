@@ -24,7 +24,7 @@ let package = Package(
         .package(url: "https://github.com/getsentry/sentry-cocoa", from: "8.34.0"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.9.1")),
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
-        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", from: "4.0.0")
+        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2"))
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
