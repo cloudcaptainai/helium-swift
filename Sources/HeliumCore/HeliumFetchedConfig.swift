@@ -36,7 +36,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     .cacheResponse(using: .cache)
                     .validate()
                     .serializingDecodable(HeliumFetchedConfig.self).response
-                print(response)
                 
                 // Check for errors
                 if let error = response.error {

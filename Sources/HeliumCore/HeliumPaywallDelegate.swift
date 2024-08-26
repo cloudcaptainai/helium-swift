@@ -22,10 +22,15 @@ public enum HeliumPaywallTransactionStatus {
 public protocol HeliumPaywallDelegate: AnyObject {
     
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
+    
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent)
 }
 
-extension HeliumPaywallDelegate {
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {}
+// Extension to provide default implementation
+public extension HeliumPaywallDelegate {
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Default implementation does nothing
+    }
 }
 
 public class HeliumPaywallDelegateWrapper: ObservableObject {
@@ -69,7 +74,6 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         delegate?.onHeliumPaywallEvent(event: event);
-        print(event);
         let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
         let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()))
         analytics?.track(name: event.caseString(), properties: eventForLogging)

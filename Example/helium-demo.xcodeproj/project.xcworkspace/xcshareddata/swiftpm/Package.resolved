@@ -1,5 +1,5 @@
 {
-  "originHash" : "8cf7671bfec39ab9b97066763e4961eb6970b4730cf7e4f089fc42167ce34e9c",
+  "originHash" : "a392fbba705647573ae1db429a1bc00f1ab255262c30c39f0773817baeed207d",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -29,21 +29,12 @@
       }
     },
     {
-      "identity" : "helium-locket-templates",
-      "kind" : "remoteSourceControl",
-      "location" : "git@github.com:cloudcaptainai/helium-locket-templates.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "d7abbcaead4447cfb1b1be62ad77a2bd042c9cfc"
-      }
-    },
-    {
       "identity" : "helium-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/cloudcaptainai/helium-swift",
       "state" : {
         "branch" : "main",
-        "revision" : "ddfdc1cf1bdff837b612c8da06f1efc0dbd52d3e"
+        "revision" : "6009c9a7e1c18529c4440fb43641600e6fa84c90"
       }
     },
     {

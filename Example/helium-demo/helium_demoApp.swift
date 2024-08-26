@@ -26,6 +26,15 @@ class DemoHeliumPaywallDelegate: HeliumPaywallDelegate {
         }
     }
     
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        switch (event) {
+            case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
+                print("hi");
+            default:
+                print("something else");
+        }
+    }
+    
     func makePurchase(productId: String) async -> HeliumCore.HeliumPaywallTransactionStatus {
         do {
             let result = try await self.subscriptions[1].purchase();
