@@ -13,7 +13,6 @@ import StoreKit
 public enum HeliumPaywallTransactionStatus {
     case purchased
     case cancelled
-    case abandoned
     case failed(Error)
     case restored
     case pending
@@ -53,8 +52,6 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, completion: @escaping (HeliumPaywallTransactionStatus?) -> Void) async {
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
-            case .abandoned:
-                self.onHeliumPaywallEvent(event: .subscriptionAbandoned(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
             case .cancelled:
                 self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
             case .failed(let error):

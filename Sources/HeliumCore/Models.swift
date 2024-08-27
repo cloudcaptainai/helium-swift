@@ -41,7 +41,6 @@ public enum HeliumPaywallEvent: Codable {
     case ctaPressed(ctaName: String, triggerName: String, paywallTemplateName: String)
     case offerSelected(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionPressed(productKey: String, triggerName: String, paywallTemplateName: String)
-    case subscriptionAbandoned(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionCancelled(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionSucceeded(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionFailed(productKey: String, triggerName: String, paywallTemplateName: String)
@@ -69,7 +68,6 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
         case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
-             .subscriptionAbandoned(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName),
@@ -115,11 +113,6 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
             self = .subscriptionPressed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName)
-        case "subscriptionAbandoned":
-            let productKey = try container.decode(String.self, forKey: .productKey)
-            let triggerName = try container.decode(String.self, forKey: .triggerName)
-            let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
-            self = .subscriptionAbandoned(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName)
         case "subscriptionCancelled":
             let productKey = try container.decode(String.self, forKey: .productKey)
             let triggerName = try container.decode(String.self, forKey: .triggerName)
@@ -180,8 +173,6 @@ public enum HeliumPaywallEvent: Codable {
             return "offerSelected"
         case .subscriptionPressed:
             return "subscriptionPressed"
-        case .subscriptionAbandoned:
-            return "subscriptionAbandoned"
         case .subscriptionCancelled:
             return "subscriptionCancelled"
         case .subscriptionSucceeded:
