@@ -61,6 +61,49 @@ struct CodableUserContext: Codable {
     var applicationInfo: CodableApplicationInfo
     var additionalParams: [String: String]
     
+    public func asParams() -> [String: Any] {
+        return [
+            "locale": [
+                "currentCountry": self.locale.currentCountry as Any,
+                "currentCurrency": self.locale.currentCurrency as Any,
+                "currentCurrencySymbol": self.locale.currentCurrencySymbol as Any,
+                "currentLanguage": self.locale.currentLanguage as Any,
+                "currentTimeZone": self.locale.currentTimeZone?.identifier as Any,
+                "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
+                "decimalSeparator": self.locale.decimalSeparator as Any,
+                "usesMetricSystem": self.locale.usesMetricSystem
+            ],
+            "screenInfo": [
+                "brightness": self.screenInfo.brightness,
+                "nativeBounds": [
+                    "x": self.screenInfo.nativeBounds.origin.x,
+                    "y": self.screenInfo.nativeBounds.origin.y,
+                    "width": self.screenInfo.nativeBounds.size.width,
+                    "height": self.screenInfo.nativeBounds.size.height
+                ],
+                "nativeScale": self.screenInfo.nativeScale,
+                "bounds": [
+                    "x": self.screenInfo.bounds.origin.x,
+                    "y": self.screenInfo.bounds.origin.y,
+                    "width": self.screenInfo.bounds.size.width,
+                    "height": self.screenInfo.bounds.size.height
+                ],
+                "scale": self.screenInfo.scale
+            ],
+            "deviceInfo": [
+                "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier as Any,
+                "orientation": self.deviceInfo.orientation,
+                "systemName": self.deviceInfo.systemName,
+                "systemVersion": self.deviceInfo.systemVersion
+            ],
+            "applicationInfo": [
+                "version": self.applicationInfo.version as Any,
+                "build": self.applicationInfo.build as Any,
+                "completeAppVersion": self.applicationInfo.completeAppVersion as Any
+            ],
+            "additionalParams": self.additionalParams
+        ]
+    }
 
     static func create() -> CodableUserContext {
         let locale = CodableLocale(

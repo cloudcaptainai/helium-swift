@@ -35,12 +35,12 @@ public func fetchEndpoint(
     }
 
     let (data, response) = try await URLSession.shared.data(for: request)
-
+    
     guard let httpResponse = response as? HTTPURLResponse,
           (200...299).contains(httpResponse.statusCode) else {
         throw URLError(.badServerResponse)
     }
-
+   
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
     return decodedResponse
 }
@@ -92,7 +92,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     public func getConfigId() -> UUID? {
-        return fetchedConfig?.fetchedConfigId
+        return fetchedConfig?.fetchedConfigID
     }
     
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {

@@ -13,7 +13,7 @@ import Segment
 
 public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumPaywallInfo {
     return HeliumPaywallInfo(
-        paywallId: 1,
+        paywallID: 1,
         paywallTemplateName: paywallTemplateName,
         productsOffered: [],
         resolvedConfig: [:],
@@ -23,8 +23,8 @@ public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumP
 }
 
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallId: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentId: String? = nil) {
-        self.paywallId = paywallId
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentId: String? = nil) {
+        self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
         self.resolvedConfig = resolvedConfig;
@@ -33,7 +33,7 @@ public struct HeliumPaywallInfo: Codable {
         self.experimentId = experimentId;
     }
     
-    var paywallId: Int
+    var paywallID: Int
     public var paywallTemplateName: String
     var productsOffered: [String]
     public var resolvedConfig: AnyCodable
@@ -49,7 +49,7 @@ public struct HeliumFetchedConfig: Codable {
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
     var orgName: String
-    var fetchedConfigId: UUID
+    var fetchedConfigID: UUID
 }
 
 public enum HeliumPaywallEvent: Codable {

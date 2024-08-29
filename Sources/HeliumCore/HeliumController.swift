@@ -15,7 +15,7 @@ public protocol BaseTemplateView: View {
 }
 
 public class HeliumController {
-    let fetchEndpoint = "https://cloudcaptainai--helium-prod-fastapi-app.modal.run/serve_template"
+    let fetchEndpoint = "https://api.tryhelium.com/on-launch"
     
     let userContext = CodableUserContext.create()
     let userId: UUID = createHeliumUserId()
@@ -28,18 +28,11 @@ public class HeliumController {
     
     public func downloadConfig() async {
         var payload: [String: Any]
-        do {
-            payload = [
-                "apiKey": self.apiKey,
-                "userId": self.userId.uuidString,
-                "userContext": try self.userContext.toJSON()
-            ]
-        } catch {
-            payload = [
-                "apiKey": self.apiKey,
-                "userId": self.userId.uuidString,
-            ]
-        }
+        payload = [
+            "apiKey": self.apiKey,
+            "userId": self.userId.uuidString,
+            "userContext": self.userContext.asParams()
+        ]
         
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: fetchEndpoint, params: payload) { result in
             switch result {
@@ -55,7 +48,7 @@ public class HeliumController {
                 analytics.identify(userId: self.userId.uuidString, traits: self.userContext)
                 HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics)
                 
-                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(configId: fetchedConfig.fetchedConfigId)
+                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(configId: fetchedConfig.fetchedConfigID)
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
                 // Use the config as needed
