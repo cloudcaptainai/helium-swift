@@ -5,30 +5,31 @@ import Foundation
 public struct FontConfig {
     let fontType: String
     let fontName: String?
+    let designString: String?
     
     init(json: JSON) {
         fontType = json["fontType"].stringValue
         fontName = json["fontName"].string
+        designString = json["design"].string
     }
 }
 
 public struct TextComponent {
     let text: String
-    let color: String
+    let colorConfig: ColorConfig
     let size: Int
     let weight: String
     let fontConfig: FontConfig
-    
+
     public init?(json: JSON) {
         guard let text = json["text"].string,
-              let color = json["color"].string,
               let size = json["size"].int,
               let weight = json["weight"].string else {
             return nil
         }
-        
+
         self.text = text
-        self.color = color
+        self.colorConfig = ColorConfig(json: json["colorConfig"])
         self.size = size
         self.weight = weight
         self.fontConfig = FontConfig(json: json["fontConfig"])
@@ -38,52 +39,64 @@ public struct TextComponent {
 public struct DynamicTextComponent: View {
     let components: [TextComponent]
     let multilineTextAlignment: TextAlignment
-    let frameWidth: CGFloat?
-    let frameHeight: CGFloat?
-    let frameAlignment: Alignment?
-    
+    let lineSpacing: CGFloat?
+
     public init(json: JSON) {
         self.components = json["components"].arrayValue.compactMap { TextComponent(json: $0) }
-        self.multilineTextAlignment = .center
-        self.frameWidth = nil
-        self.frameHeight = nil
-        self.frameAlignment = nil
+        self.multilineTextAlignment = Self.textAlignment(from: json["multilineTextAlignment"].stringValue)
+        self.lineSpacing = json["lineSpacing"].int.map { CGFloat($0) }
     }
-    
+
     public var body: some View {
-        components.reduce(Text("")) { result, component in
-            result + Text(component.text)
-                .foregroundColor(Color(hex: component.color))
-                .font(font(for: component))
+        let text = if components.count == 1 {
+            Text(verbatim: components[0].text)
+                .foregroundColor(Color(hex: components[0].colorConfig.colorHex, opacity: components[0].colorConfig.opacity))
+                .font(font(for: components[0]))
+        } else {
+            components.reduce(Text("")) { result, component in
+                result + Text(component.text)
+                    .foregroundColor(Color(hex: component.colorConfig.colorHex, opacity: component.colorConfig.opacity))
+                    .font(font(for: component))
+            }
         }
-        .multilineTextAlignment(multilineTextAlignment)
-        .modifier(OptionalFrameModifier(width: frameWidth, height: frameHeight, alignment: frameAlignment))
+        
+        return text
+            .multilineTextAlignment(multilineTextAlignment)
+            .lineSpacing(lineSpacing ?? 0)
+            .fixedSize(horizontal: false, vertical: true)  // This line was added
     }
-    
+
     private func font(for component: TextComponent) -> Font {
         let size = CGFloat(component.size)
         let weight = fontWeight(from: component.weight)
-        
+
+        var font: Font
+
         switch component.fontConfig.fontType.lowercased() {
         case "system":
-            return .system(size: size, weight: weight)
-        case "bold":
-            return .system(size: size, weight: .bold)
-        case "italic":
-            return .system(size: size, weight: weight).italic()
+            font = .system(size: size, weight: weight, design: fontDesign(from: component.fontConfig.designString))
         case "custom":
             if let customFontName = component.fontConfig.fontName {
-                return .custom(customFontName, size: size)
+                font = .custom(customFontName, size: size).weight(weight)
             } else {
-                return .system(size: size, weight: weight)
+                font = .system(size: size, weight: weight)
             }
         default:
-            return .system(size: size, weight: weight)
+            font = .system(size: size, weight: weight)
         }
+
+        // Apply italic if needed
+        if component.fontConfig.fontType.lowercased() == "italic" {
+            font = font.italic()
+        }
+
+        return font
     }
-    
+
     private func fontWeight(from string: String) -> Font.Weight {
         switch string.lowercased() {
+        case "heavy":
+            return .heavy
         case "bold":
             return .bold
         case "semibold":
@@ -96,31 +109,31 @@ public struct DynamicTextComponent: View {
             return .regular
         }
     }
-}
 
-struct OptionalFrameModifier: ViewModifier {
-    let width: CGFloat?
-    let height: CGFloat?
-    let alignment: Alignment?
-    
-    func body(content: Content) -> some View {
-        if let width = width, let height = height, let alignment = alignment {
-            content.frame(width: width, height: height, alignment: alignment)
-        } else if let width = width, let height = height {
-            content.frame(width: width, height: height)
-        } else if let width = width, let alignment = alignment {
-            content.frame(width: width, alignment: alignment)
-        } else if let height = height, let alignment = alignment {
-            content.frame(height: height, alignment: alignment)
-        } else if let width = width {
-            content.frame(width: width)
-        } else if let height = height {
-            content.frame(height: height)
-        } else if let alignment = alignment {
-            content.frame(alignment: alignment)
-        } else {
-            content
+    private func fontDesign(from string: String?) -> Font.Design {
+        guard let string = string else { return .default }
+        switch string.lowercased() {
+        case "monospaced":
+            return .monospaced
+        case "rounded":
+            return .rounded
+        case "serif":
+            return .serif
+        default:
+            return .default
+        }
+    }
+
+    private static func textAlignment(from string: String) -> TextAlignment {
+        switch string.lowercased() {
+        case "leading":
+            return .leading
+        case "trailing":
+            return .trailing
+        case "center":
+            return .center
+        default:
+            return .center
         }
     }
 }
-

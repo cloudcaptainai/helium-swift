@@ -1,15 +1,6 @@
 {
-  "originHash" : "5c81c16a22861d76c17207f27707bf76d32d5db01fc73bc2ee167eb96d746754",
+  "originHash" : "d4beba933ee091afd95a1383a56ebea65143c09287d968d3a1ece5b37f34fa95",
   "pins" : [
-    {
-      "identity" : "alamofire",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Alamofire/Alamofire.git",
-      "state" : {
-        "revision" : "f455c2975872ccd2d9c81594c658af65716e9b9a",
-        "version" : "5.9.1"
-      }
-    },
     {
       "identity" : "analytics-swift",
       "kind" : "remoteSourceControl",
@@ -47,15 +38,6 @@
       }
     },
     {
-      "identity" : "sentry-cocoa",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/getsentry/sentry-cocoa",
-      "state" : {
-        "revision" : "d2ced2d961b34573ebd2ea0567a2f1408e90f0ae",
-        "version" : "8.34.0"
-      }
-    },
-    {
       "identity" : "sovran-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/segmentio/sovran-swift.git",
@@ -65,48 +47,12 @@
       }
     },
     {
-      "identity" : "supabase-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase/supabase-swift.git",
-      "state" : {
-        "revision" : "42a22357c290992d1b548dc153c23fc96bf12ff9",
-        "version" : "2.15.3"
-      }
-    },
-    {
-      "identity" : "swift-concurrency-extras",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
-      "state" : {
-        "revision" : "bb5059bde9022d69ac516803f4f227d8ac967f71",
-        "version" : "1.1.0"
-      }
-    },
-    {
-      "identity" : "swift-crypto",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-crypto.git",
-      "state" : {
-        "revision" : "8dafe0fdce623f65178689f2d6dea7304f7fbe75",
-        "version" : "3.6.0"
-      }
-    },
-    {
       "identity" : "swiftyjson",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyJSON/SwiftyJSON.git",
       "state" : {
         "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
         "version" : "5.0.2"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "357ca1e5dd31f613a1d43320870ebc219386a495",
-        "version" : "1.2.2"
       }
     }
   ],

@@ -6,12 +6,43 @@
 //
 
 import Foundation
-import Alamofire
+
 
 public enum HeliumFetchedConfigStatus: Codable {
     case notDownloadedYet
     case downloadSuccess
     case downloadFailure
+}
+
+public func fetchEndpoint(
+    endpoint: String,
+    params: [String: Any]
+) async throws -> HeliumFetchedConfig? {
+    let urlString = endpoint // Assuming 'endpoint' is a String containing the URL
+    guard let url = URL(string: urlString) else {
+        throw URLError(.badURL)
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    do {
+        let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
+        request.httpBody = jsonData
+    } catch {
+        throw error
+    }
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse,
+          (200...299).contains(httpResponse.statusCode) else {
+        throw URLError(.badServerResponse)
+    }
+
+    let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
+    return decodedResponse
 }
 
 public class HeliumFetchedConfigManager: ObservableObject {
@@ -32,20 +63,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
         Task {
             do {
                 // Make the request asynchronously
-                let response = await AF.request(endpoint, method: .post, parameters: params, encoding: JSONEncoding.default, interceptor: .retryPolicy)
-                    .cacheResponse(using: .cache)
-                    .validate()
-                    .serializingDecodable(HeliumFetchedConfig.self).response
+                let response = try await fetchEndpoint(endpoint: endpoint, params: params);
                 
-                // Check for errors
-                if let error = response.error {
-                    await self.updateDownloadState(.downloadFailure);
-                    completion(.failure(error))
-                    return
-                }
                 
                 // Ensure we have data
-                guard let newConfig = response.value else {
+                guard let newConfig = response else {
                     await self.updateDownloadState(.downloadFailure);
                     return
                 }

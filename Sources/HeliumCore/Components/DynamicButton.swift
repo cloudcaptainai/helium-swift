@@ -23,7 +23,7 @@ public struct DynamicButtonComponent: View {
         self.action = action
         self.width = CGFloat(json["width"].doubleValue)
         self.height = CGFloat(json["height"].doubleValue)
-        self.backgroundColor = Color(hex: json["backgroundColor"].stringValue) ?? .blue
+        self.backgroundColor = Color(hex: json["backgroundColor"].stringValue)
         self.cornerRadius = CGFloat(json["cornerRadius"].doubleValue)
     }
     

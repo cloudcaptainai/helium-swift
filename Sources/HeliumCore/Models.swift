@@ -204,6 +204,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var heliumEvent: HeliumPaywallEvent
     var fetchedConfigId: UUID?
     var timestamp: String
+    var isHeliumEvent: Bool = true
 }
 
 

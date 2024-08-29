@@ -1,10 +1,3 @@
-//
-//  File.swift
-//  
-//
-//  Created by Anish Doshi on 8/22/24.
-//
-
 import Foundation
 import SwiftUI
 import SwiftyJSON
@@ -13,16 +6,42 @@ public struct DynamicPositionedComponent: View {
     let type: String
     let componentProps: JSON
     let viewModifierProps: JSON
+    let overlayComponent: OverlayBackgroundWrapper?
+    let backgroundComponent: OverlayBackgroundWrapper?
+    let actionConfig: ActionConfig?
+    let geometryProxy: GeometryProxy?
     
-    public init(json: JSON) {
+    public init(json: JSON, geometryProxy: GeometryProxy? = nil) {
         self.type = json["type"].stringValue
         self.componentProps = json["componentProps"]
         self.viewModifierProps = json["viewModifierProps"]
+        
+        if let overlayJSON = json["overlayComponent"].dictionaryObject {
+            self.overlayComponent = OverlayBackgroundWrapper(json: JSON(overlayJSON))
+        } else {
+            self.overlayComponent = nil
+        }
+        
+        if let backgroundJSON = json["backgroundComponent"].dictionaryObject {
+            self.backgroundComponent = OverlayBackgroundWrapper(json: JSON(backgroundJSON))
+        } else {
+            self.backgroundComponent = nil
+        }
+        
+        if let actionJSON = json["actionConfig"].dictionaryObject {
+            self.actionConfig = ActionConfig(json: JSON(actionJSON))
+        } else {
+            self.actionConfig = nil
+        }
+        self.geometryProxy = geometryProxy;
     }
     
     public var body: some View {
         componentView
-            .modifier(DynamicViewModifier(json: viewModifierProps))
+            .background(backgroundComponent?.view)
+            .overlay(overlayComponent?.view)
+            .modifier(DynamicViewModifier(json: viewModifierProps, proxy: geometryProxy))
+            .modifier(ActionModifier(config: actionConfig))
     }
     
     @ViewBuilder
@@ -37,133 +56,58 @@ public struct DynamicPositionedComponent: View {
                 // Action placeholder. You might want to pass this through the JSON or handle it externally.
                 print("Button tapped")
             })
+        case "rectangle":
+            DynamicRectangle(json: componentProps)
+        case "roundedRectangle":
+            DynamicRoundedRectangle(json: componentProps)
         case "text":
             DynamicTextComponent(json: componentProps)
+        case "vStack", "hStack", "zStack":
+            DynamicStackComponent(json: JSON(["type": type, "children": componentProps]))
         default:
             Text("Unsupported component type: \(type)")
         }
     }
 }
 
-struct DynamicViewModifier: ViewModifier {
-    let frame: CGSize?
-    let padding: EdgeInsets?
-    let margin: EdgeInsets?
-    let alignment: Alignment?
-    let cornerRadius: CGFloat?
-    let backgroundColor: Color?
-    let overlay: OverlayConfig?
-    
-    struct OverlayConfig {
-        let cornerRadius: CGFloat
-        let inset: CGFloat
-        let strokeColor: Color
-        let strokeWidth: CGFloat
-    }
+class OverlayBackgroundWrapper {
+    let component: DynamicPositionedComponent
     
     init(json: JSON) {
-        if let frameWidth = json["frame"]["width"].double,
-           let frameHeight = json["frame"]["height"].double {
-            self.frame = CGSize(width: frameWidth, height: frameHeight)
+        self.component = DynamicPositionedComponent(json: json)
+    }
+    
+    var view: some View {
+        component
+    }
+}
+
+
+struct ActionModifier: ViewModifier {
+    let config: ActionConfig?
+    
+    func body(content: Content) -> some View {
+        if let config = config {
+            Button(action: {
+                performAction(config.actionEvent)
+            }) {
+                content
+            }
         } else {
-            self.frame = nil
-        }
-        
-        if json["padding"] != JSON.null {
-            self.padding = EdgeInsets(
-                top: CGFloat(json["padding"]["top"].doubleValue),
-                leading: CGFloat(json["padding"]["leading"].doubleValue),
-                bottom: CGFloat(json["padding"]["bottom"].doubleValue),
-                trailing: CGFloat(json["padding"]["trailing"].doubleValue)
-            )
-        } else {
-            self.padding = nil
-        }
-        
-        if json["margin"] != JSON.null {
-            self.margin = EdgeInsets(
-                top: CGFloat(json["margin"]["top"].doubleValue),
-                leading: CGFloat(json["margin"]["leading"].doubleValue),
-                bottom: CGFloat(json["margin"]["bottom"].doubleValue),
-                trailing: CGFloat(json["margin"]["trailing"].doubleValue)
-            )
-        } else {
-            self.margin = nil
-        }
-        
-        if json["alignment"] != JSON.null {
-            self.alignment = Alignment(
-                horizontal: HorizontalAlignment(json["alignment"]["horizontal"].string ?? "center"),
-                vertical: VerticalAlignment(json["alignment"]["vertical"].string ?? "center")
-            )
-        } else {
-            self.alignment = nil
-        }
-        
-        self.cornerRadius = CGFloat(json["cornerRadius"].doubleValue)
-        
-        if let backgroundHex = json["background"].string {
-            self.backgroundColor = Color(hex: backgroundHex)
-        } else {
-            self.backgroundColor = nil
-        }
-        
-        if let overlayJSON = json["overlay"].dictionaryObject {
-            self.overlay = OverlayConfig(
-                cornerRadius: CGFloat(overlayJSON["cornerRadius"] as? Double ?? 0),
-                inset: CGFloat(overlayJSON["inset"] as? Double ?? 0),
-                strokeColor: Color(hex: overlayJSON["strokeColor"] as? String ?? "#000000"),
-                strokeWidth: CGFloat(overlayJSON["strokeWidth"] as? Double ?? 1)
-            )
-        } else {
-            self.overlay = nil
+            content
         }
     }
     
-    func body(content: Content) -> some View {
-        content
-            .frame(width: frame?.width, height: frame?.height, alignment: alignment ?? .center)
-            .padding(padding ?? EdgeInsets())
-            .margin(margin ?? EdgeInsets())
-            .background(backgroundColor)
-            .cornerRadius(cornerRadius ?? 0)
-            .overlay(
-                Group {
-                    if let overlay = overlay {
-                        RoundedRectangle(cornerRadius: overlay.cornerRadius)
-                            .inset(by: overlay.inset)
-                            .stroke(overlay.strokeColor, lineWidth: overlay.strokeWidth)
-                    }
-                }
-            )
-    }
-}
-
-extension View {
-    func margin(_ edges: EdgeInsets) -> some View {
-        padding(.top, edges.top)
-            .padding(.leading, edges.leading)
-            .padding(.bottom, edges.bottom)
-            .padding(.trailing, edges.trailing)
-    }
-}
-
-extension HorizontalAlignment {
-    init(_ string: String?) {
-        switch string?.lowercased() {
-        case "leading": self = .leading
-        case "trailing": self = .trailing
-        default: self = .center
-        }
-    }
-}
-
-extension VerticalAlignment {
-    init(_ string: String?) {
-        switch string?.lowercased() {
-        case "top": self = .top
-        case "bottom": self = .bottom
-        default: self = .center
+    private func performAction(_ event: ActionConfig.ActionEvent) {
+        switch event {
+        case .dismiss:
+            print("Dismiss action")
+        case .selectProduct(let productKey):
+            print("Select product: \(productKey)")
+        case .subscribe(let productKey):
+            print("Subscribe to product: \(productKey)")
+        case .showScreen(let screenId):
+            print("Show screen: \(screenId)")
         }
     }
 }

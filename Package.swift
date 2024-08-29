@@ -18,11 +18,8 @@ let package = Package(
             targets: ["HeliumCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/supabase/supabase-swift.git", .upToNextMajor(from: "2.5.1")),
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "7.0.0")),
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
-        .package(url: "https://github.com/getsentry/sentry-cocoa", from: "8.34.0"),
-        .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.9.1")),
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2"))
     ],
@@ -32,11 +29,9 @@ let package = Package(
         .target(
             name: "HeliumCore",
             dependencies: [
-                .product(name: "Supabase", package: "supabase-swift"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Segment", package: "analytics-swift"),
                 .product(name: "AnyCodable", package: "AnyCodable"),
-                .product(name: "Alamofire", package: "Alamofire"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON")
             ]
         ),

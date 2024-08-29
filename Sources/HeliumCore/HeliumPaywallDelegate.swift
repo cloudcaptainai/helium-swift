@@ -39,14 +39,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
     
-    public func setDelegate(_ delegate: HeliumPaywallDelegate) -> HeliumPaywallDelegateWrapper {
+    public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
-        return self
     }
     
-    public func setAnalytics(_ analytics: Analytics) -> HeliumPaywallDelegateWrapper {
+    public func setAnalytics(_ analytics: Analytics) {
         self.analytics = analytics
-        return self
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, completion: @escaping (HeliumPaywallTransactionStatus?) -> Void) async {
@@ -54,7 +52,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         switch transactionStatus {
             case .cancelled:
                 self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            case .failed(let error):
+            case .failed(_):
                 self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
             case .restored:
                 self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
