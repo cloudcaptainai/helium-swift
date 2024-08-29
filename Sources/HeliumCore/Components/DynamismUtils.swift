@@ -15,7 +15,7 @@ public func createDynamicComponentIfExists(for key: String, in templateValues: J
 public func resolveReferences(_ json: JSON, templateValues: JSON) -> JSON {
     func resolve(_ element: JSON) -> JSON {
         if let ref = element["$ref"].string {
-            return resolve(templateValues[ref]) ?? element
+            return resolve(templateValues[ref])
         } else if element.type == .array {
             return JSON(element.arrayValue.map { resolve($0) })
         } else if element.type == .dictionary {
