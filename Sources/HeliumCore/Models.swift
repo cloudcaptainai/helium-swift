@@ -11,14 +11,26 @@ import SwiftUI
 import AnyCodable
 import Segment
 
+public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumPaywallInfo {
+    return HeliumPaywallInfo(
+        paywallId: 1,
+        paywallTemplateName: paywallTemplateName,
+        productsOffered: [],
+        resolvedConfig: [:],
+        shouldShow: true,
+        fallbackPaywallName: ""
+    )
+}
+
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallId: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String) {
+    public init(paywallId: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentId: String? = nil) {
         self.paywallId = paywallId
-        self.paywallTemplateName = paywallTemplateName
-        self.productsOffered = productsOffered
-        self.resolvedConfig = resolvedConfig
-        self.shouldShow = shouldShow
-        self.fallbackPaywallName = fallbackPaywallName
+        self.paywallTemplateName = paywallTemplateName;
+        self.productsOffered = productsOffered;
+        self.resolvedConfig = resolvedConfig;
+        self.shouldShow = shouldShow;
+        self.fallbackPaywallName = fallbackPaywallName;
+        self.experimentId = experimentId;
     }
     
     var paywallId: Int
@@ -27,6 +39,9 @@ public struct HeliumPaywallInfo: Codable {
     public var resolvedConfig: AnyCodable
     var shouldShow: Bool
     var fallbackPaywallName: String
+    var experimentId: String?
+    var secondChance: Bool?
+    var secondChancePaywall: AnyCodable?
 }
 
 public struct HeliumFetchedConfig: Codable {

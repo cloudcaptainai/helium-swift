@@ -19,6 +19,10 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
+    public func previewPaywallTemplate(paywallTemplateName: String, from viewController: UIViewController? = nil) {
+        HeliumPaywallPresenter.shared.presentUpsell(paywallTemplateName: paywallTemplateName, from: viewController);
+    }
+    
     public func initializeAndFetchVariants(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
@@ -45,7 +49,6 @@ public class Helium {
     }
 }
 
-@available(iOS 15.0, *)
 struct DynamicPaywallModifier: ViewModifier {
     @Binding var isPresented: Bool
     let trigger: String
@@ -75,7 +78,6 @@ struct DynamicPaywallModifier: ViewModifier {
 }
 
 // Extension to make DynamicPaywallModifier easier to use
-@available(iOS 15.0, *)
 public extension View {
     func triggerUpsell(isPresented: Binding<Bool>, trigger: String) -> some View {
         self.modifier(DynamicPaywallModifier(isPresented: isPresented, trigger: trigger))

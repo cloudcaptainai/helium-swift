@@ -71,6 +71,6 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         delegate?.onHeliumPaywallEvent(event: event);
         let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
         let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()))
-        analytics?.track(name: event.caseString(), properties: eventForLogging)
+        analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging)
     }
 }
