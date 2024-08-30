@@ -21,9 +21,9 @@ public class HeliumController {
     let userId: UUID = createHeliumUserId()
     
     var apiKey: String
-    var triggers: [String]?
+    var triggers: [HeliumTrigger]?
     
-    public init(apiKey: String, triggers: [String]? = nil) {
+    public init(apiKey: String, triggers: [HeliumTrigger]? = nil) {
         self.apiKey = apiKey
         self.triggers = triggers;
     }
@@ -34,7 +34,7 @@ public class HeliumController {
             "apiKey": self.apiKey,
             "userId": self.userId.uuidString,
             "userContext": self.userContext.asParams(),
-            "triggers": self.triggers as Any
+            "triggers": self.triggers?.compactMap({ trigger in trigger.name }) as Any
         ]
         
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: fetchEndpoint, params: payload) { result in
