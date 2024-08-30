@@ -21,9 +21,11 @@ public class HeliumController {
     let userId: UUID = createHeliumUserId()
     
     var apiKey: String
+    var triggers: [String]?
     
-    public init(apiKey: String) {
+    public init(apiKey: String, triggers: [String]? = nil) {
         self.apiKey = apiKey
+        self.triggers = triggers;
     }
     
     public func downloadConfig() async {
@@ -31,7 +33,8 @@ public class HeliumController {
         payload = [
             "apiKey": self.apiKey,
             "userId": self.userId.uuidString,
-            "userContext": self.userContext.asParams()
+            "userContext": self.userContext.asParams(),
+            "triggers": self.triggers as Any
         ]
         
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: fetchEndpoint, params: payload) { result in
