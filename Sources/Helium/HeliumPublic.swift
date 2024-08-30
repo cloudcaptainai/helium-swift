@@ -28,7 +28,7 @@ public class Helium {
         heliumPaywallDelegate: HeliumPaywallDelegate,
         baseTemplateView: any BaseTemplateView.Type,
         useCache: Bool,
-        triggers: [String]?
+        triggers: [String]? = nil
     ) async {
         self.controller = HeliumController(
             apiKey: apiKey,
