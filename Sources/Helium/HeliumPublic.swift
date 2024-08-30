@@ -27,10 +27,12 @@ public class Helium {
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
         baseTemplateView: any BaseTemplateView.Type,
-        useCache: Bool
+        useCache: Bool,
+        triggers: [String]?
     ) async {
         self.controller = HeliumController(
-            apiKey: apiKey
+            apiKey: apiKey,
+            triggers: triggers
         )
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate)
         self.baseTemplateViewType = baseTemplateView
