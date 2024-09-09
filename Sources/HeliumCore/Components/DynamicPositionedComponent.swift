@@ -2,28 +2,41 @@ import Foundation
 import SwiftUI
 import SwiftyJSON
 
+func parseAlignment(_ string: String) -> Alignment {
+    switch string.lowercased() {
+    case "topleft", "topleading": return .topLeading
+    case "top": return .top
+    case "topright", "toptrailing": return .topTrailing
+    case "left", "leading": return .leading
+    case "center": return .center
+    case "right", "trailing": return .trailing
+    case "bottomleft", "bottomleading": return .bottomLeading
+    case "bottom": return .bottom
+    case "bottomright", "bottomtrailing": return .bottomTrailing
+    default: return .center
+    }
+}
+
 public struct DynamicPositionedComponent: View {
-    let type: String
-    let componentProps: JSON
+    let componentType: ComponentType
     let viewModifierProps: JSON
-    let overlayComponent: OverlayBackgroundWrapper?
-    let backgroundComponent: OverlayBackgroundWrapper?
+    let overlayComponent: ComponentWrapper?
+    let backgroundComponent: ComponentWrapper?
     let actionConfig: ActionConfig?
     let geometryProxy: GeometryProxy?
-    
+
     public init(json: JSON, geometryProxy: GeometryProxy? = nil) {
-        self.type = json["type"].stringValue
-        self.componentProps = json["componentProps"]
+        self.componentType = ComponentType(json: json)
         self.viewModifierProps = json["viewModifierProps"]
         
         if let overlayJSON = json["overlayComponent"].dictionaryObject {
-            self.overlayComponent = OverlayBackgroundWrapper(json: JSON(overlayJSON))
+            self.overlayComponent = ComponentWrapper(json: JSON(overlayJSON))
         } else {
             self.overlayComponent = nil
         }
         
         if let backgroundJSON = json["backgroundComponent"].dictionaryObject {
-            self.backgroundComponent = OverlayBackgroundWrapper(json: JSON(backgroundJSON))
+            self.backgroundComponent = ComponentWrapper(json: JSON(backgroundJSON))
         } else {
             self.backgroundComponent = nil
         }
@@ -33,7 +46,8 @@ public struct DynamicPositionedComponent: View {
         } else {
             self.actionConfig = nil
         }
-        self.geometryProxy = geometryProxy;
+        
+        self.geometryProxy = geometryProxy
     }
     
     public var body: some View {
@@ -46,29 +60,137 @@ public struct DynamicPositionedComponent: View {
     
     @ViewBuilder
     private var componentView: some View {
-        switch type {
+        switch componentType {
+        case .linearGradient(let props):
+            DynamicLinearGradient(json: props)
+        case .image(let props):
+            DynamicImage(json: props)
+        case .rectangle(let props):
+            DynamicRectangle(json: props)
+        case .roundedRectangle(let props):
+            DynamicRoundedRectangle(json: props)
+        case .text(let props):
+            DynamicTextComponent(json: props)
+        case .stack(let type, let props, let children):
+            createStack(type: type, props: props, children: children)
+        case .animation(let props):
+            DynamicAnimation(json: props)
+        case .spacer(let props):
+            DynamicSpacer(json: props)
+        case .scrollView(let props, let children):
+            DynamicScrollView(json: props) {
+                ForEach(children.indices, id: \.self) { index in
+                    children[index].view
+                }
+            }
+        }
+        }
+    }
+    
+    @ViewBuilder
+   private func createStack(type: StackType, props: JSON, children: [ComponentWrapper]) -> some View {
+       let spacing = props["spacing"].double.map { CGFloat($0) }
+       let alignment = parseAlignment(props["alignment"].stringValue)
+       
+       switch type {
+       case .vStack:
+           VStack(alignment: alignment.horizontal, spacing: spacing) {
+               ForEach(children.indices, id: \.self) { index in
+                   children[index].view
+               }
+           }
+       case .hStack:
+           HStack(alignment: alignment.vertical, spacing: spacing) {
+               ForEach(children.indices, id: \.self) { index in
+                   children[index].view
+               }
+           }
+       case .zStack:
+           ZStack(alignment: alignment) {
+               ForEach(children.indices, id: \.self) { index in
+                   children[index].view
+               }
+           }
+       }
+}
+
+indirect enum ComponentType {
+    case linearGradient(JSON)
+    case image(JSON)
+    case rectangle(JSON)
+    case roundedRectangle(JSON)
+    case text(JSON)
+    case stack(StackType, JSON, [ComponentWrapper])
+    case animation(JSON)
+    case spacer(JSON)
+    case scrollView(JSON, [ComponentWrapper])
+        
+    
+    init(json: JSON) {
+        switch json["type"].stringValue {
         case "linearGradient":
-            DynamicLinearGradient(json: componentProps)
+            self = .linearGradient(json["componentProps"])
         case "image":
-            DynamicImage(json: componentProps)
-        case "button":
-            DynamicButtonComponent(json: componentProps, action: {
-                // Action placeholder. You might want to pass this through the JSON or handle it externally.
-                print("Button tapped")
-            })
+            self = .image(json["componentProps"])
         case "rectangle":
-            DynamicRectangle(json: componentProps)
+            self = .rectangle(json["componentProps"])
         case "roundedRectangle":
-            DynamicRoundedRectangle(json: componentProps)
+            self = .roundedRectangle(json["componentProps"])
         case "text":
-            DynamicTextComponent(json: componentProps)
-        case "vStack", "hStack", "zStack":
-            DynamicStackComponent(json: JSON(["type": type, "children": componentProps]))
+            self = .text(json["componentProps"])
+        case "animation":
+            self = .animation(json["componentProps"])
+        case "vStack":
+            self = .stack(.vStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+        case "hStack":
+            self = .stack(.hStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+        case "zStack":
+            self = .stack(.zStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+        case "spacer":
+            self = .spacer(json["componentProps"])
+        case "scrollView":
+            self = .scrollView(json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
         default:
-            Text("Unsupported component type: \(type)")
+            self = .text(JSON(["text": "Unsupported component type"]))
         }
     }
 }
+
+enum StackType {
+    case vStack, hStack, zStack
+}
+
+class ComponentWrapper {
+    let component: DynamicPositionedComponent
+    
+    init(json: JSON) {
+        self.component = DynamicPositionedComponent(json: json)
+    }
+    
+    var view: some View {
+        component
+    }
+}
+
+
+extension Alignment {
+    var horizontal: HorizontalAlignment {
+        switch self {
+        case .leading, .topLeading, .bottomLeading: return .leading
+        case .trailing, .topTrailing, .bottomTrailing: return .trailing
+        default: return .center
+        }
+    }
+    
+    var vertical: VerticalAlignment {
+        switch self {
+        case .top, .topLeading, .topTrailing: return .top
+        case .bottom, .bottomLeading, .bottomTrailing: return .bottom
+        default: return .center
+        }
+    }
+}
+
 
 class OverlayBackgroundWrapper {
     let component: DynamicPositionedComponent

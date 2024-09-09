@@ -13,6 +13,7 @@ public struct DynamicViewModifier: ViewModifier {
     let position: PositionConfig?
     let geometryPosition: GeometryPositionConfig?
     let geometryProxy: GeometryProxy?
+    let edgesIgnoringSafeArea: Edge.Set?
 
     struct OverlayConfig {
         let cornerRadius: CGFloat
@@ -130,6 +131,22 @@ public struct DynamicViewModifier: ViewModifier {
         } else {
             self.geometryPosition = nil
         }
+        
+        if let edgesJSON = json["edgesIgnoringSafeArea"].array {
+            var edgeSet: Edge.Set = []
+            for edgeJSON in edgesJSON {
+                switch edgeJSON.stringValue.lowercased() {
+                case "top": edgeSet.insert(.top)
+                case "bottom": edgeSet.insert(.bottom)
+                case "leading": edgeSet.insert(.leading)
+                case "trailing": edgeSet.insert(.trailing)
+                default: break
+                }
+            }
+            self.edgesIgnoringSafeArea = edgeSet.isEmpty ? nil : edgeSet
+        } else {
+            self.edgesIgnoringSafeArea = nil
+        }
     }
 
     public func body(content: Content) -> some View {
@@ -143,10 +160,20 @@ public struct DynamicViewModifier: ViewModifier {
             .modify(shadow: shadow)
             .modify(position: position)
             .modify(geometryPosition: geometryPosition, in: geometryProxy)
+            .modify(edgesIgnoringSafeArea: edgesIgnoringSafeArea)
     }
 }
 
 extension View {
+    @ViewBuilder
+    func modify(edgesIgnoringSafeArea: Edge.Set?) -> some View {
+        if let edges = edgesIgnoringSafeArea {
+            self.edgesIgnoringSafeArea(edges)
+        } else {
+            self
+        }
+    }
+
     func margin(_ edges: EdgeInsets) -> some View {
         padding(.top, edges.top)
             .padding(.leading, edges.leading)

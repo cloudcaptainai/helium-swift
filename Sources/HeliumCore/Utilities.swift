@@ -7,6 +7,7 @@
 
 import Foundation
 import AnyCodable
+import SwiftUI
 
 public extension Encodable {
     /// Converting object to postable JSON
@@ -44,4 +45,44 @@ func formatAsTimestamp(date: Date) -> String {
     formatter.locale = Locale.current // Use user's current locale
     formatter.timeZone = TimeZone.current // Use user's current timezone
     return formatter.string(from: date)
+}
+
+
+public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 0, additionalBottomPadding: CGFloat = 0) -> EdgeInsets {
+    let topPadding: CGFloat
+    let bottomPadding: CGFloat
+    let leftPadding: CGFloat
+    let rightPadding: CGFloat
+
+    if #unavailable(iOS 15) {
+        topPadding = UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        bottomPadding = UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 0
+        leftPadding = UIApplication.shared.windows.first?.safeAreaInsets.left ?? 0
+        rightPadding = UIApplication.shared.windows.first?.safeAreaInsets.right ?? 0
+    } else {
+        topPadding = UIApplication
+            .shared
+            .connectedScenes
+            .flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+            .first { $0.isKeyWindow }?.safeAreaInsets.top ?? 0
+        
+        bottomPadding = UIApplication
+            .shared
+            .connectedScenes
+            .flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+            .first { $0.isKeyWindow }?.safeAreaInsets.bottom ?? 0
+        
+        leftPadding = UIApplication
+            .shared
+            .connectedScenes
+            .flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+            .first { $0.isKeyWindow }?.safeAreaInsets.left ?? 0
+        
+        rightPadding = UIApplication
+            .shared
+            .connectedScenes
+            .flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+            .first { $0.isKeyWindow }?.safeAreaInsets.right ?? 0
+    }
+    return EdgeInsets(top: topPadding + additionalTopPadding, leading: leftPadding, bottom: bottomPadding + additionalBottomPadding, trailing: rightPadding);
 }
