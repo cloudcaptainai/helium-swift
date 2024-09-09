@@ -31,43 +31,44 @@ class HeliumViewController: UIViewController {
     }
     
     override func viewDidLoad() {
-        super.viewDidLoad();
+        super.viewDidLoad()
         
-        let configManager = HeliumFetchedConfigManager.shared;
+        let configManager = HeliumFetchedConfigManager.shared
         
-        if (configManager.downloadStatus == .notDownloadedYet) {
-            return;
+        if case .notDownloadedYet = configManager.downloadStatus {
+            return
         }
         
-        var paywallInfo: HeliumPaywallInfo? = nil;
-        var clientName: String? = nil;
-        var baseTemplateView: AnyView;
-        if (trigger != nil) {
-            if (configManager.downloadStatus == HeliumFetchedConfigStatus.downloadSuccess) {
-                paywallInfo = configManager.getPaywallInfoForTrigger(trigger!);
-                clientName = configManager.getClientName();
+        var paywallInfo: HeliumPaywallInfo? = nil
+        var clientName: String? = nil
+        var baseTemplateView: AnyView
+        
+        if let trigger = trigger {
+            if case .downloadSuccess = configManager.downloadStatus {
+                paywallInfo = configManager.getPaywallInfoForTrigger(trigger)
+                clientName = configManager.getClientName()
             }
             
             baseTemplateView = Helium.shared.getBaseTemplateView(
                 clientName: clientName,
                 paywallInfo: paywallInfo,
-                trigger: trigger!
-            );
+                trigger: trigger
+            )
             
-        } else if (paywallTemplateName != nil) {
-            if (configManager.downloadStatus == HeliumFetchedConfigStatus.downloadSuccess) {
-                clientName = configManager.getClientName();
+        } else if let paywallTemplateName = paywallTemplateName {
+            if case .downloadSuccess = configManager.downloadStatus {
+                clientName = configManager.getClientName()
             }
-            let paywallInfo = createDummyHeliumPaywallInfo(paywallTemplateName: paywallTemplateName!);
+            let paywallInfo = createDummyHeliumPaywallInfo(paywallTemplateName: paywallTemplateName)
             
             baseTemplateView = Helium.shared.getBaseTemplateView(
                 clientName: clientName,
                 paywallInfo: paywallInfo,
                 trigger: "previewing"
-            );
+            )
             
         } else {
-            return;
+            return
         }
         
         let modalView = UIHostingController(rootView: baseTemplateView)

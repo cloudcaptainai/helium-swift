@@ -3,13 +3,20 @@ import SwiftUI
 import Kingfisher
 import SwiftyJSON
 
+
+
 public struct DynamicImage: View {
     private let imageSource: ImageSource
     private let tintColor: ColorConfig?
+    private let isResizable: Bool
+    private let aspectRatio: AspectRatioConfig?
+    private let frame: FrameConfig?
     
     public init(json: JSON) {
         if json["isSystemImage"].boolValue {
             self.imageSource = .system(name: json["systemImageName"].stringValue)
+        } else if json["isLocalImage"].boolValue {
+            self.imageSource = .local(name: json["localImageName"].stringValue)
         } else {
             self.imageSource = .url(json["imageURL"].stringValue)
         }
@@ -19,6 +26,20 @@ public struct DynamicImage: View {
         } else {
             self.tintColor = nil
         }
+        
+        self.isResizable = json["isResizable"].boolValue
+        
+        if json["aspectRatio"] != JSON.null {
+            self.aspectRatio = AspectRatioConfig(json: json["aspectRatio"])
+        } else {
+            self.aspectRatio = nil
+        }
+        
+        if json["frame"] != JSON.null {
+            self.frame = FrameConfig(json: json["frame"])
+        } else {
+            self.frame = nil
+        }
     }
     
     public var body: some View {
@@ -26,21 +47,52 @@ public struct DynamicImage: View {
             switch imageSource {
             case .url(let urlString):
                 KFImage(URL(string: urlString))
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .resizable(isResizable)
+                    .aspectRatioIfNeeded(aspectRatio)
             case .system(let name):
                 Image(systemName: name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .resizable(isResizable)
+                    .aspectRatioIfNeeded(aspectRatio)
+            case .local(let name):
+                Image(uiImage: UIImage(named: name) ?? UIImage())
+                    .resizable(isResizable)
+                    .aspectRatioIfNeeded(aspectRatio)
             }
         }
         .modifyForegroundColor(with: tintColor)
+        .frame(width: frame?.width, height: frame?.height)
     }
 }
 
 private enum ImageSource {
     case url(String)
     case system(name: String)
+    case local(name: String)
+}
+
+struct AspectRatioConfig {
+    let contentMode: SwiftUI.ContentMode
+    
+    init(json: JSON) {
+        switch json["contentMode"].stringValue.lowercased() {
+        case "fit":
+            self.contentMode = .fit
+        case "fill":
+            self.contentMode = .fill
+        default:
+            self.contentMode = .fit
+        }
+    }
+}
+
+struct FrameConfig {
+    let width: CGFloat?
+    let height: CGFloat?
+    
+    init(json: JSON) {
+        self.width = json["width"].double.map { CGFloat($0) }
+        self.height = json["height"].double.map { CGFloat($0) }
+    }
 }
 
 extension View {
@@ -53,5 +105,34 @@ extension View {
             }
         }
     }
+    
+    func aspectRatioIfNeeded(_ config: AspectRatioConfig?) -> some View {
+        Group {
+            if let config = config {
+                self.aspectRatio(contentMode: config.contentMode)
+            } else {
+                self
+            }
+        }
+    }
 }
 
+extension Image {
+    func resizable(_ isResizable: Bool) -> some View {
+        if isResizable {
+            return AnyView(self.resizable())
+        } else {
+            return AnyView(self)
+        }
+    }
+}
+
+extension KFImage {
+    func resizable(_ isResizable: Bool) -> some View {
+        if isResizable {
+            return AnyView(self.resizable())
+        } else {
+            return AnyView(self)
+        }
+    }
+}

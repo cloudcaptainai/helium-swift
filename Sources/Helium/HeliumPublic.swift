@@ -1,10 +1,3 @@
-//
-//  HeliumPublic.swift
-//  Helium
-//
-//  Created by Anish Doshi on 7/30/24.
-//
-
 import Foundation
 import SwiftUI
 import HeliumCore
@@ -34,13 +27,13 @@ public class Helium {
             apiKey: apiKey,
             triggers: triggers
         )
-        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate)
-        self.baseTemplateViewType = baseTemplateView
-        await self.controller!.downloadConfig()
+        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
+        self.baseTemplateViewType = baseTemplateView;
+        await self.controller!.downloadConfig();
     }
     
     public func downloadStatus() -> HeliumFetchedConfigStatus {
-        return HeliumFetchedConfigManager.shared.downloadStatus
+        return HeliumFetchedConfigManager.shared.downloadStatus;
     }
     
     public func getBaseTemplateView(clientName: String?, paywallInfo: HeliumPaywallInfo?, trigger: String) -> AnyView {
@@ -58,14 +51,14 @@ struct DynamicPaywallModifier: ViewModifier {
     
     @ViewBuilder
     func body(content: Content) -> some View {
-        if configManager.downloadStatus == HeliumFetchedConfigStatus.downloadSuccess,
+        if case .downloadSuccess = configManager.downloadStatus,
            let paywallInfo = configManager.getPaywallInfoForTrigger(trigger),
            let clientName = configManager.getClientName() {
             content
                 .fullScreenCover(isPresented: $isPresented) {
                     Helium.shared.getBaseTemplateView(clientName: clientName, paywallInfo: paywallInfo, trigger: trigger)
                 }
-        } else if configManager.downloadStatus == HeliumFetchedConfigStatus.notDownloadedYet {
+        } else if case .notDownloadedYet = configManager.downloadStatus {
             content
         } else {
             content.fullScreenCover(isPresented: $isPresented) {

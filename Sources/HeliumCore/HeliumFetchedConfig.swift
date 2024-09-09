@@ -1,16 +1,8 @@
-//
-//  File.swift
-//  
-//
-//  Created by Anish Doshi on 8/17/24.
-//
-
 import Foundation
-
 
 public enum HeliumFetchedConfigStatus: Codable {
     case notDownloadedYet
-    case downloadSuccess
+    case downloadSuccess(fetchedConfigId: UUID)
     case downloadFailure
 }
 
@@ -63,28 +55,27 @@ public class HeliumFetchedConfigManager: ObservableObject {
         Task {
             do {
                 // Make the request asynchronously
-                let response = try await fetchEndpoint(endpoint: endpoint, params: params);
-                
+                let response = try await fetchEndpoint(endpoint: endpoint, params: params)
                 
                 // Ensure we have data
                 guard let newConfig = response else {
-                    await self.updateDownloadState(.downloadFailure);
+                    await self.updateDownloadState(.downloadFailure)
                     return
                 }
                 
                 // Update the fetched config
                 self.fetchedConfig = newConfig
-                await self.updateDownloadState(.downloadSuccess)
+                await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
                 completion(.success(newConfig))
             } catch {
-                await self.updateDownloadState(.downloadFailure);
+                await self.updateDownloadState(.downloadFailure)
                 completion(.failure(error))
             }
         }
     }
     
     @MainActor func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
-        self.downloadStatus = status;
+        self.downloadStatus = status
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
@@ -96,10 +87,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {
-        return fetchedConfig?.triggerToPaywalls[trigger];
+        return fetchedConfig?.triggerToPaywalls[trigger]
     }
     
     public func getClientName() -> String? {
-        return fetchedConfig?.orgName;
+        return fetchedConfig?.orgName
     }
 }
