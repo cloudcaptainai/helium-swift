@@ -10,10 +10,6 @@ import SwiftUI
 import Segment
 
 
-public protocol BaseTemplateView: View {
-    init(clientName: String?, paywallInfo: HeliumPaywallInfo?, trigger: String)
-}
-
 public class HeliumController {
     let fetchEndpoint = "https://api.tryhelium.com/on-launch"
     

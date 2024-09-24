@@ -10,19 +10,23 @@ import HeliumCore
 import SwiftUI
 import UIKit
 
+
 class HeliumViewController: UIViewController {
     let trigger: String?
     let paywallTemplateName: String?
+    let fallbackPaywall: (any View)?
     
-    init(trigger: String) {
+    init(trigger: String, fallbackPaywall: (any View)?) {
         self.trigger = trigger
         self.paywallTemplateName = nil;
+        self.fallbackPaywall = fallbackPaywall;
         super.init(nibName: nil, bundle: nil)
     }
     
-    init(paywallTemplateName: String) {
+    init(paywallTemplateName: String, fallbackPaywall: (any View)?) {
         self.trigger = nil;
         self.paywallTemplateName = paywallTemplateName;
+        self.fallbackPaywall = fallbackPaywall;
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -40,54 +44,56 @@ class HeliumViewController: UIViewController {
         }
         
         var paywallInfo: HeliumPaywallInfo? = nil
-        var clientName: String? = nil
-        var baseTemplateView: AnyView
+        var baseTemplateView: AnyView?
         
         if let trigger = trigger {
             if case .downloadSuccess = configManager.downloadStatus {
                 paywallInfo = configManager.getPaywallInfoForTrigger(trigger)
-                clientName = configManager.getClientName()
+                
+                baseTemplateView = Helium.shared.getBaseTemplateView(
+                    paywallInfo: paywallInfo,
+                    trigger: trigger
+                )
+            } else if (self.fallbackPaywall != nil) {
+                baseTemplateView = AnyView(self.fallbackPaywall!);
             }
-            
-            baseTemplateView = Helium.shared.getBaseTemplateView(
-                clientName: clientName,
-                paywallInfo: paywallInfo,
-                trigger: trigger
-            )
             
         } else if let paywallTemplateName = paywallTemplateName {
-            if case .downloadSuccess = configManager.downloadStatus {
-                clientName = configManager.getClientName()
-            }
             let paywallInfo = createDummyHeliumPaywallInfo(paywallTemplateName: paywallTemplateName)
             
             baseTemplateView = Helium.shared.getBaseTemplateView(
-                clientName: clientName,
                 paywallInfo: paywallInfo,
                 trigger: "previewing"
             )
-            
         } else {
             return
         }
         
-        let modalView = UIHostingController(rootView: baseTemplateView)
-        addChild(modalView)
-        view.addSubview(modalView.view)
-        modalView.view.frame = view.bounds
-        modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        modalView.didMove(toParent: self)
+        if (baseTemplateView != nil) {
+            let modalView = UIHostingController(rootView: baseTemplateView)
+            addChild(modalView)
+            view.addSubview(modalView.view)
+            modalView.view.frame = view.bounds
+            modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            modalView.didMove(toParent: self)
+        }
     }
 }
 
 // Helper class to present the base paywall from anywhere
 class HeliumPaywallPresenter {
+    var fallbackPaywall: (any View)?
+    
     static let shared = HeliumPaywallPresenter()
     
     private init() {}
     
+    func setFallback(fallbackPaywall: any View) {
+        self.fallbackPaywall = fallbackPaywall;
+    }
+    
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
-        let modalVC = HeliumViewController(trigger: trigger)
+        let modalVC = HeliumViewController(trigger: trigger, fallbackPaywall: fallbackPaywall)
         modalVC.modalPresentationStyle = .fullScreen
         
         if let presenter = viewController {
@@ -101,7 +107,7 @@ class HeliumPaywallPresenter {
     }
     
     func presentUpsell(paywallTemplateName: String, from viewController: UIViewController? = nil) {
-        let modalVC = HeliumViewController(paywallTemplateName: paywallTemplateName);
+        let modalVC = HeliumViewController(paywallTemplateName: paywallTemplateName, fallbackPaywall: fallbackPaywall);
         modalVC.modalPresentationStyle = .fullScreen
         
         if let presenter = viewController {
