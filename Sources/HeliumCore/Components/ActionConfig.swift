@@ -4,7 +4,7 @@ public struct ActionConfig {
     enum ActionEvent {
         case dismiss
         case selectProduct(productKey: String)
-        case subscribe(productKey: String)
+        case subscribe
         case showScreen(screenId: String)
     }
     
@@ -20,8 +20,7 @@ public struct ActionConfig {
             guard let productKey = json["productKey"].string else { return nil }
             self.actionEvent = .selectProduct(productKey: productKey)
         case "subscribe":
-            guard let productKey = json["productKey"].string else { return nil }
-            self.actionEvent = .subscribe(productKey: productKey)
+            self.actionEvent = .subscribe
         case "showScreen":
             guard let screenId = json["screenId"].string else { return nil }
             self.actionEvent = .showScreen(screenId: screenId)

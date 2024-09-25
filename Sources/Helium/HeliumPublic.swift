@@ -5,11 +5,25 @@ import HeliumCore
 public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
+    private var fallbackPaywall: (any View)?
     
     public static let shared = Helium()
     
     public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
+    }
+    
+    public func upsellViewForTrigger(trigger: String) -> AnyView {
+        if case .downloadSuccess = self.downloadStatus() {
+            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
+            
+            return Helium.shared.getBaseTemplateView(
+                paywallInfo: paywallInfo,
+                trigger: trigger
+            )
+        } else {
+            return AnyView(self.fallbackPaywall!);
+        }
     }
     
     public func previewPaywallTemplate(paywallTemplateName: String, from viewController: UIViewController? = nil) {
@@ -19,8 +33,9 @@ public class Helium {
     public func initializeAndFetchVariants(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
-        baseTemplateView: any BaseTemplateView.Type,
-        useCache: Bool,
+        baseTemplateView: (any BaseTemplateView.Type)? = nil,
+        fallbackPaywall: (any View)? = nil,
+        useCache: Bool = false,
         triggers: [HeliumTrigger]? = nil
     ) async {
         self.controller = HeliumController(
@@ -28,19 +43,53 @@ public class Helium {
             triggers: triggers
         )
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
-        self.baseTemplateViewType = baseTemplateView;
+        if (baseTemplateView == nil) {
+            self.baseTemplateViewType = DynamicBaseTemplateView.self;
+        } else {
+            self.baseTemplateViewType = baseTemplateView;
+        }
+        
+        if (fallbackPaywall != nil) {
+            self.fallbackPaywall = fallbackPaywall;
+            HeliumPaywallPresenter.shared.setFallback(fallbackPaywall: fallbackPaywall!);
+        }
+        
         await self.controller!.downloadConfig();
+    }
+    
+    public func configure(
+        apiKey: String,
+        heliumPaywallDelegate: HeliumPaywallDelegate,
+        fallbackPaywall: (any View)? = nil,
+        baseTemplateView: (any BaseTemplateView.Type)? = nil
+    ) {
+        self.controller = HeliumController(
+            apiKey: apiKey,
+            triggers: []
+        )
+
+        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
+        if (baseTemplateView == nil) {
+            self.baseTemplateViewType = DynamicBaseTemplateView.self;
+        } else {
+            self.baseTemplateViewType = baseTemplateView;
+        }
+        
+        if (fallbackPaywall != nil) {
+            HeliumPaywallPresenter.shared.setFallback(fallbackPaywall: fallbackPaywall!);
+            self.fallbackPaywall = fallbackPaywall;
+        }
     }
     
     public func downloadStatus() -> HeliumFetchedConfigStatus {
         return HeliumFetchedConfigManager.shared.downloadStatus;
     }
     
-    public func getBaseTemplateView(clientName: String?, paywallInfo: HeliumPaywallInfo?, trigger: String) -> AnyView {
-        guard let viewType = baseTemplateViewType else {
+    public func getBaseTemplateView(paywallInfo: HeliumPaywallInfo?, trigger: String) -> AnyView {
+        guard let viewType = baseTemplateViewType, let templatePaywallInfo = paywallInfo else {
             fatalError("Base template view not set up correctly. Please contact founders@tryhelium.com to get set up!")
         }
-        return AnyView(viewType.init(clientName: clientName, paywallInfo: paywallInfo, trigger: trigger))
+        return AnyView(viewType.init(paywallInfo: templatePaywallInfo, trigger: trigger))
     }
 }
 
@@ -56,14 +105,13 @@ struct DynamicPaywallModifier: ViewModifier {
            let clientName = configManager.getClientName() {
             content
                 .fullScreenCover(isPresented: $isPresented) {
-                    Helium.shared.getBaseTemplateView(clientName: clientName, paywallInfo: paywallInfo, trigger: trigger)
+                    Helium.shared.getBaseTemplateView(paywallInfo: paywallInfo, trigger: trigger)
                 }
         } else if case .notDownloadedYet = configManager.downloadStatus {
             content
         } else {
             content.fullScreenCover(isPresented: $isPresented) {
                 Helium.shared.getBaseTemplateView(
-                    clientName: nil,
                     paywallInfo: nil,
                     trigger: trigger
                 )

@@ -4,29 +4,47 @@ import SwiftyJSON
 
 func parseAlignment(_ string: String) -> Alignment {
     switch string.lowercased() {
-    case "topleft", "topleading": return .topLeading
-    case "top": return .top
-    case "topright", "toptrailing": return .topTrailing
-    case "left", "leading": return .leading
-    case "center": return .center
-    case "right", "trailing": return .trailing
-    case "bottomleft", "bottomleading": return .bottomLeading
-    case "bottom": return .bottom
-    case "bottomright", "bottomtrailing": return .bottomTrailing
-    default: return .center
+        case "topleft", "topleading": return .topLeading
+        case "top": return .top
+        case "topright", "toptrailing": return .topTrailing
+        case "left", "leading": return .leading
+        case "center": return .center
+        case "right", "trailing": return .trailing
+        case "bottomleft", "bottomleading": return .bottomLeading
+        case "bottom": return .bottom
+        case "bottomright", "bottomtrailing": return .bottomTrailing
+        default: return .center
     }
 }
 
+public struct ActionMethods {
+    var dismissAction: () -> Void
+    // TODO - move this to analytics/custom event handling method
+    var onCTAPressMethod: (_ contentComponentName: String) -> Void
+    
+    var showScreenMethod: (_ screenId: String) -> Void
+    var selectProductMethod: (_ productId: String) -> Void
+    var makePurchaseMethod: () -> Void
+}
+
 public struct DynamicPositionedComponent: View {
+    @EnvironmentObject var actionsDelegate: ActionsDelegate
+    let componentId: Int
+    let componentName: String
     let componentType: ComponentType
     let viewModifierProps: JSON
     let overlayComponent: ComponentWrapper?
     let backgroundComponent: ComponentWrapper?
     let actionConfig: ActionConfig?
     let geometryProxy: GeometryProxy?
+    
 
-    public init(json: JSON, geometryProxy: GeometryProxy? = nil) {
+    public init(json: JSON, geometryProxy: GeometryProxy? = nil, actionMethods: ActionMethods? = nil) {
         self.componentType = ComponentType(json: json)
+        
+        self.componentName = json["componentName"].string ?? "component_\(json["type"].string ?? "undefinedType")_no_name_\(UUID().uuidString)";
+        self.componentId = json["componentId"].int ?? -1;
+        
         self.viewModifierProps = json["viewModifierProps"]
         
         if let overlayJSON = json["overlayComponent"].dictionaryObject {
@@ -55,7 +73,7 @@ public struct DynamicPositionedComponent: View {
             .background(backgroundComponent?.view)
             .overlay(overlayComponent?.view)
             .modifier(DynamicViewModifier(json: viewModifierProps, proxy: geometryProxy))
-            .modifier(ActionModifier(config: actionConfig))
+            .modifier(ActionModifier(config: actionConfig, actionsDelegate: actionsDelegate, contentComponentName: componentName))
     }
     
     @ViewBuilder
@@ -87,7 +105,7 @@ public struct DynamicPositionedComponent: View {
         }
     }
     
-    @ViewBuilder
+   @ViewBuilder
    private func createStack(type: StackType, props: JSON, children: [ComponentWrapper]) -> some View {
        let spacing = props["spacing"].double.map { CGFloat($0) }
        let alignment = parseAlignment(props["alignment"].stringValue)
@@ -207,6 +225,8 @@ class OverlayBackgroundWrapper {
 
 struct ActionModifier: ViewModifier {
     let config: ActionConfig?
+    let actionsDelegate: ActionsDelegate
+    let contentComponentName: String
     
     func body(content: Content) -> some View {
         if let config = config {
@@ -221,15 +241,29 @@ struct ActionModifier: ViewModifier {
     }
     
     private func performAction(_ event: ActionConfig.ActionEvent) {
+        actionsDelegate.onCTAPress(contentComponentName: contentComponentName)
         switch event {
-        case .dismiss:
-            print("Dismiss action")
-        case .selectProduct(let productKey):
-            print("Select product: \(productKey)")
-        case .subscribe(let productKey):
-            print("Subscribe to product: \(productKey)")
-        case .showScreen(let screenId):
-            print("Show screen: \(screenId)")
+            case .dismiss:
+                actionsDelegate.dismiss();
+            case .selectProduct(let productKey):
+                actionsDelegate.selectProduct(productId: productKey)
+            case .subscribe:
+                Task { @MainActor in
+                    do {
+                        let success = try await actionsDelegate.makePurchase()
+                        if success {
+                            print("Purchase successful")
+                            // Handle successful purchase, e.g., dismiss the view
+                            actionsDelegate.dismiss()
+                        } else {
+                            print("Purchase failed or was cancelled")
+                        }
+                    } catch {
+                        print("Purchase error: \(error)")
+                    }
+                }
+            case .showScreen(let screenId):
+                actionsDelegate.showScreen(screenId: screenId);
         }
     }
 }
