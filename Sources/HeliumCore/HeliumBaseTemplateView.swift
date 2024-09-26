@@ -113,7 +113,9 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             }
             actionsDelegate.logImpression()
         }
-        .onDisappear { actionsDelegate.logDismissal() }
+        .onDisappear {
+            actionsDelegate.logDismissal()
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
         .environmentObject(actionsDelegate)

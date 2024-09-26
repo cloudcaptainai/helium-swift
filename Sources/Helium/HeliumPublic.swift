@@ -17,12 +17,16 @@ public class Helium {
         if case .downloadSuccess = self.downloadStatus() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
-            return Helium.shared.getBaseTemplateView(
-                paywallInfo: paywallInfo,
-                trigger: trigger
-            )
-        } else {
+            guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
+                return AnyView(self.fallbackPaywall!);
+            }
+            
+            return AnyView(baseTemplateViewType.init(paywallInfo: templatePaywallInfo, trigger: trigger));
+            
+        } else if (self.fallbackPaywall != nil) {
             return AnyView(self.fallbackPaywall!);
+        } else {
+            return AnyView(EmptyView())
         }
     }
     
