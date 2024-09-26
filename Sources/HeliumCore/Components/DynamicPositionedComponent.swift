@@ -79,29 +79,29 @@ public struct DynamicPositionedComponent: View {
     @ViewBuilder
     private var componentView: some View {
         switch componentType {
-        case .linearGradient(let props):
-            DynamicLinearGradient(json: props)
-        case .image(let props):
-            DynamicImage(json: props)
-        case .rectangle(let props):
-            DynamicRectangle(json: props)
-        case .roundedRectangle(let props):
-            DynamicRoundedRectangle(json: props)
-        case .text(let props):
-            DynamicTextComponent(json: props)
-        case .stack(let type, let props, let children):
-            createStack(type: type, props: props, children: children)
-        case .animation(let props):
-            DynamicAnimation(json: props)
-        case .spacer(let props):
-            DynamicSpacer(json: props)
-        case .scrollView(let props, let children):
-            DynamicScrollView(json: props) {
-                ForEach(children.indices, id: \.self) { index in
-                    children[index].view
+            case .linearGradient(let props):
+                DynamicLinearGradient(json: props)
+            case .image(let props):
+                DynamicImage(json: props)
+            case .rectangle(let props):
+                DynamicRectangle(json: props)
+            case .roundedRectangle(let props):
+                DynamicRoundedRectangle(json: props)
+            case .text(let props):
+                DynamicTextComponent(json: props)
+            case .stack(let type, let props, let children):
+                createStack(type: type, props: props, children: children)
+            case .animation(let props):
+                DynamicAnimation(json: props)
+            case .spacer(let props):
+                DynamicSpacer(json: props)
+            case .scrollView(let props, let children):
+                DynamicScrollView(json: props) {
+                    ForEach(children.indices, id: \.self) { index in
+                        children[index].view
+                    }
                 }
             }
-        }
         }
     }
     
