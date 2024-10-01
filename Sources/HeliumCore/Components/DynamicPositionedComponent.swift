@@ -17,18 +17,8 @@ func parseAlignment(_ string: String) -> Alignment {
     }
 }
 
-public struct ActionMethods {
-    var dismissAction: () -> Void
-    // TODO - move this to analytics/custom event handling method
-    var onCTAPressMethod: (_ contentComponentName: String) -> Void
-    
-    var showScreenMethod: (_ screenId: String) -> Void
-    var selectProductMethod: (_ productId: String) -> Void
-    var makePurchaseMethod: () -> Void
-}
-
 public struct DynamicPositionedComponent: View {
-    @EnvironmentObject var actionsDelegate: ActionsDelegate
+    @EnvironmentObject var actionsDelegate: ActionsDelegateWrapper
     let componentId: Int
     let componentName: String
     let componentType: ComponentType
@@ -37,10 +27,11 @@ public struct DynamicPositionedComponent: View {
     let backgroundComponent: ComponentWrapper?
     let actionConfig: ActionConfig?
     let geometryProxy: GeometryProxy?
+    let isHighlighted: Bool
     
 
-    public init(json: JSON, geometryProxy: GeometryProxy? = nil, actionMethods: ActionMethods? = nil) {
-        self.componentType = ComponentType(json: json)
+    public init(json: JSON, geometryProxy: GeometryProxy? = nil) {
+        self.componentType = ComponentType(json: json, geometryProxy: geometryProxy)
         
         self.componentName = json["componentName"].string ?? "component_\(json["type"].string ?? "undefinedType")_no_name_\(UUID().uuidString)";
         self.componentId = json["componentId"].int ?? -1;
@@ -48,13 +39,13 @@ public struct DynamicPositionedComponent: View {
         self.viewModifierProps = json["viewModifierProps"]
         
         if let overlayJSON = json["overlayComponent"].dictionaryObject {
-            self.overlayComponent = ComponentWrapper(json: JSON(overlayJSON))
+            self.overlayComponent = ComponentWrapper(json: JSON(overlayJSON), geometryProxy: geometryProxy)
         } else {
             self.overlayComponent = nil
         }
         
         if let backgroundJSON = json["backgroundComponent"].dictionaryObject {
-            self.backgroundComponent = ComponentWrapper(json: JSON(backgroundJSON))
+            self.backgroundComponent = ComponentWrapper(json: JSON(backgroundJSON), geometryProxy: geometryProxy)
         } else {
             self.backgroundComponent = nil
         }
@@ -66,6 +57,7 @@ public struct DynamicPositionedComponent: View {
         }
         
         self.geometryProxy = geometryProxy
+        self.isHighlighted = json["isInteractive"].bool ?? false;
     }
     
     public var body: some View {
@@ -73,7 +65,7 @@ public struct DynamicPositionedComponent: View {
             .background(backgroundComponent?.view)
             .overlay(overlayComponent?.view)
             .modifier(DynamicViewModifier(json: viewModifierProps, proxy: geometryProxy))
-            .modifier(ActionModifier(config: actionConfig, actionsDelegate: actionsDelegate, contentComponentName: componentName))
+            .modifier(ActionModifier(actionConfig: self.actionConfig, actionsDelegate: actionsDelegate, contentComponentName: componentName))
     }
     
     @ViewBuilder
@@ -144,7 +136,7 @@ indirect enum ComponentType {
     case scrollView(JSON, [ComponentWrapper])
         
     
-    init(json: JSON) {
+    init(json: JSON, geometryProxy: GeometryProxy?) {
         switch json["type"].stringValue {
         case "linearGradient":
             self = .linearGradient(json["componentProps"])
@@ -159,15 +151,15 @@ indirect enum ComponentType {
         case "animation":
             self = .animation(json["componentProps"])
         case "vStack":
-            self = .stack(.vStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+            self = .stack(.vStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
         case "hStack":
-            self = .stack(.hStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+            self = .stack(.hStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
         case "zStack":
-            self = .stack(.zStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+            self = .stack(.zStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
         case "spacer":
             self = .spacer(json["componentProps"])
         case "scrollView":
-            self = .scrollView(json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0) })
+            self = .scrollView(json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
         default:
             self = .text(JSON(["text": "Unsupported component type"]))
         }
@@ -181,8 +173,8 @@ enum StackType {
 class ComponentWrapper {
     let component: DynamicPositionedComponent
     
-    init(json: JSON) {
-        self.component = DynamicPositionedComponent(json: json)
+    init(json: JSON, geometryProxy: GeometryProxy?) {
+        self.component = DynamicPositionedComponent(json: json, geometryProxy: geometryProxy);
     }
     
     var view: some View {
@@ -210,28 +202,21 @@ extension Alignment {
 }
 
 
-class OverlayBackgroundWrapper {
-    let component: DynamicPositionedComponent
-    
-    init(json: JSON) {
-        self.component = DynamicPositionedComponent(json: json)
-    }
-    
-    var view: some View {
-        component
-    }
-}
-
-
 struct ActionModifier: ViewModifier {
-    let config: ActionConfig?
-    let actionsDelegate: ActionsDelegate
+    let actionConfig: ActionConfig?
+    let actionsDelegate: ActionsDelegateWrapper
     let contentComponentName: String
     
+    public init(actionConfig: ActionConfig?, actionsDelegate: ActionsDelegateWrapper, contentComponentName: String) {
+        self.actionConfig = actionConfig
+        self.actionsDelegate = actionsDelegate
+        self.contentComponentName = contentComponentName
+    }
+    
     func body(content: Content) -> some View {
-        if let config = config {
+        if let actionConfig = self.actionConfig {
             Button(action: {
-                performAction(config.actionEvent)
+                performAction(actionConfig.actionEvent)
             }) {
                 content
             }
@@ -248,22 +233,17 @@ struct ActionModifier: ViewModifier {
             case .selectProduct(let productKey):
                 actionsDelegate.selectProduct(productId: productKey)
             case .subscribe:
-                Task { @MainActor in
-                    do {
-                        let success = try await actionsDelegate.makePurchase()
-                        if success {
-                            print("Purchase successful")
-                            // Handle successful purchase, e.g., dismiss the view
-                            actionsDelegate.dismiss()
-                        } else {
-                            print("Purchase failed or was cancelled")
-                        }
-                    } catch {
-                        print("Purchase error: \(error)")
-                    }
+                Task {
+                    await actionsDelegate.makePurchase()
                 }
             case .showScreen(let screenId):
                 actionsDelegate.showScreen(screenId: screenId);
+            case .customAction(let actionKey):
+                // Handled by cta pressed
+                return;
+            default:
+                return;
+                
         }
     }
 }

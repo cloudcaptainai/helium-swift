@@ -46,9 +46,14 @@ public struct DynamicImage: View {
         Group {
             switch imageSource {
             case .url(let urlString):
-                KFImage(URL(string: urlString))
-                    .resizable(isResizable)
-                    .aspectRatioIfNeeded(aspectRatio)
+                if (isResizable) {
+                    KFImage(URL(string: urlString))
+                        .resizable()
+                        .aspectRatioIfNeeded(aspectRatio)
+                } else {
+                    KFImage(URL(string: urlString))
+                        .aspectRatioIfNeeded(aspectRatio)
+                }
             case .system(let name):
                 Image(systemName: name)
                     .resizable(isResizable)

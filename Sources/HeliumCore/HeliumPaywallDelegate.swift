@@ -47,6 +47,10 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.analytics = analytics
     }
     
+    public func getAnalytics() -> Analytics? {
+        return analytics;
+    }
+    
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {

@@ -24,6 +24,10 @@ public class HeliumController {
         self.triggers = triggers;
     }
     
+    public func getUserId() -> UUID {
+        return userId;
+    }
+    
     public func downloadConfig() async {
         var payload: [String: Any]
         payload = [
@@ -42,10 +46,13 @@ public class HeliumController {
                     .trackApplicationLifecycleEvents(false)
                     .flushInterval(10)
                 
-        
-                let analytics = Analytics(configuration: configuration)
-                analytics.identify(userId: self.userId.uuidString, traits: self.userContext)
-                HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics)
+                if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
+                    print("Can't re-set analytics.")
+                } else {
+                    let analytics = Analytics(configuration: configuration)
+                    analytics.identify(userId: self.userId.uuidString, traits: self.userContext)
+                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                }
                 
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(configId: fetchedConfig.fetchedConfigID)
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
