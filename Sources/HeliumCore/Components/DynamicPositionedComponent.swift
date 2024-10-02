@@ -220,6 +220,8 @@ struct ActionModifier: ViewModifier {
             }) {
                 content
             }
+            .buttonStyle(PlainButtonStyle())
+            .contentShape(Rectangle())
         } else {
             content
         }
