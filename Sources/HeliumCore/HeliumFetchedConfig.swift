@@ -38,48 +38,6 @@ public func fetchEndpoint(
     return decodedResponse
 }
 
-public func downloadFonts(from jsonData: Data) async throws {
-    // Parse JSON data
-    let json = try! JSON(data: jsonData)
-    
-    // Collect fontURLs
-    var fontURLs = Set<String>()
-    collectFontURLs(from: json, into: &fontURLs)
-    
-    // Download fonts in parallel
-    await withTaskGroup(of: Void.self) { group in
-        for fontURL in fontURLs {
-            group.addTask {
-                if let url = URL(string: fontURL) {
-                    let result = await downloadRemoteFont(fontURL: url);
-                    print(result);
-                }
-            }
-        }
-    }
-    print("Successfully downloaded \(fontURLs.count) fonts");
-}
-
-func collectFontURLs(from json: JSON, into fontURLs: inout Set<String>) {
-    switch json.type {
-    case .dictionary:
-        for (key, value) in json {
-            if key == "fontURL", let url = value.string {
-                fontURLs.insert(url)
-            } else {
-                collectFontURLs(from: value, into: &fontURLs)
-            }
-        }
-    case .array:
-        for item in json.arrayValue {
-            collectFontURLs(from: item, into: &fontURLs)
-        }
-    default:
-        break
-    }
-}
-
-
 public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
@@ -118,6 +76,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         let encoder = JSONEncoder()
                         let jsonData = try encoder.encode(self.fetchedConfig!.triggerToPaywalls)
                         try await downloadFonts(from: jsonData);
+                        downloadImages(from: jsonData);
                     } catch {
                         print("Couldnt load all fonts.");
                     }

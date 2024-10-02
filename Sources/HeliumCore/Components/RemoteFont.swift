@@ -23,9 +23,6 @@ public final class FontDownloader: ObservableObject {
     }
 
     let registrationResult = CTFontManagerRegisterGraphicsFont(font, nil);
-    if (!registrationResult) {
-        assertionFailure("Could not register font.");
-    }
 
     return font
   }

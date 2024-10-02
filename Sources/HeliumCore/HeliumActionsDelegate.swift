@@ -71,7 +71,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     
     func setDismissAction(_ action: @escaping () -> Void) {
          self.dismissAction = action
-     }
+    }
     
     public func dismiss() {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(

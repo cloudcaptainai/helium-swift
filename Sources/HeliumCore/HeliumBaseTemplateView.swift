@@ -46,14 +46,14 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             actionsDelegate.setDismissAction {
                 dismiss()
             }
-            actionsDelegate.logImpression()
+            actionsDelegateWrapper.logImpression()
         }
         .onDisappear {
-            actionsDelegate.logDismissal()
+            actionsDelegateWrapper.logDismissal()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
-        .environmentObject(actionsDelegate)
+        .environmentObject(actionsDelegateWrapper)
     }
 }
 
