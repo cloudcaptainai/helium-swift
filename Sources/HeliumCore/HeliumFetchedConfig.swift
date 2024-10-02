@@ -1,4 +1,5 @@
 import Foundation
+import SwiftyJSON
 
 public enum HeliumFetchedConfigStatus: Codable {
     case notDownloadedYet
@@ -40,6 +41,8 @@ public func fetchEndpoint(
 public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
+    @Published public var downloadTimeTakenMS: UInt64?
+    
     private init() {
         downloadStatus = .notDownloadedYet
     }
@@ -54,6 +57,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         
         Task {
             do {
+                let startTime = DispatchTime.now();
                 // Make the request asynchronously
                 let response = try await fetchEndpoint(endpoint: endpoint, params: params)
                 
@@ -65,7 +69,26 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 // Update the fetched config
                 self.fetchedConfig = newConfig
+                
+                // Download assets
+                if (self.fetchedConfig != nil) {
+                    do {
+                        let encoder = JSONEncoder()
+                        let jsonData = try encoder.encode(self.fetchedConfig!.triggerToPaywalls)
+                        try await downloadFonts(from: jsonData);
+                        downloadImages(from: jsonData);
+                    } catch {
+                        print("Couldnt load all fonts.");
+                    }
+                }
+                
                 await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
+                let endTime = DispatchTime.now();
+
+                let elapsedTime = endTime.uptimeNanoseconds - startTime.uptimeNanoseconds
+                let elapsedTimeInMilliSeconds = Double(elapsedTime) / 1_000_000.0;
+
+                downloadTimeTakenMS = UInt64(elapsedTimeInMilliSeconds);
                 completion(.success(newConfig))
             } catch {
                 await self.updateDownloadState(.downloadFailure)
@@ -88,6 +111,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {
         return fetchedConfig?.triggerToPaywalls[trigger]
+    }
+    
+    public func getFetchedTriggerNames() -> [String] {
+        if (fetchedConfig == nil || fetchedConfig?.triggerToPaywalls == nil) {
+            return []
+        }
+        return Array(fetchedConfig!.triggerToPaywalls.keys);
     }
     
     public func getClientName() -> String? {

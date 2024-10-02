@@ -14,6 +14,12 @@ public struct DynamicViewModifier: ViewModifier {
     let geometryPosition: GeometryPositionConfig?
     let geometryProxy: GeometryProxy?
     let edgesIgnoringSafeArea: Edge.Set?
+    let geometryFrame: GeometryFrameConfig?
+        
+    struct GeometryFrameConfig {
+        let widthPercent: CGFloat?
+        let heightPercent: CGFloat?
+    }
 
     struct OverlayConfig {
         let cornerRadius: CGFloat
@@ -132,6 +138,15 @@ public struct DynamicViewModifier: ViewModifier {
             self.geometryPosition = nil
         }
         
+        if let geometryFrameJSON = json["geometryFrame"].dictionaryObject {
+           self.geometryFrame = GeometryFrameConfig(
+               widthPercent: CGFloat(geometryFrameJSON["widthPercent"] as? Double ?? 1.0),
+               heightPercent: CGFloat(geometryFrameJSON["heightPercent"] as? Double ?? 1.0)
+           )
+       } else {
+           self.geometryFrame = nil
+       }
+        
         if let edgesJSON = json["edgesIgnoringSafeArea"].array {
             var edgeSet: Edge.Set = []
             for edgeJSON in edgesJSON {
@@ -152,6 +167,7 @@ public struct DynamicViewModifier: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .modify(frame: frame, alignment: alignment)
+            .modify(geometryFrame: geometryFrame, in: geometryProxy)
             .modify(padding: padding)
             .modify(margin: margin)
             .modify(background: backgroundColor)
@@ -169,6 +185,18 @@ extension View {
     func modify(edgesIgnoringSafeArea: Edge.Set?) -> some View {
         if let edges = edgesIgnoringSafeArea {
             self.edgesIgnoringSafeArea(edges)
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder
+    func modify(geometryFrame: DynamicViewModifier.GeometryFrameConfig?, in geometry: GeometryProxy?) -> some View {
+        if let geometryFrame = geometryFrame, let geometry = geometry {
+            self.frame(
+                width: geometryFrame.widthPercent.map { geometry.size.width * $0 },
+                height: geometryFrame.heightPercent.map { geometry.size.height * $0 }
+            )
         } else {
             self
         }

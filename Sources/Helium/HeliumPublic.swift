@@ -34,6 +34,13 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(paywallTemplateName: paywallTemplateName, from: viewController);
     }
     
+    public func getHeliumUserId() -> UUID? {
+        if (self.controller == nil) {
+            return nil;
+        }
+        return self.controller?.getUserId();
+    }
+    
     public func initializeAndFetchVariants(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,

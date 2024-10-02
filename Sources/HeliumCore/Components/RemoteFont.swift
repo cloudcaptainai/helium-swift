@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-final class FontDownloader: ObservableObject {
+public final class FontDownloader: ObservableObject {
   static func downloadRemoteFont(url: URL) -> CGFont? {
     // Create a data provider that provides data from a URL. This URL
     // can be remote, or local.
@@ -22,13 +22,13 @@ final class FontDownloader: ObservableObject {
       return nil
     }
 
-    CTFontManagerRegisterGraphicsFont(font, nil)
+    let registrationResult = CTFontManagerRegisterGraphicsFont(font, nil);
 
     return font
   }
 }
 
-func downloadRemoteFont(fontURL: URL) async -> HeliumAssetLoadStatus {
+public func downloadRemoteFont(fontURL: URL) async -> HeliumAssetLoadStatus {
       // Load font from URL using our FontLoader.
       guard let font = FontDownloader.downloadRemoteFont(url: fontURL) else {
           return .downloadFailed;

@@ -6,11 +6,13 @@ public struct FontConfig {
     let fontType: String
     let fontName: String?
     let designString: String?
+    let fontURL: String?
     
     init(json: JSON) {
         fontType = json["fontType"].stringValue
         fontName = json["fontName"].string
         designString = json["design"].string
+        fontURL = json["fontURL"].string
     }
 }
 

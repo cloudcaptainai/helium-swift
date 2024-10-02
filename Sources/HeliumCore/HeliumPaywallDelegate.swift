@@ -47,13 +47,17 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.analytics = analytics
     }
     
+    public func getAnalytics() -> Analytics? {
+        return analytics;
+    }
+    
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
             case .cancelled:
                 self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            case .failed(_):
-                self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            case .failed(let error):
+                self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error.localizedDescription))
             case .restored:
                 self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
             case .purchased:
