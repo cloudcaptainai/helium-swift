@@ -14,7 +14,7 @@ public class HeliumController {
     let fetchEndpoint = "https://api.tryhelium.com/on-launch"
     
     let userContext = CodableUserContext.create()
-    let userId: UUID = createHeliumUserId()
+    var userId: String = createHeliumUserId()
     
     var apiKey: String
     var triggers: [HeliumTrigger]?
@@ -24,7 +24,7 @@ public class HeliumController {
         self.triggers = triggers;
     }
     
-    public func getUserId() -> UUID {
+    public func getUserId() -> String {
         return userId;
     }
     
@@ -32,7 +32,7 @@ public class HeliumController {
         var payload: [String: Any]
         payload = [
             "apiKey": self.apiKey,
-            "userId": self.userId.uuidString,
+            "userId": self.userId,
             "userContext": self.userContext.asParams(),
             "triggers": self.triggers?.compactMap({ trigger in trigger.name }) as Any
         ]
@@ -50,7 +50,7 @@ public class HeliumController {
                     print("Can't re-set analytics.")
                 } else {
                     let analytics = Analytics(configuration: configuration)
-                    analytics.identify(userId: self.userId.uuidString, traits: self.userContext)
+                    analytics.identify(userId: self.userId, traits: self.userContext)
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
                 
