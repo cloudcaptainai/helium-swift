@@ -74,8 +74,13 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         delegate?.onHeliumPaywallEvent(event: event);
         if (analytics != nil) {
+            var experimentID: String? = nil;
+            if let triggerName = event.getTriggerIfExists() {
+                experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
+            }
+            
             let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
-            let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()))
+            let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID);
             analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
         }
     }

@@ -34,7 +34,7 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(paywallTemplateName: paywallTemplateName, from: viewController);
     }
     
-    public func getHeliumUserId() -> UUID? {
+    public func getHeliumUserId() -> String? {
         if (self.controller == nil) {
             return nil;
         }
@@ -46,9 +46,12 @@ public class Helium {
         heliumPaywallDelegate: HeliumPaywallDelegate,
         baseTemplateView: (any BaseTemplateView.Type)? = nil,
         fallbackPaywall: (any View)? = nil,
-        useCache: Bool = false,
-        triggers: [HeliumTrigger]? = nil
+        triggers: [HeliumTrigger]? = nil,
+        customUserId: String? = nil
     ) async {
+        if (customUserId != nil) {
+            self.overrideUserId(newUserId: customUserId!);
+        }
         self.controller = HeliumController(
             apiKey: apiKey,
             triggers: triggers
@@ -101,6 +104,10 @@ public class Helium {
             fatalError("Base template view not set up correctly. Please contact founders@tryhelium.com to get set up!")
         }
         return AnyView(viewType.init(paywallInfo: templatePaywallInfo, trigger: trigger))
+    }
+    
+    public func overrideUserId(newUserId: String) {
+        UserDefaults.standard.set(newUserId, forKey: "heliumUserId");
     }
 }
 

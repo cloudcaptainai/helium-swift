@@ -33,9 +33,8 @@ public func fetchEndpoint(
           (200...299).contains(httpResponse.statusCode) else {
         throw URLError(.badServerResponse)
     }
-   
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-    return decodedResponse
+    return decodedResponse;
 }
 
 public class HeliumFetchedConfigManager: ObservableObject {
@@ -111,6 +110,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {
         return fetchedConfig?.triggerToPaywalls[trigger]
+    }
+    
+    public func getExperimentIDForTrigger(_ trigger: String) -> String? {
+        return fetchedConfig?.triggerToPaywalls[trigger]?.experimentID;
     }
     
     public func getFetchedTriggerNames() -> [String] {

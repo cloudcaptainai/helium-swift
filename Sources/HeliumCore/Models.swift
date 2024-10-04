@@ -23,14 +23,14 @@ public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumP
 }
 
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentId: String? = nil) {
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil) {
         self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
         self.resolvedConfig = resolvedConfig;
         self.shouldShow = shouldShow;
         self.fallbackPaywallName = fallbackPaywallName;
-        self.experimentId = experimentId;
+        self.experimentID = experimentID;
     }
     
     var paywallID: Int
@@ -39,7 +39,7 @@ public struct HeliumPaywallInfo: Codable {
     public var resolvedConfig: AnyCodable
     var shouldShow: Bool
     var fallbackPaywallName: String
-    var experimentId: String?
+    public var experimentID: String?
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
 }
@@ -70,6 +70,35 @@ public enum HeliumPaywallEvent: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type, ctaName, productKey, triggerName, paywallTemplateName, configId, errorDescription
+    }
+    
+    public func getTriggerIfExists() -> String?{
+        switch self {
+        case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
+            return triggerName;
+            
+        case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionRestored(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPending(let productKey, let triggerName, let paywallTemplateName):
+            
+            return triggerName;
+        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+            return triggerName;
+            
+        case .paywallOpen(let triggerName, let paywallTemplateName),
+             .paywallOpenFailed(let triggerName, let paywallTemplateName),
+             .paywallClose(let triggerName, let paywallTemplateName),
+             .paywallDismissed(let triggerName, let paywallTemplateName):
+            return triggerName;
+            
+        case .paywallsDownloadSuccess(let configId):
+            return nil;
+        case .paywallsDownloadError(let error):
+            return nil;
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -226,6 +255,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var fetchedConfigId: UUID?
     var timestamp: String
     var isHeliumEvent: Bool = true
+    var experimentID: String?
 }
 
 

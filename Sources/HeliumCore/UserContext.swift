@@ -31,6 +31,7 @@ struct CodableApplicationInfo: Codable {
     var version: String?
     var build: String?
     var completeAppVersion: String?
+    var appDisplayName: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -51,7 +52,14 @@ func createApplicationInfo() -> CodableApplicationInfo {
         completeAppVersion = nil
     }
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion)
+    let appDisplayName: String?
+    if let displayName = Bundle.main.displayName {
+        appDisplayName = displayName;
+    } else {
+        appDisplayName = nil;
+    }
+    
+    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName);
 }
 
 struct CodableUserContext: Codable {
@@ -99,7 +107,8 @@ struct CodableUserContext: Codable {
             "applicationInfo": [
                 "version": self.applicationInfo.version as Any,
                 "build": self.applicationInfo.build as Any,
-                "completeAppVersion": self.applicationInfo.completeAppVersion as Any
+                "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
+                "appDisplayName": self.applicationInfo.appDisplayName as Any
             ],
             "additionalParams": self.additionalParams
         ]
@@ -145,17 +154,21 @@ struct CodableUserContext: Codable {
 }
 
 
-func createHeliumUserId() -> UUID {
-    // Check if the UUID exists in UserDefaults
-    if let existingUUID = UserDefaults.standard.string(forKey: "heliumUserId") {
-        // Return the existing UUID
-        return UUID(uuidString: existingUUID) ?? UUID()
+func createHeliumUserId() -> String {
+    // Check if the User Id exists in UserDefaults
+    if let existingUserId = UserDefaults.standard.string(forKey: "heliumUserId") {
+        // Return the existing User Id
+        return existingUserId;
     } else {
-        // Create a new UUID
-        let newUUID: UUID = UUID()
-        // Save the new UUID to UserDefaults
-        UserDefaults.standard.set(newUUID.uuidString, forKey: "heliumUserId")
-        // Return the new UUID
-        return newUUID
+        // Create a new User Id
+        let newUserId: String = UUID().uuidString;
+        // Save the new User Id to UserDefaults
+        return newUserId
+    }
+}
+
+extension Bundle {
+    var displayName: String? {
+        return object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
     }
 }
