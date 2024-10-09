@@ -21,7 +21,8 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "7.0.0")),
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
-        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2"))
+        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
+        .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -32,7 +33,8 @@ let package = Package(
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Segment", package: "analytics-swift"),
                 .product(name: "AnyCodable", package: "AnyCodable"),
-                .product(name: "SwiftyJSON", package: "SwiftyJSON")
+                .product(name: "SwiftyJSON", package: "SwiftyJSON"),
+                .product(name: "DeviceKit", package: "DeviceKit")
             ]
         ),
         .target(
