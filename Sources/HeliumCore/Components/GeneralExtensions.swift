@@ -13,9 +13,18 @@ public struct ColorConfig {
     let colorHex: String
     let opacity: Double
     
+    public init(colorHex: String, opacity: Double) {
+        self.colorHex = colorHex
+        self.opacity = opacity
+    }
+    
     init(json: JSON) {
         self.colorHex = json["colorHex"].stringValue
         self.opacity = json["opacity"].doubleValue
+    }
+    
+    public static func createDefault() -> ColorConfig {
+        return ColorConfig(colorHex: "#000000", opacity: 1.0)
     }
 }
 

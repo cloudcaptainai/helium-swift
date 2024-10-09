@@ -7,6 +7,8 @@
 
 import Foundation
 import UIKit
+import DeviceKit
+
 
 struct CodableLocale: Codable {
     var currentCountry: String?
@@ -39,6 +41,8 @@ struct CodableDeviceInfo: Codable {
     var orientation: Int
     var systemName: String
     var systemVersion: String
+    var deviceModel: String
+    var userInterfaceIdiom: String
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
@@ -102,7 +106,9 @@ struct CodableUserContext: Codable {
                 "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier as Any,
                 "orientation": self.deviceInfo.orientation,
                 "systemName": self.deviceInfo.systemName,
-                "systemVersion": self.deviceInfo.systemVersion
+                "systemVersion": self.deviceInfo.systemVersion,
+                "deviceModel": self.deviceInfo.deviceModel,
+                "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
             ],
             "applicationInfo": [
                 "version": self.applicationInfo.version as Any,
@@ -140,7 +146,9 @@ struct CodableUserContext: Codable {
             currentDeviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             orientation: UIDevice.current.orientation.rawValue,
             systemName: UIDevice.current.systemName,
-            systemVersion: UIDevice.current.systemVersion
+            systemVersion: UIDevice.current.systemVersion,
+            deviceModel: Device.current.safeDescription,
+            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom)
         )
 
         return CodableUserContext(
