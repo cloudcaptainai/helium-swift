@@ -1,7 +1,7 @@
 import SwiftyJSON
 
 public struct ActionConfig {
-    enum ActionEvent {
+    enum ActionEvent: Equatable {
         case dismiss
         case selectProduct(productKey: String)
         case subscribe

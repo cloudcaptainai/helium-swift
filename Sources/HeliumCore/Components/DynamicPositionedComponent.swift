@@ -206,6 +206,7 @@ struct ActionModifier: ViewModifier {
     let actionConfig: ActionConfig?
     let actionsDelegate: ActionsDelegateWrapper
     let contentComponentName: String
+    @State private var isLoading = false
     
     public init(actionConfig: ActionConfig?, actionsDelegate: ActionsDelegateWrapper, contentComponentName: String) {
         self.actionConfig = actionConfig
@@ -216,18 +217,36 @@ struct ActionModifier: ViewModifier {
     func body(content: Content) -> some View {
         if let actionConfig = self.actionConfig {
             Button(action: {
-                performAction(actionConfig.actionEvent)
+                Task {
+                    await performAction(actionConfig.actionEvent)
+                }
             }) {
-                content
+                ZStack {
+                    // Hide the content when loading
+                    content
+                        .opacity(isLoading ? 0 : 1)
+                    
+                    // Show spinner when loading
+                    if isLoading && actionConfig.actionEvent == .subscribe {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    }
+                }
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
+            .disabled(isLoading) // Disable button while loading
         } else {
             content
         }
     }
     
-    private func performAction(_ event: ActionConfig.ActionEvent) {
+    private func performAction(_ event: ActionConfig.ActionEvent) async {
+        guard !isLoading else { return } // Extra safety check
+        
+        isLoading = true
+        defer { isLoading = false } // Ensure we reset loading state when done
+        
         actionsDelegate.onCTAPress(contentComponentName: contentComponentName)
         switch event {
             case .dismiss:
@@ -235,9 +254,7 @@ struct ActionModifier: ViewModifier {
             case .selectProduct(let productKey):
                 actionsDelegate.selectProduct(productId: productKey)
             case .subscribe:
-                Task {
-                    await actionsDelegate.makePurchase()
-                }
+                await actionsDelegate.makePurchase();
             case .showScreen(let screenId):
                 actionsDelegate.showScreen(screenId: screenId);
             case .customAction(let actionKey):
@@ -245,7 +262,6 @@ struct ActionModifier: ViewModifier {
                 return;
             default:
                 return;
-                
         }
     }
 }
