@@ -12,6 +12,8 @@ import Segment
 
 public class HeliumController {
     let fetchEndpoint = "https://api.tryhelium.com/on-launch"
+    let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
+    let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
     let userContext = CodableUserContext.create()
     
@@ -55,11 +57,33 @@ public class HeliumController {
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
                 
-                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(configId: fetchedConfig.fetchedConfigID)
+                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
+                    configId: fetchedConfig.fetchedConfigID,
+                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
+                    imagesDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.imageDownloadTimeTakenMS,
+                    fontsDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.fontDownloadTimeTakenMS
+                );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
                 // Use the config as needed
             case .failure(let error):
+                
+                let configuration = Configuration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
+                    .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
+                    .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
+                    .trackApplicationLifecycleEvents(false)
+                    .flushInterval(10)
+                
+                if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
+                    print("Can't re-set analytics.")
+                    let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
+                    analytics.identify(userId: self.getUserId(), traits: self.userContext);
+                } else {
+                    let analytics = Analytics(configuration: configuration)
+                    analytics.identify(userId: self.getUserId(), traits: self.userContext)
+                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                }
+
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallsDownloadError(error: error.localizedDescription))
             }
         }

@@ -41,6 +41,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     @Published public var downloadTimeTakenMS: UInt64?
+    @Published public var imageDownloadTimeTakenMS: UInt64?
+    @Published public var fontDownloadTimeTakenMS: UInt64?
     
     private init() {
         downloadStatus = .notDownloadedYet
@@ -56,7 +58,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         
         Task {
             do {
-                let startTime = DispatchTime.now();
+                var startTime = DispatchTime.now();
                 // Make the request asynchronously
                 let response = try await fetchEndpoint(endpoint: endpoint, params: params)
                 
@@ -65,6 +67,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     await self.updateDownloadState(.downloadFailure)
                     return
                 }
+                var endTime = DispatchTime.now();
+                downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
                 
                 // Update the fetched config
                 self.fetchedConfig = newConfig
@@ -74,20 +78,23 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     do {
                         let encoder = JSONEncoder()
                         let jsonData = try encoder.encode(self.fetchedConfig!.triggerToPaywalls)
+                        
+                        startTime = DispatchTime.now();
                         try await downloadFonts(from: jsonData);
+                        endTime = DispatchTime.now();
+                        fontDownloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
+                        
+                        startTime = DispatchTime.now();
                         downloadImages(from: jsonData);
+                        endTime = DispatchTime.now();
+                        imageDownloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
                     } catch {
                         print("Couldnt load all fonts.");
                     }
                 }
                 
                 await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
-                let endTime = DispatchTime.now();
 
-                let elapsedTime = endTime.uptimeNanoseconds - startTime.uptimeNanoseconds
-                let elapsedTimeInMilliSeconds = Double(elapsedTime) / 1_000_000.0;
-
-                downloadTimeTakenMS = UInt64(elapsedTimeInMilliSeconds);
                 completion(.success(newConfig))
             } catch {
                 await self.updateDownloadState(.downloadFailure)

@@ -15,6 +15,7 @@ public protocol BaseActionsDelegate {
     func makePurchase() async -> Bool;
     func logImpression();
     func logDismissal();
+    func getIsLoading() -> Bool;
 }
 
 public class ActionsDelegateWrapper: ObservableObject {
@@ -42,7 +43,7 @@ public class ActionsDelegateWrapper: ObservableObject {
     
     @MainActor
     public func makePurchase() async -> Bool {
-        await delegate.makePurchase()
+        await delegate.makePurchase();
     }
     
     public func logImpression() {
@@ -52,6 +53,10 @@ public class ActionsDelegateWrapper: ObservableObject {
     public func logDismissal() {
         delegate.logDismissal()
     }
+    
+    public func getIsLoading() -> Bool{
+        return delegate.getIsLoading();
+    }
 }
 
 public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
@@ -60,6 +65,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     @Published var selectedProductId: String
     @Published var isShowingModal: Bool = false
     @Published var showingModalScreen: String? = nil
+    @Published var isLoading: Bool = false
     
     var dismissAction: (() -> Void)?
         
@@ -73,21 +79,29 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
          self.dismissAction = action
     }
     
+    public func getIsLoading() -> Bool {
+        return isLoading;
+    }
+    
     public func dismiss() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-            event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
-        )
-        dismissAction?()
+        if (!isLoading) {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
+            )
+            dismissAction?()
+        }
     }
     
     public func onCTAPress(contentComponentName: String) {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-            event: .ctaPressed(
-                ctaName: contentComponentName,
-                triggerName: trigger,
-                paywallTemplateName: paywallInfo.paywallTemplateName
+        if (!isLoading) {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                event: .ctaPressed(
+                    ctaName: contentComponentName,
+                    triggerName: trigger,
+                    paywallTemplateName: paywallInfo.paywallTemplateName
+                )
             )
-        )
+        }
     }
     
     public func showScreen(screenId: String) {
@@ -104,8 +118,10 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event:
             .subscriptionPressed(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
         
+        isLoading = true;
         let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
-        
+        defer { isLoading = false; }
+
         switch status {
         case .purchased, .restored:
             return true
@@ -155,5 +171,9 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public func logDismissal() {
         print("log dismissal");
+    }
+    
+    public func getIsLoading() -> Bool {
+        return false;
     }
 }

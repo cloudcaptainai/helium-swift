@@ -216,18 +216,33 @@ struct ActionModifier: ViewModifier {
     func body(content: Content) -> some View {
         if let actionConfig = self.actionConfig {
             Button(action: {
-                performAction(actionConfig.actionEvent)
+                Task {
+                    await performAction(actionConfig.actionEvent)
+                }
             }) {
-                content
+                ZStack {
+                    // Hide the content when loading
+                    content
+                        .opacity(actionsDelegate.getIsLoading() ? 0 : 1)
+                    
+                    // Show spinner when loading
+                    if actionsDelegate.getIsLoading() && actionConfig.actionEvent == .subscribe {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    }
+                }
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
+            .disabled(actionsDelegate.getIsLoading()) // Disable button while loading
         } else {
             content
         }
     }
     
-    private func performAction(_ event: ActionConfig.ActionEvent) {
+    private func performAction(_ event: ActionConfig.ActionEvent) async {
+        
+
         actionsDelegate.onCTAPress(contentComponentName: contentComponentName)
         switch event {
             case .dismiss:
@@ -235,9 +250,7 @@ struct ActionModifier: ViewModifier {
             case .selectProduct(let productKey):
                 actionsDelegate.selectProduct(productId: productKey)
             case .subscribe:
-                Task {
-                    await actionsDelegate.makePurchase()
-                }
+                await actionsDelegate.makePurchase(); 
             case .showScreen(let screenId):
                 actionsDelegate.showScreen(screenId: screenId);
             case .customAction(let actionKey):
@@ -245,7 +258,6 @@ struct ActionModifier: ViewModifier {
                 return;
             default:
                 return;
-                
         }
     }
 }
