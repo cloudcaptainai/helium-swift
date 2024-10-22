@@ -57,7 +57,12 @@ public class HeliumController {
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
                 
-                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(configId: fetchedConfig.fetchedConfigID)
+                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
+                    configId: fetchedConfig.fetchedConfigID,
+                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
+                    imagesDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.imageDownloadTimeTakenMS,
+                    fontsDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.fontDownloadTimeTakenMS
+                );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
                 // Use the config as needed

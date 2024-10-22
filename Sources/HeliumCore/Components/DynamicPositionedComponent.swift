@@ -224,10 +224,10 @@ struct ActionModifier: ViewModifier {
                 ZStack {
                     // Hide the content when loading
                     content
-                        .opacity(isLoading ? 0 : 1)
+                        .opacity(actionsDelegate.getIsLoading() ? 0 : 1)
                     
                     // Show spinner when loading
-                    if isLoading && actionConfig.actionEvent == .subscribe {
+                    if actionsDelegate.getIsLoading() && actionConfig.actionEvent == .subscribe {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                     }
@@ -242,11 +242,8 @@ struct ActionModifier: ViewModifier {
     }
     
     private func performAction(_ event: ActionConfig.ActionEvent) async {
-        guard !isLoading else { return } // Extra safety check
         
-        isLoading = true
-        defer { isLoading = false } // Ensure we reset loading state when done
-        
+
         actionsDelegate.onCTAPress(contentComponentName: contentComponentName)
         switch event {
             case .dismiss:
@@ -254,7 +251,7 @@ struct ActionModifier: ViewModifier {
             case .selectProduct(let productKey):
                 actionsDelegate.selectProduct(productId: productKey)
             case .subscribe:
-                await actionsDelegate.makePurchase();
+                await actionsDelegate.makePurchase(); 
             case .showScreen(let screenId):
                 actionsDelegate.showScreen(screenId: screenId);
             case .customAction(let actionKey):

@@ -65,11 +65,11 @@ public enum HeliumPaywallEvent: Codable {
     case paywallOpenFailed(triggerName: String, paywallTemplateName: String)
     case paywallClose(triggerName: String, paywallTemplateName: String)
     case paywallDismissed(triggerName: String, paywallTemplateName: String)
-    case paywallsDownloadSuccess(configId: UUID)
+    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil)
     case paywallsDownloadError(error: String)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, configId, errorDescription
+        case type, ctaName, productKey, triggerName, paywallTemplateName, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS
     }
     
     public func getTriggerIfExists() -> String?{
@@ -133,9 +133,12 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-        case .paywallsDownloadSuccess(let configId):
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS):
             try container.encode("paywallsDownloadSuccess", forKey: .type)
             try container.encode(configId, forKey: .configId)
+            try container.encodeIfPresent(downloadTimeTakenMS, forKey: .downloadTimeTakenMS);
+            try container.encodeIfPresent(imagesDownloadTimeTakenMS, forKey: .imagesDownloadTimeTakenMS);
+            try container.encodeIfPresent(fontsDownloadTimeTakenMS, forKey: .fontsDownloadTimeTakenMS);
         case .paywallsDownloadError(let error):
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
