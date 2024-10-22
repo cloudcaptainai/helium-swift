@@ -206,7 +206,6 @@ struct ActionModifier: ViewModifier {
     let actionConfig: ActionConfig?
     let actionsDelegate: ActionsDelegateWrapper
     let contentComponentName: String
-    @State private var isLoading = false
     
     public init(actionConfig: ActionConfig?, actionsDelegate: ActionsDelegateWrapper, contentComponentName: String) {
         self.actionConfig = actionConfig
@@ -235,7 +234,7 @@ struct ActionModifier: ViewModifier {
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
-            .disabled(isLoading) // Disable button while loading
+            .disabled(actionsDelegate.getIsLoading()) // Disable button while loading
         } else {
             content
         }
