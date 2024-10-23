@@ -38,6 +38,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
+    private var isAnalyticsEnabled: Bool = true
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
@@ -49,6 +50,14 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     public func getAnalytics() -> Analytics? {
         return analytics;
+    }
+    
+    public func setIsAnalyticsEnabled(shouldEnable: Bool) {
+        isAnalyticsEnabled = shouldEnable;
+    }
+    
+    public func getIsAnalyticsEnabled() -> Bool {
+        return isAnalyticsEnabled;
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
@@ -73,14 +82,15 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         delegate?.onHeliumPaywallEvent(event: event);
-        if (analytics != nil) {
+        if (isAnalyticsEnabled && analytics != nil) {
             var experimentID: String? = nil;
             if let triggerName = event.getTriggerIfExists() {
                 experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
             }
             
             let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
-            let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID);
+            let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID, downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus);
+            
             analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
         }
     }
