@@ -29,6 +29,13 @@ public class HeliumController {
         return createHeliumUserId();
     }
     
+    public func identifyUser(userId: String) {
+        if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil && HeliumPaywallDelegateWrapper.shared.getIsAnalyticsEnabled()) {
+            let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
+            analytics.identify(userId: userId, traits: CodableUserContext.create());
+        }
+    }
+    
     public func downloadConfig() async {
         var payload: [String: Any]
         payload = [
