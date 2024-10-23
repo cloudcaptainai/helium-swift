@@ -9,7 +9,6 @@ import Foundation
 import UIKit
 import DeviceKit
 
-
 struct CodableLocale: Codable {
     var currentCountry: String?
     var currentCurrency: String?
@@ -34,6 +33,7 @@ struct CodableApplicationInfo: Codable {
     var build: String?
     var completeAppVersion: String?
     var appDisplayName: String?
+    var heliumSdkVersion: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -63,7 +63,9 @@ func createApplicationInfo() -> CodableApplicationInfo {
         appDisplayName = nil;
     }
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName);
+    let heliumSdkVersion = BuildConstants.version;
+    
+    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
 }
 
 struct CodableUserContext: Codable {
@@ -114,7 +116,8 @@ struct CodableUserContext: Codable {
                 "version": self.applicationInfo.version as Any,
                 "build": self.applicationInfo.build as Any,
                 "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
-                "appDisplayName": self.applicationInfo.appDisplayName as Any
+                "appDisplayName": self.applicationInfo.appDisplayName as Any,
+                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion as Any,
             ],
             "additionalParams": self.additionalParams
         ]

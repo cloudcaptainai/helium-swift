@@ -220,21 +220,26 @@ struct ActionModifier: ViewModifier {
                     await performAction(actionConfig.actionEvent)
                 }
             }) {
-                ZStack {
-                    // Hide the content when loading
-                    content
-                        .opacity(actionsDelegate.getIsLoading() ? 0 : 1)
-                    
-                    // Show spinner when loading
-                    if actionsDelegate.getIsLoading() && actionConfig.actionEvent == .subscribe {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
+                if (actionConfig.actionEvent == .subscribe) {
+                    ZStack {
+                        // Hide the content when loading
+                        content
+                            .opacity(actionsDelegate.getIsLoading() ? 0 : 1)
+                        
+                        // Show spinner when loading
+                        if (actionsDelegate.getIsLoading()) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                                .opacity(1.0)
+                        }
                     }
+                } else {
+                    content
                 }
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
-            .disabled(actionsDelegate.getIsLoading()) // Disable button while loading
+            .disabled(actionConfig.actionEvent == .subscribe && actionsDelegate.getIsLoading())
         } else {
             content
         }
