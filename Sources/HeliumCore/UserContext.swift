@@ -178,6 +178,19 @@ func createHeliumUserId() -> String {
     }
 }
 
+func getHeliumPersistentId() -> String {
+    // Check if the User Id exists in UserDefaults
+    if let existingUserId = UserDefaults.standard.string(forKey: "heliumPersistentUserId") {
+        // Return the existing User Id
+        return existingUserId;
+    } else {
+        // Create a new User Id
+        let newUserId: String = UUID().uuidString;
+        // Save the new User Id to UserDefaults
+        return newUserId
+    }
+}
+
 extension Bundle {
     var displayName: String? {
         return object(forInfoDictionaryKey: "CFBundleDisplayName") as? String

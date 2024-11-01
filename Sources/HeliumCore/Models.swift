@@ -259,6 +259,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var timestamp: String
     var isHeliumEvent: Bool = true
     var experimentID: String?
+    var heliumPersistentId: String?
     var downloadStatus: HeliumFetchedConfigStatus?
 }
 

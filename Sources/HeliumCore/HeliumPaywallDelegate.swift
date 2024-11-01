@@ -81,17 +81,21 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        delegate?.onHeliumPaywallEvent(event: event);
-        if (isAnalyticsEnabled && analytics != nil) {
-            var experimentID: String? = nil;
-            if let triggerName = event.getTriggerIfExists() {
-                experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
+        do {
+            delegate?.onHeliumPaywallEvent(event: event);
+            if (isAnalyticsEnabled && analytics != nil) {
+                var experimentID: String? = nil;
+                if let triggerName = event.getTriggerIfExists() {
+                    experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
+                }
+                
+                let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
+                let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID, heliumPersistentId: getHeliumPersistentId(), downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus);
+                
+                analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }
-            
-            let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
-            let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID, downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus);
-            
-            analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+        } catch {
+            print("Delegate action failed.");
         }
     }
 }
