@@ -107,7 +107,7 @@ public class Helium {
     }
     
     public func overrideUserId(newUserId: String) {
-        UserDefaults.standard.set(newUserId, forKey: "heliumUserId");
+        UserDefaults.standard.setValue(newUserId, forKey: "heliumUserId");
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId);
     }
