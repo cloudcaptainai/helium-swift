@@ -55,7 +55,6 @@ public class HeliumController {
                     .flushInterval(10)
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
-                    print("Can't re-set analytics.")
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
                     analytics.identify(userId: self.getUserId(), traits: self.userContext);
                 } else {
@@ -74,7 +73,7 @@ public class HeliumController {
                 
                 // Use the config as needed
             case .failure(let error):
-                
+            
                 let configuration = Configuration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
                     .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
                     .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
@@ -82,7 +81,6 @@ public class HeliumController {
                     .flushInterval(10)
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
-                    print("Can't re-set analytics.")
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
                     analytics.identify(userId: self.getUserId(), traits: self.userContext);
                 } else {

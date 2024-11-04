@@ -174,6 +174,7 @@ func createHeliumUserId() -> String {
         // Create a new User Id
         let newUserId: String = UUID().uuidString;
         // Save the new User Id to UserDefaults
+        UserDefaults.standard.setValue(newUserId, forKey: "heliumUserId");
         return newUserId
     }
 }
@@ -187,6 +188,7 @@ func getHeliumPersistentId() -> String {
         // Create a new User Id
         let newUserId: String = UUID().uuidString;
         // Save the new User Id to UserDefaults
+        UserDefaults.standard.setValue(newUserId, forKey: "heliumPersistentUserId");
         return newUserId
     }
 }
