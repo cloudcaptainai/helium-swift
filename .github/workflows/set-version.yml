@@ -1,8 +1,8 @@
-name: Sync Release Version to SDK
+name: Sync Release Verison to SDK
 
 on:
   release:
-    types: [published]
+    types: [published, prereleased]
 
 jobs:
   update-version:
@@ -14,6 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.target_commitish }}
+          fetch-depth: 0  # Added to ensure we have full git history
           
       - name: Get release version
         id: get_version
@@ -34,7 +35,17 @@ jobs:
           git push
           echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           
-      - name: Update release to point to new commit
+      - name: Update release tag to point to new commit
         run: |
-          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-          gh release edit ${{ steps.get_version.outputs.VERSION }} --target ${{ steps.commit.outputs.commit }}
+          git tag -fa ${{ steps.get_version.outputs.VERSION }} ${{ steps.commit.outputs.commit }}
+          git push --force origin ${{ steps.get_version.outputs.VERSION }}
+          
+      - name: Update release to point to new commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit ${{ steps.get_version.outputs.VERSION }} \
+            --target ${{ steps.commit.outputs.commit }} \
+            --draft=false \
+            --prerelease=${{ github.event.release.prerelease }} \
+            --latest=${{ !github.event.release.prerelease }}
