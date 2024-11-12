@@ -13,7 +13,7 @@ public enum HeliumAssetDownloadStatus: Codable {
 // Status structure
 public struct HeliumAssetStatus: Codable {
     public var downloadStatus: HeliumAssetDownloadStatus
-    public var timeTakenMS: TimeInterval?
+    public var timeTakenMS: UInt64?
     public var errorMesssage: String?
 }
 
@@ -27,7 +27,7 @@ public class HeliumAssetManager: ObservableObject {
     @Published public var imageStatus = HeliumAssetStatus(downloadStatus: .notStartedYet)
     
     public func downloadFonts(from fontURLs: Set<String>) async {
-        let startTime = Date()
+        let startTime = DispatchTime.now()
         
         await MainActor.run {
             fontStatus = HeliumAssetStatus(downloadStatus: .inProgress)
@@ -51,8 +51,8 @@ public class HeliumAssetManager: ObservableObject {
             }
         }
         
-        let endTime = Date()
-        let timeTaken = endTime.timeIntervalSince(startTime) * 1000
+        let endTime = DispatchTime.now()
+        let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
         
         // Process results after all tasks are complete
         let firstFailedURL = results.first { !$0.success }?.url
@@ -113,7 +113,7 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func downloadImages(from imageURLs: Set<String>) async {
-        let startTime = Date()
+        let startTime = DispatchTime.now()
         
         // Set status on main thread
         await MainActor.run {
@@ -131,8 +131,8 @@ public class HeliumAssetManager: ObservableObject {
                     return
                 }
                 
-                let endTime = Date()
-                let timeTaken = endTime.timeIntervalSince(startTime) * 1000
+                let endTime = DispatchTime.now()
+                let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
                 
                 // Update status on main thread
                 Task { @MainActor in

@@ -14,6 +14,11 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
+    
+    public func hideUpsell() -> Bool {
+        return HeliumPaywallPresenter.shared.hideUpsell();
+    }
+    
     public func upsellViewForTrigger(trigger: String) -> AnyView {
         if (!initialized) {
             fatalError("Helium.initialize() needs to be called before presenting a paywall. Please contact founders@tryhelium.com to get set up!");
@@ -77,8 +82,7 @@ public class Helium {
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus,
-           HeliumAssetManager.shared.imageStatus.downloadStatus == .downloaded,
-           HeliumAssetManager.shared.fontStatus.downloadStatus == .downloaded {
+           HeliumAssetManager.shared.imageStatus.downloadStatus == .downloaded {
             return true;
         }
         return false;

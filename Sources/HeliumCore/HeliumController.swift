@@ -66,8 +66,8 @@ public class HeliumController {
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
                     configId: fetchedConfig.fetchedConfigID,
                     downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
-                    imagesDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.imageDownloadTimeTakenMS,
-                    fontsDownloadTimeTakenMS: HeliumFetchedConfigManager.shared.fontDownloadTimeTakenMS
+                    imagesDownloadTimeTakenMS: HeliumAssetManager.shared.imageStatus.timeTakenMS,
+                    fontsDownloadTimeTakenMS: HeliumAssetManager.shared.fontStatus.timeTakenMS
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
