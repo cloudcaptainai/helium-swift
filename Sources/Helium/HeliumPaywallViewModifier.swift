@@ -11,22 +11,13 @@ import SwiftUI
 struct DynamicPaywallModifier: ViewModifier {
     @Binding var isPresented: Bool
     let trigger: String
-    @StateObject private var configManager = HeliumFetchedConfigManager.shared
     
     @ViewBuilder
     func body(content: Content) -> some View {
-        if case .downloadSuccess = configManager.downloadStatus {
-            content
-                .fullScreenCover(isPresented: $isPresented) {
-                    Helium.shared.upsellViewForTrigger(trigger: trigger)
-                }
-        } else if case .notDownloadedYet = configManager.downloadStatus {
-            content
-        } else {
-            content.fullScreenCover(isPresented: $isPresented) {
+        content
+            .fullScreenCover(isPresented: $isPresented) {
                 Helium.shared.upsellViewForTrigger(trigger: trigger)
             }
-        }
     }
 }
 
