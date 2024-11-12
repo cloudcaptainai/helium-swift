@@ -57,7 +57,7 @@ public struct DynamicPositionedComponent: View {
         }
         
         self.geometryProxy = geometryProxy
-        self.isHighlighted = json["isInteractive"].bool ?? false;
+        self.isHighlighted = json["isHighlighted"].bool ?? false;
     }
     
     public var body: some View {
@@ -65,6 +65,7 @@ public struct DynamicPositionedComponent: View {
             .background(backgroundComponent?.view)
             .overlay(overlayComponent?.view)
             .modifier(DynamicViewModifier(json: viewModifierProps, proxy: geometryProxy))
+            .modifier(IsHighlightedModifier(isHighlighted: self.isHighlighted))
             .modifier(ActionModifier(actionConfig: self.actionConfig, actionsDelegate: actionsDelegate, contentComponentName: componentName))
     }
     
@@ -201,6 +202,22 @@ extension Alignment {
     }
 }
 
+struct IsHighlightedModifier: ViewModifier {
+    let isHighlighted: Bool
+    
+    public init(isHighlighted: Bool) {
+        self.isHighlighted = isHighlighted;
+    }
+    
+    func body(content: Content) -> some View {
+        if self.isHighlighted {
+            content.border(Color.red, width: 2)
+        } else {
+            content
+        }
+    }
+    
+}
 
 struct ActionModifier: ViewModifier {
     let actionConfig: ActionConfig?
