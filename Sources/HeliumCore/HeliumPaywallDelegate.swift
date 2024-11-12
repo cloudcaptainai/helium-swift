@@ -85,12 +85,26 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             delegate?.onHeliumPaywallEvent(event: event);
             if (isAnalyticsEnabled && analytics != nil) {
                 var experimentID: String? = nil;
+                var paywallInfo: HeliumPaywallInfo? = nil;
                 if let triggerName = event.getTriggerIfExists() {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
+                    paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
                 }
                 
                 let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
-                let eventForLogging = HeliumPaywallLoggedEvent(heliumEvent: event, fetchedConfigId: fetchedConfigId, timestamp: formatAsTimestamp(date: Date()), experimentID: experimentID, heliumPersistentId: getHeliumPersistentId(), downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus);
+                let eventForLogging = HeliumPaywallLoggedEvent(
+                    heliumEvent: event,
+                    fetchedConfigId: fetchedConfigId,
+                    timestamp: formatAsTimestamp(date: Date()),
+                    experimentID: experimentID,
+                    paywallID: paywallInfo?.paywallID,
+                    heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
+                    heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
+                    isFallback: paywallInfo?.paywallTemplateName == "Fallback",
+                    downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
+                    imageDownloadStatus: HeliumAssetManager.shared.imageStatus,
+                    fontsDownloadStatus: HeliumAssetManager.shared.fontStatus
+                );
                 
                 analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }

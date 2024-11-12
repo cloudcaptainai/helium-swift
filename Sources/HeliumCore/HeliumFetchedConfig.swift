@@ -1,8 +1,9 @@
 import Foundation
 import SwiftyJSON
 
-public enum HeliumFetchedConfigStatus: Codable {
+public enum HeliumFetchedConfigStatus: Codable, Equatable {
     case notDownloadedYet
+    case inProgress
     case downloadSuccess(fetchedConfigId: UUID)
     case downloadFailure
 }
@@ -55,10 +56,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         completion: @escaping (Result<HeliumFetchedConfig, Error>) -> Void
     ) {
-        
         Task {
             do {
-                var startTime = DispatchTime.now();
+                let startTime = DispatchTime.now()
                 // Make the request asynchronously
                 let response = try await fetchEndpoint(endpoint: endpoint, params: params)
                 
@@ -67,35 +67,43 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     await self.updateDownloadState(.downloadFailure)
                     return
                 }
-                var endTime = DispatchTime.now();
-                downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
+                let endTime = DispatchTime.now()
+                downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
                 
                 // Update the fetched config
                 self.fetchedConfig = newConfig
                 
                 // Download assets
-                if (self.fetchedConfig != nil) {
+                if let config = self.fetchedConfig {
                     do {
                         let encoder = JSONEncoder()
-                        let jsonData = try encoder.encode(self.fetchedConfig!.triggerToPaywalls)
+                        let jsonData = try encoder.encode(config.triggerToPaywalls)
+                        let jsonWrapped = try JSON(data: jsonData)
+                        var fontURLs = Set<String>()
+                        var imageURLs = Set<String>()
+                        HeliumAssetManager.shared.collectFontURLs(from: jsonWrapped, into: &fontURLs)
+                        HeliumAssetManager.shared.collectImageURLs(from: jsonWrapped, into: &imageURLs)
                         
-                        startTime = DispatchTime.now();
-                        try await downloadFonts(from: jsonData);
-                        endTime = DispatchTime.now();
-                        fontDownloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
-                        
-                        startTime = DispatchTime.now();
-                        downloadImages(from: jsonData);
-                        endTime = DispatchTime.now();
-                        imageDownloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
+                        // Create local copies for the task group
+                        let fontURLsCopy = fontURLs
+                        let imageURLsCopy = imageURLs
+                        await withTaskGroup(of: Void.self) { group in
+                            group.addTask {
+                                await HeliumAssetManager.shared.downloadImages(from: imageURLsCopy)
+                            }
+                            
+                            group.addTask {
+                                await HeliumAssetManager.shared.downloadFonts(from: fontURLsCopy)
+                            }
+                        }
                     } catch {
-                        print("Couldnt load all fonts.");
+                        print("Couldn't load all fonts.")
                     }
                 }
-                
-                await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
 
+                await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
                 completion(.success(newConfig))
+                
             } catch {
                 await self.updateDownloadState(.downloadFailure)
                 completion(.failure(error))

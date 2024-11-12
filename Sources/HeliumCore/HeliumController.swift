@@ -15,18 +15,12 @@ public class HeliumController {
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
-    let userContext = CodableUserContext.create()
-    
     var apiKey: String
     var triggers: [HeliumTrigger]?
     
     public init(apiKey: String, triggers: [HeliumTrigger]? = nil) {
         self.apiKey = apiKey
         self.triggers = triggers;
-    }
-    
-    public func getUserId() -> String {
-        return createHeliumUserId();
     }
     
     public func identifyUser(userId: String) {
@@ -36,12 +30,12 @@ public class HeliumController {
         }
     }
     
-    public func downloadConfig() async {
+    public func downloadConfig() {
         var payload: [String: Any]
         payload = [
             "apiKey": self.apiKey,
-            "userId": self.getUserId(),
-            "userContext": self.userContext.asParams(),
+            "userId": HeliumIdentityManager.shared.getUserId(),
+            "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
             "triggers": self.triggers?.compactMap({ trigger in trigger.name }) as Any
         ]
         
@@ -56,10 +50,16 @@ public class HeliumController {
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-                    analytics.identify(userId: self.getUserId(), traits: self.userContext);
+                    analytics.identify(
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
+                    );
                 } else {
                     let analytics = Analytics(configuration: configuration)
-                    analytics.identify(userId: self.getUserId(), traits: self.userContext)
+                    analytics.identify(
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
+                    );
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
                 
@@ -82,10 +82,16 @@ public class HeliumController {
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-                    analytics.identify(userId: self.getUserId(), traits: self.userContext);
+                    analytics.identify(
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
+                    );
                 } else {
                     let analytics = Analytics(configuration: configuration)
-                    analytics.identify(userId: self.getUserId(), traits: self.userContext)
+                    analytics.identify(
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
+                    );
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
 

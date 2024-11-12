@@ -68,7 +68,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
     return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
 }
 
-struct CodableUserContext: Codable {
+public struct CodableUserContext: Codable {
     var locale: CodableLocale
     var screenInfo: CodableScreenInfo
     var deviceInfo: CodableDeviceInfo
@@ -161,35 +161,6 @@ struct CodableUserContext: Codable {
             applicationInfo: applicationInfo,
             additionalParams: [:]
         )
-    }
-}
-
-
-func createHeliumUserId() -> String {
-    // Check if the User Id exists in UserDefaults
-    if let existingUserId = UserDefaults.standard.string(forKey: "heliumUserId") {
-        // Return the existing User Id
-        return existingUserId;
-    } else {
-        // Create a new User Id
-        let newUserId: String = UUID().uuidString;
-        // Save the new User Id to UserDefaults
-        UserDefaults.standard.setValue(newUserId, forKey: "heliumUserId");
-        return newUserId
-    }
-}
-
-func getHeliumPersistentId() -> String {
-    // Check if the User Id exists in UserDefaults
-    if let existingUserId = UserDefaults.standard.string(forKey: "heliumPersistentUserId") {
-        // Return the existing User Id
-        return existingUserId;
-    } else {
-        // Create a new User Id
-        let newUserId: String = UUID().uuidString;
-        // Save the new User Id to UserDefaults
-        UserDefaults.standard.setValue(newUserId, forKey: "heliumPersistentUserId");
-        return newUserId
     }
 }
 

@@ -28,17 +28,17 @@ public final class FontDownloader: ObservableObject {
   }
 }
 
-public func downloadRemoteFont(fontURL: URL) async -> HeliumAssetLoadStatus {
+public func downloadRemoteFont(fontURL: URL) async -> Bool {
       // Load font from URL using our FontLoader.
       guard let font = FontDownloader.downloadRemoteFont(url: fontURL) else {
-          return .downloadFailed;
+          return false;
       }
     
     guard let postScriptName = font.postScriptName else {
-        return .downloadFailed;
+        return false;
     }
     
-    return .fontDownloaded(postScriptName: postScriptName);
+    return true;
 }
 
 

@@ -14,7 +14,7 @@ public protocol BaseActionsDelegate {
     func selectProduct(productId: String);
     func makePurchase() async -> Bool;
     func logImpression();
-    func logDismissal();
+    func logClosure();
     func getIsLoading() -> Bool;
 }
 
@@ -50,8 +50,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         delegate.logImpression()
     }
     
-    public func logDismissal() {
-        delegate.logDismissal()
+    public func logClosure() {
+        delegate.logClosure()
     }
     
     public func getIsLoading() -> Bool{
@@ -134,8 +134,8 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
     }
     
-    public func logDismissal() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+    public func logClosure() {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
     }
 }
 
@@ -169,8 +169,8 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("log impression")
     }
     
-    public func logDismissal() {
-        print("log dismissal");
+    public func logClosure() {
+        print("log closure");
     }
     
     public func getIsLoading() -> Bool {
