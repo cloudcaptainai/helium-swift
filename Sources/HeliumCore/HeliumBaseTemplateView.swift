@@ -21,24 +21,23 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         
         let encoder = JSONEncoder()
         let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
-        self.templateValues = try! JSON(data: jsonData)
+        self.templateValues = try! JSON(data: jsonData);
+        assert(self.templateValues["baseStack"].exists());
     }
     
     public var body: some View {
         GeometryReader { reader in
-            if templateValues["baseStack"].exists() {
-                DynamicPositionedComponent(
-                    json: templateValues["baseStack"],
-                    geometryProxy: reader
-                )
-                .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
-                    if let modalScreenToShow = actionsDelegate.showingModalScreen,
-                       templateValues[modalScreenToShow].exists() {
-                        DynamicPositionedComponent(
-                            json: templateValues[modalScreenToShow],
-                            geometryProxy: reader
-                        )
-                    }
+            DynamicPositionedComponent(
+                json: templateValues["baseStack"],
+                geometryProxy: reader
+            )
+            .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
+                if let modalScreenToShow = actionsDelegate.showingModalScreen,
+                   templateValues[modalScreenToShow].exists() {
+                    DynamicPositionedComponent(
+                        json: templateValues[modalScreenToShow],
+                        geometryProxy: reader
+                    )
                 }
             }
         }
@@ -49,7 +48,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             actionsDelegateWrapper.logImpression()
         }
         .onDisappear {
-            actionsDelegateWrapper.logDismissal()
+            actionsDelegateWrapper.logClosure()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)

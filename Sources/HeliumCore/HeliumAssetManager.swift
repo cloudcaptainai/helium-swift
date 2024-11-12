@@ -1,92 +1,165 @@
-//
-//  File.swift
-//  
-//
-//  Created by Anish Doshi on 10/1/24.
-//
-
 import Foundation
 import SwiftyJSON
 import Kingfisher
+import Combine
 
-// TODO - move this into a singleton class that stores state related to if assets are downloaded
+public enum HeliumAssetDownloadStatus: Codable {
+    case notStartedYet
+    case inProgress
+    case downloaded
+    case failed
+}
 
-public func downloadFonts(from jsonData: Data) async throws {
-    // Parse JSON data
-    let json = try! JSON(data: jsonData)
+// Status structure
+public struct HeliumAssetStatus: Codable {
+    public var downloadStatus: HeliumAssetDownloadStatus
+    public var timeTakenMS: TimeInterval?
+    public var errorMesssage: String?
+}
+
+public class HeliumAssetManager: ObservableObject {
+    // Singleton instance
+    public static let shared = HeliumAssetManager()
+    private init() {}
     
-    // Collect fontURLs
-    var fontURLs = Set<String>()
-    collectFontURLs(from: json, into: &fontURLs)
+    // Published properties for observing status
+    @Published public var fontStatus = HeliumAssetStatus(downloadStatus: .notStartedYet)
+    @Published public var imageStatus = HeliumAssetStatus(downloadStatus: .notStartedYet)
     
-    // Download fonts in parallel
-    await withTaskGroup(of: Void.self) { group in
-        for fontURL in fontURLs {
-            group.addTask {
-                if let url = URL(string: fontURL) {
-                    let result = await downloadRemoteFont(fontURL: url);
-                    print(result);
+    public func downloadFonts(from fontURLs: Set<String>) async {
+        let startTime = Date()
+        
+        await MainActor.run {
+            fontStatus = HeliumAssetStatus(downloadStatus: .inProgress)
+        }
+        
+        var results: [(success: Bool, url: String)] = []
+        
+        await withTaskGroup(of: (Bool, String).self) { group in
+            for fontURL in fontURLs {
+                group.addTask {
+                    if let url = URL(string: fontURL) {
+                        let result = await downloadRemoteFont(fontURL: url)
+                        return (result, fontURL)
+                    }
+                    return (false, fontURL)
                 }
             }
-        }
-    }
-    print("Successfully downloaded \(fontURLs.count) fonts");
-}
-
-func collectFontURLs(from json: JSON, into fontURLs: inout Set<String>) {
-    switch json.type {
-    case .dictionary:
-        for (key, value) in json {
-            if key == "fontURL", let url = value.string {
-                fontURLs.insert(url)
-            } else {
-                collectFontURLs(from: value, into: &fontURLs)
+            
+            for await result in group {
+                results.append(result)
             }
         }
-    case .array:
-        for item in json.arrayValue {
-            collectFontURLs(from: item, into: &fontURLs)
-        }
-    default:
-        break
-    }
-}
-
-func collectImageURLs(from json: JSON, into imageURLs: inout Set<String>) {
-    switch json.type {
-    case .dictionary:
-        for (key, value) in json {
-            if key == "imageURL", let url = value.string {
-                imageURLs.insert(url)
+        
+        let endTime = Date()
+        let timeTaken = endTime.timeIntervalSince(startTime) * 1000
+        
+        // Process results after all tasks are complete
+        let firstFailedURL = results.first { !$0.success }?.url
+        
+        await MainActor.run {
+            if let failedURL = firstFailedURL {
+                fontStatus = HeliumAssetStatus(
+                    downloadStatus: .failed,
+                    timeTakenMS: timeTaken,
+                    errorMesssage: "Failed to download font: \(failedURL)"
+                )
             } else {
-                collectImageURLs(from: value, into: &imageURLs)
+                fontStatus = HeliumAssetStatus(
+                    downloadStatus: .downloaded,
+                    timeTakenMS: timeTaken,
+                    errorMesssage: nil
+                )
             }
         }
-    case .array:
-        for item in json.arrayValue {
-            collectImageURLs(from: item, into: &imageURLs)
+    }
+    
+    public func collectFontURLs(from json: JSON, into fontURLs: inout Set<String>) {
+        switch json.type {
+        case .dictionary:
+            for (key, value) in json {
+                if key == "fontURL", let url = value.string {
+                    fontURLs.insert(url)
+                } else {
+                    collectFontURLs(from: value, into: &fontURLs)
+                }
+            }
+        case .array:
+            for item in json.arrayValue {
+                collectFontURLs(from: item, into: &fontURLs)
+            }
+        default:
+            break
         }
-    default:
-        break
+    }
+    
+    public func collectImageURLs(from json: JSON, into imageURLs: inout Set<String>) {
+        switch json.type {
+        case .dictionary:
+            for (key, value) in json {
+                if key == "imageURL", let url = value.string {
+                    imageURLs.insert(url)
+                } else {
+                    collectImageURLs(from: value, into: &imageURLs)
+                }
+            }
+        case .array:
+            for item in json.arrayValue {
+                collectImageURLs(from: item, into: &imageURLs)
+            }
+        default:
+            break
+        }
+    }
+    
+    public func downloadImages(from imageURLs: Set<String>) async {
+        let startTime = Date()
+        
+        // Set status on main thread
+        await MainActor.run {
+            imageStatus = HeliumAssetStatus(downloadStatus: .inProgress)
+        }
+        
+        let urlList = imageURLs.compactMap { URL(string: $0) }
+        let totalExpectedImages = urlList.count
+        
+        // Create a continuation to wait for the prefetcher completion
+        await withCheckedContinuation { [self] continuation in
+            let prefetcher = ImagePrefetcher(urls: urlList) { [weak self] skippedResources, failedResources, completedResources in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                let endTime = Date()
+                let timeTaken = endTime.timeIntervalSince(startTime) * 1000
+                
+                // Update status on main thread
+                Task { @MainActor in
+                    if !failedResources.isEmpty {
+                        self.imageStatus = HeliumAssetStatus(
+                            downloadStatus: .failed,
+                            timeTakenMS: timeTaken,
+                            errorMesssage: "Failed to download \(failedResources.count) images"
+                        )
+                        continuation.resume()
+                    } else {
+                        // Check if all images are accounted for
+                        let totalProcessedImages = completedResources.count + skippedResources.count
+                        if totalProcessedImages == totalExpectedImages {
+                            self.imageStatus = HeliumAssetStatus(
+                                downloadStatus: .downloaded,
+                                timeTakenMS: timeTaken,
+                                errorMesssage: nil
+                            )
+                            continuation.resume()
+                        }
+                        // Note: If totalProcessedImages != totalExpectedImages, we don't resume
+                        // This ensures we wait for all images to complete or fail
+                    }
+                }
+            }
+            prefetcher.start()
+        }
     }
 }
-
-public func downloadImages(from jsonData: Data) {
-    // Parse JSON data
-    let json = try! JSON(data: jsonData)
-    // Collect imageURLs
-    var imageURLs = Set<String>()
-    collectImageURLs(from: json, into: &imageURLs)
-    
-    let urlList = imageURLs.compactMap { URL(string: $0) }
-    
-    // Prefetch images
-    let prefetcher = ImagePrefetcher(urls: urlList) {
-        skippedResources, failedResources, completedResources in
-        print("Successfully downloaded images: \(completedResources)")
-        print("Failed downloaded images: \(failedResources)")
-        print("Skipped: \(skippedResources)")
-    }
-    prefetcher.start()
-}
-
