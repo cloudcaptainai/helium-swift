@@ -56,20 +56,6 @@ public class HeliumIdentityManager {
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
     public func getUserContext() -> CodableUserContext {
-        // Check UserDefaults
-        if let data = UserDefaults.standard.data(forKey: userContextKey),
-           let savedContext = try? JSONDecoder().decode(CodableUserContext.self, from: data) {
-            return savedContext
-        }
-        
-        // Create new context if none exists
-        let context = CodableUserContext.create()
-        
-        // Persist to UserDefaults
-        if let encoded = try? JSONEncoder().encode(context) {
-            UserDefaults.standard.set(encoded, forKey: userContextKey)
-        }
-        
-        return context
+        return CodableUserContext.create();
     }
 }
