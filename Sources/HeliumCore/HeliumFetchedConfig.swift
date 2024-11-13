@@ -1,10 +1,10 @@
 import Foundation
 import SwiftyJSON
 
-public enum HeliumFetchedConfigStatus: Codable, Equatable {
+public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case notDownloadedYet
     case inProgress
-    case downloadSuccess(fetchedConfigId: UUID)
+    case downloadSuccess
     case downloadFailure
 }
 
@@ -101,7 +101,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     }
                 }
 
-                await self.updateDownloadState(.downloadSuccess(fetchedConfigId: newConfig.fetchedConfigID))
+                await self.updateDownloadState(.downloadSuccess)
                 completion(.success(newConfig))
                 
             } catch {
