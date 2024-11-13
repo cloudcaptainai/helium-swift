@@ -3,7 +3,7 @@ import SwiftyJSON
 import Kingfisher
 import Combine
 
-public enum HeliumAssetDownloadStatus: Codable {
+public enum HeliumAssetDownloadStatus: String, Codable {
     case notStartedYet
     case inProgress
     case downloaded

@@ -16,7 +16,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     let content: Content
     let trigger: String?
     
-    init(
+    public init(
         trigger: String? = nil,
         @ViewBuilder content: () -> Content
     ) {

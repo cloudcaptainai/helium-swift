@@ -28,7 +28,10 @@ public class Helium {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
-                return AnyView(self.fallbackPaywall!);
+                let fallbackView = AnyView(fallbackPaywall!)
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                    fallbackView
+                })
             }
             
             do {
@@ -38,11 +41,17 @@ public class Helium {
                     triggerName: trigger,
                     paywallTemplateName: templatePaywallInfo.paywallTemplateName
                 ));
-                return AnyView(self.fallbackPaywall!);
+                let fallbackView = AnyView(fallbackPaywall!)
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                    fallbackView
+                })
             };
             
         } else {
-            return AnyView(self.fallbackPaywall!);
+            let fallbackView = AnyView(fallbackPaywall!)
+            return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                fallbackView
+            })
         }
     }
     
