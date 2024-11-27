@@ -28,9 +28,10 @@ public struct DynamicPositionedComponent: View {
     let actionConfig: ActionConfig?
     let geometryProxy: GeometryProxy?
     let isHighlighted: Bool
+    let triggerName: String?
     
 
-    public init(json: JSON, geometryProxy: GeometryProxy? = nil) {
+    public init(json: JSON, geometryProxy: GeometryProxy? = nil, triggerName: String? = nil) {
         self.componentType = ComponentType(json: json, geometryProxy: geometryProxy)
         
         self.componentName = json["componentName"].string ?? "component_\(json["type"].string ?? "undefinedType")_no_name_\(UUID().uuidString)";
@@ -58,6 +59,7 @@ public struct DynamicPositionedComponent: View {
         
         self.geometryProxy = geometryProxy
         self.isHighlighted = json["isHighlighted"].bool ?? false;
+        self.triggerName = triggerName;
     }
     
     public var body: some View {
@@ -72,57 +74,61 @@ public struct DynamicPositionedComponent: View {
     @ViewBuilder
     private var componentView: some View {
         switch componentType {
-            case .linearGradient(let props):
-                DynamicLinearGradient(json: props)
-            case .image(let props):
-                DynamicImage(json: props)
-            case .rectangle(let props):
-                DynamicRectangle(json: props)
-            case .roundedRectangle(let props):
-                DynamicRoundedRectangle(json: props)
-            case .text(let props):
-                DynamicTextComponent(json: props)
-            case .stack(let type, let props, let children):
-                createStack(type: type, props: props, children: children)
-            case .animation(let props):
-                DynamicAnimation(json: props)
-            case .spacer(let props):
-                DynamicSpacer(json: props)
-            case .scrollView(let props, let children):
-                DynamicScrollView(json: props) {
-                    ForEach(children.indices, id: \.self) { index in
-                        children[index].view
-                    }
+        case .linearGradient(let props):
+            DynamicLinearGradient(json: props)
+        case .image(let props):
+            DynamicImage(json: props)
+        case .rectangle(let props):
+            DynamicRectangle(json: props)
+        case .roundedRectangle(let props):
+            DynamicRoundedRectangle(json: props)
+        case .text(let props):
+            DynamicTextComponent(json: props)
+        case .stack(let type, let props, let children):
+            createStack(type: type, props: props, children: children)
+        case .animation(let props):
+            DynamicAnimation(json: props)
+        case .spacer(let props):
+            DynamicSpacer(json: props)
+        case .scrollView(let props, let children):
+            DynamicScrollView(json: props) {
+                ForEach(children.indices, id: \.self) { index in
+                    children[index].view
                 }
             }
+        case .webView(let props):
+            DynamicWebView(json: props, actionsDelegate: actionsDelegate, triggerName: triggerName)
+        default:
+            EmptyView()
         }
     }
     
    @ViewBuilder
-   private func createStack(type: StackType, props: JSON, children: [ComponentWrapper]) -> some View {
-       let spacing = props["spacing"].double.map { CGFloat($0) }
-       let alignment = parseAlignment(props["alignment"].stringValue)
-       
-       switch type {
-       case .vStack:
-           VStack(alignment: alignment.horizontal, spacing: spacing) {
-               ForEach(children.indices, id: \.self) { index in
-                   children[index].view
-               }
-           }
-       case .hStack:
-           HStack(alignment: alignment.vertical, spacing: spacing) {
-               ForEach(children.indices, id: \.self) { index in
-                   children[index].view
-               }
-           }
-       case .zStack:
-           ZStack(alignment: alignment) {
-               ForEach(children.indices, id: \.self) { index in
-                   children[index].view
-               }
-           }
-       }
+    private func createStack(type: StackType, props: JSON, children: [ComponentWrapper]) -> some View {
+        let spacing = props["spacing"].double.map { CGFloat($0) }
+        let alignment = parseAlignment(props["alignment"].stringValue)
+        
+        switch type {
+        case .vStack:
+            VStack(alignment: alignment.horizontal, spacing: spacing) {
+                ForEach(children.indices, id: \.self) { index in
+                    children[index].view
+                }
+            }
+        case .hStack:
+            HStack(alignment: alignment.vertical, spacing: spacing) {
+                ForEach(children.indices, id: \.self) { index in
+                    children[index].view
+                }
+            }
+        case .zStack:
+            ZStack(alignment: alignment) {
+                ForEach(children.indices, id: \.self) { index in
+                    children[index].view
+                }
+            }
+        }
+    }
 }
 
 indirect enum ComponentType {
@@ -135,34 +141,36 @@ indirect enum ComponentType {
     case animation(JSON)
     case spacer(JSON)
     case scrollView(JSON, [ComponentWrapper])
-        
+    case webView(JSON)
     
     init(json: JSON, geometryProxy: GeometryProxy?) {
         switch json["type"].stringValue {
-        case "linearGradient":
-            self = .linearGradient(json["componentProps"])
-        case "image":
-            self = .image(json["componentProps"])
-        case "rectangle":
-            self = .rectangle(json["componentProps"])
-        case "roundedRectangle":
-            self = .roundedRectangle(json["componentProps"])
-        case "text":
-            self = .text(json["componentProps"])
-        case "animation":
-            self = .animation(json["componentProps"])
-        case "vStack":
-            self = .stack(.vStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
-        case "hStack":
-            self = .stack(.hStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
-        case "zStack":
-            self = .stack(.zStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
-        case "spacer":
-            self = .spacer(json["componentProps"])
-        case "scrollView":
-            self = .scrollView(json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
-        default:
-            self = .text(JSON(["text": "Unsupported component type"]))
+            case "linearGradient":
+                self = .linearGradient(json["componentProps"])
+            case "image":
+                self = .image(json["componentProps"])
+            case "rectangle":
+                self = .rectangle(json["componentProps"])
+            case "roundedRectangle":
+                self = .roundedRectangle(json["componentProps"])
+            case "text":
+                self = .text(json["componentProps"])
+            case "animation":
+                self = .animation(json["componentProps"])
+            case "vStack":
+                self = .stack(.vStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
+            case "hStack":
+                self = .stack(.hStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
+            case "zStack":
+                self = .stack(.zStack, json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
+            case "spacer":
+                self = .spacer(json["componentProps"])
+            case "scrollView":
+                self = .scrollView(json["componentProps"], json["componentProps"]["children"].arrayValue.map { ComponentWrapper(json: $0, geometryProxy: geometryProxy) })
+            case "webView":
+                self = .webView(json["componentProps"])
+            default:
+                self = .text(JSON(["text": "Unsupported component type"]))
         }
     }
 }
