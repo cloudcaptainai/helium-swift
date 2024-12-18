@@ -97,11 +97,15 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         return transactionStatus;
     }
     
-    public func restorePurchases() async -> Bool {
+    public func restorePurchases(triggerName: String, paywallTemplateName: String) async -> Bool {
         if (delegate == nil) {
             return false;
         }
-        return await delegate!.restorePurchases();
+        let result = await delegate!.restorePurchases();
+        if (result) {
+            self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        }
+        return result;
     }
     
     

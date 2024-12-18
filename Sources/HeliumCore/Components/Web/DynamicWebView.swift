@@ -71,6 +71,7 @@ public struct DynamicWebView: View {
             for (key, value) in customJSON {
                 mergedContext[key] = value
             }
+            
 
             let combinedJSON = JSON([
                 "contextualValues": mergedContext,
@@ -81,68 +82,27 @@ public struct DynamicWebView: View {
 
             let combinedScript = WKUserScript(
                 source: """
-                // Set up console.log handler
-                console.log = function(...args) {
-                    window.webkit.messageHandlers.logging.postMessage(args.map(arg =>
-                        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                    ).join(' '));
-                };
-                
-                // Set up console.error handler
-                console.error = function(...args) {
-                    window.webkit.messageHandlers.logging.postMessage('[ERROR] ' + args.map(arg =>
-                        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                    ).join(' '));
-                };
-
-                // Set up global error handler
-                window.onerror = function(message, source, lineno, colno, error) {
-                    const errorInfo = {
-                        message: message,
-                        source: source,
-                        line: lineno,
-                        column: colno,
-                        stack: error?.stack
-                    };
-                    window.webkit.messageHandlers.logging.postMessage('[UNCAUGHT ERROR] ' + JSON.stringify(errorInfo));
-                    return false; // Let the error propagate
-                };
-
-                // Set up unhandled promise rejection handler
-                window.onunhandledrejection = function(event) {
-                    const errorInfo = {
-                        message: event.reason?.message || event.reason,
-                        stack: event.reason?.stack
-                    };
-                    window.webkit.messageHandlers.logging.postMessage('[UNHANDLED PROMISE REJECTION] ' + JSON.stringify(errorInfo));
-                };
-                
                 (function() {
+                    // Set up initial console handlers (will be enhanced by TS)
+                    console.log = function(...args) {
+                        window.webkit.messageHandlers.logging.postMessage(args.map(arg =>
+                            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+                        ).join(' '));
+                    };
+                    
+                    console.error = function(...args) {
+                        window.webkit.messageHandlers.logging.postMessage('[ERROR] ' + args.map(arg =>
+                            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+                        ).join(' '));
+                    };
+
+                    // Initialize helium context
                     try {
-                        console.log('Assigning helium context...');
-                        window.helium = \(combinedJSON);
-                        console.log('Assignment successful');
-                        console.log(window.helium);
+                        window.helium = {};
+                        window.heliumContextualValues = \(mergedContext.rawString() ?? "{}");
                     } catch(e) {
                         console.error('Error in helium initialization:', e);
                     }
-                    
-                    document.addEventListener('DOMContentLoaded', function() {
-                        document.body.style.backgroundColor = 'transparent';
-                        document.documentElement.style.backgroundColor = 'transparent';
-                        
-                        // Additional error handling for runtime errors
-                        window.addEventListener('error', function(event) {
-                            const errorInfo = {
-                                message: event.error?.message || event.message,
-                                source: event.filename,
-                                line: event.lineno,
-                                column: event.colno,
-                                stack: event.error?.stack
-                            };
-                            window.webkit.messageHandlers.logging.postMessage('[RUNTIME ERROR] ' + JSON.stringify(errorInfo));
-                        });
-                    });
                 })();
                 """,
                 injectionTime: .atDocumentStart,
@@ -152,11 +112,30 @@ public struct DynamicWebView: View {
             contentController.addUserScript(combinedScript)
             config.userContentController = contentController
             
+            // Inside loadWebView() function, after creating the webView:
             let webView = WKWebView(frame: .zero, configuration: config)
-            webView.isOpaque = false
-            webView.backgroundColor = .clear
+            
+            webView.configuration.preferences.javaScriptEnabled = true
+
+            // Set content mode
+            webView.contentMode = .scaleToFill
+            
+            // Existing scroll settings
+            webView.scrollView.isScrollEnabled = true;
+            webView.scrollView.bouncesZoom = false;
+            webView.scrollView.minimumZoomScale = 1.0;
+            webView.scrollView.maximumZoomScale = 1.0;
+            webView.scrollView.isDirectionalLockEnabled = true;
+            webView.scrollView.bounces = true;
+            webView.scrollView.scrollsToTop = false;
+            webView.scrollView.contentInsetAdjustmentBehavior = .never
+            webView.scrollView.contentInset = .zero
+            webView.scrollView.scrollIndicatorInsets = .zero
+            webView.scrollView.showsVerticalScrollIndicator = false
+            webView.scrollView.showsHorizontalScrollIndicator = false
             webView.scrollView.backgroundColor = .clear
-            webView.scrollView.isScrollEnabled = false
+            webView.scrollView.isOpaque = false
+            
             
             // Get the base directory for security scope access
             let fileURL = URL(fileURLWithPath: filePath)

@@ -12,16 +12,33 @@ import WebKit
 
 public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var delegateWrapper: ActionsDelegateWrapper?
+//    private var lastScrollPosition: CGPoint = .zero
     
     public init(delegateWrapper: ActionsDelegateWrapper) {
         self.delegateWrapper = delegateWrapper
     }
+    
+//    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+//        lastScrollPosition = scrollView.contentOffset
+//    }
+//    
+//    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+//        if !decelerate {
+//            scrollView.setContentOffset(scrollView.contentOffset, animated: false)
+//        }
+//    }
     
     public func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage,
         replyHandler: @escaping (Any?, String?) -> Void
     ) {
+//        // Store current scroll position before handling message
+//        if let scrollView = (message.webView as? WKWebView)?.scrollView {
+//            lastScrollPosition = scrollView.contentOffset
+//        }
+        print("Message received: \(message.name) at scroll position: \(message.webView?.scrollView.contentOffset ?? .zero)")
+
         if message.name == "logging" {
             if let body = message.body as? String {
                 print("[WebView Log]:", body)
@@ -29,6 +46,11 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 print("[WebView Log]:", message.body)
             }
             replyHandler(nil, nil)
+//            DispatchQueue.main.async {
+//                if let scrollView = (message.webView as? WKWebView)?.scrollView {
+//                    scrollView.setContentOffset(self.lastScrollPosition, animated: false)
+//                }
+//            }
             return
         }
         
@@ -72,27 +94,27 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                         respond(["status": "failed"])
                     }
                 } else {
-                    replyHandler(["status": "failed"], nil)
+                    respond(["status": "failed"])
                 }
                 
             case "restore-purchases":
                 if let result = await self.delegateWrapper?.restorePurchases() {
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 } else {
-                    replyHandler(["status": "failed"], nil)
+                    respond(["status": "failed"])
                 }
                 
             case "open-link":
                 if let url = data["url"] as? String {
 //                    self.delegateWrapper?.openLink(url: url, option: data["option"] as? String)
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 }
                 
             case "set-variable":
                 if let variable = data["variable"] as? String,
                    let value = data["value"] {
 //                    self.delegateWrapper?.setVariable(name: variable, value: value)
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 }
                 
             case "analytics-event":
@@ -101,7 +123,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 //                        name: eventName,
 //                        properties: data["properties"] as? [String: Any]
 //                    )
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 }
                 
             case "navigate":
@@ -110,22 +132,49 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 //                        to: target,
 //                        params: data["params"] as? [String: Any]
 //                    )
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 }
                 
             case "custom":
                 if let name = data["name"] as? String {
 //                    self.delegateWrapper?.handleCustomAction(name: name)
-                    replyHandler(["status": "success"], nil)
+                    respond(["status": "success"])
                 }
                 
             case "dismiss":
                 self.delegateWrapper?.dismiss()
-                replyHandler(["status": "success"], nil)
+                respond(["status": "success"])
                 
             default:
-                replyHandler(nil, "Unknown message type")
+                respond(["message": "Unknown message type"])
             }
         }
+        print("Message handling complete for: \(message.name)")
+    }
+}
+
+// Add to your MessageHandler class to capture scroll behavior
+extension WebViewMessageHandler: UIScrollViewDelegate {
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        print("Scroll position changed: \(scrollView.contentOffset)")
+    }
+    
+    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        print("Begin dragging at: \(scrollView.contentOffset)")
+    }
+    
+    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        print("End dragging at: \(scrollView.contentOffset), will decelerate: \(decelerate)")
+    }
+}
+
+extension WebViewMessageHandler: WKNavigationDelegate {
+    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        print("WebView did commit navigation")
+    }
+    
+    public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        print("Navigation requested: \(navigationAction.navigationType)")
+        return .allow
     }
 }

@@ -141,7 +141,9 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     @MainActor
     public func restorePurchases() async -> Bool {
         isLoading = true;
-        let status = await HeliumPaywallDelegateWrapper.shared.restorePurchases()
+        let status = await HeliumPaywallDelegateWrapper.shared.restorePurchases(
+            triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName
+        )
         defer { isLoading = false; }
         
         return status;
