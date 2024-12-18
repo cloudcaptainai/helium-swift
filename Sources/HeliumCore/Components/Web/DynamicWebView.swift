@@ -25,11 +25,13 @@ public struct DynamicWebView: View {
         Group {
             if let webView = webView {
                 WebViewRepresentable(webView: webView)
+                    .padding(.horizontal, -1)
             } else {
                 ProgressView()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .edgesIgnoringSafeArea(.all)
         .onAppear {
             loadWebView()
@@ -119,23 +121,24 @@ public struct DynamicWebView: View {
 
             // Set content mode
             webView.contentMode = .scaleToFill
+            webView.backgroundColor = .clear
+            webView.isOpaque = false
+            webView.scrollView.backgroundColor = .clear
+            webView.scrollView.isOpaque = false
             
             // Existing scroll settings
-            webView.scrollView.isScrollEnabled = true;
-            webView.scrollView.bouncesZoom = false;
-            webView.scrollView.minimumZoomScale = 1.0;
-            webView.scrollView.maximumZoomScale = 1.0;
-            webView.scrollView.isDirectionalLockEnabled = true;
-            webView.scrollView.bounces = true;
-            webView.scrollView.scrollsToTop = false;
+            webView.scrollView.isScrollEnabled = true
+            webView.scrollView.bouncesZoom = false
+            webView.scrollView.minimumZoomScale = 1.0
+            webView.scrollView.maximumZoomScale = 1.0
+            webView.scrollView.isDirectionalLockEnabled = true
+            webView.scrollView.bounces = true
+            webView.scrollView.scrollsToTop = false
             webView.scrollView.contentInsetAdjustmentBehavior = .never
             webView.scrollView.contentInset = .zero
             webView.scrollView.scrollIndicatorInsets = .zero
             webView.scrollView.showsVerticalScrollIndicator = false
             webView.scrollView.showsHorizontalScrollIndicator = false
-            webView.scrollView.backgroundColor = .clear
-            webView.scrollView.isOpaque = false
-            
             
             // Get the base directory for security scope access
             let fileURL = URL(fileURLWithPath: filePath)
@@ -162,8 +165,19 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     let webView: WKWebView
     
     func makeUIView(context: Context) -> WKWebView {
-        webView
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        return webView
     }
     
-    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // Ensure constraints are set properly
+        if let superview = webView.superview {
+            NSLayoutConstraint.activate([
+                webView.leadingAnchor.constraint(equalTo: superview.leadingAnchor, constant: -1),
+                webView.trailingAnchor.constraint(equalTo: superview.trailingAnchor, constant: 1),
+                webView.topAnchor.constraint(equalTo: superview.topAnchor),
+                webView.bottomAnchor.constraint(equalTo: superview.bottomAnchor)
+            ])
+        }
+    }
 }
