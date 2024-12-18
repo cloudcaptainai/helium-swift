@@ -13,6 +13,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
     var templateValues: JSON
+    var triggerName: String?
     
     public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
@@ -22,6 +23,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         let encoder = JSONEncoder()
         let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
         self.templateValues = try! JSON(data: jsonData);
+        self.triggerName = trigger;
         assert(self.templateValues["baseStack"].exists());
     }
     
@@ -29,7 +31,8 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         GeometryReader { reader in
             DynamicPositionedComponent(
                 json: templateValues["baseStack"],
-                geometryProxy: reader
+                geometryProxy: reader,
+                triggerName: triggerName
             )
             .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
                 if let modalScreenToShow = actionsDelegate.showingModalScreen,

@@ -22,13 +22,27 @@ public protocol HeliumPaywallDelegate: AnyObject {
     
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
     
+    func restorePurchases() async -> Bool
+    
     func onHeliumPaywallEvent(event: HeliumPaywallEvent)
+    
+    func getCustomVariableValues() -> [String: Any?]
 }
 
 // Extension to provide default implementation
 public extension HeliumPaywallDelegate {
     func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         // Default implementation does nothing
+    }
+    
+    func restorePurchases() async -> Bool {
+        // Default implementation is a noop
+        return false;
+    }
+    
+    func getCustomVariableValues() -> [String: Any?] {
+        // Default implementation returns empty dictionary
+        return [:];
     }
 }
 
@@ -60,23 +74,38 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         return isAnalyticsEnabled;
     }
     
+    public func getCustomVariableValues() -> [String: Any?] {
+        return self.delegate?.getCustomVariableValues() ?? [:];
+    }
+    
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
-            case .cancelled:
-                self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            case .failed(let error):
-                self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error.localizedDescription))
-            case .restored:
-                self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            case .purchased:
-                self.onHeliumPaywallEvent(event: .subscriptionSucceeded(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            case .pending:
-                self.onHeliumPaywallEvent(event: .subscriptionPending(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
-            default:
-                break
+        case .cancelled:
+            self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        case .failed(let error):
+            self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error.localizedDescription))
+        case .restored:
+            self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        case .purchased:
+            self.onHeliumPaywallEvent(event: .subscriptionSucceeded(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        case .pending:
+            self.onHeliumPaywallEvent(event: .subscriptionPending(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        default:
+            break
         }
         return transactionStatus;
+    }
+    
+    public func restorePurchases(triggerName: String, paywallTemplateName: String) async -> Bool {
+        if (delegate == nil) {
+            return false;
+        }
+        let result = await delegate!.restorePurchases();
+        if (result) {
+            self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        }
+        return result;
     }
     
     

@@ -55,12 +55,16 @@ public class HeliumController {
                         traits: HeliumIdentityManager.shared.getUserContext()
                     );
                 } else {
-                    let analytics = Analytics(configuration: configuration)
-                    analytics.identify(
-                        userId: HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext()
-                    );
-                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                    do {
+                        let analytics = Analytics(configuration: configuration)
+                        analytics.identify(
+                            userId: HeliumIdentityManager.shared.getUserId(),
+                            traits: HeliumIdentityManager.shared.getUserContext()
+                        );
+                        HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                    } catch {
+                        // no op
+                    }
                 }
                 
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(

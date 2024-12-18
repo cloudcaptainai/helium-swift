@@ -15,7 +15,7 @@ public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumP
     return HeliumPaywallInfo(
         paywallID: 1,
         paywallTemplateName: paywallTemplateName,
-        productsOffered: [],
+        productsOffered: ["potato"],
         resolvedConfig: [:],
         shouldShow: true,
         fallbackPaywallName: ""

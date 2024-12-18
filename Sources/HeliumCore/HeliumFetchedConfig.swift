@@ -45,6 +45,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     @Published public var imageDownloadTimeTakenMS: UInt64?
     @Published public var fontDownloadTimeTakenMS: UInt64?
     
+    
     private init() {
         downloadStatus = .notDownloadedYet
     }
@@ -81,12 +82,26 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         let jsonWrapped = try JSON(data: jsonData)
                         var fontURLs = Set<String>()
                         var imageURLs = Set<String>()
+                        
                         HeliumAssetManager.shared.collectFontURLs(from: jsonWrapped, into: &fontURLs)
                         HeliumAssetManager.shared.collectImageURLs(from: jsonWrapped, into: &imageURLs)
+                        
+                        var triggerNameToBundleURLs: [String: Set<String>] = [:];
+                        config.triggerToPaywalls.forEach { (key: String, value: HeliumPaywallInfo) in
+                            var bundleURLs = Set<String>();
+                            
+                            HeliumAssetManager.shared.collectBundleURLs(from: jsonWrapped, into: &bundleURLs);
+                            
+                            triggerNameToBundleURLs[key] = bundleURLs;
+                        }
+                        
                         
                         // Create local copies for the task group
                         let fontURLsCopy = fontURLs
                         let imageURLsCopy = imageURLs
+                        let bundleURLsCopy = triggerNameToBundleURLs;
+
+                        
                         await withTaskGroup(of: Void.self) { group in
                             group.addTask {
                                 await HeliumAssetManager.shared.downloadImages(from: imageURLsCopy)
@@ -95,6 +110,20 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             group.addTask {
                                 await HeliumAssetManager.shared.downloadFonts(from: fontURLsCopy)
                             }
+                            
+                            triggerNameToBundleURLs.forEach { (key: String, value: Set<String>) in
+                                
+                                let bundleConfigs = value.compactMap { bundleURL in
+                                    HeliumAssetManager.BundleConfig(
+                                        url: bundleURL,
+                                        triggerName: key
+                                    );
+                                }
+                                group.addTask {
+                                    await HeliumAssetManager.shared.downloadBundles(configs: bundleConfigs);
+                                }
+                            }
+                            
                         }
                     } catch {
                         print("Couldn't load all fonts.")
@@ -129,6 +158,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getExperimentIDForTrigger(_ trigger: String) -> String? {
         return fetchedConfig?.triggerToPaywalls[trigger]?.experimentID;
+    }
+    
+    public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
+        return fetchedConfig?.triggerToPaywalls[trigger]?.productsOffered;
     }
     
     public func getFetchedTriggerNames() -> [String] {

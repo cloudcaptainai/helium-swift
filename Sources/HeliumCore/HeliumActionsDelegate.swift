@@ -12,7 +12,8 @@ public protocol BaseActionsDelegate {
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
     func selectProduct(productId: String);
-    func makePurchase() async -> Bool;
+    func makePurchase() async -> HeliumPaywallTransactionStatus;
+    func restorePurchases() async -> Bool;
     func logImpression();
     func logClosure();
     func getIsLoading() -> Bool;
@@ -42,8 +43,13 @@ public class ActionsDelegateWrapper: ObservableObject {
     }
     
     @MainActor
-    public func makePurchase() async -> Bool {
+    public func makePurchase() async -> HeliumPaywallTransactionStatus {
         await delegate.makePurchase();
+    }
+    
+    @MainActor
+    public func restorePurchases() async -> Bool {
+        await delegate.restorePurchases();
     }
     
     public func logImpression() {
@@ -113,21 +119,34 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         selectedProductId = productId
     }
     
-    public func makePurchase() async -> Bool {
-        print("Making purchase for product: \(selectedProductId)")
+    public func makePurchase() async -> HeliumPaywallTransactionStatus {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event:
             .subscriptionPressed(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
         
         isLoading = true;
         let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
         defer { isLoading = false; }
-
-        switch status {
-        case .purchased, .restored:
-            return true
-        case .cancelled, .failed, .pending, .none:
-            return false
+        
+        if (status == nil) {
+            return .failed(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unknown error making purchase - delegate method returned nil"]))
         }
+        switch (status) {
+            case .none:
+                return .failed(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unknown error making purchase - delegate method returned none"]))
+            default:
+                return status!;
+        }
+    }
+    
+    @MainActor
+    public func restorePurchases() async -> Bool {
+        isLoading = true;
+        let status = await HeliumPaywallDelegateWrapper.shared.restorePurchases(
+            triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName
+        )
+        defer { isLoading = false; }
+        
+        return status;
     }
     
     public func logImpression() {
@@ -160,9 +179,14 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("select product \(productId)");
     }
     
-    public func makePurchase() async -> Bool {
+    public func makePurchase() async -> HeliumPaywallTransactionStatus {
         print("make purchase");
-        return true;
+        return .purchased;
+    }
+    
+    public func restorePurchases() async -> Bool {
+        print("restore purchases")
+        return false;
     }
     
     public func logImpression() {
