@@ -12,31 +12,18 @@ import WebKit
 
 public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var delegateWrapper: ActionsDelegateWrapper?
-//    private var lastScrollPosition: CGPoint = .zero
     
     public init(delegateWrapper: ActionsDelegateWrapper) {
         self.delegateWrapper = delegateWrapper
     }
     
-//    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-//        lastScrollPosition = scrollView.contentOffset
-//    }
-//    
-//    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-//        if !decelerate {
-//            scrollView.setContentOffset(scrollView.contentOffset, animated: false)
-//        }
-//    }
-    
+
     public func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage,
         replyHandler: @escaping (Any?, String?) -> Void
     ) {
-//        // Store current scroll position before handling message
-//        if let scrollView = (message.webView as? WKWebView)?.scrollView {
-//            lastScrollPosition = scrollView.contentOffset
-//        }
+
         print("Message received: \(message.name) at scroll position: \(message.webView?.scrollView.contentOffset ?? .zero)")
 
         if message.name == "logging" {
@@ -46,11 +33,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 print("[WebView Log]:", message.body)
             }
             replyHandler(nil, nil)
-//            DispatchQueue.main.async {
-//                if let scrollView = (message.webView as? WKWebView)?.scrollView {
-//                    scrollView.setContentOffset(self.lastScrollPosition, animated: false)
-//                }
-//            }
+
             return
         }
         
