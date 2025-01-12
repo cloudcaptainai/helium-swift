@@ -63,6 +63,9 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 }
                 
             case "subscribe":
+                if let productId = data["product"] as? String {
+                    self.delegateWrapper?.selectProduct(productId: productId)
+                }
                 if let result = await self.delegateWrapper?.makePurchase() {
                     switch result {
                     case .purchased:
