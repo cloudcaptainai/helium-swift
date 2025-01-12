@@ -78,7 +78,10 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     init(paywallInfo: HeliumPaywallInfo, trigger: String) {
         self.paywallInfo = paywallInfo
         self.trigger = trigger
-        self.selectedProductId = paywallInfo.productsOffered[0]
+        self.selectedProductId = "";
+        if (!paywallInfo.productsOffered.isEmpty) {
+            self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
+        }
     }
     
     func setDismissAction(_ action: @escaping () -> Void) {
