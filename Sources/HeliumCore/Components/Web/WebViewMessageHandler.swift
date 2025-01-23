@@ -92,38 +92,30 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 
             case "open-link":
                 if let url = data["url"] as? String {
-//                    self.delegateWrapper?.openLink(url: url, option: data["option"] as? String)
                     respond(["status": "success"])
                 }
                 
             case "set-variable":
                 if let variable = data["variable"] as? String,
                    let value = data["value"] {
-//                    self.delegateWrapper?.setVariable(name: variable, value: value)
                     respond(["status": "success"])
                 }
                 
             case "analytics-event":
                 if let eventName = data["name"] as? String {
-//                    self.delegateWrapper?.logAnalyticsEvent(
-//                        name: eventName,
-//                        properties: data["properties"] as? [String: Any]
-//                    )
+
                     respond(["status": "success"])
                 }
                 
             case "navigate":
                 if let target = data["target"] as? String {
-//                    self.delegateWrapper?.navigate(
-//                        to: target,
-//                        params: data["params"] as? [String: Any]
-//                    )
+
+                    await UIApplication.shared.open(URL(string: target)!);
                     respond(["status": "success"])
                 }
                 
             case "custom":
                 if let name = data["name"] as? String {
-//                    self.delegateWrapper?.handleCustomAction(name: name)
                     respond(["status": "success"])
                 }
                 
@@ -159,8 +151,22 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         print("WebView did commit navigation")
     }
     
-    public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        print("Navigation requested: \(navigationAction.navigationType)")
-        return .allow
+    private func shouldOpenExternally(url: URL) -> Bool {
+        // For now, open all urls externally.
+        return true;
+    }
+    
+    public func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        if navigationAction.navigationType == .linkActivated,
+           let url = navigationAction.request.url, shouldOpenExternally(url: url) {
+            UIApplication.shared.open(url);
+            decisionHandler(.cancel)
+        } else {
+            decisionHandler(.allow)
+        }
     }
 }

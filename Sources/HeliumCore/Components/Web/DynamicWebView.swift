@@ -74,14 +74,6 @@ public struct DynamicWebView: View {
                 mergedContext[key] = value
             }
             
-
-            let combinedJSON = JSON([
-                "contextualValues": mergedContext,
-                "templateConfig": templateConfig,
-                "actionConfig": actionConfig,
-                "analyticsConfig": JSON([:])
-            ])
-
             let combinedScript = WKUserScript(
                 source: """
                 (function() {
@@ -118,7 +110,8 @@ public struct DynamicWebView: View {
             let webView = WKWebView(frame: .zero, configuration: config)
             
             webView.configuration.preferences.javaScriptEnabled = true
-
+            
+            webView.navigationDelegate = messageHandler;
             // Set content mode
             webView.contentMode = .scaleToFill
             webView.backgroundColor = .clear
