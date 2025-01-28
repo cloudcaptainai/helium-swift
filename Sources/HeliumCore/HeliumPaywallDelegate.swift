@@ -114,10 +114,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             delegate?.onHeliumPaywallEvent(event: event);
             if (isAnalyticsEnabled && analytics != nil) {
                 var experimentID: String? = nil;
+                var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = nil;
                 var isFallback = false;
                 if let triggerName = event.getTriggerIfExists() {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
+                    modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
                     paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
                     if (paywallInfo == nil) {
                         isFallback = true;
@@ -132,6 +134,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     fetchedConfigId: fetchedConfigId,
                     timestamp: formatAsTimestamp(date: Date()),
                     experimentID: experimentID,
+                    modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),

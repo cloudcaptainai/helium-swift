@@ -160,6 +160,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return fetchedConfig?.triggerToPaywalls[trigger]?.experimentID;
     }
     
+    public func getModelIDForTrigger(_ trigger: String) -> String? {
+        return fetchedConfig?.triggerToPaywalls[trigger]?.modelID;
+    }
+    
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
         return fetchedConfig?.triggerToPaywalls[trigger]?.productsOffered;
     }

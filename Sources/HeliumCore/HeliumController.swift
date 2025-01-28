@@ -11,7 +11,7 @@ import Segment
 
 
 public class HeliumController {
-    let fetchEndpoint = "https://api.tryhelium.com/on-launch"
+    let DEFAULT_API_ENDPOINT = "https://api.tryhelium.com/on-launch"
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
@@ -30,6 +30,10 @@ public class HeliumController {
         }
     }
     
+    public func setCustomAPIEndpoint(endpoint: String) {
+        UserDefaults.standard.set(endpoint, forKey: "heliumApiEndpoint");
+    }
+    
     public func downloadConfig() {
         var payload: [String: Any]
         payload = [
@@ -39,7 +43,8 @@ public class HeliumController {
             "triggers": self.triggers?.compactMap({ trigger in trigger.name }) as Any
         ]
         
-        HeliumFetchedConfigManager.shared.fetchConfig(endpoint: fetchEndpoint, params: payload) { result in
+        let apiEndpointOrDefault = UserDefaults.standard.string(forKey: "heliumApiEndpoint") ?? DEFAULT_API_ENDPOINT;
+        HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, params: payload) { result in
             switch result {
             case .success(let fetchedConfig):
                 let configuration = Configuration(writeKey: fetchedConfig.segmentBrowserWriteKey)
