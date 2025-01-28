@@ -68,7 +68,8 @@ public class Helium {
         fallbackPaywall: (any View),
         baseTemplateView: (any BaseTemplateView.Type)? = nil,
         triggers: [HeliumTrigger]? = nil,
-        customUserId: String? = nil
+        customUserId: String? = nil,
+        customAPIEndpoint: String? = nil
     ) {
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -85,7 +86,9 @@ public class Helium {
         } else {
             self.baseTemplateViewType = baseTemplateView;
         }
-        
+        if (customAPIEndpoint != nil) {
+            self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
+        }
         self.controller!.downloadConfig();
     }
     

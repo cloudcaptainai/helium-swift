@@ -8,6 +8,7 @@ public struct DynamicWebView: View {
     let actionConfig: JSON
     let templateConfig: JSON
     var actionsDelegate: ActionsDelegateWrapper
+    let backgroundConfig: BackgroundConfig?
     
     private var messageHandler: WebViewMessageHandler?
     @State private var webView: WKWebView?
@@ -19,28 +20,38 @@ public struct DynamicWebView: View {
         self.triggerName = triggerName
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"]
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"]
+        self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"])
     }
     
     public var body: some View {
-        Group {
-            if let webView = webView {
-                WebViewRepresentable(webView: webView)
-                    .padding(.horizontal, -1)
-            } else {
-                ProgressView()
-            }
-        }
-        .ignoresSafeArea()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .edgesIgnoringSafeArea(.all)
-        .onAppear {
-            loadWebView()
-        }
-        .onDisappear {
-            webView?.stopLoading()
-            webView = nil
-        }
-    }
+           ZStack {
+               // Background layer (if exists)
+               if let backgroundConfig = backgroundConfig {
+                   backgroundConfig.makeBackgroundView()
+                       .ignoresSafeArea()
+               }
+               
+               // WebView layer
+               Group {
+                   if let webView = webView {
+                       WebViewRepresentable(webView: webView)
+                           .padding(.horizontal, -1)
+                   } else {
+                       ProgressView()
+                   }
+               }
+               .ignoresSafeArea()
+               .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+           }
+           .edgesIgnoringSafeArea(.all)
+           .onAppear {
+               loadWebView()
+           }
+           .onDisappear {
+               webView?.stopLoading()
+               webView = nil
+           }
+       }
 
     private func loadWebView() {
         let config = WKWebViewConfiguration()

@@ -74,9 +74,13 @@ public struct CodableUserContext: Codable {
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
     var additionalParams: [String: String]
+    var heliumSessionId: String?
+    var heliumPersistentId: String?
     
     public func asParams() -> [String: Any] {
         return [
+            "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
+            "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "locale": [
                 "currentCountry": self.locale.currentCountry as Any,
                 "currentCurrency": self.locale.currentCurrency as Any,
