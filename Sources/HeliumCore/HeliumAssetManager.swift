@@ -62,6 +62,7 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func clearCache() {
+        removeDownloadedBundles()
         UserDefaults.standard.removeObject(forKey: Self.bundleCacheKey);
     }
     
@@ -158,6 +159,14 @@ public class HeliumAssetManager: ObservableObject {
         try data.write(to: localURL)
         
         return localURL.path
+    }
+    
+    private func removeDownloadedBundles() {
+        let bundleDir = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles", isDirectory: true)
+        
+        try? FileManager.default.removeItem(at: bundleDir)
     }
     
     // Existing font/image methods
