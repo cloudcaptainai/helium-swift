@@ -60,6 +60,11 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     self.delegateWrapper?.selectProduct(productId: productId)
                     respond(["status": "success", "selectedProduct": productId]);
                 }
+            case "cta-pressed":
+                if let componentName = data["componentName"] as? String {
+                    self.delegateWrapper?.onCTAPress(contentComponentName: "componentName")
+                    respond(["status": "success"])
+                }
                 
             case "subscribe":
                 if let productId = data["product"] as? String {
@@ -104,7 +109,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 
             case "analytics-event":
                 if let eventName = data["name"] as? String {
-
+                    
                     respond(["status": "success"])
                 }
                 
