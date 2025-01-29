@@ -68,13 +68,15 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 if let result = await self.delegateWrapper?.makePurchase() {
                     switch result {
                     case .purchased:
-                        respond(["status": "purchased"])
+                        respond(["status": "purchased"]);
+                        self.delegateWrapper?.dismiss();
                     case .cancelled:
                         respond(["status": "cancelled"])
                     case .pending:
                         respond(["status": "pending"])
                     case .restored:
                         respond(["status": "restored"])
+                        self.delegateWrapper?.dismiss();
                     case .failed:
                         respond(["status": "failed"])
                     }
