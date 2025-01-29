@@ -35,7 +35,11 @@ public class Helium {
             }
             
             do {
-                return AnyView(baseTemplateViewType.init(paywallInfo: templatePaywallInfo, trigger: trigger));
+                return AnyView(baseTemplateViewType.init(
+                    paywallInfo: templatePaywallInfo,
+                    trigger: trigger,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                ));
             } catch {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                     triggerName: trigger,

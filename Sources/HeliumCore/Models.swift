@@ -23,7 +23,7 @@ public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumP
 }
 
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil) {
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil) {
         self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
@@ -32,6 +32,7 @@ public struct HeliumPaywallInfo: Codable {
         self.fallbackPaywallName = fallbackPaywallName;
         self.experimentID = experimentID;
         self.modelID = modelID;
+        self.resolvedConfigJSON = resolvedConfigJSON;
     }
     
     var paywallID: Int
@@ -44,6 +45,7 @@ public struct HeliumPaywallInfo: Codable {
     public var modelID: String?
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
+    var resolvedConfigJSON: JSON?
 }
 
 public struct HeliumFetchedConfig: Codable {

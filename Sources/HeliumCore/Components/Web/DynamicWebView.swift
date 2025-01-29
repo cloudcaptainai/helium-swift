@@ -9,9 +9,14 @@ public struct DynamicWebView: View {
     let templateConfig: JSON
     var actionsDelegate: ActionsDelegateWrapper
     let backgroundConfig: BackgroundConfig?
+    let showShimmer: Bool
+    let shimmerConfig: JSON
+    let showProgressView: Bool
     
     private var messageHandler: WebViewMessageHandler?
     @State private var webView: WKWebView?
+    @State private var isContentLoaded = false
+
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
@@ -21,37 +26,49 @@ public struct DynamicWebView: View {
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"]
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"]
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"])
+        self.showShimmer = json["showShimmer"].bool ?? false
+        self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
+        self.showProgressView = json["showProgress"].bool ?? false
     }
-    
+
     public var body: some View {
-           ZStack {
-               // Background layer (if exists)
-               if let backgroundConfig = backgroundConfig {
-                   backgroundConfig.makeBackgroundView()
-                       .ignoresSafeArea()
-               }
-               
-               // WebView layer
-               Group {
-                   if let webView = webView {
-                       WebViewRepresentable(webView: webView)
-                           .padding(.horizontal, -1)
-                   } else {
-                       ProgressView()
-                   }
-               }
-               .ignoresSafeArea()
-               .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-           }
-           .edgesIgnoringSafeArea(.all)
-           .onAppear {
-               loadWebView()
-           }
-           .onDisappear {
-               webView?.stopLoading()
-               webView = nil
-           }
+       ZStack {
+           // Background always shows
+          if let backgroundConfig = backgroundConfig {
+              backgroundConfig.makeBackgroundView()
+                  .ignoresSafeArea()
+          }
+
+          if webView != nil && isContentLoaded {
+              WebViewRepresentable(webView: webView!)
+                  .padding(.horizontal, -1)
+                  .ignoresSafeArea()
+                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          } else if showShimmer {
+              VStack {}
+              .padding()
+              .padding(.top, UIScreen.main.bounds.height * 0.2)
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .shimmer(config: shimmerConfig)
+              
+          } else if showProgressView {
+              ProgressView()
+                  .ignoresSafeArea()
+                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          }
        }
+       .edgesIgnoringSafeArea(.all)
+       .onAppear {
+           loadWebView()
+       }
+       .onDisappear {
+           webView?.stopLoading()
+           webView = nil
+       }
+       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
+            isContentLoaded = true
+        }
+   }
 
     private func loadWebView() {
         let config = WKWebViewConfiguration()
@@ -116,9 +133,13 @@ public struct DynamicWebView: View {
             
             contentController.addUserScript(combinedScript)
             config.userContentController = contentController
+            config.websiteDataStore = WKWebsiteDataStore.default()
+
+            let webviewCreateTime = Date();
             
             // Inside loadWebView() function, after creating the webView:
             let webView = WKWebView(frame: .zero, configuration: config)
+            print("[webviewdebug] WKWebView creation: \(Date().timeIntervalSince(webviewCreateTime)) seconds")
             
             webView.configuration.preferences.javaScriptEnabled = true
             

@@ -24,7 +24,6 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         replyHandler: @escaping (Any?, String?) -> Void
     ) {
 
-        print("Message received: \(message.name) at scroll position: \(message.webView?.scrollView.contentOffset ?? .zero)")
 
         if message.name == "logging" {
             if let body = message.body as? String {
@@ -69,13 +68,15 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 if let result = await self.delegateWrapper?.makePurchase() {
                     switch result {
                     case .purchased:
-                        respond(["status": "purchased"])
+                        respond(["status": "purchased"]);
+                        self.delegateWrapper?.dismiss();
                     case .cancelled:
                         respond(["status": "cancelled"])
                     case .pending:
                         respond(["status": "pending"])
                     case .restored:
                         respond(["status": "restored"])
+                        self.delegateWrapper?.dismiss();
                     case .failed:
                         respond(["status": "failed"])
                     }
@@ -169,4 +170,17 @@ extension WebViewMessageHandler: WKNavigationDelegate {
             decisionHandler(.allow)
         }
     }
+    
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+          webView.evaluateJavaScript("document.readyState") { (result, error) in
+              if let readyState = result as? String, readyState == "complete" {
+                  NotificationCenter.default.post(name: .webViewContentLoaded, object: nil)
+              }
+          }
+      }
+}
+
+// Add notification name
+extension Notification.Name {
+   static let webViewContentLoaded = Notification.Name("webViewContentLoaded")
 }
