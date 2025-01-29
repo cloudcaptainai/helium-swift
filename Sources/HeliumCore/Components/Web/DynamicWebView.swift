@@ -15,14 +15,11 @@ public struct DynamicWebView: View {
     
     private var messageHandler: WebViewMessageHandler?
     @State private var webView: WKWebView?
-    @State private var isLoading: Bool = true
     @State private var isContentLoaded = false
 
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
-        let bundleId = json["bundleURL"].stringValue.components(separatedBy: "/").last;
-        
         self.actionsDelegate = actionsDelegate
         self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate)
         self.triggerName = triggerName
@@ -32,12 +29,6 @@ public struct DynamicWebView: View {
         self.showShimmer = json["showShimmer"].bool ?? false
         self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
         self.showProgressView = json["showProgress"].bool ?? false
-        
-        if let bundleId = bundleId {
-            if let webView = HeliumFetchedConfigManager.shared.getCachedWebView(bundleId: bundleId) {
-                _webView = State(initialValue: webView)
-            }
-       }
     }
 
     public var body: some View {
@@ -58,7 +49,7 @@ public struct DynamicWebView: View {
               .padding()
               .padding(.top, UIScreen.main.bounds.height * 0.2)
               .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .shimmer(when: $isLoading, config: shimmerConfig)
+              .shimmer(config: shimmerConfig)
               
           } else if showProgressView {
               ProgressView()
@@ -68,111 +59,16 @@ public struct DynamicWebView: View {
        }
        .edgesIgnoringSafeArea(.all)
        .onAppear {
-           isLoading = true
-         if webView == nil {
-             loadWebView() // Original full setup
-         } else {
-             configureExistingWebView() // New method for cached webviews
-         }
+           loadWebView()
        }
        .onDisappear {
            webView?.stopLoading()
            webView = nil
        }
        .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-            isLoading = false
             isContentLoaded = true
         }
    }
-    
-    
-    // New method to configure cached webviews
-    private func configureExistingWebView() {
-       guard let webView = webView, let messageHandler = messageHandler else { return }
-       
-       // Add message handlers
-       let contentController = webView.configuration.userContentController
-       contentController.addScriptMessageHandler(messageHandler, contentWorld: .page, name: "paywallHandler")
-       contentController.addScriptMessageHandler(messageHandler, contentWorld: .page, name: "logging")
-       
-       webView.configuration.preferences.javaScriptEnabled = true
-       webView.navigationDelegate = messageHandler
-       webView.contentMode = .scaleToFill
-       webView.backgroundColor = .clear
-       webView.isOpaque = false
-       webView.scrollView.backgroundColor = .clear
-       webView.scrollView.isOpaque = false
-       
-       // Scroll settings
-       webView.scrollView.isScrollEnabled = true
-       webView.scrollView.bouncesZoom = false
-       webView.scrollView.minimumZoomScale = 1.0
-       webView.scrollView.maximumZoomScale = 1.0
-       webView.scrollView.isDirectionalLockEnabled = true
-       webView.scrollView.bounces = true
-       webView.scrollView.scrollsToTop = false
-       webView.scrollView.contentInsetAdjustmentBehavior = .never
-       webView.scrollView.contentInset = .zero
-       webView.scrollView.scrollIndicatorInsets = .zero
-       webView.scrollView.showsVerticalScrollIndicator = false
-       webView.scrollView.showsHorizontalScrollIndicator = false
-       
-       do {
-           let currentContext = createHeliumContext(triggerName: triggerName)
-           let contextJSON = JSON(parseJSON: try currentContext.toJSON())
-           let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
-           let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
-           let customJSON = try JSON(data: customData)
-
-           var mergedContext = contextJSON
-           for (key, value) in customJSON {
-               mergedContext[key] = value
-           }
-           
-           let combinedScript = WKUserScript(
-               source: """
-               (function() {
-                   console.log = function(...args) {
-                       window.webkit.messageHandlers.logging.postMessage(args.map(arg =>
-                           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                       ).join(' '));
-                   };
-                   
-                   console.error = function(...args) {
-                       window.webkit.messageHandlers.logging.postMessage('[ERROR] ' + args.map(arg =>
-                           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                       ).join(' '));
-                   };
-
-                   try {
-                       window.helium = {};
-                       window.heliumContextualValues = \(mergedContext.rawString() ?? "{}");
-                   } catch(e) {
-                       console.error('Error in helium initialization:', e);
-                   }
-               })();
-               """,
-               injectionTime: .atDocumentStart,
-               forMainFrameOnly: true
-           )
-           
-           contentController.addUserScript(combinedScript)
-           
-           // Load content
-           let fileURL = URL(fileURLWithPath: filePath)
-           let baseDirectory = FileManager.default
-               .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-               .appendingPathComponent("helium_bundles", isDirectory: true)
-           
-           if FileManager.default.fileExists(atPath: filePath) {
-               webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
-           } else {
-               print("Error: File not found at path: \(filePath)")
-           }
-       } catch {
-           print("Error configuring cached WebView: \(error)")
-       }
-    }
 
     private func loadWebView() {
         let config = WKWebViewConfiguration()

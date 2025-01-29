@@ -140,11 +140,7 @@ public struct Shimmer: ViewModifier {
 
 public extension View {
    @ViewBuilder
-   func shimmer(when isLoading: Binding<Bool>, config: JSON) -> some View {
-       if isLoading.wrappedValue {
-           self.modifier(Shimmer(config: config))
-       } else {
-           self
-       }
+   func shimmer(config: JSON) -> some View {
+       self.modifier(Shimmer(config: config))
    }
 }

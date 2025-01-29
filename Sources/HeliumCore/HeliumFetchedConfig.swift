@@ -47,7 +47,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
     @Published public var downloadTimeTakenMS: UInt64?
     @Published public var imageDownloadTimeTakenMS: UInt64?
     @Published public var fontDownloadTimeTakenMS: UInt64?
-    private var webViewCache: [String: WKWebView] = [:]
 
     
     private init() {
@@ -146,19 +145,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 await self.updateDownloadState(.downloadSuccess)
                 completion(.success(newConfig))
                 
-               // Initialize web views in background
-               Task.detached {
-                   for trigger in self.getFetchedTriggerNames() {
-                       let config = WKWebViewConfiguration()
-                       let webView = await WKWebView(frame: .zero, configuration: config)
-                       self.webViewCache[trigger] = webView
-                   }
-                   
-                   // Log memory usage
-                   let memoryUsage = self.webViewCache.count * 10  // Approx 10MB per WKWebView
-                   print("[Memory] WebView cache using ~\(memoryUsage)MB")
-               }
-                
             } catch {
                 await self.updateDownloadState(.downloadFailure)
                 completion(.failure(error))
@@ -169,20 +155,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
     @MainActor func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
         self.downloadStatus = status
     }
-    
-    // Add method
-   public func getCachedWebView(bundleId: String) -> WKWebView? {
-       if let cachedView = webViewCache[bundleId] {
-           print("[WebView Cache] Cache hit for \(bundleId)")
-           return cachedView;
-       }
-       print("[WebView Cache] Cache miss for \(bundleId)")
-       let config = WKWebViewConfiguration()
-       let webView = WKWebView(frame: .zero, configuration: config)
-       webViewCache[bundleId] = webView;
-       return webView;
-   }
-
     
     public func getConfig() -> HeliumFetchedConfig? {
         return fetchedConfig
