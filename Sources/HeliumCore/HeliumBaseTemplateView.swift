@@ -4,11 +4,18 @@ import SwiftyJSON
 
 
 public protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
+    init(paywallInfo: HeliumPaywallInfo, trigger: String)
+}
+
+public extension BaseTemplateView {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
+        self.init(paywallInfo: paywallInfo, trigger: trigger)
+    }
 }
 
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
+    
     @Environment(\.dismiss) var dismiss
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
@@ -20,13 +27,19 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
-        let startTime = Date()
         self.templateValues = resolvedConfig ?? JSON([:]);
         self.triggerName = trigger;
-        let endTime = Date()
-        let timeElapsed = endTime.timeIntervalSince(startTime)
-        print("JSON encoding and parsing took \(timeElapsed) seconds")
+    }
+    
+    public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
+        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
+        _actionsDelegate = StateObject(wrappedValue: delegate)
+        _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
+        let encoder = JSONEncoder()
+        let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
+        self.templateValues = try! JSON(data: jsonData);
+        self.triggerName = trigger;
     }
     
     public var body: some View {
