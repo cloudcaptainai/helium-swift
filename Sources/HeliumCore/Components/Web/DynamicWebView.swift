@@ -16,7 +16,7 @@ public struct DynamicWebView: View {
     private var messageHandler: WebViewMessageHandler?
     @State private var webView: WKWebView?
     @State private var isContentLoaded = false
-
+    @State private var viewLoadStartTime: Date? // Add this property
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
@@ -59,6 +59,7 @@ public struct DynamicWebView: View {
        }
        .edgesIgnoringSafeArea(.all)
        .onAppear {
+           viewLoadStartTime = Date() // Set start time when view appears
            loadWebView()
        }
        .onDisappear {
@@ -66,7 +67,12 @@ public struct DynamicWebView: View {
            webView = nil
        }
        .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-            isContentLoaded = true
+           isContentLoaded = true
+           if let startTime = viewLoadStartTime {
+              let timeInterval = Date().timeIntervalSince(startTime)
+              let milliseconds = UInt64(timeInterval * 1000)
+              self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+          }
         }
    }
 

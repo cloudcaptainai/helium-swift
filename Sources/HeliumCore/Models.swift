@@ -69,15 +69,19 @@ public enum HeliumPaywallEvent: Codable {
     case paywallOpenFailed(triggerName: String, paywallTemplateName: String)
     case paywallClose(triggerName: String, paywallTemplateName: String)
     case paywallDismissed(triggerName: String, paywallTemplateName: String)
-    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil)
+    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil)
     case paywallsDownloadError(error: String)
+    case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS
+        case type, ctaName, productKey, triggerName, paywallTemplateName, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS
     }
     
     public func getTriggerIfExists() -> String?{
         switch self {
+        
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
+            return triggerName;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             return triggerName;
             
@@ -137,12 +141,17 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS):
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS):
+            try container.encode(triggerName, forKey: .triggerName)
+            try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
+            try container.encode(webviewRenderTimeTakenMS, forKey: .webviewRenderTimeTakenMS)
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS):
             try container.encode("paywallsDownloadSuccess", forKey: .type)
             try container.encode(configId, forKey: .configId)
             try container.encodeIfPresent(downloadTimeTakenMS, forKey: .downloadTimeTakenMS);
             try container.encodeIfPresent(imagesDownloadTimeTakenMS, forKey: .imagesDownloadTimeTakenMS);
             try container.encodeIfPresent(fontsDownloadTimeTakenMS, forKey: .fontsDownloadTimeTakenMS);
+            try container.encodeIfPresent(bundleTimeTakenMS, forKey: .bundleDownloadTimeMS);
         case .paywallsDownloadError(let error):
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
@@ -224,6 +233,8 @@ public enum HeliumPaywallEvent: Codable {
 
     public func caseString() -> String {
         switch self {
+        case .paywallWebViewRendered:
+            return "paywallWebViewRendered"
         case .ctaPressed:
             return "ctaPressed"
         case .offerSelected:
@@ -273,6 +284,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var downloadStatus: HeliumFetchedConfigStatus?
     var imageDownloadStatus: HeliumAssetStatus?
     var fontsDownloadStatus: HeliumAssetStatus?
+    var bundleDownloadStatus: HeliumAssetStatus?
 }
 
 

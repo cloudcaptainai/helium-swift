@@ -17,6 +17,7 @@ public protocol BaseActionsDelegate {
     func logImpression();
     func logClosure();
     func getIsLoading() -> Bool;
+    func logRenderTime(timeTakenMS: UInt64);
 }
 
 public class ActionsDelegateWrapper: ObservableObject {
@@ -40,6 +41,10 @@ public class ActionsDelegateWrapper: ObservableObject {
     
     public func selectProduct(productId: String) {
         delegate.selectProduct(productId: productId)
+    }
+    
+    public func logRenderTime(timeTakenMS: UInt64) {
+        delegate.logRenderTime(timeTakenMS: timeTakenMS);
     }
     
     @MainActor
@@ -86,6 +91,10 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     
     func setDismissAction(_ action: @escaping () -> Void) {
          self.dismissAction = action
+    }
+    
+    public func logRenderTime(timeTakenMS: UInt64) {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallWebViewRendered(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, webviewRenderTimeTakenMS: timeTakenMS))
     }
     
     public func getIsLoading() -> Bool {
@@ -190,6 +199,10 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     public func restorePurchases() async -> Bool {
         print("restore purchases")
         return false;
+    }
+    
+    public func logRenderTime(timeTakenMS: UInt64) {
+        print("log render time");
     }
     
     public func logImpression() {

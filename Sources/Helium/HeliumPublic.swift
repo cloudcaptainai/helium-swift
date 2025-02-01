@@ -98,7 +98,7 @@ public class Helium {
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus,
-           HeliumAssetManager.shared.imageStatus.downloadStatus == .downloaded {
+           HeliumAssetManager.shared.bundleStatus.downloadStatus == .downloaded {
             return true;
         }
         return false;

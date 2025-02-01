@@ -78,7 +78,8 @@ public class HeliumController {
                     configId: fetchedConfig.fetchedConfigID,
                     downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
                     imagesDownloadTimeTakenMS: HeliumAssetManager.shared.imageStatus.timeTakenMS,
-                    fontsDownloadTimeTakenMS: HeliumAssetManager.shared.fontStatus.timeTakenMS
+                    fontsDownloadTimeTakenMS: HeliumAssetManager.shared.fontStatus.timeTakenMS,
+                    bundleDownloadTimeMS: HeliumAssetManager.shared.bundleStatus.timeTakenMS
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
