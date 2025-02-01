@@ -141,7 +141,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     isFallback: isFallback,
                     downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
                     imageDownloadStatus: HeliumAssetManager.shared.imageStatus,
-                    fontsDownloadStatus: HeliumAssetManager.shared.fontStatus
+                    fontsDownloadStatus: HeliumAssetManager.shared.fontStatus,
+                    bundleDownloadStatus: HeliumAssetManager.shared.bundleStatus
                 );
                 
                 analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
