@@ -14,6 +14,9 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
+    public func getDownloadStatus() -> HeliumFetchedConfigStatus {
+        return HeliumFetchedConfigManager.shared.downloadStatus;
+    }
     
     public func hideUpsell() -> Bool {
         return HeliumPaywallPresenter.shared.hideUpsell();
@@ -71,18 +74,22 @@ public class Helium {
         heliumPaywallDelegate: HeliumPaywallDelegate,
         fallbackPaywall: (any View),
         baseTemplateView: (any BaseTemplateView.Type)? = nil,
-        triggers: [HeliumTrigger]? = nil,
+        triggers: [String]? = nil,
         customUserId: String? = nil,
-        customAPIEndpoint: String? = nil
+        customAPIEndpoint: String? = nil,
+        customUserTraits: HeliumUserTraits? = nil
     ) {
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
+        if (customUserTraits != nil) {
+            HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
+        }
+        
         self.initialized = true;
         self.fallbackPaywall = fallbackPaywall;
         self.controller = HeliumController(
-            apiKey: apiKey,
-            triggers: triggers
+            apiKey: apiKey
         )
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
         if (baseTemplateView == nil) {
@@ -104,9 +111,9 @@ public class Helium {
         return false;
     }
     
-    public func overrideUserId(newUserId: String) {
+    public func overrideUserId(newUserId: String, traits: HeliumUserTraits? = nil) {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
-        self.controller?.identifyUser(userId: newUserId);
+        self.controller?.identifyUser(userId: newUserId, traits: traits);
     }
 }

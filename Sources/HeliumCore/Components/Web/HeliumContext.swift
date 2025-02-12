@@ -38,7 +38,7 @@ public func createHeliumContext(triggerName: String?) -> HeliumContext {
     }
     let currentDate = Date()
     let currentCalendar = Calendar.current;
-    let userContext = CodableUserContext.create();
+    let userContext = HeliumIdentityManager.shared.getUserContext();
     
     return HeliumContext(
         trigger: triggerName,
