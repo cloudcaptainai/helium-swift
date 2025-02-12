@@ -17,17 +17,19 @@ public class HeliumController {
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
     var apiKey: String
-    var triggers: [HeliumTrigger]?
     
-    public init(apiKey: String, triggers: [HeliumTrigger]? = nil) {
+    public init(apiKey: String) {
         self.apiKey = apiKey
-        self.triggers = triggers;
     }
     
-    public func identifyUser(userId: String) {
+    public func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
+        if (traits != nil) {
+            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits!);
+        }
         if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil && HeliumPaywallDelegateWrapper.shared.getIsAnalyticsEnabled()) {
             let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-            analytics.identify(userId: userId, traits: CodableUserContext.create());
+            let userContext = HeliumIdentityManager.shared.getUserContext();
+            analytics.identify(userId: userId, traits: userContext);
         }
     }
     
@@ -41,7 +43,6 @@ public class HeliumController {
             "apiKey": self.apiKey,
             "userId": HeliumIdentityManager.shared.getUserId(),
             "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
-            "triggers": self.triggers?.compactMap({ trigger in trigger.name }) as Any
         ]
         
         let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT;

@@ -5,10 +5,12 @@ public class HeliumIdentityManager {
     public static let shared = HeliumIdentityManager()
     private init() {
         self.heliumSessionId = UUID().uuidString
+        self.heliumUserTraits = HeliumUserTraits([:]);
     }
     
     // MARK: - Properties
     private let heliumSessionId: String
+    private var heliumUserTraits: HeliumUserTraits?
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
@@ -35,6 +37,10 @@ public class HeliumIdentityManager {
         UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
     }
     
+    public func setCustomUserTraits(traits: HeliumUserTraits) {
+        self.heliumUserTraits = traits;
+    }
+    
     /// Creates or retrieves the Helium persistent ID
     /// - Returns: The Helium persistent ID
     public func getHeliumPersistentId() -> String {
@@ -56,6 +62,6 @@ public class HeliumIdentityManager {
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
     public func getUserContext() -> CodableUserContext {
-        return CodableUserContext.create();
+        return CodableUserContext.create(userTraits: self.heliumUserTraits);
     }
 }

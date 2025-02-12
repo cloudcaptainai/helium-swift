@@ -8,6 +8,7 @@
 import Foundation
 import UIKit
 import DeviceKit
+import AnyCodable
 
 struct CodableLocale: Codable {
     var currentCountry: String?
@@ -73,7 +74,7 @@ public struct CodableUserContext: Codable {
     var screenInfo: CodableScreenInfo
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
-    var additionalParams: [String: String]
+    var additionalParams: HeliumUserTraits
     var heliumSessionId: String?
     var heliumPersistentId: String?
     
@@ -127,7 +128,7 @@ public struct CodableUserContext: Codable {
         ]
     }
 
-    static func create() -> CodableUserContext {
+    static func create(userTraits: HeliumUserTraits?) -> CodableUserContext {
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
             currentCurrency: Locale.current.currencyCode,
@@ -163,7 +164,7 @@ public struct CodableUserContext: Codable {
             screenInfo: screenInfo,
             deviceInfo: deviceInfo,
             applicationInfo: applicationInfo,
-            additionalParams: [:]
+            additionalParams: userTraits ?? HeliumUserTraits([:])
         )
     }
 }

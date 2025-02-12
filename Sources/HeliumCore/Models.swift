@@ -265,6 +265,57 @@ public enum HeliumPaywallEvent: Codable {
             return "paywallsDownloadError"
         }
     }
+    
+    public func toDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "type": self.caseString()
+        ]
+        
+        switch self {
+        case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
+            dict["ctaName"] = ctaName
+            dict["triggerName"] = triggerName
+            dict["paywallTemplateName"] = paywallTemplateName
+            
+        case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionRestored(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPending(let productKey, let triggerName, let paywallTemplateName):
+            dict["productKey"] = productKey
+            dict["triggerName"] = triggerName
+            dict["paywallTemplateName"] = paywallTemplateName
+            
+        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+            dict["productKey"] = productKey
+            dict["triggerName"] = triggerName
+            dict["paywallTemplateName"] = paywallTemplateName
+            dict["errorDescription"] = error
+            
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS):
+            dict["triggerName"] = triggerName
+            dict["paywallTemplateName"] = paywallTemplateName
+            dict["webviewRenderTimeTakenMS"] = webviewRenderTimeTakenMS
+            
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS):
+            dict["configId"] = configId
+            dict["downloadTimeTakenMS"] = downloadTimeTakenMS
+            dict["imagesDownloadTimeTakenMS"] = imagesDownloadTimeTakenMS
+            dict["fontsDownloadTimeTakenMS"] = fontsDownloadTimeTakenMS
+            dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
+            
+        case .paywallsDownloadError(let error):
+            dict["errorDescription"] = error
+            
+        default:
+            if let trigger = self.getTriggerIfExists() {
+                dict["triggerName"] = trigger
+            }
+        }
+        
+        return dict
+    }
 }
 
 
