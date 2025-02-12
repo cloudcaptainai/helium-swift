@@ -13,9 +13,6 @@ let package = Package(
         .library(
             name: "Helium",
             targets: ["Helium"]),
-        .library(
-            name: "HeliumCore",
-            targets: ["HeliumCore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "7.0.0")),
@@ -28,7 +25,7 @@ let package = Package(
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "HeliumCore",
+            name: "Helium",
             dependencies: [
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Segment", package: "analytics-swift"),
@@ -36,10 +33,6 @@ let package = Package(
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),
                 .product(name: "DeviceKit", package: "DeviceKit")
             ]
-        ),
-        .target(
-            name: "Helium",
-            dependencies: ["HeliumCore"]
         ),
         .testTarget(
             name: "helium-swiftTests",

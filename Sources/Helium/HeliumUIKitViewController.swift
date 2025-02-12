@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import HeliumCore
 import SwiftUI
 import UIKit
 

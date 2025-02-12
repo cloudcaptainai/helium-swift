@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import HeliumCore
 
 public class Helium {
     var controller: HeliumController?
