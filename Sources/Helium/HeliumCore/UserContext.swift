@@ -124,7 +124,7 @@ public struct CodableUserContext: Codable {
                 "appDisplayName": self.applicationInfo.appDisplayName as Any,
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion as Any,
             ],
-            "additionalParams": self.additionalParams
+            "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
 

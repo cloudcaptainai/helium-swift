@@ -144,8 +144,15 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     fontsDownloadStatus: HeliumAssetManager.shared.fontStatus,
                     bundleDownloadStatus: HeliumAssetManager.shared.bundleStatus
                 );
-                
-                analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                do {
+                    let asJSON = try? eventForLogging.toSwiftyJSON();
+                    if (asJSON != nil) {
+                        let asDictionary = asJSON!.toDictionary();
+                        analytics?.track("helium_" + event.caseString(), properties: asDictionary);
+                    }
+                } catch {
+                    
+                }
             }
         } catch {
             print("Delegate action failed.");

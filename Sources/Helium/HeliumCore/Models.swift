@@ -10,6 +10,7 @@ import UIKit
 import SwiftUI
 import AnyCodable
 import Segment
+import SwiftyJSON
 
 public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumPaywallInfo {
     return HeliumPaywallInfo(
