@@ -46,6 +46,7 @@ public struct HeliumPaywallInfo: Codable {
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?
+    var additionalPaywallFields: JSON?
 }
 
 public struct HeliumFetchedConfig: Codable {
@@ -54,6 +55,7 @@ public struct HeliumFetchedConfig: Codable {
     var segmentAnalyticsEndpoint: String
     var orgName: String
     var fetchedConfigID: UUID
+    var additionalFields: JSON?
 }
 
 public enum HeliumPaywallEvent: Codable {
@@ -336,6 +338,9 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var imageDownloadStatus: HeliumAssetStatus?
     var fontsDownloadStatus: HeliumAssetStatus?
     var bundleDownloadStatus: HeliumAssetStatus?
+    
+    var additionalFields: JSON?
+    var additionalPaywallFields: JSON?
 }
 
 

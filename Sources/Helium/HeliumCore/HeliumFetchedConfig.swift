@@ -2,6 +2,7 @@ import Foundation
 import SwiftyJSON
 import SwiftUI
 import WebKit
+import Network
 
 public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case notDownloadedYet
@@ -10,35 +11,67 @@ public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case downloadFailure
 }
 
+class NetworkReachability {
+    static let shared = NetworkReachability()
+    private let monitor = NWPathMonitor()
+    private var isOnWiFiValue = false
+    
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.isOnWiFiValue = path.usesInterfaceType(.wifi)
+        }
+        monitor.start(queue: DispatchQueue.global())
+    }
+    
+    var isOnWiFi: Bool {
+        isOnWiFiValue
+    }
+    
+    deinit {
+        monitor.cancel()
+    }
+}
+
 public func fetchEndpoint(
     endpoint: String,
     params: [String: Any]
-) async throws -> (HeliumFetchedConfig?, JSON?)  {
-    let urlString = endpoint // Assuming 'endpoint' is a String containing the URL
+) async throws -> (HeliumFetchedConfig?, JSON?) {
+    let urlString = endpoint
     guard let url = URL(string: urlString) else {
         throw URLError(.badURL)
     }
 
+    // Configure session with max connections
+    let config = URLSessionConfiguration.default
+    config.httpMaximumConnectionsPerHost = 5
+    let session = URLSession(configuration: config)
+
+    // Configure request
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+    
+    // Adjust timeouts based on network condition
+    if NetworkReachability.shared.isOnWiFi {
+        request.timeoutInterval = 30  // More lenient on WiFi
+    } else {
+        request.timeoutInterval = 15  // More conservative on cellular
+    }
 
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
 
-
-    let (data, response) = try await URLSession.shared.data(for: request)
-    
+    let (data, response) = try await session.data(for: request)
     guard let httpResponse = response as? HTTPURLResponse,
           (200...299).contains(httpResponse.statusCode) else {
         throw URLError(.badServerResponse)
     }
     
-    
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-    let json = try? JSON(data: data);
+    let json = try? JSON(data: data)
 
-    return (decodedResponse, json);
+    return (decodedResponse, json)
 }
 
 public class HeliumFetchedConfigManager: ObservableObject {
@@ -86,7 +119,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     do {
                         let endTimeNewConfig = Date()
                         let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
-                        print("Fetch config just json took \(timeElapsed) seconds")
                         
                         var fontURLs = Set<String>()
                         var imageURLs = Set<String>()
@@ -134,13 +166,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             
                         }
                     } catch {
-                        print("Couldn't load all fonts.")
+                        await self.updateDownloadState(.downloadFailure);
+                        completion(.failure(error))
+                        return
                     }
                 }
                 
                 let endTimeConfig = Date()
-                let timeElapsed = endTimeConfig.timeIntervalSince(startTimeConfig)
-                print("Fetch config font/image parsing took \(timeElapsed) seconds")
+                let timeElapsed = endTimeConfig.timeIntervalSince(startTimeConfig);
 
                 await self.updateDownloadState(.downloadSuccess)
                 completion(.success(newConfig))

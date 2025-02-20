@@ -69,36 +69,64 @@ public class HeliumAssetManager: ObservableObject {
     // Bundle methods
     public func downloadBundles(configs: [BundleConfig]) async {
         let startTime = DispatchTime.now()
-        
-        await MainActor.run {
-            bundleStatus = HeliumAssetStatus(downloadStatus: .inProgress)
-        }
-        
-        var results: [(success: Bool, config: BundleConfig, localPath: String?)] = []
-        
-        await withTaskGroup(of: (Bool, BundleConfig, String?).self) { group in
-            for config in configs {
-                group.addTask {
-                    do {
-                        let localPath = try await self.downloadAndSaveBundle(
-                            from: config.url,
-                            into: config.triggerName
-                        )
-                        return (true, config, localPath)
-                    } catch {
-                        return (false, config, nil)
-                    }
-                }
-            }
-            
-            for await result in group {
-                results.append(result)
-            }
-        }
-        
-        let endTime = DispatchTime.now()
-        let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
-        
+       
+       // Dedup configs by URL while preserving trigger names
+       let uniqueConfigs = Dictionary(grouping: configs, by: { $0.url })
+           .mapValues { configs in
+               // Combine all trigger names for the same URL
+               BundleConfig(
+                   url: configs[0].url,
+                   triggerName: configs.map { $0.triggerName }.joined(separator: "_")
+               )
+           }
+           .values
+       
+       
+       await MainActor.run {
+           bundleStatus = HeliumAssetStatus(downloadStatus: .inProgress)
+       }
+       
+       var results: [(success: Bool, config: BundleConfig, localPath: String?)] = []
+       
+       // Configure maximum concurrent downloads
+       let maxConcurrent = 3
+       
+       await withTaskGroup(of: (Bool, BundleConfig, String?).self) { group in
+           var inProgress = 0
+           
+           for config in uniqueConfigs {
+               if inProgress >= maxConcurrent {
+                   // Wait for one task to complete before adding more
+                   if let result = await group.next() {
+                       results.append(result)
+                       inProgress -= 1
+                   }
+               }
+               
+               group.addTask {
+                   do {
+                       let localPath = try await self.downloadAndSaveBundle(
+                           from: config.url,
+                           into: config.triggerName
+                       )
+                       return (true, config, localPath)
+                   } catch {
+                       return (false, config, nil)
+                   }
+               }
+               inProgress += 1
+           }
+           
+           // Collect remaining results
+           for await result in group {
+               results.append(result)
+           }
+       }
+       
+       // Rest of your existing code for cache updates and status handling
+       let endTime = DispatchTime.now()
+       let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
+    
         // Update cache with successful downloads
         var updatedCache = bundleCache
         for result in results where result.success {
@@ -142,25 +170,35 @@ public class HeliumAssetManager: ObservableObject {
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
-        let (data, _) = try await URLSession.shared.data(from: url);
         
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("helium_bundles", isDirectory: true)
             .appendingPathComponent("\(triggerName)", isDirectory: true)
         
+        let fileName = url.lastPathComponent
+        let localURL = bundleDir.appendingPathComponent(fileName)
+        
+        if FileManager.default.fileExists(atPath: localURL.path) {
+            return localURL.path
+        }
+        
         try FileManager.default.createDirectory(
             at: bundleDir,
             withIntermediateDirectories: true
         )
         
-        let fileName = url.lastPathComponent
-        let localURL = bundleDir.appendingPathComponent(fileName)
-        try data.write(to: localURL)
+        if #available(iOS 15.0, *) {
+            let (tempURL, _) = try await URLSession.shared.download(from: url)
+            try FileManager.default.moveItem(at: tempURL, to: localURL)
+        } else {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try data.write(to: localURL)
+        }
         
         return localURL.path
     }
-    
+
     private func removeDownloadedBundles() {
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]

@@ -83,7 +83,6 @@ public class HeliumController {
                     bundleDownloadTimeMS: HeliumAssetManager.shared.bundleStatus.timeTakenMS
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
-                
                 // Use the config as needed
             case .failure(let error):
             
