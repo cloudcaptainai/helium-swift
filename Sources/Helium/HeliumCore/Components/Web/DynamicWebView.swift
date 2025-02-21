@@ -224,7 +224,10 @@ public struct DynamicWebView: View {
             self.webView = webView
 
         } catch {
-            print("[Profile] Failed after \(Date().timeIntervalSince(totalStartTime)) seconds")
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
+                triggerName: triggerName ?? "",
+                paywallTemplateName: "WebView"
+            ));
             if (fallbackPaywall != nil) {
                 shouldShowFallback = true;
             }
