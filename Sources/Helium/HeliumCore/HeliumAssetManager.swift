@@ -10,50 +10,19 @@ public enum HeliumAssetDownloadStatus: String, Codable {
     case failed
 }
 
-public struct HeliumAssetStatus: Codable {
-    public var downloadStatus: HeliumAssetDownloadStatus
-    public var timeTakenMS: UInt64?
-    public var errorMesssage: String?
-    
-    public static func initial() -> HeliumAssetStatus {
-        return HeliumAssetStatus(downloadStatus: .notStartedYet)
-    }
-}
-
 public class HeliumAssetManager: ObservableObject {
     public static let shared = HeliumAssetManager()
     private init() {}
     
-    // Published properties for observing status
-    @Published public var fontStatus = HeliumAssetStatus(downloadStatus: .notStartedYet)
-    @Published public var imageStatus = HeliumAssetStatus(downloadStatus: .notStartedYet)
-    @Published public var bundleStatus = HeliumAssetStatus.initial()
-    
-    // Bundle types
-    public struct BundleConfig {
-        let url: String
-        let triggerName: String
-    }
-    
-    public struct BundleCache: Codable {
-        var bundles: [String: BundleInfo]
-        
-        struct BundleInfo: Codable {
-            let localPath: String
-            let originalUrl: String
-        }
-    }
-    
-    // Cache handling
     private static let bundleCacheKey = "helium_bundles_cache"
     
-    private var bundleCache: BundleCache {
+    private var bundleIds: Set<String> {
         get {
             guard let data = UserDefaults.standard.data(forKey: Self.bundleCacheKey),
-                  let cache = try? JSONDecoder().decode(BundleCache.self, from: data) else {
-                return BundleCache(bundles: [:])
+                  let ids = try? JSONDecoder().decode(Set<String>.self, from: data) else {
+                return []
             }
-            return cache
+            return ids
         }
         set {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
@@ -62,188 +31,35 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func clearCache() {
-        removeDownloadedBundles()
-        UserDefaults.standard.removeObject(forKey: Self.bundleCacheKey);
+        let bundleDir = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        
+        try? FileManager.default.removeItem(at: bundleDir)
+        bundleIds = []
     }
     
-    // Bundle methods
-    public func downloadBundles(configs: [BundleConfig]) async {
-        let startTime = DispatchTime.now()
-       
-       // Dedup configs by URL while preserving trigger names
-       let uniqueConfigs = Dictionary(grouping: configs, by: { $0.url })
-           .mapValues { configs in
-               // Combine all trigger names for the same URL
-               BundleConfig(
-                   url: configs[0].url,
-                   triggerName: configs.map { $0.triggerName }.joined(separator: "_")
-               )
-           }
-           .values
-       
-       
-       await MainActor.run {
-           bundleStatus = HeliumAssetStatus(downloadStatus: .inProgress)
-       }
-       
-       var results: [(success: Bool, config: BundleConfig, localPath: String?)] = []
-       
-       // Configure maximum concurrent downloads
-       let maxConcurrent = 3
-       
-       await withTaskGroup(of: (Bool, BundleConfig, String?).self) { group in
-           var inProgress = 0
-           
-           for config in uniqueConfigs {
-               if inProgress >= maxConcurrent {
-                   // Wait for one task to complete before adding more
-                   if let result = await group.next() {
-                       results.append(result)
-                       inProgress -= 1
-                   }
-               }
-               
-               group.addTask {
-                   do {
-                       let localPath = try await self.downloadAndSaveBundle(
-                           from: config.url,
-                           into: config.triggerName
-                       )
-                       return (true, config, localPath)
-                   } catch {
-                       return (false, config, nil)
-                   }
-               }
-               inProgress += 1
-           }
-           
-           // Collect remaining results
-           for await result in group {
-               results.append(result)
-           }
-       }
-       
-       // Rest of your existing code for cache updates and status handling
-       let endTime = DispatchTime.now()
-       let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
-    
-        // Update cache with successful downloads
-        var updatedCache = bundleCache
-        for result in results where result.success {
-            let info = BundleCache.BundleInfo(
-                localPath: result.localPath!,
-                originalUrl: result.config.url
-            )
-            updatedCache.bundles[result.config.url] = info
+    private func getBundleIdFromURL(_ url: String) -> String? {
+        guard let filename = url.split(separator: "/").last?.split(separator: ".").first else {
+            return nil
         }
-        bundleCache = updatedCache
-        let hasFailures = results.contains(where: { !$0.success })
-        let failedConfig = results.first(where: { !$0.success })?.config;
-        await MainActor.run {
-            if hasFailures {
-                bundleStatus = HeliumAssetStatus(
-                    downloadStatus: .failed,
-                    timeTakenMS: timeTaken,
-                    errorMesssage: "At least one failure in downloading bundles: first failure \(failedConfig?.url) for trigger: \(failedConfig?.triggerName)"
-                )
-            } else {
-                bundleStatus = HeliumAssetStatus(
-                    downloadStatus: .downloaded,
-                    timeTakenMS: timeTaken,
-                    errorMesssage: nil
-                )
-            }
-        }
+        return filename.hasPrefix("bundle_") ? String(filename.dropFirst(7)) : String(filename)
     }
     
     public func localPathForURL(bundleURL: String) -> String? {
-        return self.bundleCache.bundles[bundleURL]?.localPath;
-    }
-    
-    func randomString(length: Int) -> String {
-      let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-      return String((0..<length).map{ _ in letters.randomElement()! })
-    }
-
-    
-    private func downloadAndSaveBundle(from urlString: String, into triggerName: String) async throws -> String {
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
+        print("Requesting local path")
+        guard let bundleId = getBundleIdFromURL(bundleURL) else {
+            print("couldnt get from url \(bundleURL)");
+            return nil
         }
         
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles", isDirectory: true)
-            .appendingPathComponent("\(triggerName)", isDirectory: true)
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
         
-        let fileName = url.lastPathComponent
-        let localURL = bundleDir.appendingPathComponent(fileName)
-        
-        if FileManager.default.fileExists(atPath: localURL.path) {
-            return localURL.path
-        }
-        
-        try FileManager.default.createDirectory(
-            at: bundleDir,
-            withIntermediateDirectories: true
-        )
-        
-        if #available(iOS 15.0, *) {
-            let (tempURL, _) = try await URLSession.shared.download(from: url)
-            try FileManager.default.moveItem(at: tempURL, to: localURL)
-        } else {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            try data.write(to: localURL)
-        }
-        
-        return localURL.path
-    }
-
-    private func removeDownloadedBundles() {
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles", isDirectory: true)
-        
-        try? FileManager.default.removeItem(at: bundleDir)
-    }
-    
-    // Existing font/image methods
-    public func collectFontURLs(from json: JSON, into fontURLs: inout Set<String>) {
-        switch json.type {
-        case .dictionary:
-            for (key, value) in json {
-                if key == "fontURL", let url = value.string {
-                    fontURLs.insert(url)
-                } else {
-                    collectFontURLs(from: value, into: &fontURLs)
-                }
-            }
-        case .array:
-            for item in json.arrayValue {
-                collectFontURLs(from: item, into: &fontURLs)
-            }
-        default:
-            break
-        }
-    }
-    
-    public func collectImageURLs(from json: JSON, into imageURLs: inout Set<String>) {
-        switch json.type {
-        case .dictionary:
-            for (key, value) in json {
-                if key == "imageURL", let url = value.string {
-                    imageURLs.insert(url)
-                } else {
-                    collectImageURLs(from: value, into: &imageURLs)
-                }
-            }
-        case .array:
-            for item in json.arrayValue {
-                collectImageURLs(from: item, into: &imageURLs)
-            }
-        default:
-            break
-        }
+        let value = bundleDir.appendingPathComponent("\(bundleId).html").path
+        print("Reading from \(value)");
+        return value;
     }
     
     public func collectBundleURLs(from json: JSON, into bundleURLs: inout Set<String>) {
@@ -265,102 +81,48 @@ public class HeliumAssetManager: ObservableObject {
         }
     }
     
-    public func downloadFonts(from fontURLs: Set<String>) async {
-            let startTime = DispatchTime.now()
-            
-            await MainActor.run {
-                fontStatus = HeliumAssetStatus(downloadStatus: .inProgress)
-            }
-            
-            var results: [(success: Bool, url: String)] = []
-            
-            await withTaskGroup(of: (Bool, String).self) { group in
-                for fontURL in fontURLs {
-                    group.addTask {
-                        if let url = URL(string: fontURL) {
-                            let result = await downloadRemoteFont(fontURL: url)
-                            return (result, fontURL)
-                        }
-                        return (false, fontURL)
-                    }
-                }
-                
-                for await result in group {
-                    results.append(result)
-                }
-            }
-            
-            let endTime = DispatchTime.now()
-            let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
-            
-            // Process results after all tasks are complete
-            let firstFailedURL = results.first { !$0.success }?.url
-            
-            await MainActor.run {
-                if let failedURL = firstFailedURL {
-                    fontStatus = HeliumAssetStatus(
-                        downloadStatus: .failed,
-                        timeTakenMS: timeTaken,
-                        errorMesssage: "Failed to download font: \(failedURL)"
-                    )
-                } else {
-                    fontStatus = HeliumAssetStatus(
-                        downloadStatus: .downloaded,
-                        timeTakenMS: timeTaken,
-                        errorMesssage: nil
-                    )
-                }
-            }
+    public func getExistingBundleIDs() -> [String] {
+        let bundleDir = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: bundleDir,
+            includingPropertiesForKeys: nil
+        ) else {
+            return []
         }
+        
+        return files
+            .filter { $0.pathExtension == "bundle" }
+            .map { $0.deletingPathExtension().lastPathComponent }
+    }
     
-    public func downloadImages(from imageURLs: Set<String>) async {
-        let startTime = DispatchTime.now()
+    public func writeBundles(bundles: [String: String]) throws {
+        let bundleDir = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
         
-        // Set status on main thread
-        await MainActor.run {
-            imageStatus = HeliumAssetStatus(downloadStatus: .inProgress)
-        }
+        try FileManager.default.createDirectory(
+            at: bundleDir,
+            withIntermediateDirectories: true
+        )
         
-        let urlList = imageURLs.compactMap { URL(string: $0) }
-        let totalExpectedImages = urlList.count
+        var updatedIds = bundleIds
         
-        // Create a continuation to wait for the prefetcher completion
-        await withCheckedContinuation { [self] continuation in
-            let prefetcher = ImagePrefetcher(urls: urlList) { [weak self] skippedResources, failedResources, completedResources in
-                guard let self = self else {
-                    continuation.resume()
-                    return
-                }
-                
-                let endTime = DispatchTime.now()
-                let timeTaken = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0);
-                
-                // Update status on main thread
-                Task { @MainActor in
-                    if !failedResources.isEmpty {
-                        self.imageStatus = HeliumAssetStatus(
-                            downloadStatus: .failed,
-                            timeTakenMS: timeTaken,
-                            errorMesssage: "Failed to download \(failedResources.count) images"
-                        )
-                        continuation.resume()
-                    } else {
-                        // Check if all images are accounted for
-                        let totalProcessedImages = completedResources.count + skippedResources.count
-                        if totalProcessedImages == totalExpectedImages {
-                            self.imageStatus = HeliumAssetStatus(
-                                downloadStatus: .downloaded,
-                                timeTakenMS: timeTaken,
-                                errorMesssage: nil
-                            )
-                            continuation.resume()
-                        }
-                        // Note: If totalProcessedImages != totalExpectedImages, we don't resume
-                        // This ensures we wait for all images to complete or fail
-                    }
-                }
+        for (bundleId, content) in bundles {
+            let fileName = "\(bundleId).html"
+            let localURL = bundleDir.appendingPathComponent(fileName)
+            
+            let unescapedContent = content
+          
+            if let data = unescapedContent.data(using: .utf8) {
+                print("Writing to \(localURL)");
+                try data.write(to: localURL)
+                updatedIds.insert(bundleId)
             }
-            prefetcher.start()
         }
+        
+        bundleIds = updatedIds
     }
 }

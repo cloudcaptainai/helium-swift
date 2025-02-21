@@ -56,9 +56,11 @@ public struct HeliumFetchedConfig: Codable {
     var orgName: String
     var fetchedConfigID: UUID
     var additionalFields: JSON?
+    var bundles: [String: String]?;
 }
 
 public enum HeliumPaywallEvent: Codable {
+    case initializeStart
     case ctaPressed(ctaName: String, triggerName: String, paywallTemplateName: String)
     case offerSelected(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionPressed(productKey: String, triggerName: String, paywallTemplateName: String)
@@ -81,7 +83,8 @@ public enum HeliumPaywallEvent: Codable {
     
     public func getTriggerIfExists() -> String?{
         switch self {
-        
+        case .initializeStart:
+            return nil
         case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
             return triggerName;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
@@ -115,6 +118,8 @@ public enum HeliumPaywallEvent: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
         switch self {
+        case .initializeStart:
+            break;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             try container.encode("ctaPressed", forKey: .type)
             try container.encode(ctaName, forKey: .ctaName)
@@ -165,6 +170,8 @@ public enum HeliumPaywallEvent: Codable {
         let type = try container.decode(String.self, forKey: .type)
         
         switch type {
+        case "initializeStart":
+            self = .initializeStart
         case "ctaPressed":
             let ctaName = try container.decode(String.self, forKey: .ctaName)
             let triggerName = try container.decode(String.self, forKey: .triggerName)
@@ -235,6 +242,8 @@ public enum HeliumPaywallEvent: Codable {
 
     public func caseString() -> String {
         switch self {
+        case .initializeStart:
+            return "initializeStart"
         case .paywallWebViewRendered:
             return "paywallWebViewRendered"
         case .ctaPressed:
@@ -274,6 +283,8 @@ public enum HeliumPaywallEvent: Codable {
         ]
         
         switch self {
+        case .initializeStart:
+            break;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             dict["ctaName"] = ctaName
             dict["triggerName"] = triggerName
@@ -335,10 +346,6 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var isFallback: Bool?
     
     var downloadStatus: HeliumFetchedConfigStatus?
-    var imageDownloadStatus: HeliumAssetStatus?
-    var fontsDownloadStatus: HeliumAssetStatus?
-    var bundleDownloadStatus: HeliumAssetStatus?
-    
     var additionalFields: JSON?
     var additionalPaywallFields: JSON?
 }

@@ -25,7 +25,7 @@ public class Helium {
         if (!initialized) {
             fatalError("Helium.initialize() needs to be called before presenting a paywall. Please contact founders@tryhelium.com to get set up!");
         }
-
+        
         if self.paywallsLoaded() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
@@ -59,6 +59,13 @@ public class Helium {
                 fallbackView
             })
         }
+    }
+    
+    public func getFallbackPaywall() -> AnyView? {
+        if (fallbackPaywall == nil) {
+            return nil;
+        }
+        return AnyView(fallbackPaywall!);
     }
     
     public func getHeliumUserId() -> String? {
@@ -103,8 +110,7 @@ public class Helium {
     }
     
     public func paywallsLoaded() -> Bool {
-        if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus,
-           HeliumAssetManager.shared.bundleStatus.downloadStatus == .downloaded {
+        if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
             return true;
         }
         return false;

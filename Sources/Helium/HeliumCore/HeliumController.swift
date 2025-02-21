@@ -43,6 +43,7 @@ public class HeliumController {
             "apiKey": self.apiKey,
             "userId": HeliumIdentityManager.shared.getUserId(),
             "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
+            "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
         ]
         
         let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT;
@@ -77,10 +78,7 @@ public class HeliumController {
                 
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
                     configId: fetchedConfig.fetchedConfigID,
-                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
-                    imagesDownloadTimeTakenMS: HeliumAssetManager.shared.imageStatus.timeTakenMS,
-                    fontsDownloadTimeTakenMS: HeliumAssetManager.shared.fontStatus.timeTakenMS,
-                    bundleDownloadTimeMS: HeliumAssetManager.shared.bundleStatus.timeTakenMS
+                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 // Use the config as needed

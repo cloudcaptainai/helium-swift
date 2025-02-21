@@ -21,7 +21,9 @@ class HeliumPaywallPresenter {
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()
-        presenter.present(modalVC, animated: true)
+        presenter.present(modalVC, animated: true) {
+            modalVC.presentationState.isFullyPresented = true
+        }
         
         currentPaywallViewController = modalVC
     }
@@ -53,6 +55,6 @@ class HeliumPaywallPresenter {
             currentPaywallViewController = nil
             return true
         }
-        return true // Immediate return for non-async compatibility
+        return true
     }
 }

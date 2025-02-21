@@ -9,11 +9,17 @@ import Foundation
 import SwiftUI
 import UIKit
 
+public class HeliumPaywallPresentationState: ObservableObject {
+    @Published var isFullyPresented = false
+}
+
 class HeliumViewController: UIViewController {
     private let contentView: AnyView
+    let presentationState = HeliumPaywallPresentationState()
     
     init(contentView: AnyView) {
-        self.contentView = contentView
+        self.contentView = AnyView(contentView
+            .environmentObject(presentationState))
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -30,5 +36,13 @@ class HeliumViewController: UIViewController {
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        transitionCoordinator?.animate(alongsideTransition: nil) { [weak self] _ in
+            self?.presentationState.isFullyPresented = true
+        }
     }
 }
