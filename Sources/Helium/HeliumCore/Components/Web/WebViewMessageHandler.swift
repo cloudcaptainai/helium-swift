@@ -26,13 +26,6 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
 
         if message.name == "logging" {
-            if let body = message.body as? String {
-                print("[WebView Log]:", body)
-            } else {
-                print("[WebView Log]:", message.body)
-            }
-            replyHandler(nil, nil)
-
             return
         }
         
@@ -137,20 +130,6 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     }
 }
 
-// Add to your MessageHandler class to capture scroll behavior
-extension WebViewMessageHandler: UIScrollViewDelegate {
-    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        print("Scroll position changed: \(scrollView.contentOffset)")
-    }
-    
-    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        print("Begin dragging at: \(scrollView.contentOffset)")
-    }
-    
-    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        print("End dragging at: \(scrollView.contentOffset), will decelerate: \(decelerate)")
-    }
-}
 
 extension WebViewMessageHandler: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
