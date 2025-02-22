@@ -62,7 +62,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 }
             case "cta-pressed":
                 if let componentName = data["componentName"] as? String {
-                    self.delegateWrapper?.onCTAPress(contentComponentName: "componentName")
+                    self.delegateWrapper?.onCTAPress(contentComponentName: componentName)
                     respond(["status": "success"])
                 }
                 
