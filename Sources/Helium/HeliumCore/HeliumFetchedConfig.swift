@@ -126,7 +126,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             completion(.failure(error))
                             return
                         }
+                    } else {
+                        await self.updateDownloadState(.downloadSuccess)
+                        completion(.success(newConfig))
                     }
+                } else {
+                    await self.updateDownloadState(.downloadFailure);
+                    completion(.failure(URLError(.unknown)));
                 }
 
                 

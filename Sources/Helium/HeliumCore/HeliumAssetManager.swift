@@ -94,7 +94,7 @@ public class HeliumAssetManager: ObservableObject {
         }
         
         return files
-            .filter { $0.pathExtension == "bundle" }
+            .filter { $0.pathExtension == "html" }
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
