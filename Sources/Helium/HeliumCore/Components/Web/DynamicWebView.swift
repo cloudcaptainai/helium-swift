@@ -24,7 +24,7 @@ public struct DynamicWebView: View {
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
-        self.fallbackPaywall = Helium.shared.getFallbackPaywall();
+        self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate);
         self.triggerName = triggerName;
