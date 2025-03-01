@@ -9,6 +9,7 @@ public struct DynamicWebView: View {
     let templateConfig: JSON
     var actionsDelegate: ActionsDelegateWrapper
     let backgroundConfig: BackgroundConfig?
+    let postLoadBackgroundConfig: BackgroundConfig?
     let showShimmer: Bool
     let shimmerConfig: JSON
     let showProgressView: Bool
@@ -31,6 +32,7 @@ public struct DynamicWebView: View {
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"];
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
+        self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
         self.showShimmer = json["showShimmer"].bool ?? false;
         self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
         self.showProgressView = json["showProgress"].bool ?? false;
@@ -38,11 +40,18 @@ public struct DynamicWebView: View {
 
     public var body: some View {
        ZStack {
-           // Background always shows
-          if let backgroundConfig = backgroundConfig {
-              backgroundConfig.makeBackgroundView()
-                  .ignoresSafeArea()
-          }
+           // Background view - shows either initial background or post-load background when content is loaded
+           if isContentLoaded, let postLoadBg = postLoadBackgroundConfig {
+               // Show post-load background if content is loaded and postLoadBackgroundConfig exists
+               postLoadBg.makeBackgroundView()
+                   .ignoresSafeArea()
+                   .transition(.opacity)
+           } else if let backgroundConfig = backgroundConfig {
+               // Show initial background
+               backgroundConfig.makeBackgroundView()
+                   .ignoresSafeArea()
+           }
+           
            if shouldShowFallback, let fallback = fallbackPaywall {
                fallback
                    .ignoresSafeArea()
@@ -128,7 +137,6 @@ public struct DynamicWebView: View {
         
         // Context and script injection timing
         do {
-//          let contextStartTime = Date()
             let currentContext = createHeliumContext(triggerName: triggerName)
             let contextJSON = JSON(parseJSON: try currentContext.toJSON())
             let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
