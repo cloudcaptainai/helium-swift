@@ -11,19 +11,8 @@ import SwiftUI
 import AnyCodable
 import Segment
 
-public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumPaywallInfo {
-    return HeliumPaywallInfo(
-        paywallID: 1,
-        paywallTemplateName: paywallTemplateName,
-        productsOffered: ["potato"],
-        resolvedConfig: [:],
-        shouldShow: true,
-        fallbackPaywallName: ""
-    )
-}
-
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil) {
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false) {
         self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
@@ -33,6 +22,7 @@ public struct HeliumPaywallInfo: Codable {
         self.experimentID = experimentID;
         self.modelID = modelID;
         self.resolvedConfigJSON = resolvedConfigJSON;
+        self.forceShowFallback = forceShowFallback;
     }
     
     var paywallID: Int
@@ -43,6 +33,7 @@ public struct HeliumPaywallInfo: Codable {
     var fallbackPaywallName: String
     public var experimentID: String?
     public var modelID: String?
+    public var forceShowFallback: Bool?
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?

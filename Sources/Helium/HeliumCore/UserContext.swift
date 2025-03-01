@@ -15,6 +15,7 @@ struct CodableLocale: Codable {
     var currentCurrency: String?
     var currentCurrencySymbol: String?
     var currentLanguage: String?
+    var preferredLanguages: [String]?
     var currentTimeZone: TimeZone?
     var currentTimeZoneName: String?
     var decimalSeparator: String?
@@ -44,6 +45,8 @@ struct CodableDeviceInfo: Codable {
     var systemVersion: String
     var deviceModel: String
     var userInterfaceIdiom: String
+    var totalCapacity: Int?
+    var availableCapacity: Int64?
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
@@ -86,6 +89,7 @@ public struct CodableUserContext: Codable {
                 "currentCountry": self.locale.currentCountry as Any,
                 "currentCurrency": self.locale.currentCurrency as Any,
                 "currentCurrencySymbol": self.locale.currentCurrencySymbol as Any,
+                "preferredLanguages": self.locale.preferredLanguages as Any,
                 "currentLanguage": self.locale.currentLanguage as Any,
                 "currentTimeZone": self.locale.currentTimeZone?.identifier as Any,
                 "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
@@ -129,11 +133,13 @@ public struct CodableUserContext: Codable {
     }
 
     static func create(userTraits: HeliumUserTraits?) -> CodableUserContext {
+        
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
             currentCurrency: Locale.current.currencyCode,
             currentCurrencySymbol: Locale.current.currencySymbol,
             currentLanguage: Locale.current.languageCode,
+            preferredLanguages: Locale.preferredLanguages,
             currentTimeZone: TimeZone.current,
             currentTimeZoneName: TimeZone.current.identifier,
             decimalSeparator: Locale.current.decimalSeparator,
@@ -150,13 +156,16 @@ public struct CodableUserContext: Codable {
         
         let applicationInfo = createApplicationInfo()
 
+        
         let deviceInfo = CodableDeviceInfo(
             currentDeviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             orientation: UIDevice.current.orientation.rawValue,
             systemName: UIDevice.current.systemName,
             systemVersion: UIDevice.current.systemVersion,
             deviceModel: Device.current.safeDescription,
-            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom)
+            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
+            totalCapacity: Device.volumeTotalCapacity,
+            availableCapacity: Device.volumeAvailableCapacityForOpportunisticUsage
         )
 
         return CodableUserContext(

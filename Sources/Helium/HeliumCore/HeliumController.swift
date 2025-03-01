@@ -16,10 +16,33 @@ public class HeliumController {
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
+    let INITIALIZATION_BROWSER_WRITE_KEY = "dIPnOYdPFgAabYaURULtIHAxbofvIIAD:GV9TlMOuPgt989LaumjVTJofZ8vipJXb";
+    let INITIALIZATION_ANALYTICS_ENDPOINT = "cm7mjur1o00003p6r7lio27sb.d.jitsu.com";
+    
     var apiKey: String
     
     public init(apiKey: String) {
         self.apiKey = apiKey
+    }
+    
+    public func logInitializeEvent() {
+        let configuration = Configuration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
+            .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .trackApplicationLifecycleEvents(false)
+            .flushInterval(10)
+        let initialAnalytics = Analytics(configuration: configuration)
+
+        initialAnalytics.identify(
+            userId: HeliumIdentityManager.shared.getUserId(),
+            traits: HeliumIdentityManager.shared.getUserContext()
+        );
+        
+        initialAnalytics.track(name: "helium_initializeCalled", properties: [
+            "timestamp": formatAsTimestamp(date: Date()),
+            "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
+            "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId()
+        ]);
     }
     
     public func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
