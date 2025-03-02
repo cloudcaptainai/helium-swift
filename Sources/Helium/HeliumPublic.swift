@@ -22,15 +22,14 @@ public class Helium {
     
     public func upsellViewForTrigger(trigger: String) -> AnyView {
         if (!initialized) {
-            print("Error: Helium.initialize() needs to be called before presenting a paywall. Please contact founders@tryhelium.com to get set up!");
-            return HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) ?? AnyView(EmptyView())
+            fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
         
         if self.paywallsLoaded() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) ?? AnyView(EmptyView())
+                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                     fallbackView
                 })
@@ -38,7 +37,7 @@ public class Helium {
             
             do {
                 if (paywallInfo?.forceShowFallback != nil && (paywallInfo?.forceShowFallback)!) {
-                    let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) ?? AnyView(EmptyView())
+                    let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                     return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                         fallbackView
                     })
@@ -53,14 +52,14 @@ public class Helium {
                     triggerName: trigger,
                     paywallTemplateName: templatePaywallInfo.paywallTemplateName
                 ));
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) ?? AnyView(EmptyView())
+                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                     fallbackView
                 })
             };
             
         } else {
-            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) ?? AnyView(EmptyView())
+            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
             return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                 fallbackView
             })

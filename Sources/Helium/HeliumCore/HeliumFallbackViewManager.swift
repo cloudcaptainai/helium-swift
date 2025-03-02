@@ -35,10 +35,10 @@ public class HeliumFallbackViewManager {
         return defaultFallback
     }
     
-    public func getFallbackForTrigger(trigger: String) -> AnyView? {
+    public func getFallbackForTrigger(trigger: String) -> AnyView {
         if let fallbackView = triggerToFallbackView[trigger] {
             return fallbackView
         }
-        return defaultFallback
+        return defaultFallback!
     }
 }
