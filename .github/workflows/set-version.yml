@@ -23,14 +23,14 @@ jobs:
       - name: Update version in BuildConstants.swift
         run: |
           VERSION=$(echo "${{ steps.get_version.outputs.VERSION }}" | sed 's/^v//')
-          sed -i "s/static let version = \".*\"/static let version = \"${VERSION}\"/" Sources/HeliumCore/BuildConstants.swift
+          sed -i "s/static let version = \".*\"/static let version = \"${VERSION}\"/" Sources/Helium/HeliumCore/BuildConstants.swift
           
       - name: Commit and push changes
         id: commit
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add Sources/HeliumCore/BuildConstants.swift
+          git add Sources/Helium/HeliumCore/BuildConstants.swift
           git commit -m "chore: update version to ${{ steps.get_version.outputs.VERSION }}"
           git push
           echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
