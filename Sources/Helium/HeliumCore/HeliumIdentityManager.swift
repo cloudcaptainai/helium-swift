@@ -11,6 +11,7 @@ public class HeliumIdentityManager {
     // MARK: - Properties
     private let heliumSessionId: String
     private var heliumUserTraits: HeliumUserTraits?
+    private var heliumPaywallSessionId: String?
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
@@ -39,6 +40,14 @@ public class HeliumIdentityManager {
     
     public func setCustomUserTraits(traits: HeliumUserTraits) {
         self.heliumUserTraits = traits;
+    }
+    
+    public func setPaywallSessionId() {
+        self.heliumPaywallSessionId = UUID().uuidString;
+    }
+    
+    public func getPaywallSessionId() -> String? {
+        return self.heliumPaywallSessionId;
     }
     
     /// Creates or retrieves the Helium persistent ID

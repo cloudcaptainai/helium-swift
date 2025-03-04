@@ -15,10 +15,33 @@ public class HeliumController {
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
+    let INITIALIZATION_BROWSER_WRITE_KEY = "dIPnOYdPFgAabYaURULtIHAxbofvIIAD:GV9TlMOuPgt989LaumjVTJofZ8vipJXb";
+    let INITIALIZATION_ANALYTICS_ENDPOINT = "cm7mjur1o00003p6r7lio27sb.d.jitsu.com";
+    
     var apiKey: String
     
     public init(apiKey: String) {
         self.apiKey = apiKey
+    }
+    
+    public func logInitializeEvent() {
+        let configuration = Configuration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
+            .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .trackApplicationLifecycleEvents(false)
+            .flushInterval(10)
+        let initialAnalytics = Analytics(configuration: configuration)
+
+        initialAnalytics.identify(
+            userId: HeliumIdentityManager.shared.getUserId(),
+            traits: HeliumIdentityManager.shared.getUserContext()
+        );
+        
+        initialAnalytics.track(name: "helium_initializeCalled", properties: [
+            "timestamp": formatAsTimestamp(date: Date()),
+            "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
+            "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId()
+        ]);
     }
     
     public func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
@@ -42,6 +65,7 @@ public class HeliumController {
             "apiKey": self.apiKey,
             "userId": HeliumIdentityManager.shared.getUserId(),
             "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
+            "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
         ]
         
         let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT;
@@ -73,13 +97,9 @@ public class HeliumController {
                 
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
                     configId: fetchedConfig.fetchedConfigID,
-                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
-                    imagesDownloadTimeTakenMS: HeliumAssetManager.shared.imageStatus.timeTakenMS,
-                    fontsDownloadTimeTakenMS: HeliumAssetManager.shared.fontStatus.timeTakenMS,
-                    bundleDownloadTimeMS: HeliumAssetManager.shared.bundleStatus.timeTakenMS
+                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
-                
                 // Use the config as needed
             case .failure(let error):
                 let apiURLFailure = URL(string: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT);

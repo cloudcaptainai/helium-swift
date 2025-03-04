@@ -140,9 +140,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     isFallback: isFallback,
                     downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
-                    imageDownloadStatus: HeliumAssetManager.shared.imageStatus,
-                    fontsDownloadStatus: HeliumAssetManager.shared.fontStatus,
-                    bundleDownloadStatus: HeliumAssetManager.shared.bundleStatus
+                    additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
+                    additionalPaywallFields: paywallInfo?.additionalPaywallFields
                 );
                 do {
                     let asJSON = try? eventForLogging.toSwiftyJSON();

@@ -4,7 +4,6 @@ import SwiftUI
 public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
-    private var fallbackPaywall: (any View)?
     private var initialized: Bool = false;
     
     public static let shared = Helium()
@@ -23,20 +22,26 @@ public class Helium {
     
     public func upsellViewForTrigger(trigger: String) -> AnyView {
         if (!initialized) {
-            fatalError("Helium.initialize() needs to be called before presenting a paywall. Please contact founders@tryhelium.com to get set up!");
+            fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
-
+        
         if self.paywallsLoaded() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
-                let fallbackView = AnyView(fallbackPaywall!)
+                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                     fallbackView
                 })
             }
             
             do {
+                if (paywallInfo?.forceShowFallback != nil && (paywallInfo?.forceShowFallback)!) {
+                    let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
+                    return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                        fallbackView
+                    })
+                }
                 return AnyView(baseTemplateViewType.init(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
@@ -47,14 +52,14 @@ public class Helium {
                     triggerName: trigger,
                     paywallTemplateName: templatePaywallInfo.paywallTemplateName
                 ));
-                let fallbackView = AnyView(fallbackPaywall!)
+                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                     fallbackView
                 })
             };
             
         } else {
-            let fallbackView = AnyView(fallbackPaywall!)
+            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
             return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                 fallbackView
             })
@@ -76,7 +81,8 @@ public class Helium {
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
-        customUserTraits: HeliumUserTraits? = nil
+        customUserTraits: HeliumUserTraits? = nil,
+        fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -86,10 +92,22 @@ public class Helium {
         }
         
         self.initialized = true;
-        self.fallbackPaywall = fallbackPaywall;
+        HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall));
+        
+        // Set up trigger-specific fallback views if provided
+        if let triggerFallbacks = fallbackPaywallPerTrigger {
+            var triggerToViewMap: [String: AnyView] = [:]
+            for (trigger, view) in triggerFallbacks {
+                triggerToViewMap[trigger] = AnyView(view)
+            }
+            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
+        }
+        
         self.controller = HeliumController(
             apiKey: apiKey
         )
+        self.controller?.logInitializeEvent();
+        
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
         if (baseTemplateView == nil) {
             self.baseTemplateViewType = DynamicBaseTemplateView.self;
@@ -103,8 +121,7 @@ public class Helium {
     }
     
     public func paywallsLoaded() -> Bool {
-        if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus,
-           HeliumAssetManager.shared.bundleStatus.downloadStatus == .downloaded {
+        if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
             return true;
         }
         return false;

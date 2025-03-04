@@ -2,6 +2,7 @@ import Foundation
 import SwiftyJSON
 import SwiftUI
 import WebKit
+import Network
 
 public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case notDownloadedYet
@@ -10,43 +11,71 @@ public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case downloadFailure
 }
 
+class NetworkReachability {
+    static let shared = NetworkReachability()
+    private let monitor = NWPathMonitor()
+    private var isOnWiFiValue = false
+    
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.isOnWiFiValue = path.usesInterfaceType(.wifi)
+        }
+        monitor.start(queue: DispatchQueue.global())
+    }
+    
+    var isOnWiFi: Bool {
+        isOnWiFiValue
+    }
+    
+    deinit {
+        monitor.cancel()
+    }
+}
+
 public func fetchEndpoint(
     endpoint: String,
     params: [String: Any]
-) async throws -> (HeliumFetchedConfig?, JSON?)  {
-    let urlString = endpoint // Assuming 'endpoint' is a String containing the URL
+) async throws -> (HeliumFetchedConfig?, JSON?) {
+    let urlString = endpoint
     guard let url = URL(string: urlString) else {
         throw URLError(.badURL)
     }
 
+    let config = URLSessionConfiguration.default
+    config.httpMaximumConnectionsPerHost = 5
+    let session = URLSession(configuration: config)
+
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+
+    if NetworkReachability.shared.isOnWiFi {
+        request.timeoutInterval = 30
+    } else {
+        request.timeoutInterval = 15
+    }
+
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
 
-
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
     
     guard let httpResponse = response as? HTTPURLResponse,
           (200...299).contains(httpResponse.statusCode) else {
         throw URLError(.badServerResponse)
     }
     
-    
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-    let json = try? JSON(data: data);
-
-    return (decodedResponse, json);
+    
+    let json = try? JSON(data: data)
+    return (decodedResponse, json)
 }
 
 public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     @Published public var downloadTimeTakenMS: UInt64?
-    @Published public var imageDownloadTimeTakenMS: UInt64?
-    @Published public var fontDownloadTimeTakenMS: UInt64?
-
     
     private init() {
         downloadStatus = .notDownloadedYet
@@ -82,67 +111,30 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let startTimeConfig = Date()
 
                 if let config = self.fetchedConfig {
-                    do {
-                        let endTimeNewConfig = Date()
-                        let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
-                        print("Fetch config just json took \(timeElapsed) seconds")
-                        
-                        var fontURLs = Set<String>()
-                        var imageURLs = Set<String>()
-                        
-                        HeliumAssetManager.shared.collectFontURLs(from: self.fetchedConfigJSON?["triggerToPaywalls"] ?? JSON([:]), into: &fontURLs)
-                        HeliumAssetManager.shared.collectImageURLs(from: self.fetchedConfigJSON?["triggerToPaywalls"] ?? JSON([:]), into: &imageURLs)
-                        
-                        var triggerNameToBundleURLs: [String: Set<String>] = [:];
-                        config.triggerToPaywalls.forEach { (key: String, value: HeliumPaywallInfo) in
-                            var bundleURLs = Set<String>();
+                    if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
+                        do {
+                            let bundles = (self.fetchedConfig?.bundles)!;
+                            let endTimeNewConfig = Date()
+                            let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                             
-                            HeliumAssetManager.shared.collectBundleURLs(from: self.fetchedConfigJSON?["triggerToPaywalls"] ?? JSON([:]), into: &bundleURLs);
+                            try HeliumAssetManager.shared.writeBundles(bundles: bundles);
+                            await self.updateDownloadState(.downloadSuccess)
+                            completion(.success(newConfig))
                             
-                            triggerNameToBundleURLs[key] = bundleURLs;
+                        } catch {
+                            await self.updateDownloadState(.downloadFailure);
+                            completion(.failure(error))
+                            return
                         }
-                        
-                        
-                        // Create local copies for the task group
-                        let fontURLsCopy = fontURLs
-                        let imageURLsCopy = imageURLs
-                        let bundleURLsCopy = triggerNameToBundleURLs;
-
-                        
-                        await withTaskGroup(of: Void.self) { group in
-                            group.addTask {
-                                await HeliumAssetManager.shared.downloadImages(from: imageURLsCopy)
-                            }
-                            
-                            group.addTask {
-                                await HeliumAssetManager.shared.downloadFonts(from: fontURLsCopy)
-                            }
-                            
-                            triggerNameToBundleURLs.forEach { (key: String, value: Set<String>) in
-                                
-                                let bundleConfigs = value.compactMap { bundleURL in
-                                    HeliumAssetManager.BundleConfig(
-                                        url: bundleURL,
-                                        triggerName: key
-                                    );
-                                }
-                                group.addTask {
-                                    await HeliumAssetManager.shared.downloadBundles(configs: bundleConfigs);
-                                }
-                            }
-                            
-                        }
-                    } catch {
-                        print("Couldn't load all fonts.")
+                    } else {
+                        await self.updateDownloadState(.downloadSuccess)
+                        completion(.success(newConfig))
                     }
+                } else {
+                    await self.updateDownloadState(.downloadFailure);
+                    completion(.failure(URLError(.unknown)));
                 }
-                
-                let endTimeConfig = Date()
-                let timeElapsed = endTimeConfig.timeIntervalSince(startTimeConfig)
-                print("Fetch config font/image parsing took \(timeElapsed) seconds")
 
-                await self.updateDownloadState(.downloadSuccess)
-                completion(.success(newConfig))
                 
             } catch {
                 await self.updateDownloadState(.downloadFailure)

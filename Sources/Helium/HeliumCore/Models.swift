@@ -12,19 +12,8 @@ import AnyCodable
 import Segment
 import SwiftyJSON
 
-public func createDummyHeliumPaywallInfo(paywallTemplateName: String) -> HeliumPaywallInfo {
-    return HeliumPaywallInfo(
-        paywallID: 1,
-        paywallTemplateName: paywallTemplateName,
-        productsOffered: ["potato"],
-        resolvedConfig: [:],
-        shouldShow: true,
-        fallbackPaywallName: ""
-    )
-}
-
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil) {
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false) {
         self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
@@ -34,6 +23,7 @@ public struct HeliumPaywallInfo: Codable {
         self.experimentID = experimentID;
         self.modelID = modelID;
         self.resolvedConfigJSON = resolvedConfigJSON;
+        self.forceShowFallback = forceShowFallback;
     }
     
     var paywallID: Int
@@ -44,9 +34,11 @@ public struct HeliumPaywallInfo: Codable {
     var fallbackPaywallName: String
     public var experimentID: String?
     public var modelID: String?
+    public var forceShowFallback: Bool?
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?
+    var additionalPaywallFields: JSON?
 }
 
 public struct HeliumFetchedConfig: Codable {
@@ -55,9 +47,12 @@ public struct HeliumFetchedConfig: Codable {
     var segmentAnalyticsEndpoint: String
     var orgName: String
     var fetchedConfigID: UUID
+    var additionalFields: JSON?
+    var bundles: [String: String]?;
 }
 
 public enum HeliumPaywallEvent: Codable {
+    case initializeStart
     case ctaPressed(ctaName: String, triggerName: String, paywallTemplateName: String)
     case offerSelected(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionPressed(productKey: String, triggerName: String, paywallTemplateName: String)
@@ -80,7 +75,8 @@ public enum HeliumPaywallEvent: Codable {
     
     public func getTriggerIfExists() -> String?{
         switch self {
-        
+        case .initializeStart:
+            return nil
         case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
             return triggerName;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
@@ -114,6 +110,8 @@ public enum HeliumPaywallEvent: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
         switch self {
+        case .initializeStart:
+            break;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             try container.encode("ctaPressed", forKey: .type)
             try container.encode(ctaName, forKey: .ctaName)
@@ -164,6 +162,8 @@ public enum HeliumPaywallEvent: Codable {
         let type = try container.decode(String.self, forKey: .type)
         
         switch type {
+        case "initializeStart":
+            self = .initializeStart
         case "ctaPressed":
             let ctaName = try container.decode(String.self, forKey: .ctaName)
             let triggerName = try container.decode(String.self, forKey: .triggerName)
@@ -234,6 +234,8 @@ public enum HeliumPaywallEvent: Codable {
 
     public func caseString() -> String {
         switch self {
+        case .initializeStart:
+            return "initializeStart"
         case .paywallWebViewRendered:
             return "paywallWebViewRendered"
         case .ctaPressed:
@@ -273,6 +275,8 @@ public enum HeliumPaywallEvent: Codable {
         ]
         
         switch self {
+        case .initializeStart:
+            break;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             dict["ctaName"] = ctaName
             dict["triggerName"] = triggerName
@@ -334,9 +338,8 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var isFallback: Bool?
     
     var downloadStatus: HeliumFetchedConfigStatus?
-    var imageDownloadStatus: HeliumAssetStatus?
-    var fontsDownloadStatus: HeliumAssetStatus?
-    var bundleDownloadStatus: HeliumAssetStatus?
+    var additionalFields: JSON?
+    var additionalPaywallFields: JSON?
 }
 
 

@@ -9,37 +9,55 @@ public struct DynamicWebView: View {
     let templateConfig: JSON
     var actionsDelegate: ActionsDelegateWrapper
     let backgroundConfig: BackgroundConfig?
+    let postLoadBackgroundConfig: BackgroundConfig?
     let showShimmer: Bool
     let shimmerConfig: JSON
     let showProgressView: Bool
+    var fallbackPaywall: AnyView?
     
     private var messageHandler: WebViewMessageHandler?
     @State private var webView: WKWebView?
     @State private var isContentLoaded = false
-    @State private var viewLoadStartTime: Date? // Add this property
+    @State private var viewLoadStartTime: Date?
+    @State private var shouldShowFallback = false
+    @State private var loadTimer: Timer?
+    @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
-        self.actionsDelegate = actionsDelegate
-        self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate)
-        self.triggerName = triggerName
-        self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"]
-        self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"]
-        self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"])
-        self.showShimmer = json["showShimmer"].bool ?? false
+        self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
+        self.actionsDelegate = actionsDelegate;
+        self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate);
+        self.triggerName = triggerName;
+        self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"];
+        self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
+        self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
+        self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
+        self.showShimmer = json["showShimmer"].bool ?? false;
         self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
-        self.showProgressView = json["showProgress"].bool ?? false
+        self.showProgressView = json["showProgress"].bool ?? false;
     }
 
     public var body: some View {
        ZStack {
-           // Background always shows
-          if let backgroundConfig = backgroundConfig {
-              backgroundConfig.makeBackgroundView()
-                  .ignoresSafeArea()
-          }
-
-          if webView != nil && isContentLoaded {
+           // Background view - shows either initial background or post-load background when content is loaded
+           if isContentLoaded, let postLoadBg = postLoadBackgroundConfig {
+               // Show post-load background if content is loaded and postLoadBackgroundConfig exists
+               postLoadBg.makeBackgroundView()
+                   .ignoresSafeArea()
+                   .transition(.opacity)
+           } else if let backgroundConfig = backgroundConfig {
+               // Show initial background
+               backgroundConfig.makeBackgroundView()
+                   .ignoresSafeArea()
+           }
+           
+           if shouldShowFallback, let fallback = fallbackPaywall {
+               fallback
+                   .ignoresSafeArea()
+                   .frame(maxWidth: .infinity, maxHeight: .infinity)
+               
+        } else if webView != nil && isContentLoaded {
               WebViewRepresentable(webView: webView!)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
@@ -59,30 +77,53 @@ public struct DynamicWebView: View {
        }
        .edgesIgnoringSafeArea(.all)
        .onAppear {
-           viewLoadStartTime = Date() // Set start time when view appears
+           viewLoadStartTime = Date()
+           startLoadTimer();
            loadWebView()
        }
        .onDisappear {
-           webView?.stopLoading()
-           webView = nil
-       }
-       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-           isContentLoaded = true
-           if let startTime = viewLoadStartTime {
+          loadTimer?.invalidate()
+          loadTimer = nil
+          webView?.stopLoading()
+          webView = nil
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
+          loadTimer?.invalidate()
+          loadTimer = nil
+          isContentLoaded = true
+          if let startTime = viewLoadStartTime {
               let timeInterval = Date().timeIntervalSince(startTime)
               let milliseconds = UInt64(timeInterval * 1000)
-              self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+              Task {
+                  self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+              }
           }
-        }
-   }
+      }
+    }
+    
+    private func startLoadTimer() {
+         loadTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+             if (!isContentLoaded && fallbackPaywall != nil) {
+                 shouldShowFallback = true
+             }
+         }
+     }
 
     private func loadWebView() {
+        let totalStartTime = Date()
+        
+        // Initialization timing
+        let configStartTime = Date()
         let config = WKWebViewConfiguration()
         let contentController = WKUserContentController()
         
-        if (messageHandler == nil) { return }
+        if (messageHandler == nil && fallbackPaywall != nil) {
+            shouldShowFallback = true
+            return;
+        }
         
-        // Add message handlers
+        // Message handler setup timing
+        let handlerStartTime = Date()
         contentController.addScriptMessageHandler(
             messageHandler!,
             contentWorld: .page,
@@ -94,20 +135,26 @@ public struct DynamicWebView: View {
             name: "logging"
         )
         
-        // Create the combined script for context and logging
+        // Context and script injection timing
         do {
             let currentContext = createHeliumContext(triggerName: triggerName)
             let contextJSON = JSON(parseJSON: try currentContext.toJSON())
             let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
+            
 
+            let serializationStartTime = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)
+            
 
+            let mergeStartTime = Date()
             var mergedContext = contextJSON
             for (key, value) in customJSON {
                 mergedContext[key] = value
             }
             
+            
+            let scriptStartTime = Date()
             let combinedScript = WKUserScript(
                 source: """
                 (function() {
@@ -137,27 +184,25 @@ public struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
             
+            let injectionStartTime = Date()
             contentController.addUserScript(combinedScript)
             config.userContentController = contentController
             config.websiteDataStore = WKWebsiteDataStore.default()
-
-            let webviewCreateTime = Date();
             
-            // Inside loadWebView() function, after creating the webView:
+            // WebView creation timing
+            let webviewCreateTime = Date()
             let webView = WKWebView(frame: .zero, configuration: config)
-            print("[webviewdebug] WKWebView creation: \(Date().timeIntervalSince(webviewCreateTime)) seconds")
             
+            // WebView configuration timing
+            let webviewConfigStartTime = Date()
             webView.configuration.preferences.javaScriptEnabled = true
-            
-            webView.navigationDelegate = messageHandler;
-            // Set content mode
+            webView.navigationDelegate = messageHandler
             webView.contentMode = .scaleToFill
             webView.backgroundColor = .clear
             webView.isOpaque = false
             webView.scrollView.backgroundColor = .clear
             webView.scrollView.isOpaque = false
             
-            // Existing scroll settings
             webView.scrollView.isScrollEnabled = true
             webView.scrollView.bouncesZoom = false
             webView.scrollView.minimumZoomScale = 1.0
@@ -171,23 +216,29 @@ public struct DynamicWebView: View {
             webView.scrollView.showsVerticalScrollIndicator = false
             webView.scrollView.showsHorizontalScrollIndicator = false
             
-            // Get the base directory for security scope access
+            // File loading timing
+            let fileLoadStartTime = Date()
             let fileURL = URL(fileURLWithPath: filePath)
             let baseDirectory = FileManager.default
                 .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("helium_bundles", isDirectory: true)
+                .appendingPathComponent("helium_bundles_cache", isDirectory: true)
             
-            // Security-scoped loading with proper base directory access
             if FileManager.default.fileExists(atPath: filePath) {
+                let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
                 webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
             } else {
-                print("Error: File not found at path: \(filePath)")
-                // Optionally load an error page or handle the missing file case
             }
             
             self.webView = webView
+
         } catch {
-            print("Error setting up WebView: \(error)")
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
+                triggerName: triggerName ?? "",
+                paywallTemplateName: "WebView"
+            ));
+            if (fallbackPaywall != nil) {
+                shouldShowFallback = true;
+            }
         }
     }
 }
