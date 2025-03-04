@@ -309,6 +309,12 @@ public enum HeliumPaywallEvent: Codable {
             dict["imagesDownloadTimeTakenMS"] = imagesDownloadTimeTakenMS
             dict["fontsDownloadTimeTakenMS"] = fontsDownloadTimeTakenMS
             dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
+
+        case .paywallOpen(let triggerName, let paywallTemplateName),
+             .paywallClose(let triggerName, let paywallTemplateName),
+             .paywallDismissed(let triggerName, let paywallTemplateName):
+            dict["triggerName"] = triggerName;
+            dict["paywallTemplateName"] = paywallTemplateName
             
         case .paywallsDownloadError(let error):
             dict["errorDescription"] = error
