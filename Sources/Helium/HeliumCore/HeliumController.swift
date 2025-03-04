@@ -25,19 +25,18 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
-        let configuration = Configuration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
-            .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
-            .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
-            .trackApplicationLifecycleEvents(false)
-            .flushInterval(10)
+        let apiURL = URL(string: INITIALIZATION_ANALYTICS_ENDPOINT);
+        let configuration = AnalyticsConfiguration(writeKey: INITIALIZATION_BROWSER_WRITE_KEY, defaultAPIHost: apiURL);
+        
+
         let initialAnalytics = Analytics(configuration: configuration)
 
         initialAnalytics.identify(
-            userId: HeliumIdentityManager.shared.getUserId(),
-            traits: HeliumIdentityManager.shared.getUserContext()
+            HeliumIdentityManager.shared.getUserId(),
+            traits: HeliumIdentityManager.shared.getUserContext().asParams()
         );
         
-        initialAnalytics.track(name: "helium_initializeCalled", properties: [
+        initialAnalytics.track("helium_initializeCalled", properties: [
             "timestamp": formatAsTimestamp(date: Date()),
             "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId()
