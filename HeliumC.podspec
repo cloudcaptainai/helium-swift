@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.homepage         = 'https://github.com/salami/analytics-swift-cocoapod'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = "Kyle G for Helium"
-  s.source           = { :git => 'https://github.com/salami/analytics-swift-cocoapod', :branch => 'cocoapod-swift-analytics' }
+  s.source           = { :git => 'https://github.com/salami/analytics-swift-cocoapod.git', :branch => 'cocoapod-swift-analytics' }
 
   s.ios.deployment_target = '14.0'
   s.swift_version = '5.0'
