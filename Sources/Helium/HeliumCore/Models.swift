@@ -10,7 +10,6 @@ import UIKit
 import SwiftUI
 import AnyCodable
 import Segment
-import SwiftyJSON
 
 public struct HeliumPaywallInfo: Codable {
     public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false) {
