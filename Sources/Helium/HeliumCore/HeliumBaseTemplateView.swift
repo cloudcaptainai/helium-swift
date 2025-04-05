@@ -43,22 +43,11 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     }
     
     public var body: some View {
-        GeometryReader { reader in
-            DynamicPositionedComponent(
-                json: templateValues["baseStack"],
-                geometryProxy: reader,
-                triggerName: triggerName
-            )
-            .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
-                if let modalScreenToShow = actionsDelegate.showingModalScreen,
-                   templateValues[modalScreenToShow].exists() {
-                    DynamicPositionedComponent(
-                        json: templateValues[modalScreenToShow],
-                        geometryProxy: reader
-                    )
-                }
-            }
-        }
+        DynamicWebView(
+            json: templateValues["baseStack"]["componentProps"],
+            actionsDelegate: actionsDelegateWrapper,
+            triggerName: triggerName
+        )
         .onAppear {
             actionsDelegate.setDismissAction {
                 dismiss()
