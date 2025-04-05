@@ -2,10 +2,10 @@ Pod::Spec.new do |s|
   s.name             = 'HeliumC'
   s.version          = '1.6.3'
   s.summary          = 'HeliumC SDK for iOS'
-  s.homepage         = 'https://github.com/salami/analytics-swift-cocoapod'
+  s.homepage         = 'https://github.com/salami/helium-swift'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = "Kyle G for Helium"
-  s.source           = { :git => 'https://github.com/salami/analytics-swift-cocoapod.git', :branch => 'cocoapod-swift-analytics' }
+  s.source           = { :git => 'https://github.com/salami/helium-swift.git', :branch => 'cocoapod-swift-analytics' }
 
   s.ios.deployment_target = '14.0'
   s.swift_version = '5.0'
