@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'HeliumC'
-  s.version          = '1.6.3'
+  s.version          = '1.6.5'
   s.summary          = 'HeliumC SDK for iOS'
   s.homepage         = 'https://github.com/salami/helium-swift'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
