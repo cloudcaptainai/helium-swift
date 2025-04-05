@@ -143,15 +143,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
                     additionalPaywallFields: paywallInfo?.additionalPaywallFields
                 );
-                do {
-                    let asJSON = try? eventForLogging.toSwiftyJSON();
-                    if (asJSON != nil) {
-                        let asDictionary = asJSON!.toDictionary();
-                        analytics?.track("helium_" + event.caseString(), properties: asDictionary);
-                    }
-                } catch {
-                    
-                }
+                
+                analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }
         } catch {
             print("Delegate action failed.");
