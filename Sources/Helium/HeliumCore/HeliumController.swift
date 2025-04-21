@@ -11,7 +11,7 @@ import Segment
 
 
 public class HeliumController {
-    let DEFAULT_API_ENDPOINT = "https://api.tryhelium.com/on-launch"
+    let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
     let API_STORAGE_KEY = "heliumApiEndpoint"
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
