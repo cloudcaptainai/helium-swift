@@ -25,18 +25,19 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
-        let apiURL = URL(string: INITIALIZATION_ANALYTICS_ENDPOINT);
-        let configuration = AnalyticsConfiguration(writeKey: INITIALIZATION_BROWSER_WRITE_KEY, defaultAPIHost: apiURL);
-        
-
+        let configuration = Configuration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
+            .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
+            .trackApplicationLifecycleEvents(false)
+            .flushInterval(10)
         let initialAnalytics = Analytics(configuration: configuration)
 
         initialAnalytics.identify(
-            HeliumIdentityManager.shared.getUserId(),
-            traits: HeliumIdentityManager.shared.getUserContext().asParams()
+            userId: HeliumIdentityManager.shared.getUserId(),
+            traits: HeliumIdentityManager.shared.getUserContext()
         );
         
-        initialAnalytics.track("helium_initializeCalled", properties: [
+        initialAnalytics.track(name: "helium_initializeCalled", properties: [
             "timestamp": formatAsTimestamp(date: Date()),
             "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId()
@@ -50,7 +51,7 @@ public class HeliumController {
         if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil && HeliumPaywallDelegateWrapper.shared.getIsAnalyticsEnabled()) {
             let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
             let userContext = HeliumIdentityManager.shared.getUserContext();
-            analytics.identify(userId, traits: userContext.asParams())
+            analytics.identify(userId: userId, traits: userContext);
         }
     }
     
@@ -72,21 +73,24 @@ public class HeliumController {
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, params: payload) { result in
             switch result {
             case .success(let fetchedConfig):
-                let apiURL = URL(string: fetchedConfig.segmentAnalyticsEndpoint);
-                let configuration = AnalyticsConfiguration(writeKey: fetchedConfig.segmentBrowserWriteKey, defaultAPIHost: apiURL);
+                let configuration = Configuration(writeKey: fetchedConfig.segmentBrowserWriteKey)
+                    .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
+                    .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)
+                    .trackApplicationLifecycleEvents(false)
+                    .flushInterval(10)
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
                     analytics.identify(
-                        HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext().asParams()
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
                     );
                 } else {
                     do {
                         let analytics = Analytics(configuration: configuration)
                         analytics.identify(
-                            HeliumIdentityManager.shared.getUserId(),
-                            traits: HeliumIdentityManager.shared.getUserContext().asParams()
+                            userId: HeliumIdentityManager.shared.getUserId(),
+                            traits: HeliumIdentityManager.shared.getUserContext()
                         );
                         HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                     } catch {
@@ -101,20 +105,24 @@ public class HeliumController {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 // Use the config as needed
             case .failure(let error):
-                let apiURLFailure = URL(string: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT);
-                let configuration = AnalyticsConfiguration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY, defaultAPIHost: apiURLFailure);
+            
+                let configuration = Configuration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
+                    .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
+                    .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
+                    .trackApplicationLifecycleEvents(false)
+                    .flushInterval(10)
                 
                 if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
                     let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
                     analytics.identify(
-                        HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext().asParams()
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
                     );
                 } else {
                     let analytics = Analytics(configuration: configuration)
                     analytics.identify(
-                        HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext().asParams()
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
                     );
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }

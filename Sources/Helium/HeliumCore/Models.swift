@@ -9,7 +9,6 @@ import Foundation
 import UIKit
 import SwiftUI
 import AnyCodable
-import Segment
 import SwiftyJSON
 
 public struct HeliumPaywallInfo: Codable {
