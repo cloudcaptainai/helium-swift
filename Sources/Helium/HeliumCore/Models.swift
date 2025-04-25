@@ -12,8 +12,9 @@ import AnyCodable
 import SwiftyJSON
 
 public struct HeliumPaywallInfo: Codable {
-    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false) {
+    public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil) {
         self.paywallID = paywallID
+        self.paywallUUID = paywallUUID;
         self.paywallTemplateName = paywallTemplateName;
         self.productsOffered = productsOffered;
         self.resolvedConfig = resolvedConfig;
@@ -26,6 +27,7 @@ public struct HeliumPaywallInfo: Codable {
     }
     
     var paywallID: Int
+    var paywallUUID: String?
     public var paywallTemplateName: String
     var productsOffered: [String]
     public var resolvedConfig: AnyCodable
@@ -45,6 +47,7 @@ public struct HeliumFetchedConfig: Codable {
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
     var orgName: String
+    var organizationID: String?
     var fetchedConfigID: UUID
     var additionalFields: JSON?
     var bundles: [String: String]?;
@@ -338,6 +341,8 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var experimentID: String?
     var modelID: String?
     var paywallID: Int?
+    var paywallUUID: String?
+    var organizationID: String?
     var heliumPersistentID: String?
     var heliumSessionID: String?
     var isFallback: Bool?
