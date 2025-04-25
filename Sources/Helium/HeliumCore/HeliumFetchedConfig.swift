@@ -83,6 +83,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
+    private(set) var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
         endpoint: String,
@@ -118,6 +119,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                             
                             try HeliumAssetManager.shared.writeBundles(bundles: bundles);
+                            
+                            // Fetch localized prices for all products
+                            await fetchLocalizedPrices()
+                            
                             await self.updateDownloadState(.downloadSuccess)
                             completion(.success(newConfig))
                             
@@ -127,6 +132,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             return
                         }
                     } else {
+                        // Fetch localized prices for all products
+                        await fetchLocalizedPrices()
+                        
                         await self.updateDownloadState(.downloadSuccess)
                         completion(.success(newConfig))
                     }
@@ -134,13 +142,55 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     await self.updateDownloadState(.downloadFailure);
                     completion(.failure(URLError(.unknown)));
                 }
-
                 
             } catch {
                 await self.updateDownloadState(.downloadFailure)
                 completion(.failure(error))
             }
         }
+    }
+    
+    private func fetchLocalizedPrices() async {
+        do {
+            // Get all unique product IDs from all paywalls
+            var allProductIds = Set<String>()
+            if let config = fetchedConfig {
+                for paywall in config.triggerToPaywalls.values {
+                    allProductIds.formUnion(paywall.productsOffered)
+                }
+            }
+            
+            // Fetch prices for all products in one shot
+            if #available(iOS 15.0, *) {
+                self.localizedPriceMap = await PriceFetcher.localizedPricing(for: Array(allProductIds))
+            } else {
+                // Fallback for older iOS versions
+                await withCheckedContinuation { continuation in
+                    PriceFetcher.localizedPricing(for: Array(allProductIds)) { prices in
+                        self.localizedPriceMap = prices
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            print("Error fetching localized prices");
+        }
+    }
+    
+    public func getLocalizedPriceMap() -> [String: LocalizedPrice] {
+        return localizedPriceMap
+    }
+    
+    /// Get localized prices filtered by a specific trigger's product IDs
+    /// - Parameter triggerName: The trigger name to get products for
+    /// - Returns: Dictionary containing only prices for products in the specified trigger
+    public func getLocalizedPriceMapForTrigger(_ triggerName: String?) -> [String: LocalizedPrice] {
+        guard let triggerName = triggerName, 
+              let productIDs = getProductIDsForTrigger(triggerName) else {
+            return [:]
+        }
+        
+        return localizedPriceMap.filter { productIDs.contains($0.key) }
     }
     
     @MainActor func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
@@ -157,6 +207,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {
         return fetchedConfig?.triggerToPaywalls[trigger]
+    }
+    
+    public func getOrganizationID() -> String? {
+        return fetchedConfig?.organizationID;
     }
     
     public func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {

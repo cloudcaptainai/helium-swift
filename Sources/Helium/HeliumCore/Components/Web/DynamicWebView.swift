@@ -137,15 +137,13 @@ public struct DynamicWebView: View {
         
         // Context and script injection timing
         do {
-            let currentContext = createHeliumContext(triggerName: triggerName)
-            let contextJSON = JSON(parseJSON: try currentContext.toJSON())
+            let contextJSON = createHeliumContext(triggerName: triggerName)
+                        
             let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
-            
 
             let serializationStartTime = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)
-            
 
             let mergeStartTime = Date()
             var mergedContext = contextJSON
@@ -153,6 +151,9 @@ public struct DynamicWebView: View {
                 mergedContext[key] = value
             }
             
+            // Get localized prices from HeliumFetchedConfigManager
+            // Only fetch prices for products associated with this trigger
+            let localizedPrices = HeliumFetchedConfigManager.shared.getLocalizedPriceMapForTrigger(triggerName)
             
             let scriptStartTime = Date()
             let combinedScript = WKUserScript(
@@ -174,7 +175,8 @@ public struct DynamicWebView: View {
                     // Initialize helium context
                     try {
                         window.helium = {};
-                        window.heliumContextualValues = \(mergedContext.rawString() ?? "{}");
+                        window.heliumContext = \(mergedContext.rawString() ?? "{}");
+                        window.heliumLocalizedPrices = \(JSON(localizedPrices.mapValues { $0.json }).rawString() ?? "{}");
                     } catch(e) {
                         console.error('Error in helium initialization:', e);
                     }
