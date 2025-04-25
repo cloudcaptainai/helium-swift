@@ -9,7 +9,6 @@ import Foundation
 import SwiftUI
 import Segment
 
-
 public class HeliumController {
     let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
     let API_STORAGE_KEY = "heliumApiEndpoint"

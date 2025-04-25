@@ -9,7 +9,7 @@ import Foundation
 import UIKit
 import SwiftUI
 import AnyCodable
-import Segment
+import SwiftyJSON
 
 public struct HeliumPaywallInfo: Codable {
     public init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil) {
@@ -311,6 +311,12 @@ public enum HeliumPaywallEvent: Codable {
             dict["imagesDownloadTimeTakenMS"] = imagesDownloadTimeTakenMS
             dict["fontsDownloadTimeTakenMS"] = fontsDownloadTimeTakenMS
             dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
+
+        case .paywallOpen(let triggerName, let paywallTemplateName),
+             .paywallClose(let triggerName, let paywallTemplateName),
+             .paywallDismissed(let triggerName, let paywallTemplateName):
+            dict["triggerName"] = triggerName;
+            dict["paywallTemplateName"] = paywallTemplateName
             
         case .paywallsDownloadError(let error):
             dict["errorDescription"] = error
