@@ -119,7 +119,7 @@ public class Helium {
         }
         self.controller!.downloadConfig();
         
-        WebViewPerformanceHelper.prepareForFutureWebViewUse()
+        WebViewManager.shared.createWebView()
     }
     
     public func paywallsLoaded() -> Bool {

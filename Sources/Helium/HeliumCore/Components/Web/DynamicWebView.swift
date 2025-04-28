@@ -15,8 +15,6 @@ public struct DynamicWebView: View {
     let showProgressView: Bool
     var fallbackPaywall: AnyView?
     
-    private var messageHandler: WebViewMessageHandler?
-    @State private var webView: WKWebView?
     @State private var isContentLoaded = false
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
@@ -27,7 +25,9 @@ public struct DynamicWebView: View {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
-        self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate);
+        
+        WebViewManager.shared.messageHandler.setActionsDelegate(delegateWrapper: actionsDelegate)
+        
         self.triggerName = triggerName;
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"];
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
@@ -57,8 +57,8 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if webView != nil && isContentLoaded {
-              WebViewRepresentable(webView: webView!)
+        } else if isContentLoaded {
+            WebViewRepresentable(webView: WebViewManager.shared.preparedWebView!)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -110,30 +110,13 @@ public struct DynamicWebView: View {
      }
 
     private func loadWebView() {
+        
         let totalStartTime = Date()
+        
+        let messageHandler = WebViewManager.shared.messageHandler
         
         // Initialization timing
         let configStartTime = Date()
-        let config = WKWebViewConfiguration()
-        let contentController = WKUserContentController()
-        
-        if (messageHandler == nil && fallbackPaywall != nil) {
-            shouldShowFallback = true
-            return;
-        }
-        
-        // Message handler setup timing
-        let handlerStartTime = Date()
-        contentController.addScriptMessageHandler(
-            messageHandler!,
-            contentWorld: .page,
-            name: "paywallHandler"
-        )
-        contentController.addScriptMessageHandler(
-            messageHandler!,
-            contentWorld: .page,
-            name: "logging"
-        )
         
         // Context and script injection timing
         do {
@@ -186,37 +169,17 @@ public struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
             
-            let injectionStartTime = Date()
-            contentController.addUserScript(combinedScript)
-            config.userContentController = contentController
-            config.websiteDataStore = WKWebsiteDataStore.default()
-            
             // WebView creation timing
             let webviewCreateTime = Date()
-            let webView = WKWebView(frame: .zero, configuration: config)
+            WebViewManager.shared.prepareForShowing()
+            guard let webView = WebViewManager.shared.preparedWebView else {
+                print("Failed to retrieve preparedWebView!")
+                shouldShowFallback = true
+                return
+            }
             
-            // WebView configuration timing
-            let webviewConfigStartTime = Date()
-            webView.configuration.preferences.javaScriptEnabled = true
-            webView.navigationDelegate = messageHandler
-            webView.contentMode = .scaleToFill
-            webView.backgroundColor = .clear
-            webView.isOpaque = false
-            webView.scrollView.backgroundColor = .clear
-            webView.scrollView.isOpaque = false
-            
-            webView.scrollView.isScrollEnabled = true
-            webView.scrollView.bouncesZoom = false
-            webView.scrollView.minimumZoomScale = 1.0
-            webView.scrollView.maximumZoomScale = 1.0
-            webView.scrollView.isDirectionalLockEnabled = true
-            webView.scrollView.bounces = true
-            webView.scrollView.scrollsToTop = false
-            webView.scrollView.contentInsetAdjustmentBehavior = .never
-            webView.scrollView.contentInset = .zero
-            webView.scrollView.scrollIndicatorInsets = .zero
-            webView.scrollView.showsVerticalScrollIndicator = false
-            webView.scrollView.showsHorizontalScrollIndicator = false
+            let injectionStartTime = Date()
+            webView.configuration.userContentController.addUserScript(combinedScript)
             
             // File loading timing
             let fileLoadStartTime = Date()
@@ -231,8 +194,6 @@ public struct DynamicWebView: View {
             } else {
             }
             
-            self.webView = webView
-
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                 triggerName: triggerName ?? "",
@@ -266,16 +227,73 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     }
 }
 
-class WebViewPerformanceHelper {
+/**
+ Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebView, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
+ */
+class WebViewManager {
     
-    static func prepareForFutureWebViewUse() {
+    static let shared: WebViewManager = WebViewManager()
+    
+    private(set) var preparedWebView: WKWebView? = nil
+    
+    private(set) var messageHandler: WebViewMessageHandler = WebViewMessageHandler()
+    
+    func createWebView() {
         Task {
             do {
-                let webView = WKWebView()
+                preparedWebView?.stopLoading()
+                preparedWebView = nil
+                
+                let config = WKWebViewConfiguration()
+                let contentController = WKUserContentController()
+                
+                // Message handler setup timing
+                let handlerStartTime = Date()
+                contentController.addScriptMessageHandler(
+                    messageHandler,
+                    contentWorld: .page,
+                    name: "paywallHandler"
+                )
+                contentController.addScriptMessageHandler(
+                    messageHandler,
+                    contentWorld: .page,
+                    name: "logging"
+                )
+                
+                config.userContentController = contentController
+                
+                let webView = WKWebView(frame: .zero, configuration: config)
+                webView.configuration.preferences.javaScriptEnabled = true
+                
+                preparedWebView = webView
             } catch {
                 print("failed to warm up WKWebView")
             }
         }
+    }
+    
+    func prepareForShowing() {
+        guard let webView = preparedWebView else { return }
+        webView.navigationDelegate = messageHandler
+        webView.contentMode = .scaleToFill
+        webView.backgroundColor = .clear
+        webView.isOpaque = false
+        webView.scrollView.backgroundColor = .clear
+        webView.scrollView.isOpaque = false
+
+        
+        webView.scrollView.isScrollEnabled = true
+        webView.scrollView.bouncesZoom = false
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+        webView.scrollView.isDirectionalLockEnabled = true
+        webView.scrollView.bounces = true
+        webView.scrollView.scrollsToTop = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.contentInset = .zero
+        webView.scrollView.scrollIndicatorInsets = .zero
+        webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
     }
     
 }
