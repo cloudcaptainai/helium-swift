@@ -265,3 +265,17 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
         }
     }
 }
+
+class WebViewPerformanceHelper {
+    
+    static func prepareForFutureWebViewUse() {
+        Task {
+            do {
+                let webView = WKWebView()
+            } catch {
+                print("failed to warm up WKWebView")
+            }
+        }
+    }
+    
+}
