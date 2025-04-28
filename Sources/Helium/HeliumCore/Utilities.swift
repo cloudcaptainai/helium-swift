@@ -8,6 +8,7 @@
 import Foundation
 import AnyCodable
 import SwiftUI
+import SwiftyJSON
 
 public extension Encodable {
     /// Converting object to postable JSON
@@ -15,6 +16,38 @@ public extension Encodable {
         let data = try encoder.encode(self)
         let result = String(decoding: data, as: UTF8.self)
         return result
+    }
+    
+    func toSwiftyJSON(_ encoder: JSONEncoder = JSONEncoder()) throws -> JSON {
+        let data = try encoder.encode(self)
+        let json = try JSON(data: data)
+        return json
+    }
+}
+
+public extension JSON {
+    func toDictionary() -> [String: Any] {
+        var dict: [String: Any] = [:]
+        
+        for (key, value) in self {
+            switch value.type {
+            case .array:
+                dict[key] = value.arrayValue.map { subJson in
+                    switch subJson.type {
+                    case .dictionary:
+                        return subJson.toDictionary() as Any
+                    default:
+                        return subJson.object
+                    }
+                }
+            case .dictionary:
+                dict[key] = value.toDictionary() as Any
+            default:
+                dict[key] = value.object
+            }
+        }
+        
+        return dict
     }
 }
 
