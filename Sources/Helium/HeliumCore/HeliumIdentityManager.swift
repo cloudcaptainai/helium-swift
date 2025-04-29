@@ -13,6 +13,8 @@ public class HeliumIdentityManager {
     private var heliumUserTraits: HeliumUserTraits?
     private var heliumPaywallSessionId: String?
     
+    private var cachedUserContext: CodableUserContext? = nil
+    
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
     private let heliumUserIdKey = "heliumUserId"
@@ -70,7 +72,15 @@ public class HeliumIdentityManager {
     
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
-    public func getUserContext() -> CodableUserContext {
-        return CodableUserContext.create(userTraits: self.heliumUserTraits);
+    public func getUserContext(
+        skipDeviceCapacity: Bool = false,
+        useCachedIfAvailable: Bool = false
+    ) -> CodableUserContext {
+        if useCachedIfAvailable, let cachedUserContext {
+            return cachedUserContext
+        }
+        let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
+        cachedUserContext = userContext
+        return userContext
     }
 }
