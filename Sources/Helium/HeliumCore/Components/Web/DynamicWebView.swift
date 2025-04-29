@@ -302,9 +302,7 @@ class WebViewManager {
             return
         }
         let fileURL = URL(fileURLWithPath: filePath)
-        let baseDirectory = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
             let contents = try? String(contentsOfFile: filePath, encoding: .utf8)

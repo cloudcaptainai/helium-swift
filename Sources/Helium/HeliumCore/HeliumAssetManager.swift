@@ -16,6 +16,12 @@ public class HeliumAssetManager: ObservableObject {
     
     private static let bundleCacheKey = "helium_bundles_cache"
     
+    static var bundleDir: URL {
+        return FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+    }
+    
     private var bundleIds: Set<String> {
         get {
             guard let data = UserDefaults.standard.data(forKey: Self.bundleCacheKey),
@@ -31,9 +37,7 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func clearCache() {
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.removeItem(at: bundleDir)
         bundleIds = []
@@ -99,9 +103,7 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func writeBundles(bundles: [String: String]) throws {
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        let bundleDir = HeliumAssetManager.bundleDir
         
         try FileManager.default.createDirectory(
             at: bundleDir,
