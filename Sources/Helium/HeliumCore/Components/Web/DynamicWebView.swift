@@ -84,8 +84,7 @@ public struct DynamicWebView: View {
        .onDisappear {
           loadTimer?.invalidate()
           loadTimer = nil
-          webView?.stopLoading()
-          webView = nil
+          WebViewManager.shared.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
           loadTimer?.invalidate()
@@ -183,16 +182,8 @@ public struct DynamicWebView: View {
             
             // File loading timing
             let fileLoadStartTime = Date()
-            let fileURL = URL(fileURLWithPath: filePath)
-            let baseDirectory = FileManager.default
-                .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            WebViewManager.shared.loadFilePath(filePath)
             
-            if FileManager.default.fileExists(atPath: filePath) {
-                let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
-                webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
-            } else {
-            }
             
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
@@ -294,6 +285,35 @@ class WebViewManager {
         webView.scrollView.scrollIndicatorInsets = .zero
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
+    }
+    
+    func preLoad(filePath: String) {
+        let fileLoadStartTime = Date()
+        
+        Task {
+            await loadFilePath(filePath)
+            print("WebViewManager preload in ms \(Date().timeIntervalSince(fileLoadStartTime) * 1000)")
+        }
+    }
+    
+    @MainActor
+    func loadFilePath(_ filePath: String) {
+        guard let webView = preparedWebView else {
+            return
+        }
+        let fileURL = URL(fileURLWithPath: filePath)
+        let baseDirectory = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+        
+        if FileManager.default.fileExists(atPath: filePath) {
+            let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
+            webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+        }
+    }
+    
+    func stopLoading() {
+        preparedWebView?.stopLoading()
     }
     
 }
