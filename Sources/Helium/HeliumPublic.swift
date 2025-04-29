@@ -116,8 +116,12 @@ public class Helium {
         }
         if (customAPIEndpoint != nil) {
             self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
+        } else {
+            self.controller!.clearCustomAPIEndpoint()
         }
         self.controller!.downloadConfig();
+        
+        WebViewManager.shared.createWebView()
     }
     
     public func paywallsLoaded() -> Bool {

@@ -41,21 +41,6 @@ public struct BackgroundConfig {
     
     let type: BackgroundType
     
-    // Initialize with a solid color
-    public init(color: Color) {
-        self.type = .color(color)
-    }
-    
-    // Initialize with a linear gradient
-    public init(gradientStops: [GradientStop], startPoint: UnitPoint = .top, endPoint: UnitPoint = .bottom) {
-        self.type = .linearGradient(stops: gradientStops, startPoint: startPoint, endPoint: endPoint)
-    }
-    
-    // Initialize with an image
-    public init(imageName: String, contentMode: ContentMode = .fill) {
-        self.type = .image(name: imageName, contentMode: contentMode)
-    }
-    
     // Initialize from JSON
     public init(json: JSON) {
         switch json["type"].stringValue {
