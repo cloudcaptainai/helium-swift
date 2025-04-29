@@ -34,7 +34,7 @@ public struct DynamicWebView: View {
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
         self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
         self.showShimmer = json["showShimmer"].bool ?? false;
-        self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
+        self.shimmerConfig = json["shimmerConfig"].type == .null ? JSON([:]) : json["shimmerConfig"];
         self.showProgressView = json["showProgress"].bool ?? false;
     }
 

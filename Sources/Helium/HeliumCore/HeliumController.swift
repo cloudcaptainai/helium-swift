@@ -58,6 +58,9 @@ public class HeliumController {
     public func setCustomAPIEndpoint(endpoint: String) {
         UserDefaults.standard.setValue(endpoint, forKey: API_STORAGE_KEY);
     }
+    public func clearCustomAPIEndpoint() {
+        UserDefaults.standard.removeObject(forKey: API_STORAGE_KEY)
+    }
     
     public func downloadConfig() {
         var payload: [String: Any]
