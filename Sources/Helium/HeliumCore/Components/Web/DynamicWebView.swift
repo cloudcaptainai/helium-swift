@@ -16,6 +16,7 @@ public struct DynamicWebView: View {
     var fallbackPaywall: AnyView?
     
     @State private var isContentLoaded = false
+    @State private var webViewReady = false
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
     @State private var loadTimer: Timer?
@@ -57,7 +58,7 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if isContentLoaded, let webView = WebViewManager.shared.preparedWebView {
+        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView {
               WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
@@ -184,6 +185,7 @@ public struct DynamicWebView: View {
             let fileLoadStartTime = Date()
             WebViewManager.shared.loadFilePath(filePath)
             
+            webViewReady = true
             
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
