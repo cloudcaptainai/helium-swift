@@ -57,8 +57,8 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if isContentLoaded {
-            WebViewRepresentable(webView: WebViewManager.shared.preparedWebView!)
+        } else if isContentLoaded, let webView = WebViewManager.shared.preparedWebView {
+              WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -219,7 +219,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
 }
 
 /**
- Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebView, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
+ Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebViews, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
  */
 class WebViewManager {
     
@@ -252,6 +252,7 @@ class WebViewManager {
                 )
                 
                 config.userContentController = contentController
+                config.websiteDataStore = WKWebsiteDataStore.default()
                 
                 let webView = WKWebView(frame: .zero, configuration: config)
                 webView.configuration.preferences.javaScriptEnabled = true
