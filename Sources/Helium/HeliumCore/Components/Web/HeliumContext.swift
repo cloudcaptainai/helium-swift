@@ -27,8 +27,7 @@ public func createHeliumContext(triggerName: String?) -> JSON {
         
         // Get user context from identity manager
         let userContext = HeliumIdentityManager.shared.getUserContext(
-            skipDeviceCapacity: true,
-            useCachedIfAvailable: true
+            skipDeviceCapacity: true
         )
         
         // Create the base context JSON from user context params
