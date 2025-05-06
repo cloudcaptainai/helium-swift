@@ -19,7 +19,6 @@ public struct DynamicWebView: View {
     @State private var webViewReady = false
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
-    @State private var loadTimer: Timer?
     @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
@@ -79,17 +78,12 @@ public struct DynamicWebView: View {
        .edgesIgnoringSafeArea(.all)
        .onAppear {
            viewLoadStartTime = Date()
-           startLoadTimer();
            loadWebView()
        }
        .onDisappear {
-          loadTimer?.invalidate()
-          loadTimer = nil
           WebViewManager.shared.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-          loadTimer?.invalidate()
-          loadTimer = nil
           isContentLoaded = true
           if let startTime = viewLoadStartTime {
               let timeInterval = Date().timeIntervalSince(startTime)
@@ -100,14 +94,6 @@ public struct DynamicWebView: View {
           }
       }
     }
-    
-    private func startLoadTimer() {
-         loadTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-             if (!isContentLoaded && fallbackPaywall != nil) {
-                 shouldShowFallback = true
-             }
-         }
-     }
 
     private func loadWebView() {
         

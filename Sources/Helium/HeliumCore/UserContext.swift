@@ -28,6 +28,7 @@ struct CodableScreenInfo: Codable {
     var nativeScale: Float
     var bounds: CGRect
     var scale: Float
+    var isDarkModeEnabled: Bool
 }
 
 struct CodableApplicationInfo: Codable {
@@ -111,7 +112,8 @@ public struct CodableUserContext: Codable {
                     "width": self.screenInfo.bounds.size.width,
                     "height": self.screenInfo.bounds.size.height
                 ],
-                "scale": self.screenInfo.scale
+                "scale": self.screenInfo.scale,
+                "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
             ],
             "deviceInfo": [
                 "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier as Any,
@@ -151,7 +153,8 @@ public struct CodableUserContext: Codable {
             nativeBounds: UIScreen.main.nativeBounds,
             nativeScale: Float(UIScreen.main.nativeScale),
             bounds: UIScreen.main.bounds,
-            scale: Float(UIScreen.main.scale)
+            scale: Float(UIScreen.main.scale),
+            isDarkModeEnabled: UITraitCollection.current.userInterfaceStyle == .dark
         )
         
         let applicationInfo = createApplicationInfo()
