@@ -10,6 +10,8 @@ public struct DynamicWebView: View {
     var actionsDelegate: ActionsDelegateWrapper
     let backgroundConfig: BackgroundConfig?
     let postLoadBackgroundConfig: BackgroundConfig?
+    let darkModeBackgroundConfig: BackgroundConfig?
+    let darkModePostLoadBackgroundConfig: BackgroundConfig?
     let showShimmer: Bool
     let shimmerConfig: JSON
     let showProgressView: Bool
@@ -20,6 +22,7 @@ public struct DynamicWebView: View {
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
     @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
+    @Environment(\.colorScheme) private var colorScheme
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
@@ -33,6 +36,8 @@ public struct DynamicWebView: View {
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
         self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
+        self.darkModeBackgroundConfig = json["darkModeBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModeBackgroundConfig"]);
+        self.darkModePostLoadBackgroundConfig = json["darkModePostLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModePostLoadBackgroundConfig"]);
         self.showShimmer = json["showShimmer"].bool ?? false;
         self.shimmerConfig = json["shimmerConfig"].type == .null ? JSON([:]) : json["shimmerConfig"];
         self.showProgressView = json["showProgress"].bool ?? false;
@@ -41,14 +46,18 @@ public struct DynamicWebView: View {
     public var body: some View {
        ZStack {
            // Background view - shows either initial background or post-load background when content is loaded
-           if isContentLoaded, let postLoadBg = postLoadBackgroundConfig {
-               // Show post-load background if content is loaded and postLoadBackgroundConfig exists
-               postLoadBg.makeBackgroundView()
-                   .ignoresSafeArea()
-                   .transition(.opacity)
-           } else if let backgroundConfig = backgroundConfig {
+           if isContentLoaded {
+               if let postLoadBg = colorScheme == .dark && darkModePostLoadBackgroundConfig != nil ? 
+                   darkModePostLoadBackgroundConfig : postLoadBackgroundConfig {
+                   // Show post-load background if content is loaded and postLoadBackgroundConfig exists
+                   postLoadBg.makeBackgroundView()
+                       .ignoresSafeArea()
+                       .transition(.opacity)
+               }
+           } else if let bg = colorScheme == .dark && darkModeBackgroundConfig != nil ? 
+               darkModeBackgroundConfig : backgroundConfig {
                // Show initial background
-               backgroundConfig.makeBackgroundView()
+               bg.makeBackgroundView()
                    .ignoresSafeArea()
            }
            
