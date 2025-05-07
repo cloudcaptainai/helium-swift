@@ -10,45 +10,54 @@ public struct DynamicWebView: View {
     var actionsDelegate: ActionsDelegateWrapper
     let backgroundConfig: BackgroundConfig?
     let postLoadBackgroundConfig: BackgroundConfig?
+    let darkModeBackgroundConfig: BackgroundConfig?
+    let darkModePostLoadBackgroundConfig: BackgroundConfig?
     let showShimmer: Bool
     let shimmerConfig: JSON
     let showProgressView: Bool
     var fallbackPaywall: AnyView?
     
-    private var messageHandler: WebViewMessageHandler?
-    @State private var webView: WKWebView?
     @State private var isContentLoaded = false
+    @State private var webViewReady = false
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
-    @State private var loadTimer: Timer?
     @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
+    @Environment(\.colorScheme) private var colorScheme
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
-        self.messageHandler = WebViewMessageHandler(delegateWrapper: actionsDelegate);
+        
+        WebViewManager.shared.messageHandler.setActionsDelegate(delegateWrapper: actionsDelegate)
+        
         self.triggerName = triggerName;
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"];
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
         self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
+        self.darkModeBackgroundConfig = json["darkModeBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModeBackgroundConfig"]);
+        self.darkModePostLoadBackgroundConfig = json["darkModePostLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModePostLoadBackgroundConfig"]);
         self.showShimmer = json["showShimmer"].bool ?? false;
-        self.shimmerConfig = json["shimmerConfig"] ?? JSON([:]);
+        self.shimmerConfig = json["shimmerConfig"].type == .null ? JSON([:]) : json["shimmerConfig"];
         self.showProgressView = json["showProgress"].bool ?? false;
     }
 
     public var body: some View {
        ZStack {
            // Background view - shows either initial background or post-load background when content is loaded
-           if isContentLoaded, let postLoadBg = postLoadBackgroundConfig {
-               // Show post-load background if content is loaded and postLoadBackgroundConfig exists
-               postLoadBg.makeBackgroundView()
-                   .ignoresSafeArea()
-                   .transition(.opacity)
-           } else if let backgroundConfig = backgroundConfig {
+           if isContentLoaded {
+               if let postLoadBg = colorScheme == .dark && darkModePostLoadBackgroundConfig != nil ? 
+                   darkModePostLoadBackgroundConfig : postLoadBackgroundConfig {
+                   // Show post-load background if content is loaded and postLoadBackgroundConfig exists
+                   postLoadBg.makeBackgroundView()
+                       .ignoresSafeArea()
+                       .transition(.opacity)
+               }
+           } else if let bg = colorScheme == .dark && darkModeBackgroundConfig != nil ? 
+               darkModeBackgroundConfig : backgroundConfig {
                // Show initial background
-               backgroundConfig.makeBackgroundView()
+               bg.makeBackgroundView()
                    .ignoresSafeArea()
            }
            
@@ -57,8 +66,8 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if webView != nil && isContentLoaded {
-              WebViewRepresentable(webView: webView!)
+        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView {
+              WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -78,18 +87,12 @@ public struct DynamicWebView: View {
        .edgesIgnoringSafeArea(.all)
        .onAppear {
            viewLoadStartTime = Date()
-           startLoadTimer();
            loadWebView()
        }
        .onDisappear {
-          loadTimer?.invalidate()
-          loadTimer = nil
-          webView?.stopLoading()
-          webView = nil
+          WebViewManager.shared.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-          loadTimer?.invalidate()
-          loadTimer = nil
           isContentLoaded = true
           if let startTime = viewLoadStartTime {
               let timeInterval = Date().timeIntervalSince(startTime)
@@ -100,40 +103,15 @@ public struct DynamicWebView: View {
           }
       }
     }
-    
-    private func startLoadTimer() {
-         loadTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-             if (!isContentLoaded && fallbackPaywall != nil) {
-                 shouldShowFallback = true
-             }
-         }
-     }
 
     private func loadWebView() {
+        
         let totalStartTime = Date()
+        
+        let messageHandler = WebViewManager.shared.messageHandler
         
         // Initialization timing
         let configStartTime = Date()
-        let config = WKWebViewConfiguration()
-        let contentController = WKUserContentController()
-        
-        if (messageHandler == nil && fallbackPaywall != nil) {
-            shouldShowFallback = true
-            return;
-        }
-        
-        // Message handler setup timing
-        let handlerStartTime = Date()
-        contentController.addScriptMessageHandler(
-            messageHandler!,
-            contentWorld: .page,
-            name: "paywallHandler"
-        )
-        contentController.addScriptMessageHandler(
-            messageHandler!,
-            contentWorld: .page,
-            name: "logging"
-        )
         
         // Context and script injection timing
         do {
@@ -186,53 +164,24 @@ public struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
             
-            let injectionStartTime = Date()
-            contentController.addUserScript(combinedScript)
-            config.userContentController = contentController
-            config.websiteDataStore = WKWebsiteDataStore.default()
-            
             // WebView creation timing
             let webviewCreateTime = Date()
-            let webView = WKWebView(frame: .zero, configuration: config)
+            WebViewManager.shared.prepareForShowing()
+            guard let webView = WebViewManager.shared.preparedWebView else {
+                print("Failed to retrieve preparedWebView!")
+                shouldShowFallback = true
+                return
+            }
             
-            // WebView configuration timing
-            let webviewConfigStartTime = Date()
-            webView.configuration.preferences.javaScriptEnabled = true
-            webView.navigationDelegate = messageHandler
-            webView.contentMode = .scaleToFill
-            webView.backgroundColor = .clear
-            webView.isOpaque = false
-            webView.scrollView.backgroundColor = .clear
-            webView.scrollView.isOpaque = false
-            
-            webView.scrollView.isScrollEnabled = true
-            webView.scrollView.bouncesZoom = false
-            webView.scrollView.minimumZoomScale = 1.0
-            webView.scrollView.maximumZoomScale = 1.0
-            webView.scrollView.isDirectionalLockEnabled = true
-            webView.scrollView.bounces = true
-            webView.scrollView.scrollsToTop = false
-            webView.scrollView.contentInsetAdjustmentBehavior = .never
-            webView.scrollView.contentInset = .zero
-            webView.scrollView.scrollIndicatorInsets = .zero
-            webView.scrollView.showsVerticalScrollIndicator = false
-            webView.scrollView.showsHorizontalScrollIndicator = false
+            let injectionStartTime = Date()
+            webView.configuration.userContentController.addUserScript(combinedScript)
             
             // File loading timing
             let fileLoadStartTime = Date()
-            let fileURL = URL(fileURLWithPath: filePath)
-            let baseDirectory = FileManager.default
-                .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            WebViewManager.shared.loadFilePath(filePath)
             
-            if FileManager.default.fileExists(atPath: filePath) {
-                let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
-                webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
-            } else {
-            }
+            webViewReady = true
             
-            self.webView = webView
-
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                 triggerName: triggerName ?? "",
@@ -264,4 +213,103 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
             ])
         }
     }
+}
+
+/**
+ Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebViews, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
+ */
+class WebViewManager {
+    
+    static let shared: WebViewManager = WebViewManager()
+    
+    private(set) var preparedWebView: WKWebView? = nil
+    
+    private(set) var messageHandler: WebViewMessageHandler = WebViewMessageHandler()
+    
+    func createWebView() {
+        Task {
+            do {
+                preparedWebView?.stopLoading()
+                preparedWebView = nil
+                
+                let config = WKWebViewConfiguration()
+                let contentController = WKUserContentController()
+                
+                // Message handler setup timing
+                let handlerStartTime = Date()
+                contentController.addScriptMessageHandler(
+                    messageHandler,
+                    contentWorld: .page,
+                    name: "paywallHandler"
+                )
+                contentController.addScriptMessageHandler(
+                    messageHandler,
+                    contentWorld: .page,
+                    name: "logging"
+                )
+                
+                config.userContentController = contentController
+                config.websiteDataStore = WKWebsiteDataStore.default()
+                
+                let webView = WKWebView(frame: .zero, configuration: config)
+                webView.configuration.preferences.javaScriptEnabled = true
+                
+                preparedWebView = webView
+            } catch {
+                print("failed to warm up WKWebView")
+            }
+        }
+    }
+    
+    func prepareForShowing() {
+        guard let webView = preparedWebView else { return }
+        webView.navigationDelegate = messageHandler
+        webView.contentMode = .scaleToFill
+        webView.backgroundColor = .clear
+        webView.isOpaque = false
+        webView.scrollView.backgroundColor = .clear
+        webView.scrollView.isOpaque = false
+
+        
+        webView.scrollView.isScrollEnabled = true
+        webView.scrollView.bouncesZoom = false
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+        webView.scrollView.isDirectionalLockEnabled = true
+        webView.scrollView.bounces = true
+        webView.scrollView.scrollsToTop = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.contentInset = .zero
+        webView.scrollView.scrollIndicatorInsets = .zero
+        webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
+    }
+    
+    func preLoad(filePath: String) {
+        let fileLoadStartTime = Date()
+        
+        Task {
+            await loadFilePath(filePath)
+            print("WebViewManager preload in ms \(Date().timeIntervalSince(fileLoadStartTime) * 1000)")
+        }
+    }
+    
+    @MainActor
+    func loadFilePath(_ filePath: String) {
+        guard let webView = preparedWebView else {
+            return
+        }
+        let fileURL = URL(fileURLWithPath: filePath)
+        let baseDirectory = HeliumAssetManager.bundleDir
+        
+        if FileManager.default.fileExists(atPath: filePath) {
+            let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
+            webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+        }
+    }
+    
+    func stopLoading() {
+        preparedWebView?.stopLoading()
+    }
+    
 }
