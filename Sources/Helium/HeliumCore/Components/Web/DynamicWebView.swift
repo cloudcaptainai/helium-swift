@@ -36,6 +36,7 @@ public struct DynamicWebView: View {
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
         self.backgroundConfig = json["backgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["backgroundConfig"]);
         self.postLoadBackgroundConfig = json["postLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["postLoadBackgroundConfig"]);
+
         self.darkModeBackgroundConfig = json["darkModeBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModeBackgroundConfig"]);
         self.darkModePostLoadBackgroundConfig = json["darkModePostLoadBackgroundConfig"].type == .null ? nil : BackgroundConfig(json: json["darkModePostLoadBackgroundConfig"]);
         self.showShimmer = json["showShimmer"].bool ?? false;
@@ -106,12 +107,12 @@ public struct DynamicWebView: View {
 
     private func loadWebView() {
         
-        let totalStartTime = Date()
+        _ = Date()
         
-        let messageHandler = WebViewManager.shared.messageHandler
+        _ = WebViewManager.shared.messageHandler
         
         // Initialization timing
-        let configStartTime = Date()
+        _ = Date()
         
         // Context and script injection timing
         do {
@@ -119,11 +120,11 @@ public struct DynamicWebView: View {
                         
             let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
 
-            let serializationStartTime = Date()
+            _ = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)
 
-            let mergeStartTime = Date()
+            _ = Date()
             var mergedContext = contextJSON
             for (key, value) in customJSON {
                 mergedContext[key] = value
@@ -133,7 +134,7 @@ public struct DynamicWebView: View {
             // Only fetch prices for products associated with this trigger
             let localizedPrices = HeliumFetchedConfigManager.shared.getLocalizedPriceMapForTrigger(triggerName)
             
-            let scriptStartTime = Date()
+            _ = Date()
             let combinedScript = WKUserScript(
                 source: """
                 (function() {
@@ -165,7 +166,7 @@ public struct DynamicWebView: View {
             )
             
             // WebView creation timing
-            let webviewCreateTime = Date()
+            _ = Date()
             WebViewManager.shared.prepareForShowing()
             guard let webView = WebViewManager.shared.preparedWebView else {
                 print("Failed to retrieve preparedWebView!")
@@ -173,14 +174,15 @@ public struct DynamicWebView: View {
                 return
             }
             
-            let injectionStartTime = Date()
+            _ = Date()
             webView.configuration.userContentController.addUserScript(combinedScript)
             
             // File loading timing
-            let fileLoadStartTime = Date()
-            WebViewManager.shared.loadFilePath(filePath)
-            
-            webViewReady = true
+            _ = Date()
+            Task {
+                await WebViewManager.shared.loadFilePath(filePath)
+                webViewReady = true
+            }
             
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
@@ -229,14 +231,14 @@ class WebViewManager {
     func createWebView() {
         Task {
             do {
-                preparedWebView?.stopLoading()
+                await preparedWebView?.stopLoading()
                 preparedWebView = nil
                 
                 let config = WKWebViewConfiguration()
                 let contentController = WKUserContentController()
                 
                 // Message handler setup timing
-                let handlerStartTime = Date()
+                _ = Date()
                 contentController.addScriptMessageHandler(
                     messageHandler,
                     contentWorld: .page,
@@ -251,8 +253,8 @@ class WebViewManager {
                 config.userContentController = contentController
                 config.websiteDataStore = WKWebsiteDataStore.default()
                 
-                let webView = WKWebView(frame: .zero, configuration: config)
-                webView.configuration.preferences.javaScriptEnabled = true
+                let webView = await WKWebView(frame: .zero, configuration: config)
+                await webView.configuration.preferences.javaScriptEnabled = true
                 
                 preparedWebView = webView
             } catch {
@@ -286,16 +288,16 @@ class WebViewManager {
     }
     
     func preLoad(filePath: String) {
-        let fileLoadStartTime = Date()
+        let startTime = Date()
         
         Task {
             await loadFilePath(filePath)
-            print("WebViewManager preload in ms \(Date().timeIntervalSince(fileLoadStartTime) * 1000)")
+            print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
         }
     }
     
     @MainActor
-    func loadFilePath(_ filePath: String) {
+    func loadFilePath(_ filePath: String) async {
         guard let webView = preparedWebView else {
             return
         }
@@ -303,7 +305,7 @@ class WebViewManager {
         let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
-            let contents = try? String(contentsOfFile: filePath, encoding: .utf8)
+            _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         }
     }
