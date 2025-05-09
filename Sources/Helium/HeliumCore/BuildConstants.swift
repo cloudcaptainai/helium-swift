@@ -1,7 +1,7 @@
 public struct BuildConstants {
     /// Current SDK version
     /// This is automatically updated by GitHub Actions on release
-    public static let version = "1.7.2"
+    public static let version = "1.7.3"
     
     /// Get the current SDK version
     public static func current() -> String {
