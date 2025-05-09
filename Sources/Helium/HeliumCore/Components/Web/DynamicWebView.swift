@@ -135,32 +135,34 @@ public struct DynamicWebView: View {
             let localizedPrices = HeliumFetchedConfigManager.shared.getLocalizedPriceMapForTrigger(triggerName)
             
             _ = Date()
+            let stringSource = """
+            (function() {
+                // Create properties on window object directly
+                Object.defineProperty(window, 'heliumContext', {
+                    value: \(mergedContext.rawString() ?? "{}"),
+                    writable: false,
+                    enumerable: true,
+                    configurable: false
+                });
+                
+                Object.defineProperty(window, 'heliumLocalizedPrices', {
+                    value: \(JSON(localizedPrices.mapValues { $0.json }).rawString() ?? "{}"),
+                    writable: false,
+                    enumerable: true,
+                    configurable: false
+                });
+                
+                 Object.defineProperty(window, 'heliumReady', {
+                    value: true,
+                    writable: false,
+                    enumerable: true,
+                    configurable: false
+                });
+            })();
+            """
+            
             let combinedScript = WKUserScript(
-                source: """
-                (function() {
-                    // Set up initial console handlers (will be enhanced by TS)
-                    console.log = function(...args) {
-                        window.webkit.messageHandlers.logging.postMessage(args.map(arg =>
-                            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                        ).join(' '));
-                    };
-                    
-                    console.error = function(...args) {
-                        window.webkit.messageHandlers.logging.postMessage('[ERROR] ' + args.map(arg =>
-                            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-                        ).join(' '));
-                    };
-
-                    // Initialize helium context
-                    try {
-                        window.helium = {};
-                        window.heliumContext = \(mergedContext.rawString() ?? "{}");
-                        window.heliumLocalizedPrices = \(JSON(localizedPrices.mapValues { $0.json }).rawString() ?? "{}");
-                    } catch(e) {
-                        console.error('Error in helium initialization:', e);
-                    }
-                })();
-                """,
+                source: stringSource,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             )

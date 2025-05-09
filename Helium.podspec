@@ -1,11 +1,11 @@
 Pod::Spec.new do |s|
   s.name             = 'Helium'
-  s.version          = '1.7.2'
+  s.version          = '1.7.3'
   s.summary          = 'Helium SDK for iOS'
   s.homepage         = 'https://github.com/cloudcaptainai/helium-swift'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Anish Doshi' => 'anish@tryhelium.com' }
-  s.source           = { :git => 'https://github.com/cloudcaptainai/helium-swift.git', :branch => 'main', :tag => '1.7.2' }
+  s.source           = { :git => 'https://github.com/cloudcaptainai/helium-swift.git', :branch => 'main', :tag => '1.7.3' }
 
   s.ios.deployment_target = '14.0'
   s.swift_version = '5.0'
