@@ -16,6 +16,7 @@ jobs:
         id: get_version
         run: |
           VERSION=$(grep -o 'version = "[^"]*"' Sources/Helium/HeliumCore/BuildConstants.swift | cut -d'"' -f2)
+          echo "version extracted! $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
   trigger-tests:
