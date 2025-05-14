@@ -2,28 +2,41 @@ name: Create Release
 on:
   repository_dispatch:
     types: [tests-passed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the release'
+        required: true
+        type: string
+      sha:
+        description: 'Commit hash to create release from'
+        required: true
+        type: string
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
+      COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
     steps:
       - uses: actions/checkout@v4
       
       - name: Checkout specific commit
         run: |
-          git checkout ${{ github.event.client_payload.sha }}
+          git checkout ${{ env.COMMIT_SHA }}
       
       - name: Create tag
         run: |
-          git tag "${{ github.event.client_payload.version }}"
-          git push origin "${{ github.event.client_payload.version }}"
+          git tag "${{ env.RELEASE_VERSION }}"
+          git push origin "${{ env.RELEASE_VERSION }}"
       
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.event.client_payload.version }}" \
-            --target ${{ github.event.client_payload.sha }} \
+          gh release create "${{ env.RELEASE_VERSION }}" \
+            --target ${{ env.COMMIT_SHA }} \
             --draft \
             --generate-notes
       
