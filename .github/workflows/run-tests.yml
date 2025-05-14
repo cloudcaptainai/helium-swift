@@ -4,11 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize]
   workflow_dispatch:
-    inputs:
-      branch_name:
-        description: 'Branch name'
-        required: true
-        default: ${{ github.ref_name }}
 
 jobs:
   prepare-testing:
