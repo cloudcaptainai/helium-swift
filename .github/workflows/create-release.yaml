@@ -7,24 +7,25 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+      
+      - name: Checkout specific commit
+        run: |
+          git checkout ${{ github.event.client_payload.sha }}
       
       - name: Create tag
         run: |
-          git tag "v${{ github.event.client_payload.version }}"
-          git push origin "v${{ github.event.client_payload.version }}"
+          git tag "${{ github.event.client_payload.version }}"
+          git push origin "${{ github.event.client_payload.version }}"
       
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "v${{ github.event.client_payload.version }}"
-          release_name: "Release v${{ github.event.client_payload.version }}"
-          draft: false
-          prerelease: false
+        run: |
+          gh release create "${{ github.event.client_payload.version }}" \
+            --target ${{ github.event.client_payload.sha }} \
+            --draft \
+            --generate-notes
       
 #      is this actually needed?
 #      - name: Set up Ruby
@@ -38,7 +39,7 @@ jobs:
       - name: Pod spec lint
         run: pod spec lint --allow-warnings
 
-      - name: Pod trunk push
-        run: pod trunk push --allow-warnings
-        env:
-          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+#      - name: Pod trunk push
+#        run: pod trunk push --allow-warnings
+#        env:
+#          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
