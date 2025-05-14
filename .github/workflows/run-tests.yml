@@ -27,7 +27,7 @@ jobs:
          token: ${{ secrets.DEMO_PAT }}
          repository: cloudcaptainai/helium-demo
          event-type: run-sdk-tests
-         client-payload: '{"repo": "${{ github.repository }}", "branch": "${{ needs.prepare-testing.outputs.branch_ref }}", "sha": "${{ needs.prepare-testing.outputs.commit_sha }}"}'
+         client-payload: '{"branch": "${{ needs.prepare-testing.outputs.branch_ref }}", "sha": "${{ needs.prepare-testing.outputs.commit_sha }}"}'
 
  wait-for-results:
    needs: trigger-test-app
