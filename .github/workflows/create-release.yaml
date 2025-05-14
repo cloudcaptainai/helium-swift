@@ -1,0 +1,44 @@
+name: Create Release
+on:
+  repository_dispatch:
+    types: [tests-passed]
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Create tag
+        run: |
+          git tag "v${{ github.event.client_payload.version }}"
+          git push origin "v${{ github.event.client_payload.version }}"
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "v${{ github.event.client_payload.version }}"
+          release_name: "Release v${{ github.event.client_payload.version }}"
+          draft: false
+          prerelease: false
+      
+#      is this actually needed?
+#      - name: Set up Ruby
+#        uses: ruby/setup-ruby@v1
+#        with:
+#          ruby-version: '3.0'
+      
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      - name: Pod spec lint
+        run: pod spec lint --allow-warnings
+
+      - name: Pod trunk push
+        run: pod trunk push --allow-warnings
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
