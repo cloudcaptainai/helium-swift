@@ -1,0 +1,58 @@
+name: Create Release
+on:
+  repository_dispatch:
+    types: [tests-passed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the release'
+        required: true
+        type: string
+      sha:
+        description: 'Commit hash to create release from'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
+      COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkout specific commit
+        run: |
+          git checkout ${{ env.COMMIT_SHA }}
+      
+      - name: Create tag
+        run: |
+          git tag "${{ env.RELEASE_VERSION }}"
+          git push origin "${{ env.RELEASE_VERSION }}"
+      
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ env.RELEASE_VERSION }}" \
+            --target ${{ env.COMMIT_SHA }} \
+            --draft \
+            --generate-notes
+      
+#      is this actually needed?
+#      - name: Set up Ruby
+#        uses: ruby/setup-ruby@v1
+#        with:
+#          ruby-version: '3.0'
+      
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      - name: Pod spec lint
+        run: pod spec lint --allow-warnings
+
+#      - name: Pod trunk push
+#        run: pod trunk push --allow-warnings
+#        env:
+#          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}

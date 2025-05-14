@@ -1,0 +1,31 @@
+name: Release CI - Trigger Tests
+on:
+  push:
+    branches: [main]
+    paths: ['**/BuildConstants.swift']
+  workflow_dispatch:
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: get_version
+        run: |
+          VERSION=$(grep -o 'version = "[^"]*"' Sources/Helium/HeliumCore/BuildConstants.swift | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+  trigger-tests:
+    needs: extract-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger test app workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DEMO_PAT }}
+          repository: cloudcaptainai/helium-demo
+          event-type: run-sdk-tests
+          client-payload: '{"branch": "main", "sha": "${{ github.sha }}", "version": "${{ needs.extract-version.outputs.version }}", "should_release": true}'
