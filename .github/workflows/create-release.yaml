@@ -16,6 +16,8 @@ on:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # so can create release and create tag
     env:
       RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
       COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
