@@ -1,19 +1,21 @@
 name: Branch CI Testing
 
 on:
- workflow_dispatch:
-   inputs:
-     branch_name:
-       description: 'Branch name'
-       required: true
-       default: ${{ github.ref_name }}
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: 'Branch name'
+        required: true
+        default: ${{ github.ref_name }}
 
 jobs:
  prepare-testing:
    runs-on: ubuntu-latest
    outputs:
-     branch_ref: ${{ github.ref_name }}
-     commit_sha: ${{ github.sha }}
+     branch_ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+     commit_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
    steps:
      - uses: actions/checkout@v3
 
