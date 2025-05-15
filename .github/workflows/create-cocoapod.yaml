@@ -1,0 +1,39 @@
+name: Create CocoaPod
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit hash to checkout and push to CocoaPods'
+        required: true
+        type: string
+
+jobs:
+  push-to-cocoapods:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkout specific commit (for manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git fetch --all
+          git checkout ${{ github.event.inputs.commit_sha }}
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+      
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      - name: Pod spec lint
+        run: pod spec lint --allow-warnings
+
+      - name: Pod trunk push
+        run: pod trunk push --allow-warnings
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
