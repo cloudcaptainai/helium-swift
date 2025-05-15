@@ -30,3 +30,8 @@ jobs:
           repository: cloudcaptainai/helium-demo
           event-type: run-sdk-tests
           client-payload: '{"branch": "main", "sha": "${{ github.sha }}", "version": "${{ needs.extract-version.outputs.version }}", "should_release": true}'
+          
+      - name: Wait for test results
+        run: |
+          echo "Tests have been triggered in helium-demo repository"
+          echo "If successful, the create-release workflow will kickoff to create the release."

@@ -25,11 +25,7 @@ jobs:
           repository: cloudcaptainai/helium-demo
           event-type: run-sdk-tests
           client-payload: '{"branch": "${{ needs.prepare-testing.outputs.branch_ref }}", "sha": "${{ needs.prepare-testing.outputs.commit_sha }}", "should_release": false}'
-
-  wait-for-results:
-    needs: trigger-test-app
-    runs-on: ubuntu-latest
-    steps:
+          
       - name: Wait for test results
         run: |
           echo "Tests have been triggered in helium-demo repository"
