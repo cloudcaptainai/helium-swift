@@ -102,6 +102,7 @@ public struct DynamicWebView: View {
                   self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
               }
           }
+          lowPowerModeAutoPlayVideoWorkaround()
       }
     }
 
@@ -185,7 +186,11 @@ public struct DynamicWebView: View {
                 await WebViewManager.shared.loadFilePath(filePath)
                 webViewReady = true
             }
-            
+            Task {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                // try here to try and make autoplay more smooth
+                lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
+            }
         } catch {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                 triggerName: triggerName ?? "",
@@ -196,6 +201,50 @@ public struct DynamicWebView: View {
             }
         }
     }
+    
+    private func lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: Bool = true) {
+        // Video autoplayback is disabled if in Low Power Mode. This is a workaroudn to
+        // force explicit auto-play. Note that using img element instead of video in the
+        // html also seems to work in limited testing but feels hacky.
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            Task {
+//                // Can extra delay here if needed but in testing doesn't seem needed
+//                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                
+                // First attempt to play the video
+                let firstAttemptResult = await forceVideoPlay()
+                
+                if !multipleAttempts {
+                    return
+                }
+                
+                // If first attempt failed or couldn't find video, try one more time
+                if !firstAttemptResult {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    
+                    // Second attempt
+                    await forceVideoPlay()
+                }
+            }
+        }
+    }
+    private func forceVideoPlay() async -> Bool {
+        guard let webView = WebViewManager.shared.preparedWebView else {
+            return false
+        }
+        let result = try? await webView.evaluateJavaScript("""
+            (function() {
+                const video = document.querySelector('video');
+                if (video) {
+                    video.play().catch(e => console.log('First play attempt failed:', e));
+                    return true;
+                }
+                return false;
+            })();
+        """) as? Bool
+        return result == true
+    }
+    
 }
 
 fileprivate struct WebViewRepresentable: UIViewRepresentable {
