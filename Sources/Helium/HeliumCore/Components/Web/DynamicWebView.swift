@@ -177,7 +177,21 @@ public struct DynamicWebView: View {
             }
             
             _ = Date()
+            webView.configuration.allowsInlineMediaPlayback = true
+            webView.configuration.allowsAirPlayForMediaPlayback = true
+            webView.configuration.allowsPictureInPictureMediaPlayback = true
+            webView.configuration.mediaTypesRequiringUserActionForPlayback = []
             webView.configuration.userContentController.addUserScript(combinedScript)
+            let preferences = WKPreferences()
+            if #available(iOS 17.0, *) {
+                let websiteDataStore = WKWebsiteDataStore.default()
+                webView.configuration.websiteDataStore = websiteDataStore
+                let websitePreferences = WKWebpagePreferences()
+                websitePreferences.allowsContentJavaScript = true
+                webView.configuration.defaultWebpagePreferences = websitePreferences
+            }
+            preferences.javaScriptCanOpenWindowsAutomatically = true
+            webView.configuration.preferences = preferences
             
             // File loading timing
             _ = Date()
