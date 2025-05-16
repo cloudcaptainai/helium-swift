@@ -48,6 +48,7 @@ If tests pass, the release is created automatically:
 - A git tag is created with the version number
 - A GitHub draft release is created
 - Release notes are auto-generated
+- If the version ends in **-pre** it will be a pre-release
 
 You can also create a release manually:
 1. Go to the "Create Release" workflow

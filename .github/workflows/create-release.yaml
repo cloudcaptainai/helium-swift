@@ -26,7 +26,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
       COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
-      IS_PRERELEASE: ${{ github.event.inputs.prerelease || false }}
+      MANUAL_PRERELEASE: ${{ github.event.inputs.prerelease || false }}
     steps:
       - uses: actions/checkout@v4
       
@@ -40,6 +40,16 @@ jobs:
         run: |
           git tag "${{ env.RELEASE_VERSION }}"
           git push origin "${{ env.RELEASE_VERSION }}"
+      
+      - name: Determine if pre-release
+        id: check_prerelease
+        run: |
+          # Check if version ends with -pre or if manually set to prerelease
+          if [[ "${{ env.RELEASE_VERSION }}" == *-pre ]] || [[ "${{ env.MANUAL_PRERELEASE }}" == "true" ]]; then
+            echo "IS_PRERELEASE=true" >> $GITHUB_ENV
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+          fi
       
       - name: Create GitHub Release
         env:
