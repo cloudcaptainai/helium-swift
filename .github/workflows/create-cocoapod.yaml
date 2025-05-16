@@ -17,8 +17,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      
+      - name: Checkout specific commit (for manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git fetch --all
+          git checkout ${{ github.event.inputs.commit_sha }}
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+      
+      - name: Install CocoaPods
+        run: gem install cocoapods
 
-      - name: fix bad pod
-        run: pod trunk delete Helium 2.0.0
+      - name: Pod spec lint
+        run: pod spec lint --allow-warnings
+
+      - name: Pod trunk push
+        run: pod trunk push --allow-warnings
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
