@@ -45,4 +45,10 @@ class HeliumViewController: UIViewController {
             self?.presentationState.isFullyPresented = true
         }
     }
+    
+    // Only allow portrait paywalls for now
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        .portrait
+    }
+    
 }

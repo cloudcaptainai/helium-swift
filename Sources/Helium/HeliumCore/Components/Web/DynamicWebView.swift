@@ -237,6 +237,10 @@ class WebViewManager {
                 preparedWebView = nil
                 
                 let config = WKWebViewConfiguration()
+                // allow video autoplay
+                config.allowsInlineMediaPlayback = true
+                // for all media types (regardless of whether video has audio)
+                config.mediaTypesRequiringUserActionForPlayback = []
                 let contentController = WKUserContentController()
                 
                 // Message handler setup timing
