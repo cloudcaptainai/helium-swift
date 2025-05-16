@@ -12,6 +12,11 @@ on:
         description: 'Commit hash to create release from'
         required: true
         type: string
+      prerelease:
+        description: 'Create as a pre-release'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   create-release:
@@ -21,6 +26,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
       COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
+      IS_PRERELEASE: ${{ github.event.inputs.prerelease || false }}
     steps:
       - uses: actions/checkout@v4
       
@@ -39,7 +45,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ env.RELEASE_VERSION }}" \
-            --target ${{ env.COMMIT_SHA }} \
-            --draft \
-            --generate-notes
+          if [ "${{ env.IS_PRERELEASE }}" == "true" ]; then
+            gh release create "${{ env.RELEASE_VERSION }}" \
+              --target ${{ env.COMMIT_SHA }} \
+              --draft \
+              --prerelease \
+              --generate-notes
+          else
+            gh release create "${{ env.RELEASE_VERSION }}" \
+              --target ${{ env.COMMIT_SHA }} \
+              --draft \
+              --generate-notes
+          fi
