@@ -2,11 +2,11 @@ name: Create CocoaPod
 
 on:
   release:
-    types: [published]
+    types: [released]
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'Commit hash to checkout and push to CocoaPods'
+      tag_name:
+        description: 'Tag name to checkout and push to CocoaPods'
         required: true
         type: string
 
@@ -18,11 +18,11 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Checkout specific commit (for manual trigger)
+      - name: Checkout specific tag (for manual trigger)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          git fetch --all
-          git checkout ${{ github.event.inputs.commit_sha }}
+          git fetch --all --tags
+          git checkout refs/tags/${{ github.event.inputs.tag_name }}
       
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
