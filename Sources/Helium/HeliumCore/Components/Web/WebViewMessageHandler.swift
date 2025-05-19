@@ -82,7 +82,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 }
                 
             case "restore-purchases":
-                if let result = await self.delegateWrapper?.restorePurchases() {
+                if let result = await self.delegateWrapper?.restorePurchases(), result == true {
                     respond(["status": "success"])
                 } else {
                     respond(["status": "failed"])
