@@ -104,6 +104,31 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         let result = await delegate!.restorePurchases();
         if (result) {
             self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+        } else {
+            self.onHeliumPaywallEvent(event: .subscriptionRestoreFailed(triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            await MainActor.run {
+               let alert = UIAlertController(
+                   title: "Restore Failed",
+                   message: "We couldn't find any previous purchases to restore.",
+                   preferredStyle: .alert
+               )
+               
+               // Add a single OK button
+               alert.addAction(UIAlertAction(
+                   title: "OK",
+                   style: .default
+               ))
+               
+               // Get the top view controller to present the alert
+               if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let topVC = windowScene.windows.first?.rootViewController {
+                   var presentedVC = topVC
+                   while let presented = presentedVC.presentedViewController {
+                       presentedVC = presented
+                   }
+                   presentedVC.present(alert, animated: true)
+               }
+           }
         }
         return result;
     }
