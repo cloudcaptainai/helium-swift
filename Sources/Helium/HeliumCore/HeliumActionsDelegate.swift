@@ -10,7 +10,7 @@ import Foundation
 public protocol BaseActionsDelegate {
     func dismiss();
     func dismissAll();
-    func showSecondaryPaywall(triggerName: String);
+    func showSecondaryPaywall(uuid: String);
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
     func selectProduct(productId: String);
@@ -37,8 +37,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         delegate.dismissAll()
     }
     
-    public func showSecondaryPaywall(triggerName: String) {
-        delegate.showSecondaryPaywall(triggerName: triggerName)
+    public func showSecondaryPaywall(uuid: String) {
+        delegate.showSecondaryPaywall(uuid: uuid)
     }
     
     public func onCTAPress(contentComponentName: String) {
@@ -126,9 +126,15 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
-    public func showSecondaryPaywall(triggerName: String) {
+    public func showSecondaryPaywall(uuid: String) {
         if (!isLoading) {
-            HeliumPaywallPresenter.shared.presentUpsell(trigger: triggerName)
+            if let trigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger)
+            } else {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallOpenFailed(triggerName: "\(trigger)_secondTry", paywallTemplateName: "unknown")
+                )
+            }
         }
     }
     
@@ -205,7 +211,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("dismissAll pressed");
     }
     
-    public func showSecondaryPaywall(triggerName: String) {
+    public func showSecondaryPaywall(uuid: String) {
         print("show secondary paywall");
     }
     

@@ -118,8 +118,8 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 }
                 
             case "show-secondary-paywall":
-                if let trigger = data["trigger"] as? String {
-                    self.delegateWrapper?.showSecondaryPaywall(triggerName: trigger)
+                if let paywallUuid = data["uuid"] as? String {
+                    self.delegateWrapper?.showSecondaryPaywall(uuid: paywallUuid)
                     respond(["status": "success"])
                 }
                 
