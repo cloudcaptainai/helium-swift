@@ -117,6 +117,12 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     respond(["status": "success"])
                 }
                 
+            case "showSecondaryPaywall":
+                if let trigger = data["trigger"] as? String {
+                    self.delegateWrapper?.showSecondaryPaywall(triggerName: trigger)
+                    respond(["status": "success"])
+                }
+                
             case "dismiss":
                 self.delegateWrapper?.dismiss()
                 respond(["status": "success"])
