@@ -127,6 +127,10 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 self.delegateWrapper?.dismiss()
                 respond(["status": "success"])
                 
+            case "dismissAll":
+                self.delegateWrapper?.dismissAll()
+                respond(["status": "success"])
+                
             default:
                 respond(["message": "Unknown message type"])
             }

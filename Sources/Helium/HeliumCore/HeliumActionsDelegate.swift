@@ -9,6 +9,7 @@ import Foundation
 
 public protocol BaseActionsDelegate {
     func dismiss();
+    func dismissAll();
     func showSecondaryPaywall(triggerName: String);
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
@@ -30,6 +31,10 @@ public class ActionsDelegateWrapper: ObservableObject {
     
     public func dismiss() {
         delegate.dismiss()
+    }
+    
+    public func dismissAll() {
+        delegate.dismissAll()
     }
     
     public func showSecondaryPaywall(triggerName: String) {
@@ -115,6 +120,12 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
+    public func dismissAll() {
+        if (!isLoading) {
+            HeliumPaywallPresenter.shared.hideAllUpsells()
+        }
+    }
+    
     public func showSecondaryPaywall(triggerName: String) {
         if (!isLoading) {
             HeliumPaywallPresenter.shared.presentUpsell(trigger: triggerName)
@@ -188,6 +199,10 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public func dismiss() {
         print("dismiss pressed");
+    }
+    
+    public func dismissAll() {
+        print("dismissAll pressed");
     }
     
     public func showSecondaryPaywall(triggerName: String) {
