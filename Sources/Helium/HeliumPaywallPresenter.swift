@@ -59,9 +59,9 @@ class HeliumPaywallPresenter {
     
     func hideAllUpsells() {
         Task { @MainActor in
-            for (i, paywallDisplay) in paywallsDisplayed.reversed().enumerated() {
-                paywallDisplay.dismiss(animated: i == paywallsDisplayed.count - 1)
-            }
+            // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
+            // since they must have ultimately be presented by the topmost paywall if you go all the way up.
+            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true)
             paywallsDisplayed.removeAll()
         }
     }
