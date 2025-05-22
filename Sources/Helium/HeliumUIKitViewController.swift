@@ -46,6 +46,13 @@ class HeliumViewController: UIViewController {
         }
     }
     
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed {
+            HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
+        }
+    }
+    
     // Only allow portrait paywalls for now
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         .portrait

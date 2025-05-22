@@ -20,6 +20,10 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }
     
+    public func hideAllUpsells() {
+        return HeliumPaywallPresenter.shared.hideAllUpsells()
+    }
+    
     public func upsellViewForTrigger(trigger: String) -> AnyView {
         if (!initialized) {
             fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
