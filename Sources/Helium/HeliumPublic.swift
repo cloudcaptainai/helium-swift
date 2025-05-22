@@ -125,7 +125,7 @@ public class Helium {
         }
         self.controller!.downloadConfig();
         
-        WebViewManager.shared.createWebView()
+        WebViewManager.shared.preCreateFirstWebView()
     }
     
     public func paywallsLoaded() -> Bool {

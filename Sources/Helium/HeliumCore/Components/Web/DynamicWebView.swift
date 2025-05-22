@@ -29,8 +29,6 @@ public struct DynamicWebView: View {
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
-        WebViewManager.shared.messageHandler.setActionsDelegate(delegateWrapper: actionsDelegate)
-        
         self.triggerName = triggerName;
         self.actionConfig = json["actionConfig"].type == .null ? JSON([:]) : json["actionConfig"];
         self.templateConfig = json["templateConfig"].type == .null ? JSON([:]) : json["templateConfig"];
@@ -67,7 +65,7 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView {
+        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView(trigger: triggerName) {
               WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
@@ -91,7 +89,7 @@ public struct DynamicWebView: View {
            loadWebView()
        }
        .onDisappear {
-          WebViewManager.shared.stopLoading()
+           WebViewManager.shared.stopLoading(trigger: triggerName)
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
           isContentLoaded = true
@@ -107,10 +105,6 @@ public struct DynamicWebView: View {
     }
 
     private func loadWebView() {
-        
-        _ = Date()
-        
-        _ = WebViewManager.shared.messageHandler
         
         // Initialization timing
         _ = Date()
@@ -168,22 +162,23 @@ public struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
             
-            // WebView creation timing
-            _ = Date()
-            WebViewManager.shared.prepareForShowing()
-            guard let webView = WebViewManager.shared.preparedWebView else {
-                print("Failed to retrieve preparedWebView!")
-                shouldShowFallback = true
-                return
-            }
-            
-            _ = Date()
-            webView.configuration.userContentController.addUserScript(combinedScript)
-            
-            // File loading timing
-            _ = Date()
             Task {
-                await WebViewManager.shared.loadFilePath(filePath)
+                // WebView creation timing
+                _ = Date()
+                let preparedWebView = await WebViewManager.shared.prepareForShowing(trigger: triggerName, delegateWrapper: actionsDelegate)
+                guard let webView = preparedWebView else {
+                    print("Failed to retrieve preparedWebView!")
+                    shouldShowFallback = true
+                    return
+                }
+                
+                _ = Date()
+                webView.configuration.userContentController.addUserScript(combinedScript)
+                
+                // File loading timing
+                _ = Date()
+                
+                await WebViewManager.shared.loadFilePath(filePath, trigger: triggerName)
                 webViewReady = true
             }
             Task {
@@ -229,7 +224,7 @@ public struct DynamicWebView: View {
         }
     }
     private func forceVideoPlay() async -> Bool {
-        guard let webView = WebViewManager.shared.preparedWebView else {
+        guard let webView = WebViewManager.shared.preparedWebView(trigger: triggerName) else {
             return false
         }
         let result = try? await webView.evaluateJavaScript("""
@@ -275,52 +270,76 @@ class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
     
-    private(set) var preparedWebView: WKWebView? = nil
+    private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
     
-    private(set) var messageHandler: WebViewMessageHandler = WebViewMessageHandler()
+    func preparedWebView(trigger: String) -> WKWebView? {
+        return preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }?.preparedWebView
+    }
     
-    func createWebView() {
+    func preCreateFirstWebView() {
         Task {
-            do {
-                await preparedWebView?.stopLoading()
-                preparedWebView = nil
-                
-                let config = WKWebViewConfiguration()
-                // allow video autoplay
-                config.allowsInlineMediaPlayback = true
-                // for all media types (regardless of whether video has audio)
-                config.mediaTypesRequiringUserActionForPlayback = []
-                let contentController = WKUserContentController()
-                
-                // Message handler setup timing
-                _ = Date()
-                contentController.addScriptMessageHandler(
-                    messageHandler,
-                    contentWorld: .page,
-                    name: "paywallHandler"
-                )
-                contentController.addScriptMessageHandler(
-                    messageHandler,
-                    contentWorld: .page,
-                    name: "logging"
-                )
-                
-                config.userContentController = contentController
-                config.websiteDataStore = WKWebsiteDataStore.default()
-                
-                let webView = await WKWebView(frame: .zero, configuration: config)
-                await webView.configuration.preferences.javaScriptEnabled = true
-                
-                preparedWebView = webView
-            } catch {
-                print("failed to warm up WKWebView")
-            }
+            let bundle = await createWebViewBundle(trigger: nil)
+            preparedWebViewBundles.append(
+                bundle
+            )
         }
     }
     
-    func prepareForShowing() {
-        guard let webView = preparedWebView else { return }
-        webView.navigationDelegate = messageHandler
+    fileprivate func createWebViewBundle(trigger: String? = nil) async -> PaywallWebViewBundle {
+        do {
+            let messageHandler = WebViewMessageHandler()
+            
+            let config = WKWebViewConfiguration()
+            // allow video autoplay
+            config.allowsInlineMediaPlayback = true
+            // for all media types (regardless of whether video has audio)
+            config.mediaTypesRequiringUserActionForPlayback = []
+            let contentController = WKUserContentController()
+            
+            // Message handler setup timing
+            _ = Date()
+            contentController.addScriptMessageHandler(
+                messageHandler,
+                contentWorld: .page,
+                name: "paywallHandler"
+            )
+            contentController.addScriptMessageHandler(
+                messageHandler,
+                contentWorld: .page,
+                name: "logging"
+            )
+            
+            config.userContentController = contentController
+            config.websiteDataStore = WKWebsiteDataStore.default()
+            
+            let webView = await WKWebView(frame: .zero, configuration: config)
+            await webView.configuration.preferences.javaScriptEnabled = true
+            
+            return PaywallWebViewBundle(
+                trigger: trigger, webView: webView, msgHandler: messageHandler
+            )
+        } catch {
+            print("failed to warm up WKWebView")
+        }
+    }
+    
+    fileprivate func prepareForShowing(trigger: String, delegateWrapper: ActionsDelegateWrapper) async -> WKWebView? {
+        var webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }
+        if webViewBundle == nil {
+            webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == nil } // see if there's one available
+            if let webViewBundle {
+                webViewBundle.triggerForPreparedWebView = trigger
+            } else {
+                let newBundle = await createWebViewBundle(trigger: trigger)
+                preparedWebViewBundles.append(newBundle)
+            }
+        }
+        guard let webViewBundle else { return nil }
+        webViewBundle.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
+        
+        let webView = webViewBundle.preparedWebView
+        
+        webView.navigationDelegate = webViewBundle.messageHandler
         webView.contentMode = .scaleToFill
         webView.backgroundColor = .clear
         webView.isOpaque = false
@@ -340,20 +359,27 @@ class WebViewManager {
         webView.scrollView.scrollIndicatorInsets = .zero
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
+        
+        return webView
     }
     
     func preLoad(filePath: String) {
         let startTime = Date()
         
         Task {
-            await loadFilePath(filePath)
+            await loadFilePath(filePath, trigger: nil)
             print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
         }
     }
     
     @MainActor
-    func loadFilePath(_ filePath: String) async {
-        guard let webView = preparedWebView else {
+    fileprivate func loadFilePath(_ filePath: String, trigger: String?) async {
+        var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
+        if let trigger {
+            // grab a specific one otherwise just for preloading and doesn't really matter
+            webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }
+        }
+        guard let webView = webViewBundle?.preparedWebView else {
             return
         }
         let fileURL = URL(fileURLWithPath: filePath)
@@ -365,8 +391,21 @@ class WebViewManager {
         }
     }
     
-    func stopLoading() {
-        preparedWebView?.stopLoading()
+    // Clean up the web view
+    fileprivate func stopLoading(trigger: String) {
+        preparedWebView(trigger: trigger)?.stopLoading()
     }
     
+}
+
+class PaywallWebViewBundle {
+    var triggerForPreparedWebView: String? = nil
+    let preparedWebView: WKWebView
+    let messageHandler: WebViewMessageHandler
+    
+    init(trigger: String? = nil, webView: WKWebView, msgHandler: WebViewMessageHandler) {
+        triggerForPreparedWebView = trigger
+        preparedWebView = webView
+        messageHandler = msgHandler
+    }
 }
