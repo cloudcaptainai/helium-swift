@@ -58,10 +58,12 @@ class HeliumPaywallPresenter {
     }
     
     func hideAllUpsells() {
-        for (i, paywallDisplay) in paywallsDisplayed.reversed().enumerated() {
-            paywallDisplay.dismiss(animated: i == paywallsDisplayed.count - 1)
+        Task { @MainActor in
+            for (i, paywallDisplay) in paywallsDisplayed.reversed().enumerated() {
+                paywallDisplay.dismiss(animated: i == paywallsDisplayed.count - 1)
+            }
+            paywallsDisplayed.removeAll()
         }
-        paywallsDisplayed.removeAll()
     }
     
     func cleanUpPaywall(heliumViewController: HeliumViewController) {
