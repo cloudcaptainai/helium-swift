@@ -65,7 +65,7 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView(trigger: triggerName) {
+        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView(filePath: filePath) {
               WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
@@ -89,7 +89,7 @@ public struct DynamicWebView: View {
            loadWebView()
        }
        .onDisappear {
-           WebViewManager.shared.stopLoading(trigger: triggerName)
+           WebViewManager.shared.stopLoading(filePath: filePath)
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
           isContentLoaded = true
@@ -165,7 +165,7 @@ public struct DynamicWebView: View {
             Task {
                 // WebView creation timing
                 _ = Date()
-                let preparedWebView = await WebViewManager.shared.prepareForShowing(trigger: triggerName, delegateWrapper: actionsDelegate)
+                let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate)
                 guard let webView = preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
                     shouldShowFallback = true
@@ -178,7 +178,7 @@ public struct DynamicWebView: View {
                 // File loading timing
                 _ = Date()
                 
-                await WebViewManager.shared.loadFilePath(filePath, trigger: triggerName)
+                await WebViewManager.shared.loadFilePath(filePath)
                 webViewReady = true
             }
             Task {
@@ -224,7 +224,7 @@ public struct DynamicWebView: View {
         }
     }
     private func forceVideoPlay() async -> Bool {
-        guard let webView = WebViewManager.shared.preparedWebView(trigger: triggerName) else {
+        guard let webView = WebViewManager.shared.preparedWebView(filePath: filePath) else {
             return false
         }
         let result = try? await webView.evaluateJavaScript("""
@@ -272,20 +272,20 @@ class WebViewManager {
     
     private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
     
-    func preparedWebView(trigger: String) -> WKWebView? {
-        return preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }?.preparedWebView
+    func preparedWebView(filePath: String) -> WKWebView? {
+        return preparedWebViewBundles.first { $0.filePath == filePath }?.preparedWebView
     }
     
     func preCreateFirstWebView() {
         Task {
-            let bundle = await createWebViewBundle(trigger: nil)
+            let bundle = await createWebViewBundle(filePath: nil)
             preparedWebViewBundles.append(
                 bundle
             )
         }
     }
     
-    fileprivate func createWebViewBundle(trigger: String? = nil) async -> PaywallWebViewBundle {
+    fileprivate func createWebViewBundle(filePath: String? = nil) async -> PaywallWebViewBundle {
         do {
             let messageHandler = WebViewMessageHandler()
             
@@ -316,21 +316,21 @@ class WebViewManager {
             await webView.configuration.preferences.javaScriptEnabled = true
             
             return PaywallWebViewBundle(
-                trigger: trigger, webView: webView, msgHandler: messageHandler
+                filePath: filePath, webView: webView, msgHandler: messageHandler
             )
         } catch {
             print("failed to warm up WKWebView")
         }
     }
     
-    fileprivate func prepareForShowing(trigger: String, delegateWrapper: ActionsDelegateWrapper) async -> WKWebView? {
-        var webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }
+    fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper) async -> WKWebView? {
+        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath }
         if webViewBundle == nil {
-            webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == nil } // see if there's one available
+            webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
             if let webViewBundle {
-                webViewBundle.triggerForPreparedWebView = trigger
+                webViewBundle.filePath = filePath
             } else {
-                let newBundle = await createWebViewBundle(trigger: trigger)
+                let newBundle = await createWebViewBundle(filePath: filePath)
                 preparedWebViewBundles.append(newBundle)
             }
         }
@@ -367,17 +367,17 @@ class WebViewManager {
         let startTime = Date()
         
         Task {
-            await loadFilePath(filePath, trigger: nil)
+            await loadFilePath(filePath, isPreload: true)
             print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
         }
     }
     
     @MainActor
-    fileprivate func loadFilePath(_ filePath: String, trigger: String?) async {
+    fileprivate func loadFilePath(_ filePath: String, isPreload: Bool = false) async {
         var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
-        if let trigger {
+        if !isPreload {
             // grab a specific one otherwise just for preloading and doesn't really matter
-            webViewBundle = preparedWebViewBundles.first { $0.triggerForPreparedWebView == trigger }
+            webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath }
         }
         guard let webView = webViewBundle?.preparedWebView else {
             return
@@ -392,19 +392,19 @@ class WebViewManager {
     }
     
     // Clean up the web view
-    fileprivate func stopLoading(trigger: String) {
-        preparedWebView(trigger: trigger)?.stopLoading()
+    fileprivate func stopLoading(filePath: String) {
+        preparedWebView(filePath: filePath)?.stopLoading()
     }
     
 }
 
 class PaywallWebViewBundle {
-    var triggerForPreparedWebView: String? = nil
+    var filePath: String? = nil
     let preparedWebView: WKWebView
     let messageHandler: WebViewMessageHandler
     
-    init(trigger: String? = nil, webView: WKWebView, msgHandler: WebViewMessageHandler) {
-        triggerForPreparedWebView = trigger
+    init(filePath: String? = nil, webView: WKWebView, msgHandler: WebViewMessageHandler) {
+        self.filePath = filePath
         preparedWebView = webView
         messageHandler = msgHandler
     }
