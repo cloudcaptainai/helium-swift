@@ -6,7 +6,7 @@ class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     private init() {}
     
-    private weak var currentPaywallViewController: HeliumViewController?
+    private var paywallsDisplayed: [HeliumViewController] = []
     
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         Task { @MainActor in
@@ -25,7 +25,7 @@ class HeliumPaywallPresenter {
             modalVC.presentationState.isFullyPresented = true
         }
         
-        currentPaywallViewController = modalVC
+        paywallsDisplayed.append(modalVC)
     }
     
     @MainActor
@@ -46,15 +46,28 @@ class HeliumPaywallPresenter {
     @discardableResult
     func hideUpsell(animated: Bool = true) -> Bool {
         Task { @MainActor in
-            guard let currentPaywall = currentPaywallViewController,
+            guard let currentPaywall = paywallsDisplayed.popLast(),
                   currentPaywall.presentingViewController != nil else {
                 return false
             }
             
             currentPaywall.dismiss(animated: animated)
-            currentPaywallViewController = nil
             return true
         }
         return true
     }
+    
+    func hideAllUpsells() {
+        Task { @MainActor in
+            // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
+            // since they must have ultimately be presented by the topmost paywall if you go all the way up.
+            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true)
+            paywallsDisplayed.removeAll()
+        }
+    }
+    
+    func cleanUpPaywall(heliumViewController: HeliumViewController) {
+        paywallsDisplayed.removeAll { $0 === heliumViewController }
+    }
+    
 }

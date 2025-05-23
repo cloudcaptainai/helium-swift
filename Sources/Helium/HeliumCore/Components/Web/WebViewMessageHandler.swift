@@ -117,8 +117,18 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     respond(["status": "success"])
                 }
                 
+            case "show-secondary-paywall":
+                if let paywallUuid = data["uuid"] as? String {
+                    self.delegateWrapper?.showSecondaryPaywall(uuid: paywallUuid)
+                    respond(["status": "success"])
+                }
+                
             case "dismiss":
                 self.delegateWrapper?.dismiss()
+                respond(["status": "success"])
+                
+            case "dismiss-all":
+                self.delegateWrapper?.dismissAll()
                 respond(["status": "success"])
                 
             default:
@@ -157,7 +167,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
           webView.evaluateJavaScript("document.readyState") { (result, error) in
               if let readyState = result as? String, readyState == "complete" {
-                  NotificationCenter.default.post(name: .webViewContentLoaded, object: nil)
+                  NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
               }
           }
       }

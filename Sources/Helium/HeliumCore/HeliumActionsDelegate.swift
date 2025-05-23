@@ -9,6 +9,8 @@ import Foundation
 
 public protocol BaseActionsDelegate {
     func dismiss();
+    func dismissAll();
+    func showSecondaryPaywall(uuid: String);
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
     func selectProduct(productId: String);
@@ -29,6 +31,14 @@ public class ActionsDelegateWrapper: ObservableObject {
     
     public func dismiss() {
         delegate.dismiss()
+    }
+    
+    public func dismissAll() {
+        delegate.dismissAll()
+    }
+    
+    public func showSecondaryPaywall(uuid: String) {
+        delegate.showSecondaryPaywall(uuid: uuid)
     }
     
     public func onCTAPress(contentComponentName: String) {
@@ -89,10 +99,6 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
-    func setDismissAction(_ action: @escaping () -> Void) {
-         self.dismissAction = action
-    }
-    
     public func logRenderTime(timeTakenMS: UInt64) {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallWebViewRendered(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, webviewRenderTimeTakenMS: timeTakenMS))
     }
@@ -106,7 +112,25 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
                 event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
             )
-            dismissAction?()
+            HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
+        }
+    }
+    
+    public func dismissAll() {
+        if (!isLoading) {
+            HeliumPaywallPresenter.shared.hideAllUpsells()
+        }
+    }
+    
+    public func showSecondaryPaywall(uuid: String) {
+        if (!isLoading) {
+            if let trigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger)
+            } else {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallOpenFailed(triggerName: "\(trigger)_secondTry", paywallTemplateName: "unknown")
+                )
+            }
         }
     }
     
@@ -177,6 +201,14 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public func dismiss() {
         print("dismiss pressed");
+    }
+    
+    public func dismissAll() {
+        print("dismissAll pressed");
+    }
+    
+    public func showSecondaryPaywall(uuid: String) {
+        print("show secondary paywall");
     }
     
     public func onCTAPress(contentComponentName: String) {

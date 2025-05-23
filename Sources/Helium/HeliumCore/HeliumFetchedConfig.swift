@@ -209,6 +209,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return fetchedConfig?.triggerToPaywalls[trigger]
     }
     
+    public func getTriggerFromPaywallUuid(_ uuid: String) -> String? {
+        return fetchedConfig?.triggerToPaywalls
+            .first { $1.paywallUUID == uuid }?.key
+    }
+    
     public func getOrganizationID() -> String? {
         return fetchedConfig?.organizationID;
     }
