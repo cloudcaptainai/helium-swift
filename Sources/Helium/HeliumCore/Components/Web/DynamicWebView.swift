@@ -91,16 +91,18 @@ public struct DynamicWebView: View {
        .onDisappear {
            WebViewManager.shared.stopLoading(filePath: filePath)
       }
-      .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { _ in
-          isContentLoaded = true
-          if let startTime = viewLoadStartTime {
-              let timeInterval = Date().timeIntervalSince(startTime)
-              let milliseconds = UInt64(timeInterval * 1000)
-              Task {
-                  self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+      .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { res in
+          if res.object as? WKNavigationDelegate === webView?.navigationDelegate {
+              isContentLoaded = true
+              if let startTime = viewLoadStartTime {
+                  let timeInterval = Date().timeIntervalSince(startTime)
+                  let milliseconds = UInt64(timeInterval * 1000)
+                  Task {
+                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+                  }
               }
+              lowPowerModeAutoPlayVideoWorkaround()
           }
-          lowPowerModeAutoPlayVideoWorkaround()
       }
     }
 
@@ -323,8 +325,9 @@ class WebViewManager {
         }
     }
     
+    @MainActor
     fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper) async -> WKWebView? {
-        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath }
+        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.alreadyUsed }
         if webViewBundle == nil {
             webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
             if let webViewBundle {
@@ -332,9 +335,11 @@ class WebViewManager {
             } else {
                 let newBundle = await createWebViewBundle(filePath: filePath)
                 preparedWebViewBundles.append(newBundle)
+                webViewBundle = newBundle
             }
         }
         guard let webViewBundle else { return nil }
+        webViewBundle.alreadyUsed = true
         webViewBundle.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
         
         let webView = webViewBundle.preparedWebView
@@ -402,6 +407,7 @@ class PaywallWebViewBundle {
     var filePath: String? = nil
     let preparedWebView: WKWebView
     let messageHandler: WebViewMessageHandler
+    var alreadyUsed: Bool = false
     
     init(filePath: String? = nil, webView: WKWebView, msgHandler: WebViewMessageHandler) {
         self.filePath = filePath

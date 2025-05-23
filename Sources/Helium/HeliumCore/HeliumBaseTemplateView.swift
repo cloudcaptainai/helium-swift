@@ -60,9 +60,6 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             }
         }
         .onAppear {
-            actionsDelegate.setDismissAction {
-                dismiss()
-            }
             actionsDelegateWrapper.logImpression()
         }
         .onDisappear {
