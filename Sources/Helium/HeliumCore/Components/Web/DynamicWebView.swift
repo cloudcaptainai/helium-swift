@@ -18,7 +18,7 @@ public struct DynamicWebView: View {
     var fallbackPaywall: AnyView?
     
     @State private var isContentLoaded = false
-    @State private var webViewReady = false
+    @State private var webView: WKWebView? = nil
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
     @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
@@ -65,7 +65,7 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if webViewReady, let webView = WebViewManager.shared.preparedWebView(filePath: filePath) {
+        } else if let webView {
               WebViewRepresentable(webView: webView)
                   .padding(.horizontal, -1)
                   .ignoresSafeArea()
@@ -89,7 +89,7 @@ public struct DynamicWebView: View {
            loadWebView()
        }
        .onDisappear {
-           WebViewManager.shared.stopLoading(filePath: filePath)
+           webView?.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { res in
           if res.object as? WKNavigationDelegate === webView?.navigationDelegate {
@@ -107,6 +107,9 @@ public struct DynamicWebView: View {
     }
 
     private func loadWebView() {
+        if webView != nil {
+            return
+        }
         
         // Initialization timing
         _ = Date()
@@ -168,20 +171,20 @@ public struct DynamicWebView: View {
                 // WebView creation timing
                 _ = Date()
                 let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate)
-                guard let webView = preparedWebView else {
+                guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
                     shouldShowFallback = true
                     return
                 }
                 
                 _ = Date()
-                webView.configuration.userContentController.addUserScript(combinedScript)
+                preparedWebView.configuration.userContentController.addUserScript(combinedScript)
                 
                 // File loading timing
                 _ = Date()
                 
                 await WebViewManager.shared.loadFilePath(filePath)
-                webViewReady = true
+                webView = preparedWebView
             }
             Task {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
@@ -226,7 +229,7 @@ public struct DynamicWebView: View {
         }
     }
     private func forceVideoPlay() async -> Bool {
-        guard let webView = WebViewManager.shared.preparedWebView(filePath: filePath) else {
+        guard let webView else {
             return false
         }
         let result = try? await webView.evaluateJavaScript("""
@@ -273,10 +276,6 @@ class WebViewManager {
     static let shared: WebViewManager = WebViewManager()
     
     private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
-    
-    func preparedWebView(filePath: String) -> WKWebView? {
-        return preparedWebViewBundles.first { $0.filePath == filePath }?.preparedWebView
-    }
     
     func preCreateFirstWebView() {
         Task {
@@ -394,11 +393,6 @@ class WebViewManager {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         }
-    }
-    
-    // Clean up the web view
-    fileprivate func stopLoading(filePath: String) {
-        preparedWebView(filePath: filePath)?.stopLoading()
     }
     
 }

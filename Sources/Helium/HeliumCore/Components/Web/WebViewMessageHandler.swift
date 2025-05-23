@@ -167,7 +167,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
           webView.evaluateJavaScript("document.readyState") { (result, error) in
               if let readyState = result as? String, readyState == "complete" {
-                  NotificationCenter.default.post(name: .webViewContentLoaded, object: nil)
+                  NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
               }
           }
       }
