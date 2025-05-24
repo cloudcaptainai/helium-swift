@@ -183,7 +183,7 @@ public struct DynamicWebView: View {
                 // File loading timing
                 _ = Date()
                 
-                await WebViewManager.shared.loadFilePath(filePath)
+                await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
                 webView = preparedWebView
             }
             Task {
@@ -287,41 +287,37 @@ class WebViewManager {
     }
     
     fileprivate func createWebViewBundle(filePath: String? = nil) async -> PaywallWebViewBundle {
-        do {
-            let messageHandler = WebViewMessageHandler()
-            
-            let config = WKWebViewConfiguration()
-            // allow video autoplay
-            config.allowsInlineMediaPlayback = true
-            // for all media types (regardless of whether video has audio)
-            config.mediaTypesRequiringUserActionForPlayback = []
-            let contentController = WKUserContentController()
-            
-            // Message handler setup timing
-            _ = Date()
-            contentController.addScriptMessageHandler(
-                messageHandler,
-                contentWorld: .page,
-                name: "paywallHandler"
-            )
-            contentController.addScriptMessageHandler(
-                messageHandler,
-                contentWorld: .page,
-                name: "logging"
-            )
-            
-            config.userContentController = contentController
-            config.websiteDataStore = WKWebsiteDataStore.default()
-            
-            let webView = await WKWebView(frame: .zero, configuration: config)
-            await webView.configuration.preferences.javaScriptEnabled = true
-            
-            return PaywallWebViewBundle(
-                filePath: filePath, webView: webView, msgHandler: messageHandler
-            )
-        } catch {
-            print("failed to warm up WKWebView")
-        }
+        let messageHandler = WebViewMessageHandler()
+        
+        let config = WKWebViewConfiguration()
+        // allow video autoplay
+        config.allowsInlineMediaPlayback = true
+        // for all media types (regardless of whether video has audio)
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let contentController = WKUserContentController()
+        
+        // Message handler setup timing
+        _ = Date()
+        contentController.addScriptMessageHandler(
+            messageHandler,
+            contentWorld: .page,
+            name: "paywallHandler"
+        )
+        contentController.addScriptMessageHandler(
+            messageHandler,
+            contentWorld: .page,
+            name: "logging"
+        )
+        
+        config.userContentController = contentController
+        config.websiteDataStore = WKWebsiteDataStore.default()
+        
+        let webView = await WKWebView(frame: .zero, configuration: config)
+        await webView.configuration.preferences.javaScriptEnabled = true
+        
+        return PaywallWebViewBundle(
+            filePath: filePath, webView: webView, msgHandler: messageHandler
+        )
     }
     
     @MainActor
@@ -371,27 +367,29 @@ class WebViewManager {
         let startTime = Date()
         
         Task {
-            await loadFilePath(filePath, isPreload: true)
+            await preloadFilePath(filePath)
             print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
         }
     }
     
     @MainActor
-    fileprivate func loadFilePath(_ filePath: String, isPreload: Bool = false) async {
+    fileprivate func preloadFilePath(_ filePath: String) {
+        // can use any webview for preloading
         var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
-        if !isPreload {
-            // grab a specific one otherwise just for preloading and doesn't really matter
-            webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath }
-        }
         guard let webView = webViewBundle?.preparedWebView else {
             return
         }
+        loadFilePath(filePath, toWebView: webView)
+    }
+    
+    @MainActor
+    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) {
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
-            webView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+            toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         }
     }
     
