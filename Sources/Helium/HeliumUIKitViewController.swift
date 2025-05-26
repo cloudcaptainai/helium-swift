@@ -11,6 +11,7 @@ import UIKit
 
 public class HeliumPaywallPresentationState: ObservableObject {
     @Published var isFullyPresented = false
+    weak var heliumViewController: HeliumViewController? = nil
 }
 
 class HeliumViewController: UIViewController {
@@ -29,6 +30,8 @@ class HeliumViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        presentationState.heliumViewController = self
         
         let modalView = UIHostingController(rootView: contentView)
         addChild(modalView)
