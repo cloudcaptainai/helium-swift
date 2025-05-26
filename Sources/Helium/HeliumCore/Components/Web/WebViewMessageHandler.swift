@@ -73,7 +73,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                         respond(["status": "pending"])
                     case .restored:
                         respond(["status": "restored"])
-                        self.delegateWrapper?.dismiss();
+                        self.delegateWrapper?.dismissAll();
                     case .failed:
                         respond(["status": "failed"])
                     }
