@@ -170,7 +170,7 @@ public struct DynamicWebView: View {
             Task {
                 // WebView creation timing
                 _ = Date()
-                let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate)
+                let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate, heliumViewController: presentationState.heliumViewController)
                 guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
                     shouldShowFallback = true
@@ -321,8 +321,8 @@ class WebViewManager {
     }
     
     @MainActor
-    fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper) async -> WKWebView? {
-        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.alreadyUsed }
+    fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper, heliumViewController: HeliumViewController?) async -> WKWebView? {
+        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.isInUse }
         if webViewBundle == nil {
             webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
             if let webViewBundle {
@@ -334,7 +334,7 @@ class WebViewManager {
             }
         }
         guard let webViewBundle else { return nil }
-        webViewBundle.alreadyUsed = true
+        webViewBundle.heliumViewController = heliumViewController
         webViewBundle.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
         
         let webView = webViewBundle.preparedWebView
@@ -399,7 +399,10 @@ class PaywallWebViewBundle {
     var filePath: String? = nil
     let preparedWebView: WKWebView
     let messageHandler: WebViewMessageHandler
-    var alreadyUsed: Bool = false
+    weak var heliumViewController: HeliumViewController?
+    var isInUse: Bool {
+        return heliumViewController != nil
+    }
     
     init(filePath: String? = nil, webView: WKWebView, msgHandler: WebViewMessageHandler) {
         self.filePath = filePath

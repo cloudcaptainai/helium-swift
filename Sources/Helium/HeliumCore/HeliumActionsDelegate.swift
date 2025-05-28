@@ -118,6 +118,9 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     
     public func dismissAll() {
         if (!isLoading) {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
+            )
             HeliumPaywallPresenter.shared.hideAllUpsells()
         }
     }
