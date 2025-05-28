@@ -21,7 +21,7 @@ public struct DynamicWebView: View {
     @State private var webView: WKWebView? = nil
     @State private var viewLoadStartTime: Date?
     @State private var shouldShowFallback = false
-    @EnvironmentObject private var presentationState: HeliumPaywallPresentationState
+    @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {

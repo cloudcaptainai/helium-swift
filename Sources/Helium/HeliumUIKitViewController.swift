@@ -13,13 +13,25 @@ public class HeliumPaywallPresentationState: ObservableObject {
     weak var heliumViewController: HeliumViewController? = nil
 }
 
+// Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,
+// like when using upsell widget directly instead of HeliumViewController.
+private struct HeliumPaywallPresentationStateKey: EnvironmentKey {
+    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState()
+}
+extension EnvironmentValues {
+    var paywallPresentationState: HeliumPaywallPresentationState {
+        get { self[HeliumPaywallPresentationStateKey.self] }
+        set { self[HeliumPaywallPresentationStateKey.self] = newValue }
+    }
+}
+
 class HeliumViewController: UIViewController {
     private let contentView: AnyView
     let presentationState = HeliumPaywallPresentationState()
     
     init(contentView: AnyView) {
         self.contentView = AnyView(contentView
-            .environmentObject(presentationState))
+            .environment(\.paywallPresentationState, presentationState))
         super.init(nibName: nil, bundle: nil)
     }
     
