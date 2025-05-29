@@ -1,0 +1,31 @@
+name: Trigger Wrapper SDK Updates
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name/version to use'
+        required: true
+        type: string
+
+jobs:
+  trigger-wrapper-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Flutter SDK Update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.FLUTTER_PAT }}
+          repository: cloudcaptainai/helium_flutter
+          event-type: update-ios-dependency
+          client-payload: '{"version": "${{ github.event.release.tag_name || github.event.inputs.tag_name }}"}'
+
+      - name: Trigger React Native SDK Update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.RN_PAT }}
+          repository: cloudcaptainai/paywall-sdk-react-native
+          event-type: update-ios-dependency
+          client-payload: '{"version": "${{ github.event.release.tag_name || github.event.inputs.tag_name }}"}'
