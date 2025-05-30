@@ -8,8 +8,8 @@
 import Foundation
 
 public protocol BaseActionsDelegate {
-    func dismiss();
-    func dismissAll();
+    func dismiss(dispatchEvent: Bool);
+    func dismissAll(dispatchEvent: Bool);
     func showSecondaryPaywall(uuid: String);
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
@@ -29,12 +29,12 @@ public class ActionsDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func dismiss() {
-        delegate.dismiss()
+    public func dismiss(dispatchEvent: Bool = true) {
+        delegate.dismiss(dispatchEvent: dispatchEvent)
     }
     
-    public func dismissAll() {
-        delegate.dismissAll()
+    public func dismissAll(dispatchEvent: Bool = true) {
+        delegate.dismissAll(dispatchEvent: dispatchEvent)
     }
     
     public func showSecondaryPaywall(uuid: String) {
@@ -107,20 +107,24 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return isLoading;
     }
     
-    public func dismiss() {
+    public func dismiss(dispatchEvent: Bool) {
         if (!isLoading) {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
-            )
+            if dispatchEvent {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
+                )
+            }
             HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
         }
     }
     
-    public func dismissAll() {
+    public func dismissAll(dispatchEvent: Bool) {
         if (!isLoading) {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
-            )
+            if dispatchEvent {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
+                )
+            }
             HeliumPaywallPresenter.shared.hideAllUpsells()
         }
     }
@@ -202,11 +206,11 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public init () {}
     
-    public func dismiss() {
+    public func dismiss(dispatchEvent: Bool) {
         print("dismiss pressed");
     }
     
-    public func dismissAll() {
+    public func dismissAll(dispatchEvent: Bool) {
         print("dismissAll pressed");
     }
     
