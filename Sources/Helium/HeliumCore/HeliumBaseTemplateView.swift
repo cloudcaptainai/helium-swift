@@ -17,6 +17,7 @@ public extension BaseTemplateView {
 public struct DynamicBaseTemplateView: BaseTemplateView {
     
     @Environment(\.dismiss) var dismiss
+    @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
     var templateValues: JSON
@@ -59,15 +60,16 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
                 }
             }
         }
-        .onAppear {
-            actionsDelegateWrapper.logImpression()
-        }
-        .onDisappear {
-            actionsDelegateWrapper.logClosure()
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
         .environmentObject(actionsDelegateWrapper)
+        .onReceive(presentationState.$isOpen) { newIsOpen in
+            if newIsOpen {
+                actionsDelegateWrapper.logImpression()
+            } else {
+                actionsDelegateWrapper.logClosure()
+            }
+        }
     }
 }
 

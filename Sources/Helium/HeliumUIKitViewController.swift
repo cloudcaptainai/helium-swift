@@ -11,6 +11,7 @@ import UIKit
 
 public class HeliumPaywallPresentationState: ObservableObject {
     weak var heliumViewController: HeliumViewController? = nil
+    @Published var isOpen: Bool = false
 }
 
 // Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,
@@ -33,6 +34,13 @@ class HeliumViewController: UIViewController {
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
         super.init(nibName: nil, bundle: nil)
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
     }
     
     required init?(coder: NSCoder) {
@@ -50,13 +58,21 @@ class HeliumViewController: UIViewController {
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
+        
+        presentationState.isOpen = true
     }
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if isBeingDismissed {
+        if isBeingDismissed || isMovingFromParent {
             HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
+            presentationState.isOpen = false
         }
+    }
+    
+    @objc private func appWillTerminate() {
+        // attempt to register paywallClose analytics event even if user rage quits
+        presentationState.isOpen = false
     }
     
     // Only allow portrait paywalls for now
