@@ -12,6 +12,21 @@ import UIKit
 public class HeliumPaywallPresentationState: ObservableObject {
     weak var heliumViewController: HeliumViewController? = nil
     @Published var isOpen: Bool = false
+    
+    func handleOnAppear() {
+        if heliumViewController == nil {
+            // better to rely on HeliumViewController but if that's not available (ex: the paywall
+            // presentation is handled externally) then just use onAppear/onDisappear
+            isOpen = true
+        }
+    }
+    func handleOnDisappear() {
+        if heliumViewController == nil {
+            // better to rely on HeliumViewController but if that's not available (ex: the paywall
+            // presentation is handled externally) then just use onAppear/onDisappear
+            isOpen = false
+        }
+    }
 }
 
 // Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,

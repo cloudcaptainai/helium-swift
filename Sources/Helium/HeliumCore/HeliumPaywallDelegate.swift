@@ -177,4 +177,19 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             print("Delegate action failed.");
         }
     }
+    
+    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool) {
+        if isOpen {
+            onHeliumPaywallEvent(event: .paywallOpen(
+                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
+                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
+            ))
+        } else {
+            onHeliumPaywallEvent(event: .paywallClose(
+                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
+                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
+            ))
+        }
+    }
+    
 }

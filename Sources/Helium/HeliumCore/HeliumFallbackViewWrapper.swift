@@ -28,18 +28,14 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     
     public var body: some View {
         content
+            .onAppear {
+                presentationState.handleOnAppear()
+            }
+            .onDisappear {
+                presentationState.handleOnDisappear()
+            }
             .onReceive(presentationState.$isOpen) { newIsOpen in
-                if newIsOpen {
-                    HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(
-                        triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                        paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
-                    ))
-                } else {
-                    HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(
-                        triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                        paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
-                    ))
-                }
+                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen)
             }
     }
 }

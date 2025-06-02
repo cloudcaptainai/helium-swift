@@ -63,6 +63,12 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
         .environmentObject(actionsDelegateWrapper)
+        .onAppear {
+            presentationState.handleOnAppear()
+        }
+        .onDisappear {
+            presentationState.handleOnDisappear()
+        }
         .onReceive(presentationState.$isOpen) { newIsOpen in
             if newIsOpen {
                 actionsDelegateWrapper.logImpression()
