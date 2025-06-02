@@ -14,14 +14,14 @@ public class HeliumPaywallPresentationState: ObservableObject {
     @Published var isOpen: Bool = false
     
     func handleOnAppear() {
-        if heliumViewController == nil {
+        if heliumViewController == nil && !isOpen {
             // better to rely on HeliumViewController but if that's not available (ex: the paywall
             // presentation is handled externally) then just use onAppear/onDisappear
             isOpen = true
         }
     }
     func handleOnDisappear() {
-        if heliumViewController == nil {
+        if heliumViewController == nil && isOpen {
             // better to rely on HeliumViewController but if that's not available (ex: the paywall
             // presentation is handled externally) then just use onAppear/onDisappear
             isOpen = false
