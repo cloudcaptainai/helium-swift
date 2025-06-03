@@ -13,17 +13,24 @@ public class HeliumPaywallPresentationState: ObservableObject {
     weak var heliumViewController: HeliumViewController? = nil
     @Published var isOpen: Bool = false
     
+    private let ignoreAppearDisappear: Bool
+    init(ignoreAppearDisappear: Bool = true) {
+        self.ignoreAppearDisappear = ignoreAppearDisappear
+    }
+    
     func handleOnAppear() {
-        if heliumViewController == nil && !isOpen {
-            // better to rely on HeliumViewController but if that's not available (ex: the paywall
-            // presentation is handled externally) then just use onAppear/onDisappear
+        if ignoreAppearDisappear {
+            return
+        }
+        if !isOpen {
             isOpen = true
         }
     }
     func handleOnDisappear() {
-        if heliumViewController == nil && isOpen {
-            // better to rely on HeliumViewController but if that's not available (ex: the paywall
-            // presentation is handled externally) then just use onAppear/onDisappear
+        if ignoreAppearDisappear {
+            return
+        }
+        if isOpen {
             isOpen = false
         }
     }
@@ -32,7 +39,10 @@ public class HeliumPaywallPresentationState: ObservableObject {
 // Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,
 // like when using upsell widget directly instead of HeliumViewController.
 private struct HeliumPaywallPresentationStateKey: EnvironmentKey {
-    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState()
+    // Rely on HeliumViewController/DynamicPaywallModifier if possible to manage isOpen
+    // state but if that's not available (ex: the paywall presentation is handled externally)
+    // then just use onAppear/onDisappear
+    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(ignoreAppearDisappear: false)
 }
 extension EnvironmentValues {
     var paywallPresentationState: HeliumPaywallPresentationState {
