@@ -111,7 +111,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         dismissAction = action
     }
     
-    public func dismiss() {
+    public func dismiss(dispatchEvent: Bool) {
         if (!isLoading) {
             if dispatchEvent {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
