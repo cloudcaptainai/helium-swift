@@ -13,13 +13,13 @@ public class HeliumPaywallPresentationState: ObservableObject {
     weak var heliumViewController: HeliumViewController? = nil
     @Published var isOpen: Bool = false
     
-    private let ignoreAppearDisappear: Bool
-    init(ignoreAppearDisappear: Bool = true) {
-        self.ignoreAppearDisappear = ignoreAppearDisappear
+    private let useAppearanceToSetIsOpen: Bool
+    init(useAppearanceToSetIsOpen: Bool = false) {
+        self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
     }
     
     func handleOnAppear() {
-        if ignoreAppearDisappear {
+        if !useAppearanceToSetIsOpen {
             return
         }
         if !isOpen {
@@ -27,7 +27,7 @@ public class HeliumPaywallPresentationState: ObservableObject {
         }
     }
     func handleOnDisappear() {
-        if ignoreAppearDisappear {
+        if !useAppearanceToSetIsOpen {
             return
         }
         if isOpen {
@@ -42,7 +42,7 @@ private struct HeliumPaywallPresentationStateKey: EnvironmentKey {
     // Rely on HeliumViewController/DynamicPaywallModifier if possible to manage isOpen
     // state but if that's not available (ex: the paywall presentation is handled externally)
     // then just use onAppear/onDisappear
-    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(ignoreAppearDisappear: false)
+    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(useAppearanceToSetIsOpen: true)
 }
 extension EnvironmentValues {
     var paywallPresentationState: HeliumPaywallPresentationState {
