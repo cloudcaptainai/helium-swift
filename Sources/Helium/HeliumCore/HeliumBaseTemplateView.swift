@@ -64,6 +64,9 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         .edgesIgnoringSafeArea(.all)
         .environmentObject(actionsDelegateWrapper)
         .onAppear {
+            actionsDelegate.setDismissAction {
+                dismiss()
+            }
             if !presentationState.firstOnAppearHandled {
                 presentationState.handleOnAppear()
             }

@@ -107,14 +107,22 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return isLoading;
     }
     
-    public func dismiss(dispatchEvent: Bool) {
+    func setDismissAction(_ action: @escaping () -> Void) {
+        dismissAction = action
+    }
+    
+    public func dismiss() {
         if (!isLoading) {
             if dispatchEvent {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
                     event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
                 )
             }
-            HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
+            let dismissed = HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
+            if !dismissed {
+                // otherwise use dismissAction (ex: when paywall presented via DynamicPaywallModifier)
+                dismissAction?()
+            }
         }
     }
     
@@ -125,7 +133,9 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                     event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
                 )
             }
-            HeliumPaywallPresenter.shared.hideAllUpsells()
+            HeliumPaywallPresenter.shared.hideAllUpsells(onComplete: { [weak self] in
+                self?.dismissAction?()
+            })
         }
     }
     
