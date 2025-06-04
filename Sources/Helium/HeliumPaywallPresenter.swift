@@ -43,23 +43,25 @@ class HeliumPaywallPresenter {
     
     @discardableResult
     func hideUpsell(animated: Bool = true) -> Bool {
+        guard let currentPaywall = paywallsDisplayed.popLast(),
+              currentPaywall.presentingViewController != nil else {
+            return false
+        }
         Task { @MainActor in
-            guard let currentPaywall = paywallsDisplayed.popLast(),
-                  currentPaywall.presentingViewController != nil else {
-                return false
-            }
-            
             currentPaywall.dismiss(animated: animated)
-            return true
         }
         return true
     }
     
-    func hideAllUpsells() {
+    func hideAllUpsells(onComplete: (() -> Void)? = nil) {
+        if paywallsDisplayed.isEmpty {
+            onComplete?()
+            return
+        }
         Task { @MainActor in
             // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
             // since they must have ultimately be presented by the topmost paywall if you go all the way up.
-            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true)
+            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true, completion: onComplete)
             paywallsDisplayed.removeAll()
         }
     }
