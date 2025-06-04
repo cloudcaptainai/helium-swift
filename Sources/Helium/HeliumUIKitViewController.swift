@@ -16,9 +16,22 @@ public class HeliumPaywallPresentationState: ObservableObject {
     private let useAppearanceToSetIsOpen: Bool
     init(useAppearanceToSetIsOpen: Bool = false) {
         self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
     }
     
+    // Use this to try and prevent unnecessary extra open events.
+    // (Extra close events are harder to prevent, since we can't be sure if the paywall is
+    // completely closed since onDisappear can potentially be called multiple times.)
+    private(set) var firstOnAppearHandled: Bool = false
+    
     func handleOnAppear() {
+        firstOnAppearHandled = true
         if !useAppearanceToSetIsOpen {
             return
         }
@@ -34,6 +47,14 @@ public class HeliumPaywallPresentationState: ObservableObject {
             isOpen = false
         }
     }
+    
+    @objc private func appWillTerminate() {
+        // attempt to dispatch paywallClose analytics event even if user rage quits
+        if isOpen {
+            isOpen = false
+        }
+    }
+    
 }
 
 // Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,
@@ -59,13 +80,6 @@ class HeliumViewController: UIViewController {
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
         super.init(nibName: nil, bundle: nil)
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appWillTerminate),
-            name: UIApplication.willTerminateNotification,
-            object: nil
-        )
     }
     
     required init?(coder: NSCoder) {
@@ -93,11 +107,6 @@ class HeliumViewController: UIViewController {
             HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
             presentationState.isOpen = false
         }
-    }
-    
-    @objc private func appWillTerminate() {
-        // attempt to register paywallClose analytics event even if user rage quits
-        presentationState.isOpen = false
     }
     
     // Only allow portrait paywalls for now

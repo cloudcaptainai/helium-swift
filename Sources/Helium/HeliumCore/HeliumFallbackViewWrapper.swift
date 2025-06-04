@@ -29,7 +29,9 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     public var body: some View {
         content
             .onAppear {
-                presentationState.handleOnAppear()
+                if !presentationState.firstOnAppearHandled {
+                    presentationState.handleOnAppear()
+                }
             }
             .onDisappear {
                 presentationState.handleOnDisappear()

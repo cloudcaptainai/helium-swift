@@ -64,7 +64,9 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         .edgesIgnoringSafeArea(.all)
         .environmentObject(actionsDelegateWrapper)
         .onAppear {
-            presentationState.handleOnAppear()
+            if !presentationState.firstOnAppearHandled {
+                presentationState.handleOnAppear()
+            }
         }
         .onDisappear {
             presentationState.handleOnDisappear()
