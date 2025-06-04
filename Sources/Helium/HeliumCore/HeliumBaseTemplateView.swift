@@ -73,7 +73,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         }
         .onReceive(presentationState.$isOpen) { newIsOpen in
             if newIsOpen {
-                actionsDelegateWrapper.logImpression()
+                actionsDelegateWrapper.logImpression(viewType: presentationState.viewType)
             } else {
                 actionsDelegateWrapper.logClosure()
             }

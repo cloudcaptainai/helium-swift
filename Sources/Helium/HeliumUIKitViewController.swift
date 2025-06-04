@@ -10,11 +10,14 @@ import SwiftUI
 import UIKit
 
 public class HeliumPaywallPresentationState: ObservableObject {
+    
+    let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
     @Published var isOpen: Bool = false
     
     private let useAppearanceToSetIsOpen: Bool
-    init(useAppearanceToSetIsOpen: Bool = false) {
+    init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
+        self.viewType = viewType
         self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
         
         NotificationCenter.default.addObserver(
@@ -63,7 +66,7 @@ private struct HeliumPaywallPresentationStateKey: EnvironmentKey {
     // Rely on HeliumViewController/DynamicPaywallModifier if possible to manage isOpen
     // state but if that's not available (ex: the paywall presentation is handled externally)
     // then just use onAppear/onDisappear
-    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(useAppearanceToSetIsOpen: true)
+    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .embedded, useAppearanceToSetIsOpen: true)
 }
 extension EnvironmentValues {
     var paywallPresentationState: HeliumPaywallPresentationState {
@@ -74,7 +77,7 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     private let contentView: AnyView
-    let presentationState = HeliumPaywallPresentationState()
+    let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
     init(contentView: AnyView) {
         self.contentView = AnyView(contentView

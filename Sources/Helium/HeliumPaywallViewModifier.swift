@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 
 struct DynamicPaywallModifier: ViewModifier {
-    @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState()
+    @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .triggered)
     @Binding var isPresented: Bool
     let trigger: String
     

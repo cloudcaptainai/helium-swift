@@ -37,7 +37,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 presentationState.handleOnDisappear()
             }
             .onReceive(presentationState.$isOpen) { newIsOpen in
-                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen)
+                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue)
             }
     }
 }

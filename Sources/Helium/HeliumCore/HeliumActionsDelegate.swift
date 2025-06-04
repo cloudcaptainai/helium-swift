@@ -16,7 +16,7 @@ public protocol BaseActionsDelegate {
     func selectProduct(productId: String);
     func makePurchase() async -> HeliumPaywallTransactionStatus;
     func restorePurchases() async -> Bool;
-    func logImpression();
+    func logImpression(viewType: PaywallOpenViewType);
     func logClosure();
     func getIsLoading() -> Bool;
     func logRenderTime(timeTakenMS: UInt64);
@@ -67,8 +67,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    public func logImpression() {
-        delegate.logImpression()
+    public func logImpression(viewType: PaywallOpenViewType) {
+        delegate.logImpression(viewType: viewType)
     }
     
     public func logClosure() {
@@ -192,8 +192,8 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return status;
     }
     
-    public func logImpression() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+    public func logImpression(viewType: PaywallOpenViewType) {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, viewType: viewType.rawValue))
     }
     
     public func logClosure() {
@@ -244,7 +244,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("log render time");
     }
     
-    public func logImpression() {
+    public func logImpression(viewType: PaywallOpenViewType) {
         print("log impression")
     }
     
