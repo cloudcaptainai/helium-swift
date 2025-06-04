@@ -140,14 +140,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             if (isAnalyticsEnabled && analytics != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
-                var organizationID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = nil;
                 var isFallback = false;
                 if let triggerName = event.getTriggerIfExists() {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
                     paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
-                    organizationID = HeliumFetchedConfigManager.shared.getOrganizationID();
                     if (paywallInfo == nil) {
                         isFallback = true;
                     } else {
@@ -164,7 +162,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
                     paywallUUID: paywallInfo?.paywallUUID,
-                    organizationID: organizationID,
+                    organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     isFallback: isFallback,
@@ -179,4 +177,20 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             print("Delegate action failed.");
         }
     }
+    
+    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?) {
+        if isOpen {
+            onHeliumPaywallEvent(event: .paywallOpen(
+                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
+                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME,
+                viewType: viewType ?? PaywallOpenViewType.embedded.rawValue
+            ))
+        } else {
+            onHeliumPaywallEvent(event: .paywallClose(
+                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
+                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
+            ))
+        }
+    }
+    
 }

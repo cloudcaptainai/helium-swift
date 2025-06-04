@@ -8,15 +8,15 @@
 import Foundation
 
 public protocol BaseActionsDelegate {
-    func dismiss();
-    func dismissAll();
+    func dismiss(dispatchEvent: Bool);
+    func dismissAll(dispatchEvent: Bool);
     func showSecondaryPaywall(uuid: String);
     func onCTAPress(contentComponentName: String);
     func showScreen(screenId: String);
     func selectProduct(productId: String);
     func makePurchase() async -> HeliumPaywallTransactionStatus;
     func restorePurchases() async -> Bool;
-    func logImpression();
+    func logImpression(viewType: PaywallOpenViewType);
     func logClosure();
     func getIsLoading() -> Bool;
     func logRenderTime(timeTakenMS: UInt64);
@@ -29,12 +29,12 @@ public class ActionsDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func dismiss() {
-        delegate.dismiss()
+    public func dismiss(dispatchEvent: Bool = true) {
+        delegate.dismiss(dispatchEvent: dispatchEvent)
     }
     
-    public func dismissAll() {
-        delegate.dismissAll()
+    public func dismissAll(dispatchEvent: Bool = true) {
+        delegate.dismissAll(dispatchEvent: dispatchEvent)
     }
     
     public func showSecondaryPaywall(uuid: String) {
@@ -67,8 +67,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    public func logImpression() {
-        delegate.logImpression()
+    public func logImpression(viewType: PaywallOpenViewType) {
+        delegate.logImpression(viewType: viewType)
     }
     
     public func logClosure() {
@@ -111,11 +111,13 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         dismissAction = action
     }
     
-    public func dismiss() {
+    public func dismiss(dispatchEvent: Bool) {
         if (!isLoading) {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
-            )
+            if dispatchEvent {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
+                )
+            }
             let dismissed = HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
             if !dismissed {
                 // otherwise use dismissAction (ex: when paywall presented via DynamicPaywallModifier)
@@ -124,11 +126,13 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
-    public func dismissAll() {
+    public func dismissAll(dispatchEvent: Bool) {
         if (!isLoading) {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
-            )
+            if dispatchEvent {
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
+                )
+            }
             HeliumPaywallPresenter.shared.hideAllUpsells(onComplete: { [weak self] in
                 self?.dismissAction?()
             })
@@ -198,8 +202,8 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return status;
     }
     
-    public func logImpression() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+    public func logImpression(viewType: PaywallOpenViewType) {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, viewType: viewType.rawValue))
     }
     
     public func logClosure() {
@@ -212,11 +216,11 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public init () {}
     
-    public func dismiss() {
+    public func dismiss(dispatchEvent: Bool) {
         print("dismiss pressed");
     }
     
-    public func dismissAll() {
+    public func dismissAll(dispatchEvent: Bool) {
         print("dismissAll pressed");
     }
     
@@ -250,7 +254,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("log render time");
     }
     
-    public func logImpression() {
+    public func logImpression(viewType: PaywallOpenViewType) {
         print("log impression")
     }
     

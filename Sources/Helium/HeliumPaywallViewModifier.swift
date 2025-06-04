@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 
 struct DynamicPaywallModifier: ViewModifier {
+    @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .triggered)
     @Binding var isPresented: Bool
     let trigger: String
     
@@ -17,6 +18,10 @@ struct DynamicPaywallModifier: ViewModifier {
         content
             .fullScreenCover(isPresented: $isPresented) {
                 Helium.shared.upsellViewForTrigger(trigger: trigger)
+                    .environment(\.paywallPresentationState, presentationState)
+            }
+            .onChange(of: isPresented) { newValue in
+                presentationState.isOpen = isPresented
             }
     }
 }

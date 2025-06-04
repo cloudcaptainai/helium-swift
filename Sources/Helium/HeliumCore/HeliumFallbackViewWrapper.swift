@@ -13,6 +13,8 @@ public let HELIUM_FALLBACK_TRIGGER_NAME = "UnknownTrigger";
 
 public struct HeliumFallbackViewWrapper<Content: View>: View {
     
+    @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
+    
     let content: Content
     let trigger: String?
     
@@ -27,16 +29,15 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     public var body: some View {
         content
             .onAppear {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(
-                    triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                    paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
-                ))
+                if !presentationState.firstOnAppearHandled {
+                    presentationState.handleOnAppear()
+                }
             }
             .onDisappear {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(
-                    triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                    paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
-                ))
+                presentationState.handleOnDisappear()
+            }
+            .onReceive(presentationState.$isOpen) { newIsOpen in
+                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue)
             }
     }
 }
