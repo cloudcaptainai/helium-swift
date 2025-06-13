@@ -77,6 +77,11 @@ public class Helium {
         return HeliumIdentityManager.shared.getUserId();
     }
     
+    public func getAppAccountToken() -> UUID? {
+        guard let heliumUserId = getHeliumUserId() else { return nil }
+        return UUID(uuidString: heliumUserId)
+    }
+    
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
