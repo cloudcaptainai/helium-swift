@@ -54,6 +54,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var analytics: Analytics?
     private var isAnalyticsEnabled: Bool = true
     
+    var lastKnownTrigger: String? = nil
+    
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
     }
@@ -134,9 +136,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+    public func onHeliumPaywallEvent(event: HeliumPaywallEvent, notifyDelegate: Bool = true) {
         do {
-            delegate?.onHeliumPaywallEvent(event: event);
+            if notifyDelegate {
+                delegate?.onHeliumPaywallEvent(event: event);
+            }
             if (isAnalyticsEnabled && analytics != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
@@ -151,6 +155,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     } else {
                         isFallback = paywallInfo?.paywallTemplateName == "Fallback";
                     }
+                    
+                    lastKnownTrigger = triggerName
                 }
                 
                 let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();

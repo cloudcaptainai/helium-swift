@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import StoreKit
 
 public class Helium {
     var controller: HeliumController?
@@ -77,7 +78,7 @@ public class Helium {
         return HeliumIdentityManager.shared.getUserId();
     }
     
-    public func getAppAccountToken() -> UUID? {
+    fileprivate func getHeliumUserIdAsAppAccountToken() -> UUID? {
         guard let heliumUserId = getHeliumUserId() else { return nil }
         return UUID(uuidString: heliumUserId)
     }
@@ -144,5 +145,59 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
+    }
+}
+
+@available(iOS 15.0, *)
+extension Product {
+    @MainActor public func heliumPurchase(
+        options: Set<Product.PurchaseOption> = [],
+        customAppAccountToken: UUID? = nil
+    ) async throws -> Product.PurchaseResult {
+        var appAccountToken: UUID
+        var newOptions: Set<Product.PurchaseOption> = options
+        
+        // Check if options already contains an appAccountToken
+        let hasExistingAppAccountToken = newOptions.contains { option in
+            return String(describing: option).contains("appAccountToken")
+        }
+        
+        if hasExistingAppAccountToken {
+            throw HeliumPurchaseError.appAccountTokenAlreadyExists
+        }
+        
+        if let providedToken = customAppAccountToken {
+            // Use the explicitly provided token
+            appAccountToken = providedToken
+            newOptions.insert(.appAccountToken(providedToken))
+        } else if let userIdAppAccountToken = Helium.shared.getHeliumUserIdAsAppAccountToken() {
+            appAccountToken = userIdAppAccountToken
+            newOptions.insert(.appAccountToken(userIdAppAccountToken))
+        } else {
+            appAccountToken = UUID()
+            newOptions.insert(.appAccountToken(appAccountToken))
+        }
+        
+        // Log an event even if appAccountToken is same as UUID
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+            event: .heliumPurchase(
+                triggerName: HeliumPaywallDelegateWrapper.shared.lastKnownTrigger ?? "unknown",
+                appAccountToken: appAccountToken.uuidString
+            ),
+            notifyDelegate: false
+        )
+        
+        return try await purchase(options: newOptions)
+    }
+}
+
+enum HeliumPurchaseError: Error {
+    case appAccountTokenAlreadyExists
+    
+    var errorDescription: String? {
+        switch self {
+        case .appAccountTokenAlreadyExists:
+            return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
+        }
     }
 }
