@@ -83,6 +83,20 @@ public class Helium {
         return UUID(uuidString: heliumUserId)
     }
     
+    /**
+    * Initializes the Helium paywall system with configuration options.
+    *
+    * @param apiKey - Helium API key
+    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
+    * @param fallbackPaywall - Default view to display when paywall fails to load
+    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    * @param triggers - Optional array of trigger identifiers to configure
+    * @param customUserId - Optional custom user ID to override default user identification
+    * @param customAPIEndpoint - Optional custom API endpoint URL
+    * @param customUserTraits - Optional custom user traits for targeting
+    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
+    */
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
@@ -92,6 +106,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
+        revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if (customUserId != nil) {
@@ -100,6 +115,8 @@ public class Helium {
         if (customUserTraits != nil) {
             HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
         }
+        
+        HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
         
         self.initialized = true;
         HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall));
@@ -150,42 +167,27 @@ public class Helium {
 
 @available(iOS 15.0, *)
 extension Product {
+    /// Initiates a product purchase with specific configuration to support Helium analytics.
+    /// This method provides a wrapper around the standard purchase flow
+    ///
+    /// - Parameter options: A set of options to configure the purchase.
+    /// - Returns: The result of the purchase.
+    /// - Throws: A `PurchaseError` or `StoreKitError` or `HeliumPurchaseError` if an issue with appAccountToken.
     @MainActor public func heliumPurchase(
-        options: Set<Product.PurchaseOption> = [],
-        customAppAccountToken: UUID? = nil
+        options: Set<Product.PurchaseOption> = []
     ) async throws -> Product.PurchaseResult {
-        var appAccountToken: UUID
         var newOptions: Set<Product.PurchaseOption> = options
         
-        // Check if options already contains an appAccountToken
         let hasExistingAppAccountToken = newOptions.contains { option in
             return String(describing: option).contains("appAccountToken")
         }
-        
         if hasExistingAppAccountToken {
             throw HeliumPurchaseError.appAccountTokenAlreadyExists
         }
         
-        if let providedToken = customAppAccountToken {
-            // Use the explicitly provided token
-            appAccountToken = providedToken
-            newOptions.insert(.appAccountToken(providedToken))
-        } else if let userIdAppAccountToken = Helium.shared.getHeliumUserIdAsAppAccountToken() {
-            appAccountToken = userIdAppAccountToken
-            newOptions.insert(.appAccountToken(userIdAppAccountToken))
-        } else {
-            appAccountToken = UUID()
+        guard let appAccountToken = UUID(uuidString: HeliumIdentityManager.shared.getHeliumPersistentId()) else {
             newOptions.insert(.appAccountToken(appAccountToken))
         }
-        
-        // Log an event even if appAccountToken is same as UUID
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-            event: .heliumPurchase(
-                triggerName: HeliumPaywallDelegateWrapper.shared.lastKnownTrigger ?? "unknown",
-                appAccountToken: appAccountToken.uuidString
-            ),
-            notifyDelegate: false
-        )
         
         return try await purchase(options: newOptions)
     }
@@ -193,11 +195,14 @@ extension Product {
 
 enum HeliumPurchaseError: Error {
     case appAccountTokenAlreadyExists
+    case invalidPersistentId
     
     var errorDescription: String? {
         switch self {
         case .appAccountTokenAlreadyExists:
             return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
+        case .invalidPersistentId:
+            return "Helium persistent ID is not a UUID! 😅"
         }
     }
 }

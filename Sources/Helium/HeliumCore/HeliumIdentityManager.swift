@@ -13,6 +13,8 @@ public class HeliumIdentityManager {
     private var heliumUserTraits: HeliumUserTraits?
     private var heliumPaywallSessionId: String?
     
+    var revenueCatAppUserId: String? = nil // Used to connect RC purchase events with Helium paywall events
+    
     private var cachedUserContext: CodableUserContext? = nil
     
     // MARK: - Constants

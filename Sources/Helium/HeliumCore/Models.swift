@@ -71,11 +71,9 @@ public enum HeliumPaywallEvent: Codable {
     case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil)
     case paywallsDownloadError(error: String)
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
-    
-    case heliumPurchase(triggerName: String, appAccountToken: String)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, appAccountToken
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS
     }
     
     public func getTriggerIfExists() -> String?{
@@ -114,10 +112,6 @@ public enum HeliumPaywallEvent: Codable {
             return nil;
         case .paywallsDownloadError(let error):
             return nil;
-            
-        case .heliumPurchase(let triggerName, let appAccountToken):
-            return triggerName
-            
         }
     }
 
@@ -181,10 +175,6 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallsDownloadError(let error):
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
-        case .heliumPurchase(let triggerName, let appAccountToken):
-            try container.encode("heliumPurchase", forKey: .type)
-            try container.encode(triggerName, forKey: .triggerName)
-            try container.encode(appAccountToken, forKey: .appAccountToken)
         }
     }
 
@@ -264,10 +254,6 @@ public enum HeliumPaywallEvent: Codable {
         case "paywallsDownloadError":
             let error = try container.decode(String.self, forKey: .errorDescription)
             self = .paywallsDownloadError(error: error)
-        case "heliumPurchase":
-            let triggerName = try container.decode(String.self, forKey: .triggerName)
-            let appAccountToken = try container.decode(String.self, forKey: .appAccountToken)
-            self = .heliumPurchase(triggerName: triggerName, appAccountToken: appAccountToken)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type value")
         }
@@ -309,8 +295,6 @@ public enum HeliumPaywallEvent: Codable {
             return "paywallsDownloadSuccess"
         case .paywallsDownloadError:
             return "paywallsDownloadError"
-        case .heliumPurchase:
-            return "heliumPurchase"
         }
     }
     
@@ -374,10 +358,6 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallsDownloadError(let error):
             dict["errorDescription"] = error
             
-        case .heliumPurchase(let triggerName, let appAccountToken):
-            dict["triggerName"] = triggerName;
-            dict["appAccountToken"] = appAccountToken
-            
         default:
             if let trigger = self.getTriggerIfExists() {
                 dict["triggerName"] = trigger
@@ -402,6 +382,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var organizationID: String?
     var heliumPersistentID: String?
     var heliumSessionID: String?
+    var revenueCatAppUserID: String?
     var isFallback: Bool?
     
     var downloadStatus: HeliumFetchedConfigStatus?
