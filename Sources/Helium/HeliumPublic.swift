@@ -193,7 +193,7 @@ extension Product {
     }
 }
 
-enum HeliumPurchaseError: Error {
+public enum HeliumPurchaseError: Error {
     case appAccountTokenAlreadyExists
     case invalidPersistentId
     
