@@ -45,25 +45,25 @@ public func fetchEndpoint(
     guard let url = URL(string: urlString) else {
         throw URLError(.badURL)
     }
-
+    
     let config = URLSessionConfiguration.default
     config.httpMaximumConnectionsPerHost = 5
     let session = URLSession(configuration: config)
-
+    
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
-
+    
     if NetworkReachability.shared.isOnWiFi {
         request.timeoutInterval = 30
     } else {
         request.timeoutInterval = 15
     }
-
+    
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
-
+    
     let (data, response) = try await session.data(for: request)
     
     guard let httpResponse = response as? HTTPURLResponse,
@@ -108,7 +108,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             )
         }
     }
-
+    
     private func fetchConfigWithRetry(
         endpoint: String,
         params: [String: Any],
@@ -116,90 +116,17 @@ public class HeliumFetchedConfigManager: ObservableObject {
         retryCount: Int,
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) async {
-            do {
-                let startTime = DispatchTime.now()
-                // Make the request asynchronously
-                let response = try await fetchEndpoint(endpoint: endpoint, params: params)
-                
-                // Ensure we have data
-                guard let newConfig = response.0, let newConfigJSON = response.1 else {
-                    if retryCount < maxRetries {
-                        let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                        print("Fetch failed on attempt \(retryCount + 1) (no data), retrying in \(delaySeconds) seconds...")
-                        try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
-                        await fetchConfigWithRetry(
-                            endpoint: endpoint,
-                            params: params,
-                            maxRetries: maxRetries,
-                            retryCount: retryCount + 1,
-                            completion: completion
-                        )
-                    } else {
-                        await self.updateDownloadState(.downloadFailure)
-                        completion(.failure(URLError(.unknown)))
-                    }
-                    return
-                }
-                let endTime = DispatchTime.now()
-                downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
-                
-                // Update the fetched config
-                self.fetchedConfig = newConfig
-                self.fetchedConfigJSON = newConfigJSON
-                
-                // Download assets
-                let startTimeConfig = Date()
-
-                    if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
-                        do {
-                            let bundles = (self.fetchedConfig?.bundles)!
-                            let endTimeNewConfig = Date()
-                            let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
-                            
-                            try HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                            
-                            // Fetch localized prices for all products
-                            await fetchLocalizedPrices()
-                            
-                            await self.updateDownloadState(.downloadSuccess)
-                            completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
-                            
-                        } catch {
-                            // Retry on asset processing failure
-                            if retryCount < maxRetries {
-                                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                                print("Asset processing failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
-                                
-                                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
-                                
-                                await fetchConfigWithRetry(
-                                    endpoint: endpoint,
-                                    params: params,
-                                    maxRetries: maxRetries,
-                                    retryCount: retryCount + 1,
-                                    completion: completion
-                                )
-                            } else {
-                                await self.updateDownloadState(.downloadFailure)
-                                completion(.failure(error))
-                            }
-                            return
-                        }
-                    } else {
-                        // Fetch localized prices for all products
-                        await fetchLocalizedPrices()
-                        
-                        await self.updateDownloadState(.downloadSuccess)
-                        completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
-                    }
-            } catch {
-                // Retry on network/fetch failure
+        do {
+            let startTime = DispatchTime.now()
+            // Make the request asynchronously
+            let response = try await fetchEndpoint(endpoint: endpoint, params: params)
+            
+            // Ensure we have data
+            guard let newConfig = response.0, let newConfigJSON = response.1 else {
                 if retryCount < maxRetries {
                     let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                    print("Fetch failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
-                    
+                    print("Fetch failed on attempt \(retryCount + 1) (no data), retrying in \(delaySeconds) seconds...")
                     try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
-                    
                     await fetchConfigWithRetry(
                         endpoint: endpoint,
                         params: params,
@@ -209,11 +136,84 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     )
                 } else {
                     await self.updateDownloadState(.downloadFailure)
-                    completion(.failure(error))
+                    completion(.failure(URLError(.unknown)))
                 }
+                return
             }
+            let endTime = DispatchTime.now()
+            downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
+            
+            // Update the fetched config
+            self.fetchedConfig = newConfig
+            self.fetchedConfigJSON = newConfigJSON
+            
+            // Download assets
+            let startTimeConfig = Date()
+            
+            if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
+                do {
+                    let bundles = (self.fetchedConfig?.bundles)!
+                    let endTimeNewConfig = Date()
+                    let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
+                    
+                    try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+                    
+                    // Fetch localized prices for all products
+                    await fetchLocalizedPrices()
+                    
+                    await self.updateDownloadState(.downloadSuccess)
+                    completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+                    
+                } catch {
+                    // Retry on asset processing failure
+                    if retryCount < maxRetries {
+                        let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                        print("Asset processing failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
+                        
+                        try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                        
+                        await fetchConfigWithRetry(
+                            endpoint: endpoint,
+                            params: params,
+                            maxRetries: maxRetries,
+                            retryCount: retryCount + 1,
+                            completion: completion
+                        )
+                    } else {
+                        await self.updateDownloadState(.downloadFailure)
+                        completion(.failure(error))
+                    }
+                    return
+                }
+            } else {
+                // Fetch localized prices for all products
+                await fetchLocalizedPrices()
+                
+                await self.updateDownloadState(.downloadSuccess)
+                completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+            }
+        } catch {
+            // Retry on network/fetch failure
+            if retryCount < maxRetries {
+                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                print("Fetch failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
+                
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                
+                await fetchConfigWithRetry(
+                    endpoint: endpoint,
+                    params: params,
+                    maxRetries: maxRetries,
+                    retryCount: retryCount + 1,
+                    completion: completion
+                )
+            } else {
+                await self.updateDownloadState(.downloadFailure)
+                completion(.failure(error))
+            }
+        }
     }
-
+    
     private func calculateBackoffDelay(attempt: Int) -> Double {
         // Simple exponential backoff: 2^attempt seconds
         return pow(2.0, Double(attempt))
@@ -254,8 +254,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     /// - Parameter triggerName: The trigger name to get products for
     /// - Returns: Dictionary containing only prices for products in the specified trigger
     public func getLocalizedPriceMapForTrigger(_ triggerName: String?) -> [String: LocalizedPrice] {
-        guard let triggerName = triggerName, 
-              let productIDs = getProductIDsForTrigger(triggerName) else {
+        guard let triggerName = triggerName,
+                let productIDs = getProductIDsForTrigger(triggerName) else {
             return [:]
         }
         
