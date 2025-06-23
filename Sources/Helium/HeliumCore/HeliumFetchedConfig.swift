@@ -116,7 +116,21 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 // Ensure we have data
                 guard let newConfig = response.0, let newConfigJSON = response.1 else {
-                    await self.updateDownloadState(.downloadFailure)
+                    if currentAttempt < maxRetries {
+                        let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
+                        print("Fetch failed on attempt \(currentAttempt + 1) (no data), retrying in \(delaySeconds) seconds...")
+                        try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                        await fetchConfigWithRetry(
+                            endpoint: endpoint,
+                            params: params,
+                            maxRetries: maxRetries,
+                            currentAttempt: currentAttempt + 1,
+                            completion: completion
+                        )
+                    } else {
+                        await self.updateDownloadState(.downloadFailure)
+                        completion(.failure(URLError(.unknown)))
+                    }
                     return
                 }
                 let endTime = DispatchTime.now()
@@ -129,7 +143,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 // Download assets
                 let startTimeConfig = Date()
 
-                if let config = self.fetchedConfig {
                     if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                         do {
                             let bundles = (self.fetchedConfig?.bundles)!
@@ -172,11 +185,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         await self.updateDownloadState(.downloadSuccess)
                         completion(.success(newConfig))
                     }
-                } else {
-                    await self.updateDownloadState(.downloadFailure)
-                    completion(.failure(URLError(.unknown)))
-                }
-                
             } catch {
                 // Retry on network/fetch failure
                 if currentAttempt < maxRetries {
