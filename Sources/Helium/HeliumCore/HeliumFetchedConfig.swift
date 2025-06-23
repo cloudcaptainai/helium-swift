@@ -75,7 +75,8 @@ public func fetchEndpoint(
 public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
-    @Published public var downloadTimeTakenMS: UInt64?
+    public var downloadTimeTakenMS: UInt64?
+    public var numRetries: Int = 0
     
     private init() {
         downloadStatus = .notDownloadedYet
@@ -91,6 +92,23 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (Result<HeliumFetchedConfig, Error>) -> Void
     ) {
         Task {
+            await fetchConfigWithRetry(
+                endpoint: endpoint,
+                params: params,
+                maxRetries: 6, // approximately 94 seconds
+                currentAttempt: 0,
+                completion: completion
+            )
+        }
+    }
+
+    private func fetchConfigWithRetry(
+        endpoint: String,
+        params: [String: Any],
+        maxRetries: Int,
+        currentAttempt: Int,
+        completion: @escaping (Result<HeliumFetchedConfig, Error>) -> Void
+    ) async {
             do {
                 let startTime = DispatchTime.now()
                 // Make the request asynchronously
@@ -105,8 +123,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
                 
                 // Update the fetched config
-                self.fetchedConfig = newConfig;
-                self.fetchedConfigJSON = newConfigJSON;
+                self.fetchedConfig = newConfig
+                self.fetchedConfigJSON = newConfigJSON
                 
                 // Download assets
                 let startTimeConfig = Date()
@@ -114,11 +132,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 if let config = self.fetchedConfig {
                     if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                         do {
-                            let bundles = (self.fetchedConfig?.bundles)!;
+                            let bundles = (self.fetchedConfig?.bundles)!
                             let endTimeNewConfig = Date()
                             let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                             
-                            try HeliumAssetManager.shared.writeBundles(bundles: bundles);
+                            try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                             
                             // Fetch localized prices for all products
                             await fetchLocalizedPrices()
@@ -127,8 +145,24 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             completion(.success(newConfig))
                             
                         } catch {
-                            await self.updateDownloadState(.downloadFailure);
-                            completion(.failure(error))
+                            // Retry on asset processing failure
+                            if currentAttempt < maxRetries {
+                                let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
+                                print("Asset processing failed on attempt \(currentAttempt + 1), retrying in \(delaySeconds) seconds...")
+                                
+                                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                                
+                                await fetchConfigWithRetry(
+                                    endpoint: endpoint,
+                                    params: params,
+                                    maxRetries: maxRetries,
+                                    currentAttempt: currentAttempt + 1,
+                                    completion: completion
+                                )
+                            } else {
+                                await self.updateDownloadState(.downloadFailure)
+                                completion(.failure(error))
+                            }
                             return
                         }
                     } else {
@@ -139,15 +173,35 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         completion(.success(newConfig))
                     }
                 } else {
-                    await self.updateDownloadState(.downloadFailure);
-                    completion(.failure(URLError(.unknown)));
+                    await self.updateDownloadState(.downloadFailure)
+                    completion(.failure(URLError(.unknown)))
                 }
                 
             } catch {
-                await self.updateDownloadState(.downloadFailure)
-                completion(.failure(error))
+                // Retry on network/fetch failure
+                if currentAttempt < maxRetries {
+                    let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
+                    print("Fetch failed on attempt \(currentAttempt + 1), retrying in \(delaySeconds) seconds...")
+                    
+                    try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                    
+                    await fetchConfigWithRetry(
+                        endpoint: endpoint,
+                        params: params,
+                        maxRetries: maxRetries,
+                        currentAttempt: currentAttempt + 1,
+                        completion: completion
+                    )
+                } else {
+                    await self.updateDownloadState(.downloadFailure)
+                    completion(.failure(error))
+                }
             }
-        }
+    }
+
+    private func calculateBackoffDelay(attempt: Int) -> Double {
+        // Simple exponential backoff: 2^attempt seconds
+        return pow(2.0, Double(attempt))
     }
     
     private func fetchLocalizedPrices() async {
@@ -193,7 +247,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return localizedPriceMap.filter { productIDs.contains($0.key) }
     }
     
-    @MainActor func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
+    @MainActor private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
         self.downloadStatus = status
     }
     
