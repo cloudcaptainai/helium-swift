@@ -11,6 +11,11 @@ public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case downloadFailure
 }
 
+struct HeliumFetchResult {
+    var fetchedConfig: HeliumFetchedConfig
+    var numRequests: Int = 1
+}
+
 class NetworkReachability {
     static let shared = NetworkReachability()
     private let monitor = NWPathMonitor()
@@ -78,6 +83,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     public var downloadTimeTakenMS: UInt64?
     public var numRetries: Int = 0
     
+    static let MAX_NUM_RETRIES: Int = 6 // approximately 94 seconds
+    
     private init() {
         downloadStatus = .notDownloadedYet
     }
@@ -89,14 +96,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
     func fetchConfig(
         endpoint: String,
         params: [String: Any],
-        completion: @escaping (Result<HeliumFetchedConfig, Error>) -> Void
+        completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) {
-        Task {
-            await fetchConfigWithRetry(
+        Task.detached(priority: .background) { [weak self] in
+            await self?.fetchConfigWithRetry(
                 endpoint: endpoint,
                 params: params,
-                maxRetries: 6, // approximately 94 seconds
-                currentAttempt: 0,
+                maxRetries: HeliumFetchedConfigManager.MAX_NUM_RETRIES,
+                retryCount: 0,
                 completion: completion
             )
         }
@@ -106,8 +113,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
         endpoint: String,
         params: [String: Any],
         maxRetries: Int,
-        currentAttempt: Int,
-        completion: @escaping (Result<HeliumFetchedConfig, Error>) -> Void
+        retryCount: Int,
+        completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) async {
             do {
                 let startTime = DispatchTime.now()
@@ -116,15 +123,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 // Ensure we have data
                 guard let newConfig = response.0, let newConfigJSON = response.1 else {
-                    if currentAttempt < maxRetries {
-                        let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
-                        print("Fetch failed on attempt \(currentAttempt + 1) (no data), retrying in \(delaySeconds) seconds...")
+                    if retryCount < maxRetries {
+                        let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                        print("Fetch failed on attempt \(retryCount + 1) (no data), retrying in \(delaySeconds) seconds...")
                         try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                         await fetchConfigWithRetry(
                             endpoint: endpoint,
                             params: params,
                             maxRetries: maxRetries,
-                            currentAttempt: currentAttempt + 1,
+                            retryCount: retryCount + 1,
                             completion: completion
                         )
                     } else {
@@ -155,13 +162,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             await fetchLocalizedPrices()
                             
                             await self.updateDownloadState(.downloadSuccess)
-                            completion(.success(newConfig))
+                            completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
                             
                         } catch {
                             // Retry on asset processing failure
-                            if currentAttempt < maxRetries {
-                                let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
-                                print("Asset processing failed on attempt \(currentAttempt + 1), retrying in \(delaySeconds) seconds...")
+                            if retryCount < maxRetries {
+                                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                                print("Asset processing failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
                                 
                                 try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                                 
@@ -169,7 +176,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                                     endpoint: endpoint,
                                     params: params,
                                     maxRetries: maxRetries,
-                                    currentAttempt: currentAttempt + 1,
+                                    retryCount: retryCount + 1,
                                     completion: completion
                                 )
                             } else {
@@ -183,13 +190,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         await fetchLocalizedPrices()
                         
                         await self.updateDownloadState(.downloadSuccess)
-                        completion(.success(newConfig))
+                        completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
                     }
             } catch {
                 // Retry on network/fetch failure
-                if currentAttempt < maxRetries {
-                    let delaySeconds = calculateBackoffDelay(attempt: currentAttempt)
-                    print("Fetch failed on attempt \(currentAttempt + 1), retrying in \(delaySeconds) seconds...")
+                if retryCount < maxRetries {
+                    let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                    print("Fetch failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
                     
                     try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                     
@@ -197,7 +204,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         endpoint: endpoint,
                         params: params,
                         maxRetries: maxRetries,
-                        currentAttempt: currentAttempt + 1,
+                        retryCount: retryCount + 1,
                         completion: completion
                     )
                 } else {

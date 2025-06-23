@@ -88,6 +88,9 @@ public class Helium {
         customUserTraits: HeliumUserTraits? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
+        if initialized {
+            return
+        }
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
