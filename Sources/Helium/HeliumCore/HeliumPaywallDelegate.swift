@@ -135,6 +135,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        if case .paywallOpen = event {
+            HeliumIdentityManager.shared.setPaywallSessionId()
+        } else if case .paywallClose = event {
+            HeliumIdentityManager.shared.clearPaywallSessionId()
+        }
+        
         do {
             delegate?.onHeliumPaywallEvent(event: event);
             if (isAnalyticsEnabled && analytics != nil) {
@@ -165,6 +171,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
+                    heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
                     revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
                     isFallback: isFallback,
                     downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,

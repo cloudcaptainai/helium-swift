@@ -46,11 +46,15 @@ public class HeliumIdentityManager {
         self.heliumUserTraits = traits;
     }
     
-    public func setPaywallSessionId() {
+    func setPaywallSessionId() {
         self.heliumPaywallSessionId = UUID().uuidString;
     }
     
-    public func getPaywallSessionId() -> String? {
+    func clearPaywallSessionId() {
+        self.heliumPaywallSessionId = nil
+    }
+    
+    func getPaywallSessionId() -> String? {
         return self.heliumPaywallSessionId;
     }
     

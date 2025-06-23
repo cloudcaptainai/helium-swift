@@ -186,7 +186,7 @@ extension Product {
         }
         
         guard let appAccountToken = UUID(uuidString: HeliumIdentityManager.shared.getHeliumPersistentId()) else {
-            throw HeliumPurchaseError.invalidPersistentId   
+            throw HeliumPurchaseError.invalidPersistentId
         }
         newOptions.insert(.appAccountToken(appAccountToken))
         
