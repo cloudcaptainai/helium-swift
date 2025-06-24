@@ -98,7 +98,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) {
-        Task.detached(priority: .background) { [weak self] in
+        Task.detached(priority: .medium) { [weak self] in
             await self?.fetchConfigWithRetry(
                 endpoint: endpoint,
                 params: params,
