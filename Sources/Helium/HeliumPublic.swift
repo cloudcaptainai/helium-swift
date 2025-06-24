@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import StoreKit
 
 public class Helium {
     var controller: HeliumController?
@@ -77,6 +78,25 @@ public class Helium {
         return HeliumIdentityManager.shared.getUserId();
     }
     
+    fileprivate func getHeliumUserIdAsAppAccountToken() -> UUID? {
+        guard let heliumUserId = getHeliumUserId() else { return nil }
+        return UUID(uuidString: heliumUserId)
+    }
+    
+    /**
+    * Initializes the Helium paywall system with configuration options.
+    *
+    * @param apiKey - Helium API key
+    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
+    * @param fallbackPaywall - Default view to display when paywall fails to load
+    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    * @param triggers - Optional array of trigger identifiers to configure
+    * @param customUserId - Optional custom user ID to override default user identification
+    * @param customAPIEndpoint - Optional custom API endpoint URL
+    * @param customUserTraits - Optional custom user traits for targeting
+    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
+    */
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
@@ -86,6 +106,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
+        revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
@@ -97,6 +118,8 @@ public class Helium {
         if (customUserTraits != nil) {
             HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
         }
+        
+        HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
         
         self.initialized = true;
         HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall));
@@ -142,5 +165,48 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
+    }
+}
+
+@available(iOS 15.0, *)
+extension Product {
+    /// Initiates a product purchase with specific configuration to support Helium analytics.
+    /// This method provides a wrapper around the standard purchase flow
+    ///
+    /// - Parameter options: A set of options to configure the purchase.
+    /// - Returns: The result of the purchase.
+    /// - Throws: A `PurchaseError` or `StoreKitError` or `HeliumPurchaseError` if an issue with appAccountToken.
+    @MainActor public func heliumPurchase(
+        options: Set<Product.PurchaseOption> = []
+    ) async throws -> Product.PurchaseResult {
+        var newOptions: Set<Product.PurchaseOption> = options
+        
+        let hasExistingAppAccountToken = newOptions.contains { option in
+            return String(describing: option).contains("appAccountToken")
+        }
+        if hasExistingAppAccountToken {
+            throw HeliumPurchaseError.appAccountTokenAlreadyExists
+        }
+        
+        guard let appAccountToken = UUID(uuidString: HeliumIdentityManager.shared.getHeliumPersistentId()) else {
+            throw HeliumPurchaseError.invalidPersistentId
+        }
+        newOptions.insert(.appAccountToken(appAccountToken))
+        
+        return try await purchase(options: newOptions)
+    }
+}
+
+public enum HeliumPurchaseError: Error {
+    case appAccountTokenAlreadyExists
+    case invalidPersistentId
+    
+    var errorDescription: String? {
+        switch self {
+        case .appAccountTokenAlreadyExists:
+            return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
+        case .invalidPersistentId:
+            return "Helium persistent ID is not a UUID! 😅"
+        }
     }
 }

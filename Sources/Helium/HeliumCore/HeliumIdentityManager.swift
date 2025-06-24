@@ -13,6 +13,8 @@ public class HeliumIdentityManager {
     private var heliumUserTraits: HeliumUserTraits?
     private var heliumPaywallSessionId: String?
     
+    var revenueCatAppUserId: String? = nil // Used to connect RC purchase events with Helium paywall events
+    
     private var cachedUserContext: CodableUserContext? = nil
     
     // MARK: - Constants
@@ -44,11 +46,15 @@ public class HeliumIdentityManager {
         self.heliumUserTraits = traits;
     }
     
-    public func setPaywallSessionId() {
+    func setPaywallSessionId() {
         self.heliumPaywallSessionId = UUID().uuidString;
     }
     
-    public func getPaywallSessionId() -> String? {
+    func clearPaywallSessionId() {
+        self.heliumPaywallSessionId = nil
+    }
+    
+    func getPaywallSessionId() -> String? {
         return self.heliumPaywallSessionId;
     }
     

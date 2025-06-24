@@ -386,6 +386,8 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var organizationID: String?
     var heliumPersistentID: String?
     var heliumSessionID: String?
+    var heliumPaywallSessionId: String?
+    var revenueCatAppUserID: String?
     var isFallback: Bool?
     
     var downloadStatus: HeliumFetchedConfigStatus?

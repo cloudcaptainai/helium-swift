@@ -89,32 +89,10 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     respond(["status": "failed"])
                 }
                 
-            case "open-link":
-                if let url = data["url"] as? String {
-                    respond(["status": "success"])
-                }
-                
-            case "set-variable":
-                if let variable = data["variable"] as? String,
-                   let value = data["value"] {
-                    respond(["status": "success"])
-                }
-                
-            case "analytics-event":
-                if let eventName = data["name"] as? String {
-                    
-                    respond(["status": "success"])
-                }
-                
             case "navigate":
                 if let target = data["target"] as? String {
 
                     await UIApplication.shared.open(URL(string: target)!);
-                    respond(["status": "success"])
-                }
-                
-            case "custom":
-                if let name = data["name"] as? String {
                     respond(["status": "success"])
                 }
                 
