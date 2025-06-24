@@ -64,6 +64,5 @@ jobs:
           else
             gh release create "${{ env.RELEASE_VERSION }}" \
               --target ${{ env.COMMIT_SHA }} \
-              --draft \
               --generate-notes
           fi
