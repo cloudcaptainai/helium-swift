@@ -68,12 +68,12 @@ public enum HeliumPaywallEvent: Codable {
     case paywallOpenFailed(triggerName: String, paywallTemplateName: String)
     case paywallClose(triggerName: String, paywallTemplateName: String)
     case paywallDismissed(triggerName: String, paywallTemplateName: String, dismissAll: Bool = false)
-    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil)
-    case paywallsDownloadError(error: String)
+    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, numAttempts: Int? = nil)
+    case paywallsDownloadError(error: String, numAttempts: Int? = nil)
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts
     }
     
     public func getTriggerIfExists() -> String?{
@@ -165,16 +165,18 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encode(webviewRenderTimeTakenMS, forKey: .webviewRenderTimeTakenMS)
-        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS):
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS, let numAttempts):
             try container.encode("paywallsDownloadSuccess", forKey: .type)
             try container.encode(configId, forKey: .configId)
             try container.encodeIfPresent(downloadTimeTakenMS, forKey: .downloadTimeTakenMS);
             try container.encodeIfPresent(imagesDownloadTimeTakenMS, forKey: .imagesDownloadTimeTakenMS);
             try container.encodeIfPresent(fontsDownloadTimeTakenMS, forKey: .fontsDownloadTimeTakenMS);
             try container.encodeIfPresent(bundleTimeTakenMS, forKey: .bundleDownloadTimeMS);
-        case .paywallsDownloadError(let error):
+            try container.encodeIfPresent(numAttempts, forKey: .numAttempts)
+        case .paywallsDownloadError(let error, let numAttempts):
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
+            try container.encodeIfPresent(numAttempts, forKey: .numAttempts)
         }
     }
 
@@ -334,12 +336,13 @@ public enum HeliumPaywallEvent: Codable {
             dict["paywallTemplateName"] = paywallTemplateName
             dict["webviewRenderTimeTakenMS"] = webviewRenderTimeTakenMS
             
-        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS):
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS, let numAttempts):
             dict["configId"] = configId
             dict["downloadTimeTakenMS"] = downloadTimeTakenMS
             dict["imagesDownloadTimeTakenMS"] = imagesDownloadTimeTakenMS
             dict["fontsDownloadTimeTakenMS"] = fontsDownloadTimeTakenMS
             dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
+            dict["numAttempts"] = numAttempts
 
         case .paywallOpen(let triggerName, let paywallTemplateName, let viewType):
             dict["triggerName"] = triggerName;
@@ -355,8 +358,9 @@ public enum HeliumPaywallEvent: Codable {
             dict["paywallTemplateName"] = paywallTemplateName
             dict["dismissAll"] = dismissAll
             
-        case .paywallsDownloadError(let error):
+        case .paywallsDownloadError(let error, let numAttempts):
             dict["errorDescription"] = error
+            dict["numAttempts"] = numAttempts
             
         default:
             if let trigger = self.getTriggerIfExists() {

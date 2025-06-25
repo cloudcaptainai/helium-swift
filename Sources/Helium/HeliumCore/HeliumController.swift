@@ -75,7 +75,9 @@ public class HeliumController {
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, params: payload) { result in
             switch result {
-            case .success(let fetchedConfig):
+            case .success(let fetchResult):
+                let fetchedConfig = fetchResult.fetchedConfig
+                let numFetchRequests = fetchResult.numRequests
                 let configuration = Configuration(writeKey: fetchedConfig.segmentBrowserWriteKey)
                     .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
                     .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)
@@ -103,7 +105,8 @@ public class HeliumController {
                 
                 let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
                     configId: fetchedConfig.fetchedConfigID,
-                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS
+                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
+                    numAttempts: numFetchRequests
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 // Use the config as needed
@@ -130,7 +133,7 @@ public class HeliumController {
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
 
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallsDownloadError(error: error.localizedDescription))
+                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallsDownloadError(error: error.localizedDescription, numAttempts: HeliumFetchedConfigManager.MAX_NUM_RETRIES + 1))
             }
         }
     }

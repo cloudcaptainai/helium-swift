@@ -109,6 +109,9 @@ public class Helium {
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
+        if initialized {
+            return
+        }
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
