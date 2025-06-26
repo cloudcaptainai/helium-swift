@@ -13,13 +13,17 @@ let package = Package(
         .library(
             name: "Helium",
             targets: ["Helium"]),
+        .library(
+            name: "HeliumRevenueCat",
+            targets: ["HeliumRevenueCat", "Helium"]),
     ],
     dependencies: [
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.0.0")),
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
-        .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0")
+        .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0"),
+        .package(url: "https://github.com/RevenueCat/purchases-ios", .upToNextMajor(from: "5.0.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -32,6 +36,13 @@ let package = Package(
                 .product(name: "AnyCodable", package: "AnyCodable"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),
                 .product(name: "DeviceKit", package: "DeviceKit")
+            ]
+        ),
+        .target(
+            name: "HeliumRevenueCat",
+            dependencies: [
+                "Helium",
+                .product(name: "RevenueCat", package: "purchases-ios")
             ]
         ),
         .testTarget(
