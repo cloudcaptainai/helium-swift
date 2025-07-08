@@ -108,6 +108,10 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
             return false
         }
     }
+    
+    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Override in a subclass if desired
+    }
 }
 public enum StoreKitDelegateError: Error {
     case cannotFindProduct

@@ -85,6 +85,10 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
             return false
         }
     }
+    
+    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Override in a subclass if desired
+    }
 }
 
 public enum RevenueCatDelegateError: Error {

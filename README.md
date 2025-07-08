@@ -21,7 +21,7 @@ Set the `upToNextMajor` rule to be `2.0.8 < 3.0.0`:
 
 ### Set up your HeliumPaywallDelegate
 
-To integrate Helium paywalls, create a subclass of `HeliumPaywallDelegate`. This class is responsible for handling the purchase logic for your paywalls.
+To integrate Helium paywalls, create a subclass of `HeliumPaywallDelegate` or use one of our pre-built delegates. This class is responsible for handling the purchase logic for your paywalls.
 
 ```swift
 public protocol HeliumPaywallDelegate: AnyObject {
@@ -74,139 +74,28 @@ public enum HeliumPaywallTransactionStatus {
 
 #### StoreKit 2
 
-Here's an example that uses the `Product.heliumPurchase()` method, which essentially calls StoreKit's basic `Product.purchase()` method while adding an appAccountToken so that Helium can provide better revenue metrics.
+Use the StoreKitDelegate to handle purchases using native StoreKit 2:
 
 ```swift
 import Helium
-import StoreKit
 
-class DemoHeliumPaywallDelegate: HeliumPaywallDelegate {
-    var subscriptions: [Product]
-    
-    public init() {
-        self.subscriptions = []
-        Task {
-            do {
-                let products = try await Product.products(for: ["yearly_sub_subscription", "monthly_sub_id"])
-                self.subscriptions = products
-            } catch {
-                print("failed to load subscriptions")
-            }
-        }
-    }
-    
-    func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
-        do {
-            let products = try await Product.products(for: [productId])
-            let purchaseReuslt = try await products[0].heliumPurchase();
-            switch (purchaseReuslt) {
-            case .success(_):
-                    return .purchased;
-                case .userCancelled:
-                    return .cancelled;
-                case .pending:
-                    return .pending
-                @unknown default:
-                    return .failed(NSError(domain:"", code: 401, userInfo:[ NSLocalizedDescriptionKey: "Unknown error making purchase"]))
-            }
-        } catch {
-            return .failed(error)
-        }
-    }
-
-    func restorePurchases() async -> Bool {
-        for await result in Transaction.currentEntitlements {
-            if case .verified = result {
-                return true
-            }
-        }
-        return false
-    }
-}
+let delegate = StoreKitDelegate(productIds: [
+    "<product-id-1>",
+    "<product-id-2>",
+])
 ```
+
+If you would like to implement `onHeliumPaywallEvent`, simply create a subclass of StoreKitDelegate.
 
 #### RevenueCat
 
 ```swift
-import Helium
-import RevenueCat
+import HeliumRevenueCat
 
-class RevenueCatHeliumPaywallDelegate: HeliumPaywallDelegate {
-    var offerings: Offerings?
-    
-    public init() {
-        self.offerings = nil
-        Task {
-            do {
-                let offerings = try await Purchases.shared.offerings()
-                self.offerings = offerings
-            } catch {
-                print("Failed to load RevenueCat offerings: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func makePurchase(productId: String) async -> HeliumCore.HeliumPaywallTransactionStatus {
-        do {
-            guard let offerings = self.offerings else {
-                return .failed(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Offerings not loaded"]))
-            }
-            
-            var packageToPurchase: Package? = nil
-            
-            if let currentOffering = offerings.current {
-                for package in currentOffering.availablePackages {
-                    if package.storeProduct.productIdentifier == productId {
-                        packageToPurchase = package
-                        break
-                    }
-                }
-            }
-            
-            if packageToPurchase == nil {
-                for (_, offering) in offerings.all {
-                    for package in offering.availablePackages {
-                        if package.storeProduct.productIdentifier == productId {
-                            packageToPurchase = package
-                            break
-                        }
-                    }
-                    if packageToPurchase != nil {
-                        break
-                    }
-                }
-            }
-            
-            guard let package = packageToPurchase else {
-                return .failed(NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Product not found in any package"]))
-            }
-            
-            let result = try await Purchases.shared.purchase(package: package)
-            
-            if result.customerInfo.entitlements.all.isEmpty == false {
-                return .purchased
-            } else {
-                return .failed(NSError(domain: "", code: 402, userInfo: [NSLocalizedDescriptionKey: "Purchase did not result in entitlements"]))
-            }
-        } catch let error as NSError {
-            if error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
-                return .cancelled
-            } else {
-                return .failed(error)
-            }
-        }
-    }
-
-    func restorePurchases() async -> Bool {
-        do {
-            _ = try await Purchases.shared.restorePurchases()
-            return true
-        } catch {
-            return false
-        }
-    }
-}
+let delegate = RevenueCatDelegate(entitlementId: "<revenue-cat-entitlement-id>")
 ```
+
+If you would like to implement `onHeliumPaywallEvent`, simply create a subclass of RevenueCatDelegate. Make sure to initialize RevenueCat before initializing Helium or alternatively you can supply your RevenueCat API key to RevenueCatDelegate() and have Helium initialize RevenueCat for you.
 
 ### Initialize Helium and Download Paywall Configs
 
