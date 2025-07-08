@@ -8,13 +8,27 @@
 import Helium
 import RevenueCat
 
-class RevenueCatDelegate: HeliumPaywallDelegate {
+/// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
+/// in-app purchases & subscriptions. Do not use if you don't plan on configuring your purchases with RevenueCat.
+public class RevenueCatDelegate: HeliumPaywallDelegate {
     
     let entitlementId: String
     var offerings: Offerings?
-        
-    public init(entitlementId: String) {
+    
+    /// Initialize the delegate.
+    ///
+    /// - Parameter entitlementId: The id of the [entitlement](https://www.revenuecat.com/docs/getting-started/entitlements) that you have configured with RevenueCat.
+    /// - Parameter revenueCatApiKey: (Optional). Only set if you want Helium to handle RevenueCat initialization for you. Otherwise make sure to [initialize RevenueCat](https://www.revenuecat.com/docs/getting-started/quickstart#initialize-and-configure-the-sdk) before initializing Helium.
+    public init(
+        entitlementId: String,
+        revenueCatApiKey: String? = nil
+    ) {
         self.entitlementId = entitlementId
+        
+        if let revenueCatApiKey {
+            Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
+        }
+        
         Task {
             do {
                 offerings = try await Purchases.shared.offerings()
@@ -24,7 +38,7 @@ class RevenueCatDelegate: HeliumPaywallDelegate {
         }
     }
     
-    func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+    public func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let offerings = self.offerings else {
                 return .failed(RevenueCatDelegateError.couldNotLoadProducts)
@@ -63,7 +77,7 @@ class RevenueCatDelegate: HeliumPaywallDelegate {
         }
     }
     
-    func restorePurchases() async -> Bool {
+    public func restorePurchases() async -> Bool {
         do {
             _ = try await Purchases.shared.restorePurchases()
             return true

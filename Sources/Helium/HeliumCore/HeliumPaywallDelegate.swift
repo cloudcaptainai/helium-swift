@@ -46,6 +46,7 @@ public extension HeliumPaywallDelegate {
     }
 }
 
+/// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
 @available(iOS 15.0, *)
 public class StoreKitDelegate: HeliumPaywallDelegate {
     
