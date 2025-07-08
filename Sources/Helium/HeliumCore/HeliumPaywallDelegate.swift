@@ -51,7 +51,7 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
     
     private(set) var productMappings: [String: Product] = [:];
     
-    init(productIds: [String]) {
+    public init(productIds: [String]) {
         Task {
             do {
                 let fetchedProducts = try await Product.products(for: productIds)

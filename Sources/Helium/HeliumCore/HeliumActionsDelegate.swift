@@ -86,7 +86,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     @Published var selectedProductId: String
     @Published var isShowingModal: Bool = false
     @Published var showingModalScreen: String? = nil
-    @Published var isLoading: Bool = false
+    private var isLoading: Bool = false
     
     var dismissAction: (() -> Void)?
         
@@ -176,9 +176,9 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event:
             .subscriptionPressed(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
         
-        isLoading = true;
+        isLoading = true
         let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
-        defer { isLoading = false; }
+        defer { isLoading = false }
         
         if (status == nil) {
             return .failed(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unknown error making purchase - delegate method returned nil"]))
