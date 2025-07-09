@@ -23,7 +23,7 @@ let package = Package(
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
         .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0"),
-        .package(url: "https://github.com/RevenueCat/purchases-ios", .upToNextMajor(from: "5.0.0"))
+        .package(url: "https://github.com/RevenueCat/purchases-ios-spm", .upToNextMajor(from: "5.0.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -42,7 +42,7 @@ let package = Package(
             name: "HeliumRevenueCat",
             dependencies: [
                 "Helium",
-                .product(name: "RevenueCat", package: "purchases-ios")
+                .product(name: "RevenueCat", package: "purchases-ios-spm")
             ]
         ),
         .testTarget(
