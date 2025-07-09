@@ -79,8 +79,8 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
     
     public func restorePurchases() async -> Bool {
         do {
-            _ = try await Purchases.shared.restorePurchases()
-            return true
+            let customerInfo = try await Purchases.shared.restorePurchases()
+            return customerInfo.entitlements[entitlementId]?.isActive == true
         } catch {
             return false
         }

@@ -100,13 +100,12 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
     }
     
     public func restorePurchases() async -> Bool {
-        do {
-            try await AppStore.sync()
-            return true
-        } catch {
-            print("[Helium] StoreKitDelegate - Restore purchases was unsuccessful: \(error)")
-            return false
+        for await result in Transaction.currentEntitlements {
+            if case .verified = result {
+                return true
+            }
         }
+        return false
     }
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
