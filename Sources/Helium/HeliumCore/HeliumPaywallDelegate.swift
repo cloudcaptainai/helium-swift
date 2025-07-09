@@ -46,6 +46,87 @@ public extension HeliumPaywallDelegate {
     }
 }
 
+/// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
+@available(iOS 15.0, *)
+public class StoreKitDelegate: HeliumPaywallDelegate {
+    
+    private(set) var productMappings: [String: Product] = [:];
+    
+    public init(productIds: [String]) {
+        Task {
+            do {
+                let fetchedProducts = try await Product.products(for: productIds)
+                var mappings: [String: Product] = [:];
+                // First create the direct mappings from test product IDs
+                for fetchedProduct in fetchedProducts {
+                    mappings[fetchedProduct.id] = fetchedProduct;
+                }
+                productMappings = mappings
+            } catch {
+                print("[Helium] StoreKitDelegate - error fetching products. \(error)")
+            }
+        }
+    }
+    
+    public func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+        do {
+            guard let product: Product = productMappings[productId] else {
+                print("[Helium] StoreKitDelegate - makePurchase could not find product!")
+                return .failed(StoreKitDelegateError.cannotFindProduct)
+            }
+            
+            let result = try await product.heliumPurchase()
+                
+            switch result {
+            case .success(let verification):
+                switch verification {
+                case .verified(let transaction):
+                    await transaction.finish()
+                    return .purchased
+                case .unverified(_, let error):
+                    return .failed(error)
+                }
+            case .userCancelled:
+                return .cancelled
+            case .pending:
+                return .pending
+            @unknown default:
+                return .failed(StoreKitDelegateError.unknownPurchaseResult)
+            }
+        } catch {
+            print("[Helium] StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
+            return .failed(error)
+        }
+    }
+    
+    public func restorePurchases() async -> Bool {
+        for await result in Transaction.currentEntitlements {
+            if case .verified = result {
+                return true
+            }
+        }
+        return false
+    }
+    
+    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Override in a subclass if desired
+    }
+}
+public enum StoreKitDelegateError: Error {
+    case cannotFindProduct
+    case unknownPurchaseResult
+    
+    var errorDescription: String? {
+        switch self {
+        case .cannotFindProduct:
+            return "Could not find product. Please ensure products are properly configured."
+        case .unknownPurchaseResult:
+            return "Purchase returned an unknown status."
+        }
+    }
+}
+
+
 public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     public static let shared = HeliumPaywallDelegateWrapper()
