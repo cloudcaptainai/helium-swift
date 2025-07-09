@@ -11,11 +11,15 @@ Email founders@tryhelium.com for help/questions.
 
 ## **Installation**
 
-Install **helium-swift** via SPM. In Xcode, go to "Add Package Dependencies", and copy in [`https://github.com/cloudcaptainai/helium-swift`](https://github.com/cloudcaptainai/helium-swift)
+Install **helium-swift** via SPM. In Xcode, go to "Add Package Dependencies", and copy in `https://github.com/cloudcaptainai/helium-swift.git`
 
-Set the `upToNextMajor` rule to be `2.0.8 < 3.0.0`:
+Set the Dependency Rule to **Up to Next Major Version** (use the default range which should be between 2.x.x and 3.0.0)
 
-![Dependency Example](/images/ios-dependency.png)
+When asked to **Choose Package Products for helium-swift**, adjust the **Add to Target** column for **Helium** to be set to your app’s main target.
+
+If you are using RevenueCat to manage purchases, then we recommended you do the same for **HeliumRevenueCat** so you can use our RevenueCatDelegate referenced below.
+
+Then select **Add Package**.
 
 ## Configuration
 
