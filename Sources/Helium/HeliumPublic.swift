@@ -10,6 +10,14 @@ public class Helium {
     public static let shared = Helium()
     
     public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallInfo?.shouldShow == false {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                event: .paywallSkipped(triggerName: trigger, paywallTemplateName: paywallInfo?.paywallTemplateName ?? "unknown")
+            )
+            return
+        }
+        
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
