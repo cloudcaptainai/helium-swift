@@ -7,6 +7,7 @@
 
 import Helium
 import RevenueCat
+import Foundation
 
 /// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
 /// in-app purchases & subscriptions. Do not use if you don't plan on configuring your purchases with RevenueCat.
@@ -91,12 +92,12 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
     }
 }
 
-public enum RevenueCatDelegateError: Error {
+public enum RevenueCatDelegateError: LocalizedError {
     case couldNotLoadProducts
     case cannotFindProduct
     case purchaseNotVerified
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .couldNotLoadProducts:
             return "Could not load products. Make sure RevenueCat has products configured."

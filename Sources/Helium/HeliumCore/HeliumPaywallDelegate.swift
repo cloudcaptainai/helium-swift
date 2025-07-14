@@ -112,11 +112,11 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
         // Override in a subclass if desired
     }
 }
-public enum StoreKitDelegateError: Error {
+public enum StoreKitDelegateError: LocalizedError {
     case cannotFindProduct
     case unknownPurchaseResult
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .cannotFindProduct:
             return "Could not find product. Please ensure products are properly configured."
