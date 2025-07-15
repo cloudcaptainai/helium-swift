@@ -91,6 +91,13 @@ public class Helium {
         return UUID(uuidString: heliumUserId)
     }
     
+    public func getPaywallInfo(trigger: String) -> PaywallInfo? {
+        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+            return nil
+        }
+        return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
+    }
+    
     /**
     * Initializes the Helium paywall system with configuration options.
     *

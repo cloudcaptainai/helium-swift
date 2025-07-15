@@ -30,16 +30,22 @@ public struct HeliumPaywallInfo: Codable {
     var paywallUUID: String?
     public var paywallTemplateName: String
     var productsOffered: [String]
-    public var resolvedConfig: AnyCodable
+    var resolvedConfig: AnyCodable
     var shouldShow: Bool
     var fallbackPaywallName: String
     public var experimentID: String?
-    public var modelID: String?
-    public var forceShowFallback: Bool?
+    var modelID: String?
+    var forceShowFallback: Bool?
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?
     var additionalPaywallFields: JSON?
+}
+
+//User-facing details about a paywall
+public struct PaywallInfo {
+    public let paywallTemplateName: String
+    public let shouldShow: Bool
 }
 
 public struct HeliumFetchedConfig: Codable {
