@@ -10,6 +10,14 @@ public class Helium {
     public static let shared = Helium()
     
     public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallInfo?.shouldShow == false {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
+                event: .paywallSkipped(triggerName: trigger)
+            )
+            return
+        }
+        
         HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
     }
     
@@ -81,6 +89,13 @@ public class Helium {
     fileprivate func getHeliumUserIdAsAppAccountToken() -> UUID? {
         guard let heliumUserId = getHeliumUserId() else { return nil }
         return UUID(uuidString: heliumUserId)
+    }
+    
+    public func getPaywallInfo(trigger: String) -> PaywallInfo? {
+        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+            return nil
+        }
+        return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
     /**
