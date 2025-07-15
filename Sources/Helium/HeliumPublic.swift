@@ -13,7 +13,7 @@ public class Helium {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallSkipped(triggerName: trigger, paywallTemplateName: paywallInfo?.paywallTemplateName ?? "unknown")
+                event: .paywallSkipped(triggerName: trigger)
             )
             return
         }
