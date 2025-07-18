@@ -11,7 +11,7 @@ import Foundation
 
 /// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
 /// in-app purchases & subscriptions. Do not use if you don't plan on configuring your purchases with RevenueCat.
-public class RevenueCatDelegate: HeliumPaywallDelegate {
+open class RevenueCatDelegate: HeliumPaywallDelegate {
     
     let entitlementId: String
     var offerings: Offerings?
@@ -39,7 +39,7 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
         }
     }
     
-    public func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+    open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let offerings = self.offerings else {
                 return .failed(RevenueCatDelegateError.couldNotLoadProducts)
@@ -78,7 +78,7 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
         }
     }
     
-    public func restorePurchases() async -> Bool {
+    open func restorePurchases() async -> Bool {
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
             return customerInfo.entitlements[entitlementId]?.isActive == true
@@ -87,7 +87,7 @@ public class RevenueCatDelegate: HeliumPaywallDelegate {
         }
     }
     
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+    open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         // Override in a subclass if desired
     }
 }

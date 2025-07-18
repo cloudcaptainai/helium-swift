@@ -48,7 +48,7 @@ public extension HeliumPaywallDelegate {
 
 /// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
 @available(iOS 15.0, *)
-public class StoreKitDelegate: HeliumPaywallDelegate {
+open class StoreKitDelegate: HeliumPaywallDelegate {
     
     private(set) var productMappings: [String: Product] = [:];
     
@@ -68,7 +68,7 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
         }
     }
     
-    public func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+    open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let product: Product = productMappings[productId] else {
                 print("[Helium] StoreKitDelegate - makePurchase could not find product!")
@@ -99,7 +99,7 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
         }
     }
     
-    public func restorePurchases() async -> Bool {
+    open func restorePurchases() async -> Bool {
         for await result in Transaction.currentEntitlements {
             if case .verified = result {
                 return true
@@ -108,7 +108,7 @@ public class StoreKitDelegate: HeliumPaywallDelegate {
         return false
     }
     
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+    open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         // Override in a subclass if desired
     }
 }
