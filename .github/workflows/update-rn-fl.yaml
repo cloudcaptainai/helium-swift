@@ -29,3 +29,11 @@ jobs:
           repository: cloudcaptainai/paywall-sdk-react-native
           event-type: update-ios-dependency
           client-payload: '{"version": "${{ github.event.release.tag_name || github.event.inputs.tag_name }}"}'
+
+      - name: Trigger Expo SDK Update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.EXPO_PAT }}
+          repository: cloudcaptainai/helium-expo-sdk
+          event-type: update-ios-dependency
+          client-payload: '{"version": "${{ github.event.release.tag_name || github.event.inputs.tag_name }}"}'
