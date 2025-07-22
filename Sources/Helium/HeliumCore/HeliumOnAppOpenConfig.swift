@@ -11,14 +11,14 @@ public struct HeliumOnAppOpenConfig {
     var enabled: Bool = true
     var indicateLoading: Bool = false
     var loadingBudgetInSeconds: TimeInterval = 1.5
-    var customLoadingView: View? = nil
+    var customLoadingView: AnyView? = nil
     
     // Need an explicitly public init for use outside the SDK
     public init(
         enabled: Bool = true,
         indicateLoading: Bool = false,
         loadingBudgetInSeconds: TimeInterval = 1.5,
-        customLoadingView: View? = nil
+        customLoadingView: AnyView? = nil
     ) {
         self.enabled = enabled
         self.indicateLoading = indicateLoading
@@ -38,6 +38,10 @@ class HeliumOnAppOpenConfigManager {
         
     func startTiming() {
         startTime = Date()
+        
+        if config.indicateLoading {
+            HeliumPaywallPresenter.shared.presentUpsellBeforeLoaded(trigger: onAppOpenTrigger, loadingView: config.customLoadingView ?? AnyView(LoadingView()))
+        }
     }
     
     /// Get the elapsed time in seconds since timing started
@@ -58,21 +62,36 @@ class HeliumOnAppOpenConfigManager {
     
     func onBundlesAvailable() {
         if !config.enabled {
+            HeliumPaywallPresenter.shared.hideUpsell(trigger: onAppOpenTrigger)
             return
         }
         if isPastLoadingBudget() {
             print("[Helium] 'on_app_open' trigger not shown; past loading budget (\(getElapsedTime()) seconds > \(config.loadingBudgetInSeconds)).")
+            HeliumPaywallPresenter.shared.hideUpsell(trigger: onAppOpenTrigger)
             return
         }
         if !Helium.shared.triggerAvailable(trigger: onAppOpenTrigger) {
             print("[Helium] 'on_app_open' trigger is not available.")
+            HeliumPaywallPresenter.shared.hideUpsell(trigger: onAppOpenTrigger)
             return
         }
         if config.indicateLoading {
-            // todo
+            if !Helium.shared.checkShouldShowBeforePresenting(trigger: onAppOpenTrigger) {
+                HeliumPaywallPresenter.shared.hideUpsell(trigger: onAppOpenTrigger)
+            } else {
+                HeliumPaywallPresenter.shared.updateUpsellAfterLoad(trigger: onAppOpenTrigger)
+            }
         } else {
             Helium.shared.presentUpsell(trigger: onAppOpenTrigger)
         }
     }
     
+}
+
+fileprivate struct LoadingView: View {
+    var body: some View {
+        ProgressView()
+            .scaleEffect(1.5) // Make it slightly larger
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }

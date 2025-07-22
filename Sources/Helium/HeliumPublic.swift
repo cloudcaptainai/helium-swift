@@ -10,15 +10,21 @@ public class Helium {
     public static let shared = Helium()
     
     public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+        if !checkShouldShowBeforePresenting(trigger: trigger) {
+            return
+        }
+        
+        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
+    }
+    func checkShouldShowBeforePresenting(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
                 event: .paywallSkipped(triggerName: trigger)
             )
-            return
+            return false
         }
-        
-        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
+        return true
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
