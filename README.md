@@ -1,4 +1,4 @@
-### NOTE: For the most up-to-date documentation visit https://docs.tryhelium.com/welcome
+### NOTE: For the most up-to-date documentation visit https://docs.tryhelium.com/
 
 ## **Background**
 

@@ -98,20 +98,21 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
-    /**
-    * Initializes the Helium paywall system with configuration options.
-    *
-    * @param apiKey - Helium API key
-    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
-    * @param fallbackPaywall - Default view to display when paywall fails to load
-    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
-    * @param triggers - Optional array of trigger identifiers to configure
-    * @param customUserId - Optional custom user ID to override default user identification
-    * @param customAPIEndpoint - Optional custom API endpoint URL
-    * @param customUserTraits - Optional custom user traits for targeting
-    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
-    */
+    
+    /// Initializes the Helium paywall system with configuration options.
+    ///
+    /// @param apiKey Helium API key
+    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
+    /// @param fallbackPaywall  Default view to display when paywall fails to load
+    /// @param baseTemplateView  Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    /// @param triggers  Optional array of trigger identifiers to configure
+    /// @param customUserId  Optional custom user ID to override default user identification
+    /// @param customAPIEndpoint  Optional custom API endpoint URL
+    /// @param customUserTraits  Optional custom user traits for targeting
+    /// @param onAppOpenConfig  Optional configuration for an "on\_app\_open" trigger
+    /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
+    ///
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
@@ -121,6 +122,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
+        onAppOpenConfig: HeliumOnAppOpenConfig? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
@@ -216,7 +218,7 @@ public enum HeliumPurchaseError: Error {
     case appAccountTokenAlreadyExists
     case invalidPersistentId
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .appAccountTokenAlreadyExists:
             return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
