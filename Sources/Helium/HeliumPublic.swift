@@ -133,7 +133,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
-        onAppEventConfigs: [HeliumOnAppEventConfig]? = nil,
+        onAppEventConfigs: [HeliumOnAppEventConfig]? = [HeliumOnAppEventConfig(appTrigger: .defaultForAppEvents)],
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
@@ -188,6 +188,13 @@ public class Helium {
                 appTrigger: isFreshInstall ? .onAppInstallTrigger : .onAppLaunchTrigger
             )
         }
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
     
     public func paywallsLoaded() -> Bool {
@@ -201,6 +208,13 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
+    }
+    
+    @objc
+    private func appDidBecomeActive() {
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: .onAppOpenTrigger
+        )
     }
 }
 

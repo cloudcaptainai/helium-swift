@@ -15,7 +15,7 @@ public enum HeliumAppEventTrigger : String {
 }
 
 public struct HeliumOnAppEventConfig {
-    let appTrigger: HeliumAppEventTrigger
+    var appTrigger: HeliumAppEventTrigger
     var enabled: Bool = true
     var indicateLoading: Bool = false
     var loadingBudgetInSeconds: TimeInterval = 1.5
@@ -25,7 +25,7 @@ public struct HeliumOnAppEventConfig {
     public init(
         appTrigger: HeliumAppEventTrigger,
         enabled: Bool = true,
-        indicateLoading: Bool = false,
+        indicateLoading: Bool = true,
         loadingBudgetInSeconds: TimeInterval = 1.5,
         customLoadingView: AnyView? = nil
     ) {
@@ -47,10 +47,17 @@ class HeliumOnAppEventConfigManager {
     private var activeConfig: HeliumOnAppEventConfig?
         
     func startTiming(appTrigger: HeliumAppEventTrigger) {
+        if activeConfig != nil {
+            // only process one app action at a time
+            return
+        }
+        
         var config = configs.first { $0.appTrigger == appTrigger }
         if config == nil {
             // see if there is a generic config
-            config = configs.first { $0.appTrigger == .defaultForAppEvents }
+            var defaultConfigCopy = configs.first { $0.appTrigger == .defaultForAppEvents }
+            config = defaultConfigCopy
+            config?.appTrigger = appTrigger
         }
         
         guard let config else {
@@ -59,6 +66,12 @@ class HeliumOnAppEventConfigManager {
         
         startTime = Date()
         activeConfig = config
+        
+        if Helium.shared.paywallsLoaded() {
+            // already available!
+            onBundlesAvailable(skipLoading: true)
+            return
+        }
         
         if config.indicateLoading {
             HeliumPaywallPresenter.shared.presentUpsellBeforeLoaded(trigger: config.appTrigger.rawValue, loadingView: config.customLoadingView ?? AnyView(LoadingView()))
@@ -81,26 +94,27 @@ class HeliumOnAppEventConfigManager {
         return elapsed > config.loadingBudgetInSeconds
     }
     
-    func onBundlesAvailable() {
+    func onBundlesAvailable(skipLoading: Bool = false) {
         guard let config = activeConfig else {
             return
         }
+        activeConfig = nil
         let trigger = config.appTrigger.rawValue
         if !config.enabled {
             HeliumPaywallPresenter.shared.hideUpsell(trigger: trigger)
             return
         }
         if isPastLoadingBudget(config: config) {
-            print("[Helium] 'on_app_open' trigger not shown; past loading budget (\(getElapsedTime()) seconds > \(config.loadingBudgetInSeconds)).")
+            print("[Helium] '\(trigger)' trigger not shown; past loading budget (\(getElapsedTime()) seconds > \(config.loadingBudgetInSeconds)).")
             HeliumPaywallPresenter.shared.hideUpsell(trigger: trigger)
             return
         }
         if !Helium.shared.triggerAvailable(trigger: trigger) {
-            print("[Helium] 'on_app_open' trigger is not available.")
+            print("[Helium] '\(trigger)' trigger is not available.")
             HeliumPaywallPresenter.shared.hideUpsell(trigger: trigger)
             return
         }
-        if config.indicateLoading {
+        if config.indicateLoading && !skipLoading {
             if !Helium.shared.checkShouldShowBeforePresenting(trigger: trigger) {
                 HeliumPaywallPresenter.shared.hideUpsell(trigger: trigger)
             } else {

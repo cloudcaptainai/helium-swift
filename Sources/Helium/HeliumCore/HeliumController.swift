@@ -110,7 +110,7 @@ public class HeliumController {
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
                 
-                HeliumOnAppOpenConfigManager.shared.onBundlesAvailable()
+                HeliumOnAppEventConfigManager.shared.onBundlesAvailable()
                 
             case .failure(let error):
             
