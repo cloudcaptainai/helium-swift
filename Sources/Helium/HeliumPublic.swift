@@ -189,12 +189,17 @@ public class Helium {
             )
         }
         
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
+        // Ensure this doesn't fire upon app install/launch. Both to avoid conflicts with those
+        // triggers and for consistency.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(appDidBecomeActive),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
     }
     
     public func paywallsLoaded() -> Bool {
