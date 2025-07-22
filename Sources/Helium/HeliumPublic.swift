@@ -98,6 +98,11 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
+    /// Returns true if Helium is initialized, this trigger is configured, and associated paywall is ready to be presented.
+    public func triggerAvailable(trigger: String) -> Bool {
+        return getPaywallInfo(trigger: trigger) != nil
+    }
+    
     
     /// Initializes the Helium paywall system with configuration options.
     ///
@@ -134,6 +139,11 @@ public class Helium {
         }
         if (customUserTraits != nil) {
             HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
+        }
+        
+        if let onAppOpenConfig {
+            HeliumOnAppOpenConfigManager.shared.config = onAppOpenConfig
+            HeliumOnAppOpenConfigManager.shared.startTiming()
         }
         
         HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId

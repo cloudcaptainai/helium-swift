@@ -275,14 +275,14 @@ class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
     
+    private var preloadWebViewBundle: PaywallWebViewBundle? = nil
     private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
+    private var preloadCounter: Int = 0
     
     func preCreateFirstWebView() {
         Task {
             let bundle = await createWebViewBundle(filePath: nil)
-            preparedWebViewBundles.append(
-                bundle
-            )
+            preloadWebViewBundle = bundle
         }
     }
     
@@ -366,17 +366,20 @@ class WebViewManager {
     func preLoad(filePath: String) {
         let startTime = Date()
         
+        preloadCounter += 1
         Task {
             await preloadFilePath(filePath)
             print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
+            preloadCounter -= 1
+            if preloadCounter == 0 {
+                completePreloads()
+            }
         }
     }
     
     @MainActor
     fileprivate func preloadFilePath(_ filePath: String) {
-        // can use any webview for preloading
-        var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
-        guard let webView = webViewBundle?.preparedWebView else {
+        guard let webView = preloadWebViewBundle?.preparedWebView else {
             return
         }
         loadFilePath(filePath, toWebView: webView)
@@ -391,6 +394,12 @@ class WebViewManager {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         }
+    }
+    
+    private func completePreloads() {
+        guard let preloadWebViewBundle else { return }
+        // Can re-use the preload bundle now
+        preparedWebViewBundles.append(preloadWebViewBundle)
     }
     
 }

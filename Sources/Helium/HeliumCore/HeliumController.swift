@@ -109,7 +109,9 @@ public class HeliumController {
                     numAttempts: numFetchRequests
                 );
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
-                // Use the config as needed
+                
+                HeliumOnAppOpenConfigManager.shared.onBundlesAvailable()
+                
             case .failure(let error):
             
                 let configuration = Configuration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
