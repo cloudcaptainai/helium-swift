@@ -120,7 +120,7 @@ public class Helium {
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
-    /// @param onAppOpenConfig  Optional configuration for an "on\_app\_open" trigger
+    /// @param onAppEventConfigs  Optional configurations for predefined triggers such as "on\_app\_open"
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
     /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
     ///
@@ -133,23 +133,19 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
-        onAppOpenConfig: HeliumOnAppOpenConfig? = nil,
+        onAppEventConfigs: [HeliumOnAppEventConfig]? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
             return
         }
+        let isFreshInstall = !HeliumIdentityManager.shared.hasIdentity()
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
         if (customUserTraits != nil) {
             HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
-        }
-        
-        if let onAppOpenConfig {
-            HeliumOnAppOpenConfigManager.shared.config = onAppOpenConfig
-            HeliumOnAppOpenConfigManager.shared.startTiming()
         }
         
         HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
@@ -185,6 +181,13 @@ public class Helium {
         self.controller!.downloadConfig();
         
         WebViewManager.shared.preCreateFirstWebView()
+        
+        if let onAppEventConfigs {
+            HeliumOnAppEventConfigManager.shared.configs = onAppEventConfigs
+            HeliumOnAppEventConfigManager.shared.startTiming(
+                appTrigger: isFreshInstall ? .onAppInstallTrigger : .onAppLaunchTrigger
+            )
+        }
     }
     
     public func paywallsLoaded() -> Bool {
