@@ -275,22 +275,21 @@ class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
     
-    private var preloadWebViewBundle: PaywallWebViewBundle? = nil
-    private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
+    private var preloadWebViewHolder: PaywallWebViewHolder? = nil
+    private(set) var preparedWebViewHolders: [PaywallWebViewHolder] = []
     private var preloadCounter: Int = 0
     
     func preCreateFirstWebView() {
         Task {
             // Just use this one for preloading purposes
-            let preloadBundle = await createWebViewBundle(filePath: nil)
-            preloadWebViewBundle = preloadBundle
+            preloadWebViewHolder = await createWebViewHolder(filePath: nil)
             // Speed things up slightly by having first one ready for use
-            let initialEmptyBundle = await createWebViewBundle(filePath: nil)
-            preparedWebViewBundles.append(initialEmptyBundle)
+            let initialWebviewHolder = await createWebViewHolder(filePath: nil)
+            preparedWebViewHolders.append(initialWebviewHolder)
         }
     }
     
-    fileprivate func createWebViewBundle(filePath: String? = nil) async -> PaywallWebViewBundle {
+    fileprivate func createWebViewHolder(filePath: String? = nil) async -> PaywallWebViewHolder {
         let messageHandler = WebViewMessageHandler()
         
         let config = WKWebViewConfiguration()
@@ -319,31 +318,31 @@ class WebViewManager {
         let webView = await WKWebView(frame: .zero, configuration: config)
         await webView.configuration.preferences.javaScriptEnabled = true
         
-        return PaywallWebViewBundle(
+        return PaywallWebViewHolder(
             filePath: filePath, webView: webView, msgHandler: messageHandler
         )
     }
     
     @MainActor
     fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper, heliumViewController: HeliumViewController?) async -> WKWebView? {
-        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.isInUse }
-        if webViewBundle == nil {
-            webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
-            if let webViewBundle {
-                webViewBundle.filePath = filePath
+        var webViewHolder = preparedWebViewHolders.first { $0.filePath == filePath && !$0.isInUse }
+        if webViewHolder == nil {
+            webViewHolder = preparedWebViewHolders.first { $0.filePath == nil } // see if there's one available
+            if let webViewHolder {
+                webViewHolder.filePath = filePath
             } else {
-                let newBundle = await createWebViewBundle(filePath: filePath)
-                preparedWebViewBundles.append(newBundle)
-                webViewBundle = newBundle
+                let newWebViewHolder = await createWebViewHolder(filePath: filePath)
+                preparedWebViewHolders.append(newWebViewHolder)
+                webViewHolder = newWebViewHolder
             }
         }
-        guard let webViewBundle else { return nil }
-        webViewBundle.heliumViewController = heliumViewController
-        webViewBundle.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
+        guard let webViewHolder else { return nil }
+        webViewHolder.heliumViewController = heliumViewController
+        webViewHolder.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
         
-        let webView = webViewBundle.preparedWebView
+        let webView = webViewHolder.preparedWebView
         
-        webView.navigationDelegate = webViewBundle.messageHandler
+        webView.navigationDelegate = webViewHolder.messageHandler
         webView.contentMode = .scaleToFill
         webView.backgroundColor = .clear
         webView.isOpaque = false
@@ -378,7 +377,7 @@ class WebViewManager {
     
     @MainActor
     fileprivate func preloadFilePath(_ filePath: String) {
-        guard let webView = preloadWebViewBundle?.preparedWebView else {
+        guard let webView = preloadWebViewHolder?.preparedWebView else {
             return
         }
         loadFilePath(filePath, toWebView: webView)
@@ -397,7 +396,7 @@ class WebViewManager {
     
 }
 
-class PaywallWebViewBundle {
+class PaywallWebViewHolder {
     var filePath: String? = nil
     let preparedWebView: WKWebView
     let messageHandler: WebViewMessageHandler
