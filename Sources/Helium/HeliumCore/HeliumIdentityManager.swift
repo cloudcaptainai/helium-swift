@@ -24,6 +24,10 @@ public class HeliumIdentityManager {
     
     // MARK: - Public Methods
     
+    func hasIdentity() -> Bool {
+        return UserDefaults.standard.string(forKey: heliumPersistentIdKey) != nil
+    }
+    
     /// Gets the current user ID, creating one if it doesn't exist
     /// - Returns: The current user ID
     public func getUserId() -> String {

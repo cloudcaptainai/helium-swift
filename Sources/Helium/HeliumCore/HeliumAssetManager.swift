@@ -124,7 +124,7 @@ public class HeliumAssetManager: ObservableObject {
                 updatedIds.insert(bundleId)
             }
             
-            WebViewManager.shared.preLoad(filePath: bundleDir.appendingPathComponent(fileName).path)
+            WebViewManager.shared.preLoad(filePath: localURL.path)
         }
         
         bundleIds = updatedIds

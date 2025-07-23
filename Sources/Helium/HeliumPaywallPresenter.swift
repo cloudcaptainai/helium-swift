@@ -11,14 +11,28 @@ class HeliumPaywallPresenter {
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         Task { @MainActor in
             let contentView = Helium.shared.upsellViewForTrigger(trigger: trigger)
-            presentPaywall(contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, contentView: contentView, from: viewController)
+        }
+    }
+    
+    func presentUpsellBeforeLoaded(trigger: String, loadingView: AnyView) {
+        Task { @MainActor in
+            presentPaywall(trigger: trigger, contentView: loadingView, from: nil)
+        }
+    }
+    func updateUpsellAfterLoad(trigger: String) {
+        let contentView = Helium.shared.upsellViewForTrigger(trigger: trigger)
+        Task { @MainActor in
+            let paywall = paywallsDisplayed.first { $0.trigger == trigger }
+            paywall?.updateContent(contentView)
         }
     }
     
     @MainActor
-    private func presentPaywall(contentView: AnyView, from viewController: UIViewController? = nil) {
+    private func presentPaywall(trigger: String, contentView: AnyView, from viewController: UIViewController? = nil) {
         let modalVC = HeliumViewController(contentView: contentView)
         modalVC.modalPresentationStyle = .fullScreen
+        modalVC.trigger = trigger
         
         let presenter = viewController ?? findTopMostViewController()
         presenter.present(modalVC, animated: true)
@@ -39,6 +53,21 @@ class HeliumPaywallPresenter {
         }
         
         return topController
+    }
+    
+    /// Removes the topmost (top of the stack) paywall found with matching trigger
+    @discardableResult
+    func hideUpsell(trigger: String, animated: Bool = true) {
+        guard let paywallToRemoveIndex = paywallsDisplayed.firstIndex(where: { $0.trigger == trigger }) else {
+            return
+        }
+        let removed = paywallsDisplayed.remove(at: paywallToRemoveIndex)
+        Task { @MainActor in
+            guard let presenter = removed.presentingViewController else {
+                return
+            }
+            presenter.dismiss(animated: animated)
+        }
     }
     
     @discardableResult
