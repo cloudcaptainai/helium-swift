@@ -11,21 +11,20 @@ public enum HeliumAppEventTrigger : String {
     case onAppInstallTrigger = "on_app_install"
     case onAppLaunchTrigger = "on_app_launch"
     case onAppOpenTrigger = "on_app_open"
-    case defaultForAppEvents = "h_default_for_app_events"
 }
 
 public struct HeliumOnAppEventConfig {
-    var appTrigger: HeliumAppEventTrigger
-    var enabled: Bool = true
-    var indicateLoading: Bool = false
-    var loadingBudgetInSeconds: TimeInterval = 1.5
-    var customLoadingView: AnyView? = nil
+    var appTrigger: HeliumAppEventTrigger?
+    let enabled: Bool
+    let indicateLoading: Bool
+    let loadingBudgetInSeconds: TimeInterval
+    let customLoadingView: AnyView?
     
     // Need an explicitly public init for use outside the SDK
     public init(
-        appTrigger: HeliumAppEventTrigger,
+        appTrigger: HeliumAppEventTrigger? = nil,
         enabled: Bool = true,
-        indicateLoading: Bool = true,
+        indicateLoading: Bool = false,
         loadingBudgetInSeconds: TimeInterval = 1.5,
         customLoadingView: AnyView? = nil
     ) {
@@ -41,6 +40,7 @@ class HeliumOnAppEventConfigManager {
     
     public static let shared = HeliumOnAppEventConfigManager()
     
+    var defaultConfig: HeliumOnAppEventConfig?
     var configs: [HeliumOnAppEventConfig] = []
     
     private var startTime: Date?
@@ -54,13 +54,11 @@ class HeliumOnAppEventConfigManager {
         
         var config = configs.first { $0.appTrigger == appTrigger }
         if config == nil {
-            // see if there is a generic config
-            var defaultConfigCopy = configs.first { $0.appTrigger == .defaultForAppEvents }
-            config = defaultConfigCopy
+            config = defaultConfig // copy of defaultConfig
             config?.appTrigger = appTrigger
         }
         
-        guard let config else {
+        guard let config, let trigger = config.appTrigger?.rawValue else {
             return
         }
         
@@ -74,7 +72,10 @@ class HeliumOnAppEventConfigManager {
         }
         
         if config.indicateLoading {
-            HeliumPaywallPresenter.shared.presentUpsellBeforeLoaded(trigger: config.appTrigger.rawValue, loadingView: config.customLoadingView ?? AnyView(LoadingView()))
+            HeliumPaywallPresenter.shared.presentUpsellBeforeLoaded(
+                trigger: trigger,
+                loadingView: config.customLoadingView ?? AnyView(LoadingView())
+            )
         }
     }
     
@@ -99,7 +100,9 @@ class HeliumOnAppEventConfigManager {
             return
         }
         activeConfig = nil
-        let trigger = config.appTrigger.rawValue
+        guard let trigger = config.appTrigger?.rawValue else {
+            return
+        }
         if !config.enabled {
             HeliumPaywallPresenter.shared.hideUpsell(trigger: trigger)
             return

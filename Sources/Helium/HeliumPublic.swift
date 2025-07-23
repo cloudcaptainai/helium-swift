@@ -120,7 +120,8 @@ public class Helium {
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
-    /// @param onAppEventConfigs  Optional configurations for predefined triggers such as "on\_app\_open"
+    /// @param defaultOnAppEventConfig  Optional default configuration for predefined triggers such as "on\_app\_launch"
+    /// @param onAppEventConfigs  Optional configurations for predefined triggers such as "on\_app\_launch"
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
     /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
     ///
@@ -133,7 +134,8 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
-        onAppEventConfigs: [HeliumOnAppEventConfig]? = [HeliumOnAppEventConfig(appTrigger: .defaultForAppEvents)],
+        defaultOnAppEventConfig: HeliumOnAppEventConfig? = HeliumOnAppEventConfig(appTrigger: .defaultForAppEvents),
+        onAppEventConfigs: [HeliumOnAppEventConfig]? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
@@ -182,12 +184,15 @@ public class Helium {
         
         WebViewManager.shared.preCreateFirstWebView()
         
+        if let defaultOnAppEventConfig {
+            HeliumOnAppEventConfigManager.shared.defaultConfig = defaultOnAppEventConfig
+        }
         if let onAppEventConfigs {
             HeliumOnAppEventConfigManager.shared.configs = onAppEventConfigs
-            HeliumOnAppEventConfigManager.shared.startTiming(
-                appTrigger: isFreshInstall ? .onAppInstallTrigger : .onAppLaunchTrigger
-            )
         }
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: isFreshInstall ? .onAppInstallTrigger : .onAppLaunchTrigger
+        )
         
         // Ensure this doesn't fire upon app install/launch. Both to avoid conflicts with those
         // triggers and for consistency.
