@@ -11,6 +11,7 @@ public enum HeliumAppEventTrigger : String {
     case onAppInstallTrigger = "on_app_install"
     case onAppLaunchTrigger = "on_app_launch"
     case onAppOpenTrigger = "on_app_open"
+    case onDeepLinkTrigger = "on_deep_link"
 }
 
 public struct HeliumOnAppEventConfig {

@@ -134,7 +134,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
-        defaultOnAppEventConfig: HeliumOnAppEventConfig? = HeliumOnAppEventConfig(appTrigger: .defaultForAppEvents),
+        defaultOnAppEventConfig: HeliumOnAppEventConfig? = HeliumOnAppEventConfig(),
         onAppEventConfigs: [HeliumOnAppEventConfig]? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
@@ -218,6 +218,12 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
+    }
+    
+    public func handleDeepLink(url: URL) {
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: .onDeepLinkTrigger
+        )
     }
     
     @objc
