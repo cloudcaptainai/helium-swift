@@ -4,7 +4,14 @@ import UIKit
 
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
-    private init() {}
+    private init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+    }
     
     private var paywallsDisplayed: [HeliumViewController] = []
     
@@ -68,17 +75,14 @@ class HeliumPaywallPresenter {
             // since they must have ultimately be presented by the topmost paywall if you go all the way up.
             paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true) { [weak self] in
                 onComplete?()
-                for paywallDisplay in paywallsRemoved {
-                    self?.dispatchCloseEvent(trigger: paywallDisplay.trigger)
-                }
+                self?.dispatchCloseForAll(paywallVCs: paywallsRemoved)
             }
             paywallsDisplayed.removeAll()
         }
     }
     
     func cleanUpPaywall(heliumViewController: HeliumViewController) {
-        //what about here?
-        //todo handle app terminate!
+        dispatchCloseForAll(paywallVCs: paywallsDisplayed.filter { $0 === heliumViewController })
         paywallsDisplayed.removeAll { $0 === heliumViewController }
     }
     
@@ -92,6 +96,18 @@ class HeliumPaywallPresenter {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templatName))
+    }
+    
+    private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {
+        for paywallDisplay in paywallVCs {
+            dispatchCloseEvent(trigger: paywallDisplay.trigger)
+        }
+    }
+    
+    @objc private func appWillTerminate() {
+        // attempt to dispatch paywallClose analytics event even if user rage quits
+        dispatchCloseForAll(paywallVCs: paywallsDisplayed)
+        paywallsDisplayed.removeAll()
     }
     
 }
