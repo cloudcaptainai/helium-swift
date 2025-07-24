@@ -11,19 +11,21 @@ class HeliumPaywallPresenter {
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         Task { @MainActor in
             let contentView = Helium.shared.upsellViewForTrigger(trigger: trigger)
-            presentPaywall(contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, contentView: contentView, from: viewController)
         }
     }
     
     @MainActor
-    private func presentPaywall(contentView: AnyView, from viewController: UIViewController? = nil) {
-        let modalVC = HeliumViewController(contentView: contentView)
+    private func presentPaywall(trigger: String, contentView: AnyView, from viewController: UIViewController? = nil) {
+        let modalVC = HeliumViewController(trigger: trigger, contentView: contentView)
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()
         presenter.present(modalVC, animated: true)
         
         paywallsDisplayed.append(modalVC)
+                
+        dispatchOpenEvent(trigger: trigger)
     }
     
     @MainActor
@@ -48,7 +50,9 @@ class HeliumPaywallPresenter {
             return false
         }
         Task { @MainActor in
-            currentPaywall.dismiss(animated: animated)
+            currentPaywall.dismiss(animated: animated) { [weak self] in
+                self?.dispatchCloseEvent(trigger: currentPaywall.trigger)
+            }
         }
         return true
     }
@@ -58,16 +62,36 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
+        var paywallsRemoved = paywallsDisplayed
         Task { @MainActor in
             // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
             // since they must have ultimately be presented by the topmost paywall if you go all the way up.
-            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true, completion: onComplete)
+            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true) { [weak self] in
+                onComplete?()
+                for paywallDisplay in paywallsRemoved {
+                    self?.dispatchCloseEvent(trigger: paywallDisplay.trigger)
+                }
+            }
             paywallsDisplayed.removeAll()
         }
     }
     
     func cleanUpPaywall(heliumViewController: HeliumViewController) {
+        //what about here?
+        //todo handle app terminate!
         paywallsDisplayed.removeAll { $0 === heliumViewController }
+    }
+    
+    private func dispatchOpenEvent(trigger: String) {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templatName, viewType: PaywallOpenViewType.presented.rawValue))
+    }
+    
+    private func dispatchCloseEvent(trigger: String) {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templatName))
     }
     
 }

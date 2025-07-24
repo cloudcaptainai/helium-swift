@@ -76,10 +76,12 @@ extension EnvironmentValues {
 }
 
 class HeliumViewController: UIViewController {
+    let trigger: String
     private let contentView: AnyView
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
-    init(contentView: AnyView) {
+    init(trigger: String, contentView: AnyView) {
+        self.trigger = trigger
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
         super.init(nibName: nil, bundle: nil)
