@@ -207,7 +207,10 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     }
     
     public func logClosure() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+        let closeEvent: HeliumPaywallEvent = .paywallClose(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
+        DispatchQueue.main.async {
+            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: closeEvent)
+        }
     }
 }
 
