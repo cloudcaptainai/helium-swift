@@ -75,6 +75,9 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             presentationState.handleOnDisappear()
         }
         .onReceive(presentationState.$isOpen) { newIsOpen in
+            if presentationState.viewType == .presented {
+                return
+            }
             if newIsOpen {
                 actionsDelegateWrapper.logImpression(viewType: presentationState.viewType)
             } else {
