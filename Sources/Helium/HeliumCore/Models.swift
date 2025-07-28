@@ -401,6 +401,8 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var timestamp: String
     var isHeliumEvent: Bool = true
     
+    var contextTraits: CodableUserContext?
+    
     var experimentID: String?
     var modelID: String?
     var paywallID: Int?
