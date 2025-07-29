@@ -141,11 +141,16 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     
     public func showSecondaryPaywall(uuid: String) {
         if (!isLoading) {
-            if let trigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger)
+            let secondTryTrigger = "\(trigger)_second_try"
+            // use explicit second try trigger if possible
+            if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger)
+            } // otherwise look for a paywall that matches the uuid
+            else if let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger)
             } else {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                    event: .paywallOpenFailed(triggerName: "\(trigger)_secondTry", paywallTemplateName: "unknown")
+                    event: .paywallOpenFailed(triggerName: secondTryTrigger, paywallTemplateName: "unknown")
                 )
             }
         }
