@@ -37,6 +37,7 @@ struct CodableApplicationInfo: Codable {
     var completeAppVersion: String?
     var appDisplayName: String?
     var heliumSdkVersion: String?
+    var environment: String
 }
 
 struct CodableDeviceInfo: Codable {
@@ -48,7 +49,6 @@ struct CodableDeviceInfo: Codable {
     var userInterfaceIdiom: String
     var totalCapacity: Int?
     var availableCapacity: Int64?
-    var environment: String
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
@@ -71,7 +71,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
     
     let heliumSdkVersion = BuildConstants.version;
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
+    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment())
 }
 
 public struct CodableUserContext: Codable {
@@ -171,8 +171,7 @@ public struct CodableUserContext: Codable {
             deviceModel: Device.current.safeDescription,
             userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
             totalCapacity: skipDeviceCapacity ? -1 : Device.volumeTotalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage,
-            environment: AppReceiptsHelper.shared.getEnvironment()
+            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage
         )
 
         return CodableUserContext(
