@@ -35,6 +35,7 @@ class AppReceiptsHelper {
                     // The app transaction didn't pass StoreKit's verification.
                     // Handle unverified app transaction information according
                     // to your business model.
+                    break
                 case .none:
                     break
                 }
@@ -43,15 +44,15 @@ class AppReceiptsHelper {
     }
     
     func getEnvironment() -> String {
+        #if DEBUG
+        return "debug"
+        #else
         if let appTransactionEnvironment {
             return appTransactionEnvironment
         }
         
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
         
-        #if DEBUG
-        return "debug"
-        #else
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
         if isTestFlight {
             return "sandbox"
