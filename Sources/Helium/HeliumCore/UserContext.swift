@@ -48,6 +48,7 @@ struct CodableDeviceInfo: Codable {
     var userInterfaceIdiom: String
     var totalCapacity: Int?
     var availableCapacity: Int64?
+    var environment: String
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
@@ -71,6 +72,20 @@ func createApplicationInfo() -> CodableApplicationInfo {
     let heliumSdkVersion = BuildConstants.version;
     
     return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
+}
+
+// Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle special cases.
+fileprivate func getEnvironment() -> String {
+    #if DEBUG
+    return "debug"
+    #else
+    let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    if isTestFlight {
+        return "sandbox"
+    } else {
+        return "production"
+    }
+    #endif
 }
 
 public struct CodableUserContext: Codable {
@@ -170,7 +185,8 @@ public struct CodableUserContext: Codable {
             deviceModel: Device.current.safeDescription,
             userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
             totalCapacity: skipDeviceCapacity ? -1 : Device.volumeTotalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage
+            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage,
+            environment: getEnvironment()
         )
 
         return CodableUserContext(
