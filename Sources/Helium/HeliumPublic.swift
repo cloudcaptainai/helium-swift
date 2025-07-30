@@ -127,6 +127,8 @@ public class Helium {
         if initialized {
             return
         }
+        initialized = true
+        
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
@@ -136,7 +138,8 @@ public class Helium {
         
         HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
         
-        self.initialized = true;
+        AppReceiptsHelper.shared.setUp()
+        
         HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall));
         
         // Set up trigger-specific fallback views if provided

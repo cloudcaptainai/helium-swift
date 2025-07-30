@@ -74,20 +74,6 @@ func createApplicationInfo() -> CodableApplicationInfo {
     return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
 }
 
-// Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle special cases.
-fileprivate func getEnvironment() -> String {
-    #if DEBUG
-    return "debug"
-    #else
-    let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-    if isTestFlight {
-        return "sandbox"
-    } else {
-        return "production"
-    }
-    #endif
-}
-
 public struct CodableUserContext: Codable {
     var locale: CodableLocale
     var screenInfo: CodableScreenInfo
@@ -186,7 +172,7 @@ public struct CodableUserContext: Codable {
             userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
             totalCapacity: skipDeviceCapacity ? -1 : Device.volumeTotalCapacity,
             availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage,
-            environment: getEnvironment()
+            environment: AppReceiptsHelper.shared.getEnvironment()
         )
 
         return CodableUserContext(
