@@ -245,6 +245,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     heliumEvent: event,
                     fetchedConfigId: fetchedConfigId,
                     timestamp: formatAsTimestamp(date: Date()),
+                    contextTraits: HeliumIdentityManager.shared.getUserContext(skipDeviceCapacity: true),
                     experimentID: experimentID,
                     modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
