@@ -37,6 +37,7 @@ struct CodableApplicationInfo: Codable {
     var completeAppVersion: String?
     var appDisplayName: String?
     var heliumSdkVersion: String?
+    var environment: String
 }
 
 struct CodableDeviceInfo: Codable {
@@ -70,7 +71,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
     
     let heliumSdkVersion = BuildConstants.version;
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion);
+    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment())
 }
 
 public struct CodableUserContext: Codable {
