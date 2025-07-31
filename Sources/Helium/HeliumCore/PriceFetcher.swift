@@ -87,6 +87,18 @@ public struct LocalizedPrice: Codable {
 /// A utility class for fetching localized pricing information for a given SKU
 public class PriceFetcher {
     
+    private static func mapToTestSku(_ sku: String) -> String? {
+        let lowercaseSku = sku.lowercased()
+        if lowercaseSku.contains("year") || lowercaseSku.contains("1y") || lowercaseSku.contains("annual") {
+            return "test_yearly"
+        } else if lowercaseSku.contains("month") || lowercaseSku.contains("1m") {
+            return "test_monthly"
+        } else if lowercaseSku.contains("week") || lowercaseSku.contains("1w") {
+            return "test_weekly"
+        }
+        return nil
+    }
+    
     /// Fetches the localized price for multiple SKUs using async/await
     /// - Parameter skus: Array of product identifiers
     /// - Returns: Dictionary mapping SKUs to their localized price information
@@ -94,7 +106,23 @@ public class PriceFetcher {
     public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
         do {
-            let products = try await Product.products(for: Set(skus))
+            let app_name = Bundle.main.infoDictionary?["CFBundleName"] as? String
+            let isHeliumDemo = app_name == "helium-demo"
+                
+            // Determine which SKUs to fetch
+            var skusToFetch = skus
+            var originalToTestMap: [String: String] = [:]
+            
+            if isHeliumDemo {
+                for sku in skus {
+                    if let testSku = mapToTestSku(sku) {
+                        originalToTestMap[sku] = testSku
+                        skusToFetch.append(testSku)
+                    }
+                }
+            }
+            let products = try await Product.products(for: Set(skusToFetch))
+
             for product in products {
                 let formatter = NumberFormatter()
                 formatter.numberStyle = .currency
@@ -108,6 +136,7 @@ public class PriceFetcher {
                     currencySymbol: formatter.currencySymbol ?? "$",
                     decimalSeparator: formatter.currencyDecimalSeparator ?? "."
                 )
+                print(baseInfo)
                 
                 var subscriptionInfo: SubscriptionInfo?
                 var iapInfo: IAPInfo?
@@ -151,6 +180,13 @@ public class PriceFetcher {
                 
                 priceMap[product.id] = price
             }
+            if isHeliumDemo {
+                    for (originalSku, testSku) in originalToTestMap {
+                        if priceMap[originalSku] == nil && priceMap[testSku] != nil {
+                            priceMap[originalSku] = priceMap[testSku]
+                        }
+                    }
+                }
         } catch {
             // Error handling without logging
         }
