@@ -114,14 +114,13 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 respond(["message": "Unknown message type"])
             }
         }
-        print("Message handling complete for: \(message.name)")
     }
 }
 
 
 extension WebViewMessageHandler: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        print("WebView did commit navigation")
+        
     }
     
     private func shouldOpenExternally(url: URL) -> Bool {

@@ -51,7 +51,6 @@ public class HeliumAssetManager: ObservableObject {
     }
     
     public func localPathForURL(bundleURL: String) -> String? {
-        print("Requesting local path")
         guard let bundleId = getBundleIdFromURL(bundleURL) else {
             print("couldnt get from url \(bundleURL)");
             return nil
@@ -62,7 +61,6 @@ public class HeliumAssetManager: ObservableObject {
             .appendingPathComponent("helium_bundles_cache", isDirectory: true)
         
         let value = bundleDir.appendingPathComponent("\(bundleId).html").path
-        print("Reading from \(value)");
         return value;
     }
     
