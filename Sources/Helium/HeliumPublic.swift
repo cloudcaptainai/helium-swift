@@ -124,9 +124,9 @@ public class Helium {
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
-        if initialized {
-            return
-        }
+        // if initialized {
+        //     return
+        // }
         initialized = true
         
         if (customUserId != nil) {
