@@ -12,8 +12,13 @@ class AppReceiptsHelper {
     static let shared = AppReceiptsHelper()
     
     private var appTransactionEnvironment: String? = nil
+    private var setupCompleted: Bool = false
     
     func setUp() {
+        if setupCompleted {
+            return
+        }
+        setupCompleted = true
         if #available(iOS 16.0, *) {
             Task {
                 let verificationResult = try? await AppTransaction.shared
