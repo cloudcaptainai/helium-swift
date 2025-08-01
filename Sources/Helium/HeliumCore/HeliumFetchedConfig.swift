@@ -47,13 +47,17 @@ public func fetchEndpoint(
     }
     
     let config = URLSessionConfiguration.default
-    config.httpMaximumConnectionsPerHost = 5
+    config.httpMaximumConnectionsPerHost = 12
     let session = URLSession(configuration: config)
     
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+    request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
+    // Use HTTP 3 if possible
+    if #available(iOS 14.5, *) {
+        request.assumesHTTP3Capable = true
+    }
     
     if NetworkReachability.shared.isOnWiFi {
         request.timeoutInterval = 30
