@@ -64,16 +64,31 @@ public func fetchEndpoint(
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
     
+    let networkStartTime = DispatchTime.now()
+    print("🌐 Starting network request to: \(urlString)")
+    
     let (data, response) = try await session.data(for: request)
+    
+    let networkEndTime = DispatchTime.now()
+    let networkTimeMS = Double(networkEndTime.uptimeNanoseconds - networkStartTime.uptimeNanoseconds) / 1_000_000.0
+    print("🌐 Network request completed in: \(String(format: "%.2f", networkTimeMS)) ms")
     
     guard let httpResponse = response as? HTTPURLResponse,
           (200...299).contains(httpResponse.statusCode) else {
         throw URLError(.badServerResponse)
     }
     
+    let parsingStartTime = DispatchTime.now()
+    print("📄 Starting response parsing...")
+    
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
     
     let json = try? JSON(data: data)
+    
+    let parsingEndTime = DispatchTime.now()
+    let parsingTimeMS = Double(parsingEndTime.uptimeNanoseconds - parsingStartTime.uptimeNanoseconds) / 1_000_000.0
+    print("📄 Response parsing completed in: \(String(format: "%.2f", parsingTimeMS)) ms")
+    
     return (decodedResponse, json)
 }
 
@@ -117,6 +132,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) async {
         do {
+            let overallStartTime = DispatchTime.now()
+            print("⏱️ Starting config fetch attempt \(retryCount + 1)")
+            
             let startTime = DispatchTime.now()
             // Make the request asynchronously
             let response = try await fetchEndpoint(endpoint: endpoint, params: params)
@@ -142,26 +160,45 @@ public class HeliumFetchedConfigManager: ObservableObject {
             }
             let endTime = DispatchTime.now()
             downloadTimeTakenMS = UInt64(Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000.0)
+            print("✅ Config fetch completed in: \(downloadTimeTakenMS ?? 0) ms")
             
+            let configUpdateStartTime = DispatchTime.now()
+            print("💾 Updating config in memory...")
             // Update the fetched config
             self.fetchedConfig = newConfig
             self.fetchedConfigJSON = newConfigJSON
+            let configUpdateEndTime = DispatchTime.now()
+            let configUpdateTimeMS = Double(configUpdateEndTime.uptimeNanoseconds - configUpdateStartTime.uptimeNanoseconds) / 1_000_000.0
+            print("💾 Config memory update completed in: \(String(format: "%.2f", configUpdateTimeMS)) ms")
             
             // Download assets
-            let startTimeConfig = Date()
-            
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                 do {
+                    let bundleStartTime = DispatchTime.now()
+                    print("📦 Starting bundle processing (\((self.fetchedConfig?.bundles)!.count) bundles)...")
+                    
                     let bundles = (self.fetchedConfig?.bundles)!
-                    let endTimeNewConfig = Date()
-                    let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                     
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     
+                    let bundleEndTime = DispatchTime.now()
+                    let bundleTimeMS = Double(bundleEndTime.uptimeNanoseconds - bundleStartTime.uptimeNanoseconds) / 1_000_000.0
+                    print("📦 Bundle processing completed in: \(String(format: "%.2f", bundleTimeMS)) ms")
+                    
+                    let priceStartTime = DispatchTime.now()
+                    print("💰 Starting price fetching...")
                     // Fetch localized prices for all products
                     await fetchLocalizedPrices()
+                    let priceEndTime = DispatchTime.now()
+                    let priceTimeMS = Double(priceEndTime.uptimeNanoseconds - priceStartTime.uptimeNanoseconds) / 1_000_000.0
+                    print("💰 Price fetching completed in: \(String(format: "%.2f", priceTimeMS)) ms")
                     
                     await self.updateDownloadState(.downloadSuccess)
+                    
+                    let overallEndTime = DispatchTime.now()
+                    let overallTimeMS = Double(overallEndTime.uptimeNanoseconds - overallStartTime.uptimeNanoseconds) / 1_000_000.0
+                    print("🎉 Total operation completed in: \(String(format: "%.2f", overallTimeMS)) ms")
+                    
                     completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
                     
                 } catch {
@@ -186,10 +223,20 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
+                let priceStartTime = DispatchTime.now()
+                print("💰 Starting price fetching (no bundles)...")
                 // Fetch localized prices for all products
                 await fetchLocalizedPrices()
+                let priceEndTime = DispatchTime.now()
+                let priceTimeMS = Double(priceEndTime.uptimeNanoseconds - priceStartTime.uptimeNanoseconds) / 1_000_000.0
+                print("💰 Price fetching completed in: \(String(format: "%.2f", priceTimeMS)) ms")
                 
                 await self.updateDownloadState(.downloadSuccess)
+                
+                let overallEndTime = DispatchTime.now()
+                let overallTimeMS = Double(overallEndTime.uptimeNanoseconds - overallStartTime.uptimeNanoseconds) / 1_000_000.0
+                print("🎉 Total operation completed in: \(String(format: "%.2f", overallTimeMS)) ms")
+                
                 completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
             }
         } catch {
@@ -221,6 +268,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private func fetchLocalizedPrices() async {
         do {
+            let productIdStartTime = DispatchTime.now()
             // Get all unique product IDs from all paywalls
             var allProductIds = Set<String>()
             if let config = fetchedConfig {
@@ -228,8 +276,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     allProductIds.formUnion(paywall.productsOffered)
                 }
             }
+            let productIdEndTime = DispatchTime.now()
+            let productIdTimeMS = Double(productIdEndTime.uptimeNanoseconds - productIdStartTime.uptimeNanoseconds) / 1_000_000.0
+            print("🛍️ Product ID collection completed in: \(String(format: "%.2f", productIdTimeMS)) ms (\(allProductIds.count) products)")
             
             // Fetch prices for all products in one shot
+            let priceApiStartTime = DispatchTime.now()
             if #available(iOS 15.0, *) {
                 self.localizedPriceMap = await PriceFetcher.localizedPricing(for: Array(allProductIds))
             } else {
@@ -241,6 +293,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     }
                 }
             }
+            let priceApiEndTime = DispatchTime.now()
+            let priceApiTimeMS = Double(priceApiEndTime.uptimeNanoseconds - priceApiStartTime.uptimeNanoseconds) / 1_000_000.0
+            print("🛍️ StoreKit price fetching completed in: \(String(format: "%.2f", priceApiTimeMS)) ms")
         } catch {
             print("Error fetching localized prices");
         }
