@@ -95,7 +95,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
                 result = try await Purchases.shared.purchase(package: package)
             }
             
-            if let products {
+            if let products, result == nil {
                 let productToPurchase = products.first { $0.productIdentifier == productId }
                 guard let product = productToPurchase else {
                     return .failed(RevenueCatDelegateError.cannotFindProduct)
