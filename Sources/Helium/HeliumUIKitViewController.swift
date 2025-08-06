@@ -77,7 +77,8 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    private let contentView: AnyView
+    private var contentView: AnyView
+    private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
     init(trigger: String, contentView: AnyView) {
@@ -95,15 +96,29 @@ class HeliumViewController: UIViewController {
         super.viewDidLoad()
         
         presentationState.heliumViewController = self
-        
+        setupHostingController()
+        presentationState.isOpen = true
+    }
+    
+    private func setupHostingController() {
         let modalView = UIHostingController(rootView: contentView)
+        hostingController = modalView
+        
         addChild(modalView)
         view.addSubview(modalView.view)
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
+    }
+    
+    func updateContent(_ newContentView: AnyView) {
+        let wrappedContent = AnyView(newContentView
+            .environment(\.paywallPresentationState, presentationState))
         
-        presentationState.isOpen = true
+        self.contentView = wrappedContent
+        
+        // Update the hosting controller's root view
+        hostingController?.rootView = wrappedContent
     }
     
     override func viewDidDisappear(_ animated: Bool) {

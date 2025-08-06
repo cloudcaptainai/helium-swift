@@ -10,15 +10,21 @@ public class Helium {
     public static let shared = Helium()
     
     public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+        if !checkShouldShowBeforePresenting(trigger: trigger) {
+            return
+        }
+        
+        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
+    }
+    func checkShouldShowBeforePresenting(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
                 event: .paywallSkipped(triggerName: trigger)
             )
-            return
+            return false
         }
-        
-        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
+        return true
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -98,20 +104,27 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
-    /**
-    * Initializes the Helium paywall system with configuration options.
-    *
-    * @param apiKey - Helium API key
-    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
-    * @param fallbackPaywall - Default view to display when paywall fails to load
-    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
-    * @param triggers - Optional array of trigger identifiers to configure
-    * @param customUserId - Optional custom user ID to override default user identification
-    * @param customAPIEndpoint - Optional custom API endpoint URL
-    * @param customUserTraits - Optional custom user traits for targeting
-    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
-    */
+    /// Returns true if Helium is initialized, this trigger is configured, and associated paywall is ready to be presented.
+    public func triggerAvailable(trigger: String) -> Bool {
+        return getPaywallInfo(trigger: trigger) != nil
+    }
+    
+    
+    /// Initializes the Helium paywall system with configuration options.
+    ///
+    /// @param apiKey Helium API key
+    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
+    /// @param fallbackPaywall  Default view to display when paywall fails to load
+    /// @param baseTemplateView  Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    /// @param triggers  Optional array of trigger identifiers to configure
+    /// @param customUserId  Optional custom user ID to override default user identification
+    /// @param customAPIEndpoint  Optional custom API endpoint URL
+    /// @param customUserTraits  Optional custom user traits for targeting
+    /// @param defaultOnAppEventConfig  Optional default configuration for predefined triggers such as "on\_app\_launch"
+    /// @param onAppEventConfigs  Optional configurations for predefined triggers such as "on\_app\_launch"
+    /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
+    ///
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
@@ -121,6 +134,8 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
+        defaultOnAppEventConfig: HeliumOnAppEventConfig? = HeliumOnAppEventConfig(),
+        onAppEventConfigs: [HeliumOnAppEventConfig]? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
@@ -129,6 +144,7 @@ public class Helium {
         }
         initialized = true
         
+        let isFreshInstall = !HeliumIdentityManager.shared.hasIdentity()
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
@@ -170,6 +186,28 @@ public class Helium {
         self.controller!.downloadConfig();
         
         WebViewManager.shared.preCreateFirstWebView()
+        
+        if let defaultOnAppEventConfig {
+            HeliumOnAppEventConfigManager.shared.defaultConfig = defaultOnAppEventConfig
+        }
+        if let onAppEventConfigs {
+            HeliumOnAppEventConfigManager.shared.configs = onAppEventConfigs
+        }
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: isFreshInstall ? .onAppInstallTrigger : .onAppLaunchTrigger
+        )
+        
+        // Ensure this doesn't fire upon app install/launch. Both to avoid conflicts with those
+        // triggers and for consistency.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(appDidBecomeActive),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
     }
     
     public func paywallsLoaded() -> Bool {
@@ -183,6 +221,19 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
+    }
+    
+    public func handleDeepLink(url: URL) {
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: .onDeepLinkTrigger
+        )
+    }
+    
+    @objc
+    private func appDidBecomeActive() {
+        HeliumOnAppEventConfigManager.shared.startTiming(
+            appTrigger: .onAppOpenTrigger
+        )
     }
 }
 
@@ -219,7 +270,7 @@ public enum HeliumPurchaseError: Error {
     case appAccountTokenAlreadyExists
     case invalidPersistentId
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .appAccountTokenAlreadyExists:
             return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
