@@ -22,6 +22,30 @@ public class HeliumFallbackViewManager {
     // **MARK: - Public Methods**
     public func setFallbackAssetsConfig(_ config: FallbackAssetsConfig) {
         fallbackAssetsConfig = config
+        // Give immediate feedback if assets are not accessible & avoid trying to use later.
+        // This is synchronous but very fast (typically < 1 ms).
+        var fallbackAssetCount: Int = 0
+        var foundCount: Int = 0
+        if let defaultURL = config.defaultURL {
+            fallbackAssetCount += 1
+            if !FileManager.default.fileExists(atPath: defaultURL.path) {
+                print("[Helium] Fallback asset not found: \(defaultURL.path)")
+                fallbackAssetsConfig?.defaultURL = nil
+            } else {
+                foundCount += 1
+            }
+        }
+        let triggersToURLs = config.triggersToURLs
+        for (trigger, asset) in triggersToURLs {
+            fallbackAssetCount += 1
+            if !FileManager.default.fileExists(atPath: asset.path) {
+                print("[Helium] Fallback asset not found for trigger \(trigger): \(asset.path)")
+                fallbackAssetsConfig?.triggersToURLs[trigger] = nil
+            } else {
+                foundCount += 1
+            }
+        }
+        print("[Helium] \(foundCount)/\(fallbackAssetCount) fallback assets found")
     }
     
     public func setTriggerToFallback(toSet: [String: AnyView]) {
