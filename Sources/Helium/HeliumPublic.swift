@@ -42,19 +42,13 @@ public class Helium {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo else {
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                    fallbackView
-                })
+                return fallbackViewFor(trigger: trigger)
+            }
+            if templatePaywallInfo.forceShowFallback == true {
+                return fallbackViewFor(trigger: trigger)
             }
             
             do {
-                if (paywallInfo?.forceShowFallback != nil && (paywallInfo?.forceShowFallback)!) {
-                    let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                    return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                        fallbackView
-                    })
-                }
                 return AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
@@ -65,18 +59,23 @@ public class Helium {
                     triggerName: trigger,
                     paywallTemplateName: templatePaywallInfo.paywallTemplateName
                 ));
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                    fallbackView
-                })
+                return fallbackViewFor(trigger: trigger)
             };
             
         } else {
-            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-            return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                fallbackView
-            })
+            return fallbackViewFor(trigger: trigger)
         }
+    }
+    
+    private func fallbackViewFor(trigger: String) -> AnyView {
+        if let fallbackAsset = HeliumFallbackViewManager.shared.getFallbackAsset(trigger: trigger) {
+            //todo
+        }
+        
+        let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
+        return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+            fallbackView
+        })
     }
     
     public func getHeliumUserId() -> String? {
@@ -149,6 +148,10 @@ public class Helium {
                 triggerToViewMap[trigger] = AnyView(view)
             }
             HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
+        }
+        
+        if let fallbackAssetsConfig {
+            HeliumFallbackViewManager.shared.setFallbackAssetsConfig(fallbackAssetsConfig)
         }
         
         self.controller = HeliumController(

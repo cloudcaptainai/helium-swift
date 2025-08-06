@@ -15,16 +15,17 @@ public class HeliumFallbackViewManager {
     }
     
     // **MARK: - Properties**
+    private var fallbackAssetsConfig: FallbackAssetsConfig? = nil
     private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
-    public func setTriggerToFallback(toSet: [String: AnyView]) {
-        self.triggerToFallbackView = toSet
+    public func setFallbackAssetsConfig(_ config: FallbackAssetsConfig) {
+        fallbackAssetsConfig = config
     }
     
-    public func getTriggerToFallback() -> [String: AnyView] {
-        return triggerToFallbackView
+    public func setTriggerToFallback(toSet: [String: AnyView]) {
+        self.triggerToFallbackView = toSet
     }
     
     public func setDefaultFallback(fallbackView: AnyView) {
@@ -40,5 +41,12 @@ public class HeliumFallbackViewManager {
             return fallbackView
         }
         return defaultFallback!
+    }
+    
+    public func getFallbackAsset(trigger: String) -> URL? {
+        if let asset = fallbackAssetsConfig?.triggersToURLs[trigger] {
+            return asset
+        }
+        return fallbackAssetsConfig?.defaultURL
     }
 }
