@@ -41,7 +41,7 @@ public class Helium {
         if self.paywallsLoaded() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
-            guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
+            guard let templatePaywallInfo = paywallInfo else {
                 let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                     fallbackView
@@ -55,11 +55,11 @@ public class Helium {
                         fallbackView
                     })
                 }
-                return AnyView(baseTemplateViewType.init(
+                return AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
-                ));
+                ))
             } catch {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                     triggerName: trigger,
@@ -98,30 +98,30 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
-    /**
-    * Initializes the Helium paywall system with configuration options.
-    *
-    * @param apiKey - Helium API key
-    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
-    * @param fallbackPaywall - Default view to display when paywall fails to load
-    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
-    * @param triggers - Optional array of trigger identifiers to configure
-    * @param customUserId - Optional custom user ID to override default user identification
-    * @param customAPIEndpoint - Optional custom API endpoint URL
-    * @param customUserTraits - Optional custom user traits for targeting
-    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
-    */
+    /// Initializes the Helium paywall system with configuration options.
+    ///
+    /// @param apiKey Helium API key
+    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
+    /// @param fallbackPaywall  Default view to display when paywall fails to load. fallbackAssetsConfig and fallbackPaywallPerTrigger will take precedence over this.
+    /// @param baseTemplateView  Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    /// @param triggers  Optional array of trigger identifiers to configure
+    /// @param customUserId  Optional custom user ID to override default user identification
+    /// @param customAPIEndpoint  Optional custom API endpoint URL
+    /// @param customUserTraits  Optional custom user traits for targeting
+    /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    /// @param fallbackAssetsConfig  (Optional) Provide html assets to use as fallback paywalls.
+    /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
+    ///
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
         fallbackPaywall: (any View),
-        baseTemplateView: (any BaseTemplateView.Type)? = nil,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         revenueCatAppUserId: String? = nil,
+        fallbackAssetsConfig: FallbackAssetsConfig? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
@@ -157,11 +157,6 @@ public class Helium {
         self.controller?.logInitializeEvent();
         
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
-        if (baseTemplateView == nil) {
-            self.baseTemplateViewType = DynamicBaseTemplateView.self;
-        } else {
-            self.baseTemplateViewType = baseTemplateView;
-        }
         if (customAPIEndpoint != nil) {
             self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
         } else {

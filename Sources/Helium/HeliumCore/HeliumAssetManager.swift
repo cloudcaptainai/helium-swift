@@ -130,3 +130,23 @@ public class HeliumAssetManager: ObservableObject {
         bundleIds = updatedIds
     }
 }
+
+/// Configure fallback html assets to use if for some reason the desired paywall is not ready to be shown.
+public struct FallbackAssetsConfig {
+    let defaultURL: URL?
+    let triggersToURLs: [String: URL]
+    
+    /// If a mapping is found for the trigger in triggersToURLs that will take precedence over defaultURL.
+    /// - Parameter defaultURL: (Optional) URL of an html asset to use as default fallback for all triggers.
+    /// - Parameter triggersToURLs: (Optional) Fallback html assets per trigger.
+    public init(defaultURL: URL? = nil, triggersToURLs: [String: URL] = [:]) {
+        self.defaultURL = defaultURL
+        self.triggersToURLs = triggersToURLs
+    }
+    
+    /// - Parameter url: The fallback asset URL to use for all triggers.
+    public init(_ url: URL) {
+        self.defaultURL = url
+        self.triggersToURLs = [:]
+    }
+}
