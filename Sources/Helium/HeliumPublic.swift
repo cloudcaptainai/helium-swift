@@ -69,7 +69,9 @@ public class Helium {
     
     private func fallbackViewFor(trigger: String) -> AnyView {
         if let fallbackAsset = HeliumFallbackViewManager.shared.getFallbackAsset(trigger: trigger) {
-            //todo
+            return AnyView(
+                DynamicBaseTemplateView(trigger: trigger, fallbackAsset: fallbackAsset)
+            )
         }
         
         let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)

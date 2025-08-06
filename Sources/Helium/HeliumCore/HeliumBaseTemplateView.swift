@@ -32,6 +32,26 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         self.triggerName = trigger;
     }
     
+    public init(trigger: String, fallbackAsset: URL) {
+        // All that really matters here is paywallTemplateName
+        let fallbackPaywallInfo = HeliumPaywallInfo(paywallID: -1000, paywallTemplateName: "fallback_asset", productsOffered: [], resolvedConfig: "", shouldShow: true, fallbackPaywallName: "fallback_asset")
+        let delegate = HeliumActionsDelegate(paywallInfo: fallbackPaywallInfo, trigger: trigger)
+        _actionsDelegate = StateObject(wrappedValue: delegate)
+        _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate))
+        
+        // Provide fallback asset values
+        self.templateValues = JSON([
+            "baseStack" : [
+                "type" : "webView",
+                "name" : "webView",
+                "componentProps" : [
+                    "fallbackAssetURL" : fallbackAsset.absoluteString
+                ]
+            ]
+        ])
+        self.triggerName = trigger
+    }
+    
     public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
