@@ -15,16 +15,41 @@ public class HeliumFallbackViewManager {
     }
     
     // **MARK: - Properties**
+    private var fallbackAssetsConfig: FallbackAssetsConfig? = nil
     private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
-    public func setTriggerToFallback(toSet: [String: AnyView]) {
-        self.triggerToFallbackView = toSet
+    public func setFallbackAssetsConfig(_ config: FallbackAssetsConfig) {
+        fallbackAssetsConfig = config
+        // Give immediate feedback if assets are not accessible & avoid trying to use later.
+        // This is synchronous but very fast (typically < 1 ms).
+        var fallbackAssetCount: Int = 0
+        var foundCount: Int = 0
+        if let defaultURL = config.defaultURL {
+            fallbackAssetCount += 1
+            if !FileManager.default.fileExists(atPath: defaultURL.path) {
+                print("[Helium] Fallback asset not found: \(defaultURL.path)")
+                fallbackAssetsConfig?.defaultURL = nil
+            } else {
+                foundCount += 1
+            }
+        }
+        let triggersToURLs = config.triggersToURLs
+        for (trigger, asset) in triggersToURLs {
+            fallbackAssetCount += 1
+            if !FileManager.default.fileExists(atPath: asset.path) {
+                print("[Helium] Fallback asset not found for trigger \(trigger): \(asset.path)")
+                fallbackAssetsConfig?.triggersToURLs[trigger] = nil
+            } else {
+                foundCount += 1
+            }
+        }
+        print("[Helium] \(foundCount)/\(fallbackAssetCount) fallback assets found")
     }
     
-    public func getTriggerToFallback() -> [String: AnyView] {
-        return triggerToFallbackView
+    public func setTriggerToFallback(toSet: [String: AnyView]) {
+        self.triggerToFallbackView = toSet
     }
     
     public func setDefaultFallback(fallbackView: AnyView) {
@@ -40,5 +65,12 @@ public class HeliumFallbackViewManager {
             return fallbackView
         }
         return defaultFallback!
+    }
+    
+    public func getFallbackAsset(trigger: String) -> URL? {
+        if let asset = fallbackAssetsConfig?.triggersToURLs[trigger] {
+            return asset
+        }
+        return fallbackAssetsConfig?.defaultURL
     }
 }

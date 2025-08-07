@@ -25,7 +25,7 @@ public struct DynamicWebView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
-        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
+        self.filePath = (HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue) ?? json["fallbackAssetURL"].stringValue)!
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
@@ -384,6 +384,13 @@ class WebViewManager {
     
     @MainActor
     fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) {
+        if filePath.hasPrefix("file://") {
+            // It's a full file URL (ex: fallback asset URL)
+            let fileURL = URL(string: filePath)!
+            toWebView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+            return
+        }
+        
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
         
