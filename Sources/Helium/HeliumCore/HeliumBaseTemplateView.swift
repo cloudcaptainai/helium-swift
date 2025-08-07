@@ -4,13 +4,7 @@ import SwiftyJSON
 
 
 public protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String)
-}
-
-public extension BaseTemplateView {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
-        self.init(paywallInfo: paywallInfo, trigger: trigger)
-    }
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
 }
 
 
@@ -24,7 +18,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     var triggerName: String?
     
     public init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
+        let delegate = HeliumActionsDelegate(trigger: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
@@ -33,9 +27,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     }
     
     public init(trigger: String, fallbackAsset: URL) {
-        // All that really matters here is paywallTemplateName
-        let fallbackPaywallInfo = HeliumPaywallInfo(paywallID: -1000, paywallTemplateName: "fallback_asset", productsOffered: [], resolvedConfig: "", shouldShow: true, fallbackPaywallName: "fallback_asset")
-        let delegate = HeliumActionsDelegate(paywallInfo: fallbackPaywallInfo, trigger: trigger)
+        let delegate = HeliumActionsDelegate(trigger: trigger, paywallTemplateName: "fallback_asset")
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate))
         
@@ -50,17 +42,6 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             ]
         ])
         self.triggerName = trigger
-    }
-    
-    public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
-        _actionsDelegate = StateObject(wrappedValue: delegate)
-        _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
-        
-        let encoder = JSONEncoder()
-        let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
-        self.templateValues = try! JSON(data: jsonData);
-        self.triggerName = trigger;
     }
     
     public var body: some View {
