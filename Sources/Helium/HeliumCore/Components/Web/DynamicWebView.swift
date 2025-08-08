@@ -183,8 +183,12 @@ public struct DynamicWebView: View {
                 // File loading timing
                 _ = Date()
                 
-                await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
-                webView = preparedWebView
+                do {
+                    try await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
+                    webView = preparedWebView
+                } catch {
+                    webViewLoadFail(templateNameForEvent: "WebViewLoadFail")
+                }
             }
             Task {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
@@ -192,14 +196,19 @@ public struct DynamicWebView: View {
                 lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
             }
         } catch {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-                triggerName: triggerName ?? "",
-                paywallTemplateName: "WebView"
-            ));
-            if (fallbackPaywall != nil) {
-                shouldShowFallback = true;
-            }
+            webViewLoadFail(templateNameForEvent: "WebViewContextError")
         }
+    }
+    
+    private func webViewLoadFail(templateNameForEvent: String) {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
+            triggerName: triggerName ?? "",
+            paywallTemplateName: templateNameForEvent
+        ));
+        if fallbackPaywall != nil {
+            shouldShowFallback = true
+        }
+        // else should we show a generic fallback/error screen?
     }
     
     private func lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: Bool = true) {
@@ -379,15 +388,19 @@ class WebViewManager {
         guard let webView = webViewBundle?.preparedWebView else {
             return
         }
-        loadFilePath(filePath, toWebView: webView)
+        try? loadFilePath(filePath, toWebView: webView)
     }
     
     @MainActor
-    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) {
+    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) throws {
         if filePath.hasPrefix("file://") {
             // It's a full file URL (ex: fallback asset URL)
             let fileURL = URL(string: filePath)!
-            toWebView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                toWebView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+            } else {
+                throw WebViewError.fileNotFound
+            }
             return
         }
         
@@ -397,6 +410,8 @@ class WebViewManager {
         if FileManager.default.fileExists(atPath: filePath) {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+        } else {
+            throw WebViewError.bundleNotFound
         }
     }
     
@@ -416,4 +431,9 @@ class PaywallWebViewBundle {
         preparedWebView = webView
         messageHandler = msgHandler
     }
+}
+
+public enum WebViewError: Error {
+    case fileNotFound
+    case bundleNotFound
 }
