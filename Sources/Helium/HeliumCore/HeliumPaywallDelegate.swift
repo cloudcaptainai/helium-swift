@@ -254,6 +254,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
+                    appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                     revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
                     isFallback: isFallback,
                     downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,

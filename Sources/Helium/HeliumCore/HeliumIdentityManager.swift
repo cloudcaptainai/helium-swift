@@ -13,7 +13,8 @@ public class HeliumIdentityManager {
     private var heliumUserTraits: HeliumUserTraits?
     private var heliumPaywallSessionId: String?
     
-    var revenueCatAppUserId: String? = nil // Used to connect RC purchase events with Helium paywall events
+    private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
+    var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
     
     private var cachedUserContext: CodableUserContext? = nil
     
@@ -74,6 +75,15 @@ public class HeliumIdentityManager {
     /// - Returns: The session ID for this instance
     public func getHeliumSessionId() -> String {
         return heliumSessionId
+    }
+    
+    func setDefaultAppAttributionToken() {
+        if let persistentIdUUID = UUID(uuidString: getHeliumPersistentId()) { // this should always be successful
+            appAttributionToken = persistentIdUUID
+        }
+    }
+    func setCustomAppAttributionToken(_ token: UUID) {
+        appAttributionToken = token
     }
     
     /// Gets the current user context, creating it if necessary
