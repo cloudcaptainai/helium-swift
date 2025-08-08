@@ -220,7 +220,8 @@ extension Product {
         }
         
         if let existingTokenOption {
-            if !String(describing: existingTokenOption).contains(appAccountToken.uuidString) {
+            let stringDescribingToken = String(describing: existingTokenOption)
+            if !stringDescribingToken.contains(appAccountToken.uuidString.lowercased()) && !stringDescribingToken.contains(appAccountToken.uuidString.uppercased()) {
                 throw HeliumPurchaseError.appAccountTokenMismatch
             }
         }
@@ -231,10 +232,10 @@ extension Product {
     }
 }
 
-public enum HeliumPurchaseError: Error {
+public enum HeliumPurchaseError: LocalizedError {
     case appAccountTokenMismatch
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .appAccountTokenMismatch:
             return "If providing appAccountToken, this value MUST match Helium's appAttributionToken, which you can set in initialize or with Helium.shared.setAppAttributionToken()."
