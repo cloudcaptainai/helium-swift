@@ -42,10 +42,10 @@ public class Helium {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo else {
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, paywallTemplateInfo: nil)
             }
             if templatePaywallInfo.forceShowFallback == true {
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, paywallTemplateInfo: templatePaywallInfo)
             }
             
             do {
@@ -55,19 +55,20 @@ public class Helium {
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
             } catch {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-                    triggerName: trigger,
-                    paywallTemplateName: templatePaywallInfo.paywallTemplateName
-                ));
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, paywallTemplateInfo: templatePaywallInfo)
             };
             
         } else {
-            return fallbackViewFor(trigger: trigger)
+            return fallbackViewFor(trigger: trigger, paywallTemplateInfo: nil)
         }
     }
     
-    private func fallbackViewFor(trigger: String) -> AnyView {
+    private func fallbackViewFor(trigger: String, paywallTemplateInfo: HeliumPaywallInfo?) -> AnyView {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
+            triggerName: trigger,
+            paywallTemplateName: paywallTemplateInfo?.paywallTemplateName ?? "Unknown"
+        ))
+        
         if let fallbackAsset = HeliumFallbackViewManager.shared.getFallbackAsset(trigger: trigger) {
             return AnyView(
                 DynamicBaseTemplateView(trigger: trigger, fallbackAsset: fallbackAsset)

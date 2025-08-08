@@ -124,6 +124,35 @@ public enum HeliumPaywallEvent: Codable {
             return nil;
         }
     }
+    
+    public func getPaywallTemplateNameIfExists() -> String?{
+        switch self {
+        case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
+            return paywallTemplateName;
+        case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionRestored(let productKey, let triggerName, let paywallTemplateName),
+             .subscriptionPending(let productKey, let triggerName, let paywallTemplateName):
+            return paywallTemplateName;
+        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+            return paywallTemplateName;
+        case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
+            return paywallTemplateName;
+        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType):
+            return paywallTemplateName;
+        case .paywallOpenFailed(let triggerName, let paywallTemplateName),
+             .paywallClose(let triggerName, let paywallTemplateName):
+            return paywallTemplateName;
+        case .paywallDismissed(let triggerName, let paywallTemplateName, let dismissAll):
+            return paywallTemplateName;
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
+            return paywallTemplateName;
+        default:
+            return nil;
+        }
+    }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

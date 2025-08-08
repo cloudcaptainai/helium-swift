@@ -27,7 +27,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     }
     
     public init(trigger: String, fallbackAsset: URL) {
-        let delegate = HeliumActionsDelegate(trigger: trigger, paywallTemplateName: "fallback_asset")
+        let delegate = HeliumActionsDelegate(trigger: trigger, paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME)
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate))
         

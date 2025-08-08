@@ -88,13 +88,13 @@ class HeliumPaywallPresenter {
     
     private func dispatchOpenEvent(trigger: String) {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
+        let templatName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templatName, viewType: PaywallOpenViewType.presented.rawValue))
     }
     
     private func dispatchCloseEvent(trigger: String) {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
+        let templatName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templatName))
     }
     
