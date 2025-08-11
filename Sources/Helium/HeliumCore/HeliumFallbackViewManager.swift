@@ -15,13 +15,13 @@ public class HeliumFallbackViewManager {
     }
     
     // **MARK: - Properties**
-    private var fallbackAssetsConfig: FallbackAssetsConfig? = nil
+    private var fallbackBundleConfig: FallbackBundleConfig? = nil
     private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
-    public func setFallbackAssetsConfig(_ config: FallbackAssetsConfig) {
-        fallbackAssetsConfig = config
+    public func setFallbackBundleConfig(_ config: FallbackBundleConfig) {
+        fallbackBundleConfig = config
         // Give immediate feedback if assets are not accessible & avoid trying to use later.
         // This is synchronous but very fast (typically < 1 ms).
         var fallbackAssetCount: Int = 0
@@ -30,7 +30,7 @@ public class HeliumFallbackViewManager {
             fallbackAssetCount += 1
             if !FileManager.default.fileExists(atPath: defaultURL.path) {
                 print("[Helium] Fallback asset not found: \(defaultURL.path)")
-                fallbackAssetsConfig?.defaultURL = nil
+                fallbackBundleConfig?.defaultURL = nil
             } else {
                 foundCount += 1
             }
@@ -40,7 +40,7 @@ public class HeliumFallbackViewManager {
             fallbackAssetCount += 1
             if !FileManager.default.fileExists(atPath: asset.path) {
                 print("[Helium] Fallback asset not found for trigger \(trigger): \(asset.path)")
-                fallbackAssetsConfig?.triggersToURLs[trigger] = nil
+                fallbackBundleConfig?.triggersToURLs[trigger] = nil
             } else {
                 foundCount += 1
             }
@@ -68,9 +68,9 @@ public class HeliumFallbackViewManager {
     }
     
     public func getFallbackAsset(trigger: String) -> URL? {
-        if let asset = fallbackAssetsConfig?.triggersToURLs[trigger] {
+        if let asset = fallbackBundleConfig?.triggersToURLs[trigger] {
             return asset
         }
-        return fallbackAssetsConfig?.defaultURL
+        return fallbackBundleConfig?.defaultURL
     }
 }

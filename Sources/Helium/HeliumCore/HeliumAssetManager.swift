@@ -132,7 +132,7 @@ public class HeliumAssetManager: ObservableObject {
 }
 
 /// Configure fallback html assets to use if for some reason the desired paywall is not ready to be shown.
-public struct FallbackAssetsConfig {
+public struct FallbackBundleConfig {
     var defaultURL: URL?
     var triggersToURLs: [String: URL]
     

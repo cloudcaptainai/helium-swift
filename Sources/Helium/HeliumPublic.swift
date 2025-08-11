@@ -110,7 +110,7 @@ public class Helium {
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    /// @param fallbackAssetsConfig  (Optional) Provide html assets to use as fallback paywalls.
+    /// @param fallbackBundleConfig  (Optional) Provide html assets to use as fallback paywalls.
     /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
     ///
     public func initialize(
@@ -122,7 +122,7 @@ public class Helium {
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         revenueCatAppUserId: String? = nil,
-        fallbackAssetsConfig: FallbackAssetsConfig? = nil,
+        fallbackBundleConfig: FallbackBundleConfig? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
@@ -152,8 +152,8 @@ public class Helium {
             HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
         }
         
-        if let fallbackAssetsConfig {
-            HeliumFallbackViewManager.shared.setFallbackAssetsConfig(fallbackAssetsConfig)
+        if let fallbackBundleConfig {
+            HeliumFallbackViewManager.shared.setFallbackBundleConfig(fallbackBundleConfig)
         }
         
         self.controller = HeliumController(
