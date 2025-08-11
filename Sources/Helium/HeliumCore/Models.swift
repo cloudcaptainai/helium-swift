@@ -411,6 +411,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var heliumPersistentID: String?
     var heliumSessionID: String?
     var heliumPaywallSessionId: String?
+    var appAttributionToken: String?
     var revenueCatAppUserID: String?
     var isFallback: Bool?
     

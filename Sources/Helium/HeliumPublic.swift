@@ -109,6 +109,7 @@ public class Helium {
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
+    /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
     /// @param fallbackBundleConfig  (Optional) Provide html assets to use as fallback paywalls.
     /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
@@ -121,6 +122,7 @@ public class Helium {
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
+        appAttributionToken: UUID? = nil,
         revenueCatAppUserId: String? = nil,
         fallbackBundleConfig: FallbackBundleConfig? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
@@ -135,6 +137,12 @@ public class Helium {
         }
         if (customUserTraits != nil) {
             HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
+        }
+        
+        if let appAttributionToken {
+            HeliumIdentityManager.shared.setCustomAppAttributionToken(appAttributionToken)
+        } else {
+            HeliumIdentityManager.shared.setDefaultAppAttributionToken()
         }
         
         HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
@@ -184,6 +192,12 @@ public class Helium {
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
     }
+    
+    /// If you need to set a custom appAccountToken for your StoreKit purchases, make sure you keep this value in sync, either in Helium.shared.initialize or with this method.
+    /// This helps Helium provide more accurate dashboard metrics.
+    public func setAppAttributionToken(_ token: UUID) {
+        HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
+    }
 }
 
 @available(iOS 15.0, *)
@@ -199,32 +213,32 @@ extension Product {
     ) async throws -> Product.PurchaseResult {
         var newOptions: Set<Product.PurchaseOption> = options
         
-        let hasExistingAppAccountToken = newOptions.contains { option in
+        let appAccountToken = HeliumIdentityManager.shared.appAttributionToken
+        
+        let existingTokenOption = newOptions.first { option in
             return String(describing: option).contains("appAccountToken")
         }
-        if hasExistingAppAccountToken {
-            throw HeliumPurchaseError.appAccountTokenAlreadyExists
+        
+        if let existingTokenOption {
+            let stringDescribingToken = String(describing: existingTokenOption)
+            if !stringDescribingToken.contains(appAccountToken.uuidString.lowercased()) && !stringDescribingToken.contains(appAccountToken.uuidString.uppercased()) {
+                throw HeliumPurchaseError.appAccountTokenMismatch
+            }
         }
         
-        guard let appAccountToken = UUID(uuidString: HeliumIdentityManager.shared.getHeliumPersistentId()) else {
-            throw HeliumPurchaseError.invalidPersistentId
-        }
         newOptions.insert(.appAccountToken(appAccountToken))
         
         return try await purchase(options: newOptions)
     }
 }
 
-public enum HeliumPurchaseError: Error {
-    case appAccountTokenAlreadyExists
-    case invalidPersistentId
+public enum HeliumPurchaseError: LocalizedError {
+    case appAccountTokenMismatch
     
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
-        case .appAccountTokenAlreadyExists:
-            return "Options already contain an appAccountToken. Remove it or use the customAppAccountToken parameter instead."
-        case .invalidPersistentId:
-            return "Helium persistent ID is not a UUID! 😅"
+        case .appAccountTokenMismatch:
+            return "If providing appAccountToken, this value MUST match Helium's appAttributionToken, which you can set in initialize or with Helium.shared.setAppAttributionToken()."
         }
     }
 }
