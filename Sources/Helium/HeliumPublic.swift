@@ -68,9 +68,13 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String) -> AnyView {
-        if let fallbackAsset = HeliumFallbackViewManager.shared.getFallbackAsset(trigger: trigger) {
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             return AnyView(
-                DynamicBaseTemplateView(trigger: trigger, fallbackAsset: fallbackAsset)
+                DynamicBaseTemplateView(
+                    paywallInfo: fallbackPaywallInfo,
+                    trigger: trigger,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                )
             )
         }
         
@@ -111,7 +115,7 @@ public class Helium {
     /// @param customUserTraits  Optional custom user traits for targeting
     /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    /// @param fallbackBundleConfig  (Optional) Provide html assets to use as fallback paywalls.
+    /// @param fallbackBundleURL (Optional) The URL to a fallback bundle downloaded from the dashboard..
     /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
     ///
     public func initialize(
@@ -124,7 +128,7 @@ public class Helium {
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
         revenueCatAppUserId: String? = nil,
-        fallbackBundleConfig: FallbackBundleConfig? = nil,
+        fallbackBundleURL: URL? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
@@ -160,8 +164,8 @@ public class Helium {
             HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
         }
         
-        if let fallbackBundleConfig {
-            HeliumFallbackViewManager.shared.setFallbackBundleConfig(fallbackBundleConfig)
+        if let fallbackBundleURL {
+            HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
         }
         
         self.controller = HeliumController(

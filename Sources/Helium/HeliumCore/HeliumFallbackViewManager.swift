@@ -15,37 +15,37 @@ public class HeliumFallbackViewManager {
     }
     
     // **MARK: - Properties**
-    private var fallbackBundleConfig: FallbackBundleConfig? = nil
+    private var fallbackBundleURL: URL? = nil
+    private var loadedConfig: HeliumFetchedConfig?
+    
     private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
-    public func setFallbackBundleConfig(_ config: FallbackBundleConfig) {
-        fallbackBundleConfig = config
+    public func setFallbackBundleURL(_ fallbackBundleURL: URL) {
+        self.fallbackBundleURL = fallbackBundleURL
         // Give immediate feedback if assets are not accessible & avoid trying to use later.
         // This is synchronous but very fast (typically < 1 ms).
-        var fallbackAssetCount: Int = 0
-        var foundCount: Int = 0
-        if let defaultURL = config.defaultURL {
-            fallbackAssetCount += 1
-            if !FileManager.default.fileExists(atPath: defaultURL.path) {
-                print("[Helium] Fallback asset not found: \(defaultURL.path)")
-                fallbackBundleConfig?.defaultURL = nil
-            } else {
-                foundCount += 1
+        if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
+            print("[Helium] Fallback bundle URL not accessible.")
+        } else {
+            print("[Helium] Fallback bundle URL provided.")
+        }
+        Task {
+            do {
+                let data = try Data(contentsOf: fallbackBundleURL)
+                let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
+                loadedConfig = decodedConfig
+                if let bundles = decodedConfig.bundles, !bundles.isEmpty {
+                    try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+                    print("[Helium] Successfully loaded paywalls from fallback bundle file.")
+                } else {
+                    print("[Helium] No bundles found in fallback bundle file.")
+                }
+            } catch {
+                print("[Helium] Failed to load fallback bundle: \(error)")
             }
         }
-        let triggersToURLs = config.triggersToURLs
-        for (trigger, asset) in triggersToURLs {
-            fallbackAssetCount += 1
-            if !FileManager.default.fileExists(atPath: asset.path) {
-                print("[Helium] Fallback asset not found for trigger \(trigger): \(asset.path)")
-                fallbackBundleConfig?.triggersToURLs[trigger] = nil
-            } else {
-                foundCount += 1
-            }
-        }
-        print("[Helium] \(foundCount)/\(fallbackAssetCount) fallback assets found")
     }
     
     public func setTriggerToFallback(toSet: [String: AnyView]) {
@@ -67,10 +67,7 @@ public class HeliumFallbackViewManager {
         return defaultFallback!
     }
     
-    public func getFallbackAsset(trigger: String) -> URL? {
-        if let asset = fallbackBundleConfig?.triggersToURLs[trigger] {
-            return asset
-        }
-        return fallbackBundleConfig?.defaultURL
+    public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
+        return loadedConfig?.triggerToPaywalls[trigger]
     }
 }
