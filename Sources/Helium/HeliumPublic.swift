@@ -38,7 +38,7 @@ public class Helium {
             fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
         
-        if self.paywallsLoaded() {
+        if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
             let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo else {
@@ -73,7 +73,7 @@ public class Helium {
                 DynamicBaseTemplateView(
                     paywallInfo: fallbackPaywallInfo,
                     trigger: trigger,
-                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 )
             )
         }

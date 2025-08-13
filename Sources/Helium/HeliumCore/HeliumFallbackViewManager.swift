@@ -6,6 +6,7 @@
 //
 import SwiftUI
 import Foundation
+import SwiftyJSON
 
 public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
@@ -17,6 +18,7 @@ public class HeliumFallbackViewManager {
     // **MARK: - Properties**
     private var fallbackBundleURL: URL? = nil
     private var loadedConfig: HeliumFetchedConfig?
+    private var loadedConfigJSON: JSON?
     
     private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
@@ -35,8 +37,13 @@ public class HeliumFallbackViewManager {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-                loadedConfig = decodedConfig
-                if let bundles = decodedConfig.bundles, !bundles.isEmpty {
+                
+                loadedConfig = massageFallbackConfig(decodedConfig)
+                if let json = try? JSON(data: data) {
+                    loadedConfigJSON = json
+                }
+                
+                if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     print("[Helium] Successfully loaded paywalls from fallback bundle file.")
                 } else {
@@ -70,4 +77,29 @@ public class HeliumFallbackViewManager {
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
         return loadedConfig?.triggerToPaywalls[trigger]
     }
+    public func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
+        return massageResolvedConfigJSON(loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"])
+    }
+    
+    private func massageFallbackConfig(_ config: HeliumFetchedConfig) -> HeliumFetchedConfig {
+        var newConfig = config
+        newConfig.bundles = [:]
+        for (bundleId, content) in (config.bundles ?? [:]) {
+            let fallbackBundleId = bundleId.starts(with: "flbk_") ? bundleId : "flbk_\(bundleId)"
+            newConfig.bundles![fallbackBundleId] = content
+        }
+        return newConfig
+    }
+    private func massageResolvedConfigJSON(_ json: JSON?) -> JSON? {
+        guard let json else { return nil }
+        guard let providedURL = json["baseStack"]["componentProps"]["bundleURL"].string else {
+            return json
+        }
+        var newJSON = json
+        if let newBundleURL = JSON(rawValue: providedURL.replacingOccurrences(of: "/bundle_", with: "/bundle_flbk_")) {
+            newJSON["baseStack"]["componentProps"]["bundleURL"] = newBundleURL
+        }
+        return newJSON
+    }
+    
 }
