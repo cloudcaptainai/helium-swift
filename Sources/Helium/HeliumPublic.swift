@@ -75,11 +75,6 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-            triggerName: trigger,
-            paywallTemplateName: templateName ?? "Unknown"
-        ))
-        
         var result: AnyView
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             result = AnyView(

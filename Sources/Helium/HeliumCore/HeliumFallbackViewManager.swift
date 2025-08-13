@@ -76,7 +76,7 @@ public class HeliumFallbackViewManager {
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
         var result = loadedConfig?.triggerToPaywalls[trigger]
-        if let paywallUUID = result!.paywallUUID {
+        if let paywallUUID = result?.paywallUUID {
             // make events easily identifiable as fallback events
             result?.paywallTemplateName = "fallback_\(paywallUUID)"
         }
