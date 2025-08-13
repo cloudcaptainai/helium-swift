@@ -47,14 +47,15 @@ public class Helium {
             fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
         
+        
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
-            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
             
             guard let templatePaywallInfo = paywallInfo else {
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, templateName: nil)
             }
             if templatePaywallInfo.forceShowFallback == true {
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
             }
             
             do {
@@ -65,19 +66,20 @@ public class Helium {
                 ))
                 return UpsellViewResult(view: paywallView, isFallback: false)
             } catch {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-                    triggerName: trigger,
-                    paywallTemplateName: templatePaywallInfo.paywallTemplateName
-                ));
-                return fallbackViewFor(trigger: trigger)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
             };
             
         } else {
-            return fallbackViewFor(trigger: trigger)
+            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName)
         }
     }
     
-    private func fallbackViewFor(trigger: String) -> UpsellViewResult {
+    private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
+            triggerName: trigger,
+            paywallTemplateName: templateName ?? "Unknown"
+        ))
+        
         var result: AnyView
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             result = AnyView(
