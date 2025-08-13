@@ -17,14 +17,15 @@ class HeliumPaywallPresenter {
     
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         Task { @MainActor in
-            let contentView = Helium.shared.upsellViewForTrigger(trigger: trigger)
-            presentPaywall(trigger: trigger, contentView: contentView, from: viewController)
+            let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
+            let contentView = upsellViewResult.view
+            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, contentView: contentView, from: viewController)
         }
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, contentView: AnyView, from viewController: UIViewController? = nil) {
-        let modalVC = HeliumViewController(trigger: trigger, contentView: contentView)
+    private func presentPaywall(trigger: String, isFallback: Bool, contentView: AnyView, from viewController: UIViewController? = nil) {
+        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView)
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()
@@ -87,15 +88,17 @@ class HeliumPaywallPresenter {
     }
     
     private func dispatchOpenEvent(trigger: String) {
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templatName, viewType: PaywallOpenViewType.presented.rawValue))
+        let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
+        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        let templateName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templateName, viewType: PaywallOpenViewType.presented.rawValue))
     }
     
     private func dispatchCloseEvent(trigger: String) {
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        let templatName  = paywallInfo?.paywallTemplateName ?? "Unknown"
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templatName))
+        let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
+        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        let templateName = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templateName))
     }
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {

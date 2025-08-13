@@ -2,6 +2,11 @@ import Foundation
 import SwiftUI
 import StoreKit
 
+struct UpsellViewResult {
+    let view: AnyView
+    let isFallback: Bool
+}
+
 public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
@@ -34,6 +39,10 @@ public class Helium {
     }
     
     public func upsellViewForTrigger(trigger: String) -> AnyView {
+        return upsellViewResultFor(trigger: trigger).view
+    }
+    
+    func upsellViewResultFor(trigger: String) -> UpsellViewResult {
         if (!initialized) {
             fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
@@ -49,11 +58,12 @@ public class Helium {
             }
             
             do {
-                return AnyView(DynamicBaseTemplateView(
+                let paywallView = AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
+                return UpsellViewResult(view: paywallView, isFallback: false)
             } catch {
                 HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
                     triggerName: trigger,
@@ -67,21 +77,23 @@ public class Helium {
         }
     }
     
-    private func fallbackViewFor(trigger: String) -> AnyView {
+    private func fallbackViewFor(trigger: String) -> UpsellViewResult {
+        var result: AnyView
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
-            return AnyView(
+            result = AnyView(
                 DynamicBaseTemplateView(
                     paywallInfo: fallbackPaywallInfo,
                     trigger: trigger,
                     resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 )
             )
+        } else {
+            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
+            result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                fallbackView
+            })
         }
-        
-        let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-        return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-            fallbackView
-        })
+        return UpsellViewResult(view: result, isFallback: true)
     }
     
     public func getHeliumUserId() -> String? {

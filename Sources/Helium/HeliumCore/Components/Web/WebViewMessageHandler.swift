@@ -114,7 +114,6 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 respond(["message": "Unknown message type"])
             }
         }
-        print("Message handling complete for: \(message.name)")
     }
 }
 

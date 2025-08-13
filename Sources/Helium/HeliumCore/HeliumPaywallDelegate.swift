@@ -233,10 +233,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
                     paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
-                    if (paywallInfo == nil) {
+                    if paywallInfo == nil {
                         isFallback = true;
                     } else {
-                        isFallback = paywallInfo?.paywallTemplateName == "Fallback";
+                        let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
+                        isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
                     }
                 }
                 
