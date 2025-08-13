@@ -2,6 +2,11 @@ import Foundation
 import SwiftUI
 import StoreKit
 
+struct UpsellViewResult {
+    let view: AnyView
+    let isFallback: Bool
+}
+
 public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
@@ -34,49 +39,58 @@ public class Helium {
     }
     
     public func upsellViewForTrigger(trigger: String) -> AnyView {
+        return upsellViewResultFor(trigger: trigger).view
+    }
+    
+    func upsellViewResultFor(trigger: String) -> UpsellViewResult {
         if (!initialized) {
             fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
         }
         
-        if self.paywallsLoaded() {
-            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger);
+        
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
             
-            guard let templatePaywallInfo = paywallInfo, let baseTemplateViewType = baseTemplateViewType else {
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                    fallbackView
-                })
+            guard let templatePaywallInfo = paywallInfo else {
+                return fallbackViewFor(trigger: trigger, templateName: nil)
+            }
+            if templatePaywallInfo.forceShowFallback == true {
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
             }
             
             do {
-                if (paywallInfo?.forceShowFallback != nil && (paywallInfo?.forceShowFallback)!) {
-                    let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                    return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                        fallbackView
-                    })
-                }
-                return AnyView(baseTemplateViewType.init(
+                let paywallView = AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
-                ));
+                ))
+                return UpsellViewResult(view: paywallView, isFallback: false)
             } catch {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-                    triggerName: trigger,
-                    paywallTemplateName: templatePaywallInfo.paywallTemplateName
-                ));
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                    fallbackView
-                })
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
             };
             
         } else {
+            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName)
+        }
+    }
+    
+    private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
+        var result: AnyView
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
+            result = AnyView(
+                DynamicBaseTemplateView(
+                    paywallInfo: fallbackPaywallInfo,
+                    trigger: trigger,
+                    resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                )
+            )
+        } else {
             let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-            return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+            result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                 fallbackView
             })
         }
+        return UpsellViewResult(view: result, isFallback: true)
     }
     
     public func getHeliumUserId() -> String? {
@@ -98,32 +112,32 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow)
     }
     
-    /**
-    * Initializes the Helium paywall system with configuration options.
-    *
-    * @param apiKey - Helium API key
-    * @param heliumPaywallDelegate - Delegate to handle paywall events and callbacks
-    * @param fallbackPaywall - Default view to display when paywall fails to load
-    * @param baseTemplateView - Optional custom base template view type (defaults to DynamicBaseTemplateView)
-    * @param triggers - Optional array of trigger identifiers to configure
-    * @param customUserId - Optional custom user ID to override default user identification
-    * @param customAPIEndpoint - Optional custom API endpoint URL
-    * @param customUserTraits - Optional custom user traits for targeting
-    * @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
-    * @param revenueCatAppUserId - Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    * @param fallbackPaywallPerTrigger - Optional trigger-specific fallback views
-    */
+    /// Initializes the Helium paywall system with configuration options.
+    ///
+    /// @param apiKey Helium API key
+    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
+    /// @param fallbackPaywall  Default view to display when paywall fails to load. fallbackAssetsConfig and fallbackPaywallPerTrigger will take precedence over this.
+    /// @param baseTemplateView  Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    /// @param triggers  Optional array of trigger identifiers to configure
+    /// @param customUserId  Optional custom user ID to override default user identification
+    /// @param customAPIEndpoint  Optional custom API endpoint URL
+    /// @param customUserTraits  Optional custom user traits for targeting
+    /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
+    /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    /// @param fallbackBundleURL (Optional) The URL to a fallback bundle downloaded from the dashboard..
+    /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
+    ///
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
         fallbackPaywall: (any View),
-        baseTemplateView: (any BaseTemplateView.Type)? = nil,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
         revenueCatAppUserId: String? = nil,
+        fallbackBundleURL: URL? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
@@ -159,17 +173,16 @@ public class Helium {
             HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
         }
         
+        if let fallbackBundleURL {
+            HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
+        }
+        
         self.controller = HeliumController(
             apiKey: apiKey
         )
         self.controller?.logInitializeEvent();
         
         HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
-        if (baseTemplateView == nil) {
-            self.baseTemplateViewType = DynamicBaseTemplateView.self;
-        } else {
-            self.baseTemplateViewType = baseTemplateView;
-        }
         if (customAPIEndpoint != nil) {
             self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
         } else {

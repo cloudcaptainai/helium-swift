@@ -4,13 +4,7 @@ import SwiftyJSON
 
 
 public protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String)
-}
-
-public extension BaseTemplateView {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
-        self.init(paywallInfo: paywallInfo, trigger: trigger)
-    }
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
 }
 
 
@@ -29,17 +23,6 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
         self.templateValues = resolvedConfig ?? JSON([:]);
-        self.triggerName = trigger;
-    }
-    
-    public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
-        _actionsDelegate = StateObject(wrappedValue: delegate)
-        _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
-        
-        let encoder = JSONEncoder()
-        let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
-        self.templateValues = try! JSON(data: jsonData);
         self.triggerName = trigger;
     }
     
