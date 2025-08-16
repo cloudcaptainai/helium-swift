@@ -212,6 +212,7 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
     }
     
+    @discardableResult
     public func handleDeepLink(_ url: URL) -> Bool {
         // Only "test paywall" deep links handled at this time.
         guard url.host == "helium-test" else {
@@ -228,6 +229,9 @@ public class Helium {
             print("[Helium] Missing 'trigger' parameter in test URL: \(url)")
             return false
         }
+        
+        // hide any existing upsells
+        hideAllUpsells()
         
         presentUpsell(trigger: trigger)
         return true
