@@ -211,6 +211,28 @@ public class Helium {
     public func setAppAttributionToken(_ token: UUID) {
         HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
     }
+    
+    public func handleDeepLink(_ url: URL) -> Bool {
+        // Only "test paywall" deep links handled at this time.
+        guard url.host == "helium-test" else {
+            return false
+        }
+        
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else {
+            print("[Helium] Invalid test URL format: \(url)")
+            return false
+        }
+        
+        guard let trigger = queryItems.first(where: { $0.name == "trigger" })?.value else {
+            print("[Helium] Missing 'trigger' parameter in test URL: \(url)")
+            return false
+        }
+        
+        presentUpsell(trigger: trigger)
+        return true
+    }
+    
 }
 
 @available(iOS 15.0, *)
