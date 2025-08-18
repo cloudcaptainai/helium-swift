@@ -221,12 +221,22 @@ public class Helium {
         
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let queryItems = components.queryItems else {
-            print("[Helium] Invalid test URL format: \(url)")
+            print("[Helium] handleDeepLink - Invalid test URL format: \(url)")
             return false
         }
         
         guard let trigger = queryItems.first(where: { $0.name == "trigger" })?.value else {
-            print("[Helium] Missing 'trigger' parameter in test URL: \(url)")
+            print("[Helium] handleDeepLink - Missing 'trigger' parameter in test URL: \(url)")
+            return false
+        }
+        
+        // Do not show fallbacks... check to see if the needed bundle is available
+        if !paywallsLoaded() {
+            print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
+            return false
+        }
+        if getPaywallInfo(trigger: trigger) == nil {
+            print("[Helium] handleDeepLink - Bundle is not available for this trigger.")
             return false
         }
         
