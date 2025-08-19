@@ -212,8 +212,13 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
     }
     
+    /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
+    /// - Returns: The result of the purchase.
     @discardableResult
-    public func handleDeepLink(_ url: URL) -> Bool {
+    public func handleDeepLink(_ url: URL?) -> Bool {
+        guard let url else {
+            return false
+        }
         // Only "test paywall" deep links handled at this time.
         guard url.host == "helium-test" else {
             return false
@@ -225,8 +230,11 @@ public class Helium {
             return false
         }
         
-        guard let trigger = queryItems.first(where: { $0.name == "trigger" })?.value else {
-            print("[Helium] handleDeepLink - Missing 'trigger' parameter in test URL: \(url)")
+        var triggerValue = queryItems.first(where: { $0.name == "trigger" })?.value
+        let paywallUUID = queryItems.first(where: { $0.name == "puid" })?.value
+        
+        if triggerValue == nil && paywallUUID == nil {
+            print("[Helium] handleDeepLink - Test URL needs 'trigger' or 'puid': \(url)")
             return false
         }
         
@@ -235,6 +243,18 @@ public class Helium {
             print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
             return false
         }
+        
+        if let paywallUUID, triggerValue == nil {
+            triggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
+            if triggerValue == nil {
+                print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID).")
+            }
+        }
+        
+        guard let trigger = triggerValue else {
+            return false
+        }
+        
         if getPaywallInfo(trigger: trigger) == nil {
             print("[Helium] handleDeepLink - Bundle is not available for this trigger.")
             return false
