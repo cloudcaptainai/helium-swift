@@ -77,7 +77,11 @@ public struct DynamicPositionedComponent: View {
         case .linearGradient(let props):
             DynamicLinearGradient(json: props)
         case .image(let props):
-            DynamicImage(json: props)
+            if #available(iOS 15.0, *) {
+                DynamicImage(json: props)
+            } else {
+                Text("img")
+            }
         case .rectangle(let props):
             DynamicRectangle(json: props)
         case .roundedRectangle(let props):

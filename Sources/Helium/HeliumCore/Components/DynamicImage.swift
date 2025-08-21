@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
-import Kingfisher
 import SwiftyJSON
 
 
 
+@available(iOS 15.0, *)
 public struct DynamicImage: View {
     private let imageSource: ImageSource
     private let tintColor: ColorConfig?
@@ -47,11 +47,10 @@ public struct DynamicImage: View {
             switch imageSource {
             case .url(let urlString):
                 if (isResizable) {
-                    KFImage(URL(string: urlString))
-                        .resizable()
+                    AsyncImage(url: URL(string: urlString))
                         .aspectRatioIfNeeded(aspectRatio)
                 } else {
-                    KFImage(URL(string: urlString))
+                    AsyncImage(url: URL(string: urlString))
                         .aspectRatioIfNeeded(aspectRatio)
                 }
             case .system(let name):
@@ -123,16 +122,6 @@ extension View {
 }
 
 extension Image {
-    func resizable(_ isResizable: Bool) -> some View {
-        if isResizable {
-            return AnyView(self.resizable())
-        } else {
-            return AnyView(self)
-        }
-    }
-}
-
-extension KFImage {
     func resizable(_ isResizable: Bool) -> some View {
         if isResizable {
             return AnyView(self.resizable())
