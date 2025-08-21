@@ -81,4 +81,8 @@ public class HeliumFallbackViewManager {
         return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
     }
     
+    public func getConfig() -> HeliumFetchedConfig? {
+        return loadedConfig
+    }
+    
 }
