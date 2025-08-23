@@ -211,6 +211,62 @@ public class Helium {
     public func setAppAttributionToken(_ token: UUID) {
         HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
     }
+    
+    /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
+    /// - Returns: The result of the purchase.
+    @discardableResult
+    public func handleDeepLink(_ url: URL?) -> Bool {
+        guard let url else {
+            return false
+        }
+        // Only "test paywall" deep links handled at this time.
+        guard url.host == "helium-test" else {
+            return false
+        }
+        
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else {
+            print("[Helium] handleDeepLink - Invalid test URL format: \(url)")
+            return false
+        }
+        
+        var triggerValue = queryItems.first(where: { $0.name == "trigger" })?.value
+        let paywallUUID = queryItems.first(where: { $0.name == "puid" })?.value
+        
+        if triggerValue == nil && paywallUUID == nil {
+            print("[Helium] handleDeepLink - Test URL needs 'trigger' or 'puid': \(url)")
+            return false
+        }
+        
+        // Do not show fallbacks... check to see if the needed bundle is available
+        if !paywallsLoaded() {
+            print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
+            return false
+        }
+        
+        if let paywallUUID, triggerValue == nil {
+            triggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
+            if triggerValue == nil {
+                print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID).")
+            }
+        }
+        
+        guard let trigger = triggerValue else {
+            return false
+        }
+        
+        if getPaywallInfo(trigger: trigger) == nil {
+            print("[Helium] handleDeepLink - Bundle is not available for this trigger.")
+            return false
+        }
+        
+        // hide any existing upsells
+        hideAllUpsells()
+        
+        presentUpsell(trigger: trigger)
+        return true
+    }
+    
 }
 
 @available(iOS 15.0, *)
