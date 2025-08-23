@@ -38,7 +38,7 @@ public class HeliumFallbackViewManager {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
                 
-                loadedConfig = massageFallbackConfig(decodedConfig)
+                loadedConfig = decodedConfig
                 if let json = try? JSON(data: data) {
                     loadedConfigJSON = json
                 }
@@ -75,36 +75,14 @@ public class HeliumFallbackViewManager {
     }
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
-        var result = loadedConfig?.triggerToPaywalls[trigger]
-        if let paywallUUID = result?.paywallUUID {
-            // make events easily identifiable as fallback events
-            result?.paywallTemplateName = "fallback_\(paywallUUID)"
-        }
-        return result
+        return loadedConfig?.triggerToPaywalls[trigger]
     }
     public func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        return massageResolvedConfigJSON(loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"])
+        return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
     }
     
-    private func massageFallbackConfig(_ config: HeliumFetchedConfig) -> HeliumFetchedConfig {
-        var newConfig = config
-        newConfig.bundles = [:]
-        for (bundleId, content) in (config.bundles ?? [:]) {
-            let fallbackBundleId = bundleId.starts(with: "flbk_") ? bundleId : "flbk_\(bundleId)"
-            newConfig.bundles![fallbackBundleId] = content
-        }
-        return newConfig
-    }
-    private func massageResolvedConfigJSON(_ json: JSON?) -> JSON? {
-        guard let json else { return nil }
-        guard let providedURL = json["baseStack"]["componentProps"]["bundleURL"].string else {
-            return json
-        }
-        var newJSON = json
-        if let newBundleURL = JSON(rawValue: providedURL.replacingOccurrences(of: "/bundle_", with: "/bundle_flbk_")) {
-            newJSON["baseStack"]["componentProps"]["bundleURL"] = newBundleURL
-        }
-        return newJSON
+    public func getConfig() -> HeliumFetchedConfig? {
+        return loadedConfig
     }
     
 }

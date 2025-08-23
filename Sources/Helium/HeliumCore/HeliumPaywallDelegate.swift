@@ -216,6 +216,23 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
+        
+        var analyticsForEvent = analytics
+        
+        if analytics == nil, let fallbackBundleConfig {
+            let configuration = Configuration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
+                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                .trackApplicationLifecycleEvents(false)
+                .flushInterval(10)
+            analyticsForEvent = Analytics(configuration: configuration)
+            analyticsForEvent?.identify(
+                userId: HeliumIdentityManager.shared.getUserId(),
+                traits: HeliumIdentityManager.shared.getUserContext()
+            );
+        }
+        
         if case .paywallOpen = event {
             HeliumIdentityManager.shared.setPaywallSessionId()
         } else if case .paywallClose = event {
@@ -224,7 +241,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         
         do {
             delegate?.onHeliumPaywallEvent(event: event);
-            if (isAnalyticsEnabled && analytics != nil) {
+            if (isAnalyticsEnabled && analyticsForEvent != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = nil;
@@ -241,7 +258,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     }
                 }
                 
-                let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId();
+                let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
                 let eventForLogging = HeliumPaywallLoggedEvent(
                     heliumEvent: event,
                     fetchedConfigId: fetchedConfigId,
@@ -263,7 +280,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     additionalPaywallFields: paywallInfo?.additionalPaywallFields
                 );
                 
-                analytics?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                analyticsForEvent?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }
         } catch {
             print("Delegate action failed.");

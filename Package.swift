@@ -18,7 +18,6 @@ let package = Package(
             targets: ["HeliumRevenueCat", "Helium"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.0.0")),
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
@@ -31,7 +30,6 @@ let package = Package(
         .target(
             name: "Helium",
             dependencies: [
-                .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Segment", package: "analytics-swift"),
                 .product(name: "AnyCodable", package: "AnyCodable"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),

@@ -31,8 +31,8 @@ public struct HeliumPaywallInfo: Codable {
     public var paywallTemplateName: String
     var productsOffered: [String]
     var resolvedConfig: AnyCodable
-    var shouldShow: Bool
-    var fallbackPaywallName: String
+    var shouldShow: Bool?
+    var fallbackPaywallName: String?
     public var experimentID: String?
     var modelID: String?
     var forceShowFallback: Bool?
@@ -52,7 +52,7 @@ public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
-    var orgName: String
+    var orgName: String?
     var organizationID: String?
     var fetchedConfigID: UUID
     var additionalFields: JSON?

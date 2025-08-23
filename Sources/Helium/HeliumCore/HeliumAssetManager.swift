@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-import Kingfisher
 import Combine
 
 public enum HeliumAssetDownloadStatus: String, Codable {
