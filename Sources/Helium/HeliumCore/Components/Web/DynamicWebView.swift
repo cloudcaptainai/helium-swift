@@ -16,6 +16,7 @@ public struct DynamicWebView: View {
     let shimmerConfig: JSON
     let showProgressView: Bool
     var fallbackPaywall: AnyView?
+    let shouldEnableScroll: Bool
     
     @State private var isContentLoaded = false
     @State private var webView: WKWebView? = nil
@@ -40,6 +41,8 @@ public struct DynamicWebView: View {
         self.showShimmer = json["showShimmer"].bool ?? false;
         self.shimmerConfig = json["shimmerConfig"].type == .null ? JSON([:]) : json["shimmerConfig"];
         self.showProgressView = json["showProgress"].bool ?? false;
+        
+        shouldEnableScroll = json["shouldEnableScroll"].bool ?? true
     }
 
     public var body: some View {
@@ -170,7 +173,12 @@ public struct DynamicWebView: View {
             Task {
                 // WebView creation timing
                 _ = Date()
-                let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate, heliumViewController: presentationState.heliumViewController)
+                let preparedWebView = await WebViewManager.shared.prepareForShowing(
+                    filePath: filePath,
+                    shouldEnableScroll: shouldEnableScroll,
+                    delegateWrapper: actionsDelegate,
+                    heliumViewController: presentationState.heliumViewController
+                )
                 guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
                     shouldShowFallback = true
@@ -330,7 +338,12 @@ class WebViewManager {
     }
     
     @MainActor
-    fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper, heliumViewController: HeliumViewController?) async -> WKWebView? {
+    fileprivate func prepareForShowing(
+        filePath: String,
+        shouldEnableScroll: Bool,
+        delegateWrapper: ActionsDelegateWrapper,
+        heliumViewController: HeliumViewController?
+    ) async -> WKWebView? {
         var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.isInUse }
         if webViewBundle == nil {
             webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
@@ -356,12 +369,12 @@ class WebViewManager {
         webView.scrollView.isOpaque = false
 
         
-        webView.scrollView.isScrollEnabled = true
+        webView.scrollView.isScrollEnabled = shouldEnableScroll
+        webView.scrollView.bounces = shouldEnableScroll
         webView.scrollView.bouncesZoom = false
         webView.scrollView.minimumZoomScale = 1.0
         webView.scrollView.maximumZoomScale = 1.0
         webView.scrollView.isDirectionalLockEnabled = true
-        webView.scrollView.bounces = true
         webView.scrollView.scrollsToTop = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
