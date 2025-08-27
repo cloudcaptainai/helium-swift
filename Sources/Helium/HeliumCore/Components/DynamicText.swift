@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 import Foundation
 
 public struct FontConfig {

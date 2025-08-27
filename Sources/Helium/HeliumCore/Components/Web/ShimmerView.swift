@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 struct RelativeDimension {
    let percentage: CGFloat

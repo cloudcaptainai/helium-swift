@@ -6,7 +6,6 @@
 //
 import SwiftUI
 import Foundation
-import SwiftyJSON
 
 public class HeliumFallbackViewManager {
     // **MARK: - Singleton**

@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 // DynamicSpacer
 public struct DynamicSpacer: View {

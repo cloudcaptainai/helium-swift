@@ -1,6 +1,5 @@
 import SwiftUI
 import WebKit
-import SwiftyJSON
 
 public struct DynamicWebView: View {
     let filePath: String

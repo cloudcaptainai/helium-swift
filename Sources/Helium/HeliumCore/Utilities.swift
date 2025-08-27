@@ -8,7 +8,6 @@
 import Foundation
 import AnyCodable
 import SwiftUI
-import SwiftyJSON
 
 public extension Encodable {
     /// Converting object to postable JSON

@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 // Represents a color stop in a gradient
 public struct GradientStop: Equatable {

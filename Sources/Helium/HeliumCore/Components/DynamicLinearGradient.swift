@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicLinearGradient: View {
     private let stops: [Gradient.Stop]

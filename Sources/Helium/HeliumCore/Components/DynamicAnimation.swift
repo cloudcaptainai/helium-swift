@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicAnimation: View {
     let animationType: AnimationType

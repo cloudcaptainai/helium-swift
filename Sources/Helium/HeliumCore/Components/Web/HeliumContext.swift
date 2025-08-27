@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftyJSON
 
 public let weekdays = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
 

@@ -1,5 +1,4 @@
 import Foundation
-import SwiftyJSON
 import SwiftUI
 import WebKit
 import Network

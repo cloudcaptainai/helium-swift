@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 
 public protocol BaseTemplateView: View {

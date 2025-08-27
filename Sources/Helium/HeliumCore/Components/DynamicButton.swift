@@ -8,7 +8,6 @@
 import Foundation
 
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicButtonComponent: View {
     let buttonTextComponents: [JSON]

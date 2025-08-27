@@ -1,5 +1,4 @@
 import Foundation
-import SwiftyJSON
 import Combine
 
 public enum HeliumAssetDownloadStatus: String, Codable {

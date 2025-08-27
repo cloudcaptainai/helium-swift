@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 func parseAlignment(_ string: String) -> Alignment {
     switch string.lowercased() {

@@ -1,4 +1,3 @@
-import SwiftyJSON
 
 public struct ActionConfig {
     enum ActionEvent: Equatable {
