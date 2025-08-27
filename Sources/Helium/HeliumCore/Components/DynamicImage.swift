@@ -11,7 +11,7 @@ public struct DynamicImage: View {
     private let aspectRatio: AspectRatioConfig?
     private let frame: FrameConfig?
     
-    public init(json: JSON) {
+    init(json: JSON) {
         if json["isSystemImage"].boolValue {
             self.imageSource = .system(name: json["systemImageName"].stringValue)
         } else if json["isLocalImage"].boolValue {

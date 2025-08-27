@@ -55,7 +55,7 @@ public extension Color {
         self.init(hex: colorConfig.colorHex, opacity: colorConfig.opacity)
     }
     
-    init(json: JSON) {
+    internal init(json: JSON) {
         let colorConfig = ColorConfig(json: json)
         self.init(colorConfig: colorConfig)
     }

@@ -30,7 +30,7 @@ public struct DynamicPositionedComponent: View {
     let triggerName: String?
     
 
-    public init(json: JSON, geometryProxy: GeometryProxy? = nil, triggerName: String? = nil) {
+    init(json: JSON, geometryProxy: GeometryProxy? = nil, triggerName: String? = nil) {
         self.componentType = ComponentType(json: json, geometryProxy: geometryProxy)
         
         self.componentName = json["componentName"].string ?? "component_\(json["type"].string ?? "undefinedType")_no_name_\(UUID().uuidString)";

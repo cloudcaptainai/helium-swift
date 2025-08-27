@@ -17,7 +17,7 @@ public struct DynamicButtonComponent: View {
     let backgroundColor: Color
     let cornerRadius: CGFloat
     
-    public init(json: JSON, action: @escaping () -> Void) {
+    init(json: JSON, action: @escaping () -> Void) {
         self.buttonTextComponents = json["buttonTextComponents"].arrayValue
         self.action = action
         self.width = CGFloat(json["width"].doubleValue)

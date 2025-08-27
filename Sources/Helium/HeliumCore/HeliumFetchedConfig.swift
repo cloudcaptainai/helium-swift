@@ -36,7 +36,7 @@ class NetworkReachability {
     }
 }
 
-public func fetchEndpoint(
+func fetchEndpoint(
     endpoint: String,
     params: [String: Any]
 ) async throws -> (HeliumFetchedConfig?, JSON?) {

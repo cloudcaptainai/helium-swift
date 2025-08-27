@@ -14,7 +14,7 @@ public struct DynamicScrollView<Content: View>: View {
     let showsIndicators: Bool
     let content: Content
     
-    public init(json: JSON, @ViewBuilder content: () -> Content) {
+    init(json: JSON, @ViewBuilder content: () -> Content) {
         self.axes = json["axes"].string == "vertical" ? .vertical : .horizontal
         self.showsIndicators = json["showsIndicators"].boolValue
         self.content = content()

@@ -76,7 +76,7 @@ public class HeliumFallbackViewManager {
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
         return loadedConfig?.triggerToPaywalls[trigger]
     }
-    public func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
+    func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
         return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
     }
     
