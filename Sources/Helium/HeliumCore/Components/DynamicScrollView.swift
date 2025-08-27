@@ -5,7 +5,6 @@
 //  Created by Anish Doshi on 9/5/24.
 //
 import SwiftUI
-import SwiftyJSON
 
 import Foundation
 
@@ -15,7 +14,7 @@ public struct DynamicScrollView<Content: View>: View {
     let showsIndicators: Bool
     let content: Content
     
-    public init(json: JSON, @ViewBuilder content: () -> Content) {
+    init(json: JSON, @ViewBuilder content: () -> Content) {
         self.axes = json["axes"].string == "vertical" ? .vertical : .horizontal
         self.showsIndicators = json["showsIndicators"].boolValue
         self.content = content()

@@ -1,4 +1,3 @@
-import SwiftyJSON
 
 public struct ActionConfig {
     enum ActionEvent: Equatable {
@@ -11,7 +10,7 @@ public struct ActionConfig {
     
     let actionEvent: ActionEvent
     
-    public init?(json: JSON) {
+    init?(json: JSON) {
         guard let actionType = json["type"].string else { return nil }
         
         switch actionType {

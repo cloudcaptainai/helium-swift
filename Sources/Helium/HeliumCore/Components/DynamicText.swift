@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 import Foundation
 
 public struct FontConfig {
@@ -23,7 +22,7 @@ public struct TextComponent {
     let weight: String
     let fontConfig: FontConfig
 
-    public init?(json: JSON) {
+    init?(json: JSON) {
         guard let text = json["text"].string,
               let size = json["size"].int,
               let weight = json["weight"].string else {
@@ -43,7 +42,7 @@ public struct DynamicTextComponent: View {
     let multilineTextAlignment: TextAlignment
     let lineSpacing: CGFloat?
 
-    public init(json: JSON) {
+    init(json: JSON) {
         self.components = json["components"].arrayValue.compactMap { TextComponent(json: $0) }
         self.multilineTextAlignment = Self.textAlignment(from: json["multilineTextAlignment"].stringValue)
         self.lineSpacing = json["lineSpacing"].int.map { CGFloat($0) }

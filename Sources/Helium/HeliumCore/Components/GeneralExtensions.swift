@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 public struct ColorConfig {
     let colorHex: String
@@ -28,7 +27,7 @@ public struct ColorConfig {
     }
 }
 
-public extension Color {
+extension Color {
     init(hex: String, opacity: Double = 1.0) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicRectangle: View {
     var foregroundColor: ColorConfig?

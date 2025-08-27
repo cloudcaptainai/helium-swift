@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicViewModifier: ViewModifier {
     let frame: CGSize?

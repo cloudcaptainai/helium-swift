@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicLinearGradient: View {
     private let stops: [Gradient.Stop]
@@ -16,7 +15,7 @@ public struct DynamicLinearGradient: View {
     private let ignoresSafeArea: Bool
     private let ignoredSafeAreaEdges: Edge.Set
     
-    public init(json: JSON) {
+    init(json: JSON) {
         self.stops = json["stops"].arrayValue.map { stopJson in
             let color = Color(
                 red: stopJson["color"]["red"].doubleValue,

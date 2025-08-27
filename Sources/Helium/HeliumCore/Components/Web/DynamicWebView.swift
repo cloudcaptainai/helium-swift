@@ -1,6 +1,5 @@
 import SwiftUI
 import WebKit
-import SwiftyJSON
 
 public struct DynamicWebView: View {
     let filePath: String
@@ -25,7 +24,7 @@ public struct DynamicWebView: View {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
-    public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+    init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
