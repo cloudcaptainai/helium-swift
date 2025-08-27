@@ -7,7 +7,6 @@
 
 import Foundation
 import UIKit
-import DeviceKit
 import AnyCodable
 
 struct CodableLocale: Codable {
@@ -162,16 +161,15 @@ public struct CodableUserContext: Codable {
         
         let applicationInfo = createApplicationInfo()
 
-        
         let deviceInfo = CodableDeviceInfo(
             currentDeviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             orientation: UIDevice.current.orientation.rawValue,
             systemName: UIDevice.current.systemName,
             systemVersion: UIDevice.current.systemVersion,
-            deviceModel: Device.current.safeDescription,
+            deviceModel: DeviceHelpers.current.getDeviceModel(),
             userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
-            totalCapacity: skipDeviceCapacity ? -1 : Device.volumeTotalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage
+            totalCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.totalCapacity,
+            availableCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.availableCapacity
         )
 
         return CodableUserContext(
