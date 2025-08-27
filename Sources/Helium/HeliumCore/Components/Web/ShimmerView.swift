@@ -137,7 +137,7 @@ public struct Shimmer: ViewModifier {
    }
 }
 
-public extension View {
+extension View {
    @ViewBuilder
    func shimmer(config: JSON) -> some View {
        self.modifier(Shimmer(config: config))

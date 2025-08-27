@@ -64,7 +64,7 @@ public class HeliumAssetManager: ObservableObject {
         return value;
     }
     
-    public func collectBundleURLs(from json: JSON, into bundleURLs: inout Set<String>) {
+    func collectBundleURLs(from json: JSON, into bundleURLs: inout Set<String>) {
         switch json.type {
         case .dictionary:
             for (key, value) in json {

@@ -10,7 +10,7 @@ import Foundation
 public let weekdays = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
 
 
-public func createHeliumContext(triggerName: String?) -> JSON {
+func createHeliumContext(triggerName: String?) -> JSON {
     do {
         // Get product IDs if trigger name is provided
         var productIds: [String] = []

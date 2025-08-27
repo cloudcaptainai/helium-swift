@@ -27,7 +27,7 @@ public struct ColorConfig {
     }
 }
 
-public extension Color {
+extension Color {
     init(hex: String, opacity: Double = 1.0) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -55,7 +55,7 @@ public extension Color {
         self.init(hex: colorConfig.colorHex, opacity: colorConfig.opacity)
     }
     
-    internal init(json: JSON) {
+    init(json: JSON) {
         let colorConfig = ColorConfig(json: json)
         self.init(colorConfig: colorConfig)
     }
