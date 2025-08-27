@@ -6,14 +6,9 @@
 //
 
 import Foundation
-import AnyCodable
+
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
-    
-    // Make this the primary initializer
-    public init(storage: [String: AnyCodable]) {
-        self.storage = storage
-    }
     
     // Main dictionary initializer that others will call into
     public init(_ traits: [String: Any]) {

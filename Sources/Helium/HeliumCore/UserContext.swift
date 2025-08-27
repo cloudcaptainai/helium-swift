@@ -8,7 +8,6 @@
 import Foundation
 import UIKit
 import DeviceKit
-import AnyCodable
 
 struct CodableLocale: Codable {
     var currentCountry: String?
