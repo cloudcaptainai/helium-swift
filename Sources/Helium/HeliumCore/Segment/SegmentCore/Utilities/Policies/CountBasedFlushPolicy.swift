@@ -7,25 +7,25 @@
 
 import Foundation
 
-public class CountBasedFlushPolicy: FlushPolicy {
-    public weak var analytics: Analytics?
+class CountBasedFlushPolicy: FlushPolicy {
+    weak var analytics: Analytics?
     internal var desiredCount: Int?
     @Atomic internal var count: Int = 0
     
-    public init() { }
+    init() { }
     
-    public init(count: Int) {
+    init(count: Int) {
         desiredCount = count
     }
     
-    public func configure(analytics: Analytics) {
+    func configure(analytics: Analytics) {
         self.analytics = analytics
         if let desiredCount = desiredCount {
             analytics.flushAt = desiredCount
         }
     }
     
-    public func shouldFlush() -> Bool {
+    func shouldFlush() -> Bool {
         guard let a = analytics else {
             return false
         }
@@ -36,13 +36,13 @@ public class CountBasedFlushPolicy: FlushPolicy {
         }
     }
     
-   public func updateState(event: RawEvent) {
+   func updateState(event: RawEvent) {
        _count.withValue { value in
            value += 1
        }
     }
     
-    public func reset() {
+    func reset() {
         count = 0
     }
 }

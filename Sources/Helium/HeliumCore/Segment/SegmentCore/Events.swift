@@ -19,7 +19,7 @@ extension Analytics {
     ///   - name: Name of the action, e.g., 'Purchased a T-Shirt'
     ///   - properties: Properties specific to the named event. For example, an event with
     ///     the name 'Purchased a Shirt' might have properties like revenue or size.
-    public func track<P: Codable>(name: String, properties: P?) {
+    func track<P: Codable>(name: String, properties: P?) {
         do {
             if let properties = properties {
                 let jsonProperties = try JSON(with: properties)
@@ -37,7 +37,7 @@ extension Analytics {
     /// Tracks an event performed by a user.
     /// - Parameters:
     ///   - name: Name of the action, e.g., 'Purchased a T-Shirt'
-    public func track(name: String) {
+    func track(name: String) {
         track(name: name, properties: nil as TrackEvent?)
     }
     
@@ -50,7 +50,7 @@ extension Analytics {
     ///     generate the UUID and Apple's policies on IDs, see
     ///      https://segment.io/libraries/ios#ids
     /// - traits: A dictionary of traits you know about the user. Things like: email, name, plan, etc.
-    public func identify<T: Codable>(userId: String, traits: T?) {
+    func identify<T: Codable>(userId: String, traits: T?) {
         do {
             if let traits = traits {
                 let jsonTraits = try JSON(with: traits)
@@ -70,7 +70,7 @@ extension Analytics {
     /// Associate a user with their unique ID and record traits about them.
     /// - Parameters:
     ///   - traits: A dictionary of traits you know about the user. Things like: email, name, plan, etc.
-    public func identify<T: Codable>(traits: T) {
+    func identify<T: Codable>(traits: T) {
         do {
             let jsonTraits = try JSON(with: traits)
             store.dispatch(action: UserInfo.SetTraitsAction(traits: jsonTraits))
@@ -87,13 +87,13 @@ extension Analytics {
     ///     For more information on how we generate the UUID and Apple's policies on IDs, see
     ///     https://segment.io/libraries/ios#ids
     /// In the case when user logs out, make sure to call ``reset()`` to clear user's identity info.
-    public func identify(userId: String) {
+    func identify(userId: String) {
         let event = IdentifyEvent(userId: userId, traits: nil)
         store.dispatch(action: UserInfo.SetUserIdAction(userId: userId))
         process(incomingEvent: event)
     }
     
-    public func screen<P: Codable>(title: String, category: String? = nil, properties: P?) {
+    func screen<P: Codable>(title: String, category: String? = nil, properties: P?) {
         do {
             if let properties = properties {
                 let jsonProperties = try JSON(with: properties)
@@ -108,11 +108,11 @@ extension Analytics {
         }
     }
     
-    public func screen(title: String, category: String? = nil) {
+    func screen(title: String, category: String? = nil) {
         screen(title: title, category: category, properties: nil as ScreenEvent?)
     }
 
-    public func group<T: Codable>(groupId: String, traits: T?) {
+    func group<T: Codable>(groupId: String, traits: T?) {
         do {
             if let traits = traits {
                 let jsonTraits = try JSON(with: traits)
@@ -127,11 +127,11 @@ extension Analytics {
         }
     }
     
-    public func group(groupId: String) {
+    func group(groupId: String) {
         group(groupId: groupId, traits: nil as GroupEvent?)
     }
     
-    public func alias(newId: String) {
+    func alias(newId: String) {
         let event = AliasEvent(newId: newId, previousId: self.userId)
         store.dispatch(action: UserInfo.SetUserIdAction(userId: newId))
         process(incomingEvent: event)
@@ -147,7 +147,7 @@ extension Analytics {
     ///   - properties: A dictionary or properties specific to the named event.
     ///     For example, an event with the name 'Purchased a Shirt' might have properties
     ///     like revenue or size.
-    public func track(name: String, properties: [String: Any]? = nil) {
+    func track(name: String, properties: [String: Any]? = nil) {
         var props: JSON? = nil
         if let properties = properties {
             do {
@@ -170,7 +170,7 @@ extension Analytics {
     ///      https://segment.io/libraries/ios#ids
     ///   - traits: A dictionary of traits you know about the user. Things like: email, name, plan, etc.
     /// In the case when user logs out, make sure to call ``reset()`` to clear user's identity info.
-    public func identify(userId: String, traits: [String: Any]? = nil) {
+    func identify(userId: String, traits: [String: Any]? = nil) {
         do {
             if let traits = traits {
                 let traits = try JSON(traits as Any)
@@ -192,7 +192,7 @@ extension Analytics {
     ///   - screenTitle: The title of the screen being tracked.
     ///   - category: A category to the type of screen if it applies.
     ///   - properties: Any extra metadata associated with the screen. e.g. method of access, size, etc.
-    public func screen(title: String, category: String? = nil, properties: [String: Any]? = nil) {
+    func screen(title: String, category: String? = nil, properties: [String: Any]? = nil) {
         // if properties is nil, this is the event that'll get used.
         var event = ScreenEvent(title: title, category: category, properties: nil)
         // if we have properties, get a new one rolling.
@@ -211,7 +211,7 @@ extension Analytics {
     /// - Parameters:
     ///   - groupId: A unique identifier for the group identification in your system.
     ///   - traits: Traits of the group you may be interested in such as email, phone or name.
-    public func group(groupId: String, traits: [String: Any]?) {
+    func group(groupId: String, traits: [String: Any]?) {
         var event = GroupEvent(groupId: groupId)
         if let traits = traits {
             do {

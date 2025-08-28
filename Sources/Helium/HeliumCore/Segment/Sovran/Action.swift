@@ -10,7 +10,7 @@ import Foundation
 /**
  Defines conformance for synchronous Actions that will be dispatched through the State system.
  */
-public protocol Action {
+protocol Action {
     /**
      The type of state this action deals with.  Usually inferred by simply specifying it
      in the implementation of `reduce` below.
@@ -49,7 +49,7 @@ public protocol Action {
 /**
  Defines conformance for asynchronous Actions that will be dispatched through the State system.
  */
-public protocol AsyncAction {
+protocol AsyncAction {
     /**
      The type of state this action deals with.  Usually inferred by simply specifying it
      in the implementation of `reduce`.

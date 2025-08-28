@@ -10,14 +10,14 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public enum HTTPClientErrors: Error {
+enum HTTPClientErrors: Error {
     case badSession
     case failedToOpenBatch
     case statusCode(code: Int)
     case unknown(error: Error)
 }
 
-public class HTTPClient {
+class HTTPClient {
     private static let defaultAPIHost = "api.segment.io/v1"
     private static let defaultCDNHost = "cdn-settings.segment.com/v1"
     

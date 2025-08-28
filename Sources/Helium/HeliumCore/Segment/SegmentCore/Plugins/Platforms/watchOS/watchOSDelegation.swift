@@ -12,20 +12,20 @@ import WatchKit
 
 // MARK: - Remote Notifications
 
-public protocol RemoteNotifications: Plugin {
+protocol RemoteNotifications: Plugin {
     func registeredForRemoteNotifications(deviceToken: Data)
     func failedToRegisterForRemoteNotification(error: Error?)
     func receivedRemoteNotification(userInfo: [AnyHashable: Any])
 }
 
 extension RemoteNotifications {
-    public func registeredForRemoteNotifications(deviceToken: Data) {}
-    public func failedToRegisterForRemoteNotification(error: Error?) {}
-    public func receivedRemoteNotification(userInfo: [AnyHashable: Any]) {}
+    func registeredForRemoteNotifications(deviceToken: Data) {}
+    func failedToRegisterForRemoteNotification(error: Error?) {}
+    func receivedRemoteNotification(userInfo: [AnyHashable: Any]) {}
 }
 
 extension Analytics {
-    public func registeredForRemoteNotifications(deviceToken: Data) {
+    func registeredForRemoteNotifications(deviceToken: Data) {
         setDeviceToken(deviceToken.hexString)
         
         apply { plugin in
@@ -35,7 +35,7 @@ extension Analytics {
         }
     }
     
-    public func failedToRegisterForRemoteNotification(error: Error?) {
+    func failedToRegisterForRemoteNotification(error: Error?) {
         apply { plugin in
             if let p = plugin as? RemoteNotifications {
                 p.failedToRegisterForRemoteNotification(error: error)
@@ -43,7 +43,7 @@ extension Analytics {
         }
     }
     
-    public func receivedRemoteNotification(userInfo: [AnyHashable: Any]) {
+    func receivedRemoteNotification(userInfo: [AnyHashable: Any]) {
         apply { plugin in
             if let p = plugin as? RemoteNotifications {
                 p.receivedRemoteNotification(userInfo: userInfo)

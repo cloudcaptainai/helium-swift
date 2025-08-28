@@ -7,17 +7,17 @@
 
 import Foundation
 
-public class DirectoryStore: DataStore {
-    public typealias StoreConfiguration = Configuration
+class DirectoryStore: DataStore {
+    typealias StoreConfiguration = Configuration
     
-    public struct Configuration {
+    struct Configuration {
         let writeKey: String
         let storageLocation: URL
         let baseFilename: String
         let maxFileSize: Int
         let indexKey: String
         
-        public init(writeKey: String, storageLocation: URL, baseFilename: String, maxFileSize: Int, indexKey: String) {
+        init(writeKey: String, storageLocation: URL, baseFilename: String, maxFileSize: Int, indexKey: String) {
             self.writeKey = writeKey
             self.storageLocation = storageLocation
             self.baseFilename = baseFilename
@@ -26,18 +26,18 @@ public class DirectoryStore: DataStore {
         }
     }
     
-    public var hasData: Bool {
+    var hasData: Bool {
         return count > 0
     }
     
-    public var count: Int {
+    var count: Int {
         if let r = try? FileManager.default.contentsOfDirectory(at: config.storageLocation, includingPropertiesForKeys: nil) {
             return r.count
         }
         return 0
     }
     
-    public var transactionType: DataTransactionType {
+    var transactionType: DataTransactionType {
         return .file
     }
     
@@ -46,18 +46,18 @@ public class DirectoryStore: DataStore {
     internal var writer: LineStreamWriter? = nil
     internal let userDefaults: UserDefaults
     
-    public required init(configuration: Configuration) {
+    required init(configuration: Configuration) {
         try? FileManager.default.createDirectory(at: configuration.storageLocation, withIntermediateDirectories: true)
         self.config = configuration
         self.userDefaults = UserDefaults(suiteName: "com.segment.storage.\(config.writeKey)")!
     }
     
-    public func reset() {
+    func reset() {
         let files = sortedFiles(includeUnfinished: true)
         remove(data: files)
     }
     
-    public func append(data: RawEvent) {
+    func append(data: RawEvent) {
         let started = startFileIfNeeded()
         guard let writer else { return }
         
@@ -83,7 +83,7 @@ public class DirectoryStore: DataStore {
         }
     }
     
-    public func fetch(count: Int?, maxBytes: Int?) -> DataResult? {
+    func fetch(count: Int?, maxBytes: Int?) -> DataResult? {
         if writer != nil {
             finishFile()
         }
@@ -104,7 +104,7 @@ public class DirectoryStore: DataStore {
         return nil
     }
     
-    public func remove(data: [DataStore.ItemID]) {
+    func remove(data: [DataStore.ItemID]) {
         guard let urls = data as? [URL] else { return }
         for file in urls {
             try? FileManager.default.removeItem(at: file)

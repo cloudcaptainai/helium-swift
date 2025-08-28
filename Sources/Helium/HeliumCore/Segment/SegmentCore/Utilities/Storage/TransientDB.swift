@@ -6,14 +6,14 @@
 //
 import Foundation
 
-public class TransientDB {
+class TransientDB {
     // our data store
     internal let store: any DataStore
     // keeps items added in the order given.
     internal let syncQueue = DispatchQueue(label: "transientDB.sync")
     private let asyncAppend: Bool
     
-    public var hasData: Bool {
+    var hasData: Bool {
         var result: Bool = false
         syncQueue.sync {
             result = store.hasData
@@ -21,7 +21,7 @@ public class TransientDB {
         return result
     }
     
-    public var count: Int {
+    var count: Int {
         var result: Int = 0
         syncQueue.sync {
             result = store.count
@@ -29,22 +29,22 @@ public class TransientDB {
         return result
     }
     
-    public var transactionType: DataTransactionType {
+    var transactionType: DataTransactionType {
         return store.transactionType
     }
     
-    public init(store: any DataStore, asyncAppend: Bool = true) {
+    init(store: any DataStore, asyncAppend: Bool = true) {
         self.store = store
         self.asyncAppend = asyncAppend
     }
     
-    public func reset() {
+    func reset() {
         syncQueue.sync {
             store.reset()
         }
     }
     
-    public func append(data: RawEvent) {
+    func append(data: RawEvent) {
         if asyncAppend {
             syncQueue.async { [weak self] in
                 guard let self else { return }
@@ -58,7 +58,7 @@ public class TransientDB {
         }
     }
     
-    public func fetch(count: Int? = nil, maxBytes: Int? = nil) -> DataResult? {
+    func fetch(count: Int? = nil, maxBytes: Int? = nil) -> DataResult? {
         var result: DataResult? = nil
         syncQueue.sync {
             result = store.fetch(count: count, maxBytes: maxBytes)
@@ -66,7 +66,7 @@ public class TransientDB {
         return result
     }
     
-    public func remove(data: [DataStore.ItemID]) {
+    func remove(data: [DataStore.ItemID]) {
         syncQueue.sync {
             store.remove(data: data)
         }

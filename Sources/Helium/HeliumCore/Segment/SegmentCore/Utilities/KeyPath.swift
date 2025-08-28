@@ -12,7 +12,7 @@ protocol KeyPathHandler {
     func value(keyPath: KeyPath, input: Any?, reference: Any?) -> Any?
 }
 
-public struct BasicHandler: KeyPathHandler {
+struct BasicHandler: KeyPathHandler {
     func value(keyPath: KeyPath, input: Any?, reference: Any?) -> Any? {
         guard let input = input as? [String: Any] else { return nil }
         var result: Any? = nil
@@ -33,13 +33,13 @@ public struct BasicHandler: KeyPathHandler {
     }
 }
 
-public struct KeyPath {
+struct KeyPath {
     var current: String
     var remaining: [String]
     
     var remainingPath: String { return remaining.joined(separator: ".") }
 
-    public init(_ string: String) {
+    init(_ string: String) {
         var components = string.components(separatedBy: ".")
         current = components.removeFirst()
         remaining = components
@@ -60,13 +60,13 @@ public struct KeyPath {
 
 
 extension KeyPath: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
+    init(stringLiteral value: String) {
         self.init(value)
     }
-    public init(unicodeScalarLiteral value: String) {
+    init(unicodeScalarLiteral value: String) {
         self.init(value)
     }
-    public init(extendedGraphemeClusterLiteral value: String) {
+    init(extendedGraphemeClusterLiteral value: String) {
         self.init(value)
     }
 }
@@ -100,17 +100,17 @@ extension Dictionary where Key: StringProtocol, Value: Any {
         }
     }
     
-    public subscript(keyPath keyPath: KeyPath) -> Any? {
+    subscript(keyPath keyPath: KeyPath) -> Any? {
         get { return value(keyPath: keyPath, reference: nil) }
         set { setValue(newValue as Any, keyPath: keyPath) }
     }
 
-    public subscript(keyPath keyPath: KeyPath, reference reference: Any?) -> Any? {
+    subscript(keyPath keyPath: KeyPath, reference reference: Any?) -> Any? {
         get { return value(keyPath: keyPath, reference: reference) }
         set { setValue(newValue as Any, keyPath: keyPath) }
     }
     
-    public func exists(keyPath: KeyPath, reference: Any? = nil) -> Bool {
+    func exists(keyPath: KeyPath, reference: Any? = nil) -> Bool {
         return (value(keyPath: keyPath, reference: reference) != nil)
     }
 }

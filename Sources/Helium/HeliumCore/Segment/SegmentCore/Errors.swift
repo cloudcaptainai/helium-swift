@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum AnalyticsError: Error {
+enum AnalyticsError: Error {
     case storageUnableToCreate(String)
     case storageUnableToWrite(String)
     case storageUnableToRename(String)
@@ -61,7 +61,7 @@ extension Analytics {
     }
     
     /// Reports an internal error to the user-defined error handler.
-    public func reportInternalError(_ error: Error, fatal: Bool = false) {
+    func reportInternalError(_ error: Error, fatal: Bool = false) {
         let translatedError = Self.translate(error: error)
         configuration.values.errorHandler?(translatedError)
         Self.segmentLog(message: "An internal error occurred: \(translatedError)", kind: .error)
@@ -70,7 +70,7 @@ extension Analytics {
         }
     }
     
-    static public func reportInternalError(_ error: Error, fatal: Bool = false) {
+    static func reportInternalError(_ error: Error, fatal: Bool = false) {
         // we don't have an instance of analytics to call to get our error handler,
         // but we can at least report the message to the console.
         let translatedError = Self.translate(error: error)

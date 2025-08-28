@@ -13,7 +13,7 @@ import FoundationNetworking
 
 // MARK: - Custom AnonymousId generator
 /// Conform to this protocol to generate your own AnonymousID
-public protocol AnonymousIdGenerator: AnyObject, Codable {
+protocol AnonymousIdGenerator: AnyObject, Codable {
     /// Returns a new anonymousId.  Segment still manages storage and retrieval of the
     /// current anonymousId and will call this method when new id's are needed.
     ///
@@ -23,7 +23,7 @@ public protocol AnonymousIdGenerator: AnyObject, Codable {
 
 // MARK: - Operating Mode
 /// Specifies the operating mode/context
-public enum OperatingMode {
+enum OperatingMode {
     /// The operation of the Analytics client are synchronous.
     case synchronous
     /// The operation of the Analytics client are asynchronous.
@@ -34,7 +34,7 @@ public enum OperatingMode {
 
 // MARK: - Storage Mode
 /// Specifies the storage mode to be used for events
-public enum StorageMode {
+enum StorageMode {
     /// Store events to disk (default).
     case disk
     /// Store events to disk in the given a directory URL.
@@ -47,7 +47,7 @@ public enum StorageMode {
 
 // MARK: - Internal Configuration
 
-public class Configuration {
+class Configuration {
     internal struct Values {
         var writeKey: String
         var application: Any? = nil
@@ -74,7 +74,7 @@ public class Configuration {
     /// Initialize a configuration object to pass along to an Analytics instance.
     ///
     /// - Parameter writeKey: Your Segment write key value
-    public init(writeKey: String) {
+    init(writeKey: String) {
         self.values = Values(writeKey: writeKey)
         JSON.jsonNonConformingNumberStrategy = self.values.jsonNonConformingNumberStrategy
         // enable segment destination by default
@@ -90,7 +90,7 @@ public class Configuration {
 
 // MARK: - Analytics Configuration
 
-public extension Configuration {
+extension Configuration {
     
     /// Sets a reference to your application.  This can be useful in instances
     /// where referring back to your application is necessary, such as within plugins

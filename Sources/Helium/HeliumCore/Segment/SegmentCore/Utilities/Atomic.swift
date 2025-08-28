@@ -17,21 +17,21 @@ import Foundation
 // Also see thread here: https://github.com/apple/swift-evolution/pull/1387
 
 @propertyWrapper
-public class Atomic<T> {
+class Atomic<T> {
     private var value: T
     private let queue = DispatchQueue(label: "com.segment.atomic.\(UUID().uuidString)")
 
-    public init(wrappedValue value: T) {
+    init(wrappedValue value: T) {
         self.value = value
     }
 
-    public var wrappedValue: T {
+    var wrappedValue: T {
         get { return queue.sync { return value } }
         set { queue.sync { value = newValue } }
     }
 
     @discardableResult
-    public func withValue(_ operation: (inout T) -> Void) -> T {
+    func withValue(_ operation: (inout T) -> Void) -> T {
         queue.sync {
             operation(&self.value)
             return self.value

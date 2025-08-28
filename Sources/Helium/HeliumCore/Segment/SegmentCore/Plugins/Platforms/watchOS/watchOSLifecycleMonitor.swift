@@ -10,7 +10,7 @@
 import Foundation
 import WatchKit
 
-public protocol watchOSLifecycle {
+protocol watchOSLifecycle {
     func applicationDidFinishLaunching(watchExtension: WKExtension)
     func applicationWillEnterForeground(watchExtension: WKExtension)
     func applicationDidEnterBackground(watchExtension: WKExtension)
@@ -18,7 +18,7 @@ public protocol watchOSLifecycle {
     func applicationWillResignActive(watchExtension: WKExtension)
 }
 
-public extension watchOSLifecycle {
+extension watchOSLifecycle {
     func applicationDidFinishLaunching(watchExtension: WKExtension) { }
     func applicationWillEnterForeground(watchExtension: WKExtension) { }
     func applicationDidEnterBackground(watchExtension: WKExtension) { }
@@ -122,11 +122,11 @@ class watchOSLifecycleMonitor: PlatformPlugin {
 // MARK: - Segment Destination Extension
 
 extension SegmentDestination: watchOSLifecycle {
-    public func applicationWillEnterForeground(watchExtension: WKExtension) {
+    func applicationWillEnterForeground(watchExtension: WKExtension) {
         enterForeground()
     }
     
-    public func applicationDidEnterBackground(watchExtension: WKExtension) {
+    func applicationDidEnterBackground(watchExtension: WKExtension) {
         enterBackground()
     }
 }
@@ -135,11 +135,11 @@ extension SegmentDestination: watchOSLifecycle {
 // MARK: - Interval Based Flush Policy Extension
 
 extension IntervalBasedFlushPolicy: watchOSLifecycle {
-    public func applicationWillEnterForeground(watchExtension: WKExtension) {
+    func applicationWillEnterForeground(watchExtension: WKExtension) {
         enterForeground()
     }
     
-    public func applicationDidEnterBackground(watchExtension: WKExtension) {
+    func applicationDidEnterBackground(watchExtension: WKExtension) {
         enterBackground()
     }
 }

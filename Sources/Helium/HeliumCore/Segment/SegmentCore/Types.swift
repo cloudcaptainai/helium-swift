@@ -10,7 +10,7 @@ import Sovran
 
 // MARK: - Supplementary Types
 
-public struct DestinationMetadata: Codable {
+struct DestinationMetadata: Codable {
     var bundled: [String] = []
     var unbundled: [String] = []
     var bundledIds: [String] = []
@@ -18,7 +18,7 @@ public struct DestinationMetadata: Codable {
 
 // MARK: - Event Types
 
-public protocol RawEvent: Codable {
+protocol RawEvent: Codable {
     var type: String? { get set }
     var anonymousId: String? { get set }
     var messageId: String? { get set }
@@ -31,127 +31,127 @@ public protocol RawEvent: Codable {
     var _metadata: DestinationMetadata? { get set }
 }
 
-public struct TrackEvent: RawEvent {
-    public var type: String? = "track"
-    public var anonymousId: String? = nil
-    public var messageId: String? = nil
-    public var userId: String? = nil
-    public var timestamp: String? = nil
-    public var context: JSON? = nil
-    public var integrations: JSON? = nil
-    public var metrics: [JSON]? = nil
-    public var _metadata: DestinationMetadata? = nil
+struct TrackEvent: RawEvent {
+    var type: String? = "track"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: JSON? = nil
+    var integrations: JSON? = nil
+    var metrics: [JSON]? = nil
+    var _metadata: DestinationMetadata? = nil
     
-    public var event: String
-    public var properties: JSON?
+    var event: String
+    var properties: JSON?
     
-    public init(event: String, properties: JSON?) {
+    init(event: String, properties: JSON?) {
         self.event = event
         self.properties = properties
     }
     
-    public init(existing: TrackEvent) {
+    init(existing: TrackEvent) {
         self.init(event: existing.event, properties: existing.properties)
         applyRawEventData(event: existing)
     }
 }
 
-public struct IdentifyEvent: RawEvent {
-    public var type: String? = "identify"
-    public var anonymousId: String? = nil
-    public var messageId: String? = nil
-    public var userId: String?
-    public var timestamp: String? = nil
-    public var context: JSON? = nil
-    public var integrations: JSON? = nil
-    public var metrics: [JSON]? = nil
-    public var _metadata: DestinationMetadata? = nil
+struct IdentifyEvent: RawEvent {
+    var type: String? = "identify"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String?
+    var timestamp: String? = nil
+    var context: JSON? = nil
+    var integrations: JSON? = nil
+    var metrics: [JSON]? = nil
+    var _metadata: DestinationMetadata? = nil
     
-    public var traits: JSON?
+    var traits: JSON?
     
     
-    public init(userId: String? = nil, traits: JSON? = nil) {
+    init(userId: String? = nil, traits: JSON? = nil) {
         self.userId = userId
         self.traits = traits
     }
     
-    public init(existing: IdentifyEvent) {
+    init(existing: IdentifyEvent) {
         self.init(userId: existing.userId, traits: existing.traits)
         applyRawEventData(event: existing)
     }
 }
 
-public struct ScreenEvent: RawEvent {
-    public var type: String? = "screen"
-    public var anonymousId: String? = nil
-    public var messageId: String? = nil
-    public var userId: String? = nil
-    public var timestamp: String? = nil
-    public var context: JSON? = nil
-    public var integrations: JSON? = nil
-    public var metrics: [JSON]? = nil
-    public var _metadata: DestinationMetadata? = nil
+struct ScreenEvent: RawEvent {
+    var type: String? = "screen"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: JSON? = nil
+    var integrations: JSON? = nil
+    var metrics: [JSON]? = nil
+    var _metadata: DestinationMetadata? = nil
     
-    public var name: String?
-    public var category: String?
-    public var properties: JSON?
+    var name: String?
+    var category: String?
+    var properties: JSON?
     
-    public init(title: String? = nil, category: String?, properties: JSON? = nil) {
+    init(title: String? = nil, category: String?, properties: JSON? = nil) {
         self.name = title
         self.category = category
         self.properties = properties
     }
     
-    public init(existing: ScreenEvent) {
+    init(existing: ScreenEvent) {
         self.init(title: existing.name, category: existing.category, properties: existing.properties)
         applyRawEventData(event: existing)
     }
 }
 
-public struct GroupEvent: RawEvent {
-    public var type: String? = "group"
-    public var anonymousId: String? = nil
-    public var messageId: String? = nil
-    public var userId: String? = nil
-    public var timestamp: String? = nil
-    public var context: JSON? = nil
-    public var integrations: JSON? = nil
-    public var metrics: [JSON]? = nil
-    public var _metadata: DestinationMetadata? = nil
+struct GroupEvent: RawEvent {
+    var type: String? = "group"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: JSON? = nil
+    var integrations: JSON? = nil
+    var metrics: [JSON]? = nil
+    var _metadata: DestinationMetadata? = nil
     
-    public var groupId: String?
-    public var traits: JSON?
+    var groupId: String?
+    var traits: JSON?
     
-    public init(groupId: String? = nil, traits: JSON? = nil) {
+    init(groupId: String? = nil, traits: JSON? = nil) {
         self.groupId = groupId
         self.traits = traits
     }
     
-    public init(existing: GroupEvent) {
+    init(existing: GroupEvent) {
         self.init(groupId: existing.groupId, traits: existing.traits)
         applyRawEventData(event: existing)
     }
 }
 
-public struct AliasEvent: RawEvent {
-    public var type: String? = "alias"
-    public var anonymousId: String? = nil
-    public var messageId: String? = nil
-    public var timestamp: String? = nil
-    public var context: JSON? = nil
-    public var integrations: JSON? = nil
-    public var metrics: [JSON]? = nil
-    public var _metadata: DestinationMetadata? = nil
+struct AliasEvent: RawEvent {
+    var type: String? = "alias"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var timestamp: String? = nil
+    var context: JSON? = nil
+    var integrations: JSON? = nil
+    var metrics: [JSON]? = nil
+    var _metadata: DestinationMetadata? = nil
     
-    public var userId: String? = nil
-    public var previousId: String? = nil
+    var userId: String? = nil
+    var previousId: String? = nil
     
-    public init(newId: String?, previousId: String? = nil) {
+    init(newId: String?, previousId: String? = nil) {
         self.userId = newId
         self.previousId = previousId
     }
     
-    public init(existing: AliasEvent) {
+    init(existing: AliasEvent) {
         self.init(newId: existing.userId, previousId: existing.previousId)
         applyRawEventData(event: existing)
     }
@@ -170,7 +170,7 @@ extension RawEvent {
      - Parameters:
         - exceptKeys: A list of integration keys to exclude from disabling.
      */
-    public mutating func disableCloudIntegrations(exceptKeys: [String]? = nil) {
+    mutating func disableCloudIntegrations(exceptKeys: [String]? = nil) {
         guard let existing = integrations?.dictionaryValue else {
             // this shouldn't happen, might oughta log it.
             Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)
@@ -201,7 +201,7 @@ extension RawEvent {
      - Parameters:
         - exceptKeys: A list of integration keys to exclude from enabling.
      */
-    public mutating func enableCloudIntegrations(exceptKeys: [String]? = nil) {
+    mutating func enableCloudIntegrations(exceptKeys: [String]? = nil) {
         var new = [String: Any]()
         new[IntegrationConstants.allIntegrationsKey] = true
         if let exceptKeys = exceptKeys {
@@ -223,7 +223,7 @@ extension RawEvent {
      - Parameters:
         - key: The key name of the integration to disable.
      */
-    public mutating func disableIntegration(key: String) {
+    mutating func disableIntegration(key: String) {
         guard let existing = integrations?.dictionaryValue else {
             // this shouldn't happen, might oughta log it.
             Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)
@@ -247,7 +247,7 @@ extension RawEvent {
      - Parameters:
         - key: The key name of the integration to enable.
      */
-    public mutating func enableIntegration(key: String) {
+    mutating func enableIntegration(key: String) {
         guard let existing = integrations?.dictionaryValue else {
             // this shouldn't happen, might oughta log it.
             Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)

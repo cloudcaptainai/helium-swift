@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol FlushPolicy: AnyObject {
+protocol FlushPolicy: AnyObject {
     var analytics: Analytics? { get set }
     func configure(analytics: Analytics) -> Void
     func shouldFlush() -> Bool
@@ -15,7 +15,7 @@ public protocol FlushPolicy: AnyObject {
     func reset() -> Void
 }
 
-public extension Analytics {
+extension Analytics {
     func add(flushPolicy: FlushPolicy) {
         guard let state: System = store.currentState() else { return }
         let config = state.configuration

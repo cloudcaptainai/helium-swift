@@ -9,14 +9,14 @@ import Foundation
 
 @propertyWrapper
 internal struct Noncodable<T>: Codable {
-    public var wrappedValue: T?
-    public init(wrappedValue: T?) {
+    var wrappedValue: T?
+    init(wrappedValue: T?) {
         self.wrappedValue = wrappedValue
     }
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         self.wrappedValue = nil
     }
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         // Do nothing
     }
 }

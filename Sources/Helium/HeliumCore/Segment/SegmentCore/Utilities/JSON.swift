@@ -47,7 +47,7 @@ extension JSONSafeEncoder {
 
 // MARK: - JSON Definition
 
-public enum JSON: Equatable {
+enum JSON: Equatable {
     case null
     case bool(Bool)
     case number(Decimal)
@@ -63,17 +63,17 @@ public enum JSON: Equatable {
         case incorrectType
     }
     
-    public init(_ object: [String: Any]) throws {
+    init(_ object: [String: Any]) throws {
         self = .object(try object.mapValues(JSON.init))
     }
     
-    public init?(nilOrObject object: [String: Any]?) throws {
+    init?(nilOrObject object: [String: Any]?) throws {
         guard let object = object else { return nil }
         try self.init(object)
     }
     
     // For Value types
-    public init<T: Codable>(with value: T) throws {
+    init<T: Codable>(with value: T) throws {
         let encoder = JSONSafeEncoder.default
         let json = try encoder.encode(value)
         let output = try JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed)
@@ -81,7 +81,7 @@ public enum JSON: Equatable {
     }
     
     // For primitives??
-    public init(_ value: Any) throws {
+    init(_ value: Any) throws {
         switch value {
         // handle NS values
         case _ as NSNull:
@@ -126,7 +126,7 @@ public enum JSON: Equatable {
 // MARK: - Codable conformance
 
 extension JSON: Codable {
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         
         switch self {
@@ -145,7 +145,7 @@ extension JSON: Codable {
         }
     }
     
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null
@@ -166,15 +166,15 @@ extension JSON: Codable {
 }
 
 extension Encodable {
-    public func prettyPrint() -> String {
+    func prettyPrint() -> String {
         return toString(pretty: true)
     }
     
-    public func toString() -> String {
+    func toString() -> String {
         return toString(pretty: false)
     }
     
-    public func toString(pretty: Bool) -> String {
+    func toString(pretty: Bool) -> String {
         var returnString = ""
         do {
             let encoder = JSONSafeEncoder.default
@@ -222,7 +222,7 @@ extension JSON {
         return result as Any
     }
     
-    public func codableValue<T: Codable>() -> T? {
+    func codableValue<T: Codable>() -> T? {
         var result: T? = nil
         if let dict = dictionaryValue, let jsonData = try? JSONSerialization.data(withJSONObject: dict) {
             do {
@@ -234,7 +234,7 @@ extension JSON {
         return result
     }
 
-    public var boolValue: Bool? {
+    var boolValue: Bool? {
         switch self {
         case .bool(let value):
             return value
@@ -243,7 +243,7 @@ extension JSON {
         }
     }
     
-    public var decimalValue: Decimal? {
+    var decimalValue: Decimal? {
         switch self {
         case .number(let value):
             return value
@@ -252,7 +252,7 @@ extension JSON {
         }
     }
     
-    public var intValue: Int? {
+    var intValue: Int? {
         switch self {
         case .number(let value):
             return (value as NSDecimalNumber).intValue
@@ -261,7 +261,7 @@ extension JSON {
         }
     }
     
-    public var uintValue: UInt? {
+    var uintValue: UInt? {
         switch self {
         case .number(let value):
             return (value as NSDecimalNumber).uintValue
@@ -270,7 +270,7 @@ extension JSON {
         }
     }
     
-    public var floatValue: Float? {
+    var floatValue: Float? {
         switch self {
         case .number(let value):
             return (value as NSDecimalNumber).floatValue
@@ -279,7 +279,7 @@ extension JSON {
         }
     }
     
-    public var doubleValue: Double? {
+    var doubleValue: Double? {
         switch self {
         case .number(let value):
             return (value as NSDecimalNumber).doubleValue
@@ -288,7 +288,7 @@ extension JSON {
         }
     }
     
-    public var stringValue: String? {
+    var stringValue: String? {
         switch self {
         case .string(let value):
             return value
@@ -297,7 +297,7 @@ extension JSON {
         }
     }
     
-    public var arrayValue: [Any]? {
+    var arrayValue: [Any]? {
         switch self {
         case .array(let value):
             let result = value.map { item in
@@ -310,7 +310,7 @@ extension JSON {
     }
     
 
-    public var dictionaryValue: [String: Any]? {
+    var dictionaryValue: [String: Any]? {
         switch self {
         case .object(let value):
             let result = value.mapValues { item in
@@ -333,7 +333,7 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the specified changes.
     /// - Throws: This method will throw if transformation or JSON cannot be properly completed.
-    public func mapTransform(_ keys: [String: String], valueTransform: ((_ key: String, _ value: Any) -> Any)? = nil) throws -> JSON {
+    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: String, _ value: Any) -> Any)? = nil) throws -> JSON {
         guard let dict = self.dictionaryValue else { return self }
         let mapped = try dict.mapTransform(keys, valueTransform: valueTransform)
         let result = try JSON(mapped)
@@ -346,7 +346,7 @@ extension JSON {
     ///
     /// - Returns: A new JSON array with the supplied value added.
     /// - Throws: This method throws when a value is added and unable to be serialized.
-    public func add(value: Any) throws -> JSON? {
+    func add(value: Any) throws -> JSON? {
         var result: JSON? = nil
         switch self {
         case .array:
@@ -369,7 +369,7 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the supplied Key/Value added.
     /// - Throws: This method throws when a value is added and unable to be serialized.
-    public func add(value: Any, forKey key: String) throws -> JSON? {
+    func add(value: Any, forKey key: String) throws -> JSON? {
         var result: JSON? = nil
         switch self {
         case .object:
@@ -391,7 +391,7 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the specified key and it's associated value removed.
     /// - Throws: This method throws when after modification, it is unable to be serialized.
-    public func remove(key: String) throws -> JSON? {
+    func remove(key: String) throws -> JSON? {
         var result: JSON? = nil
         switch self {
         case .object:
@@ -409,7 +409,7 @@ extension JSON {
     }
         
     /// Directly access a specific index in the JSON array.
-    public subscript(index: Int) -> JSON? {
+    subscript(index: Int) -> JSON? {
         get {
             switch self {
             case .array(let value):
@@ -425,7 +425,7 @@ extension JSON {
     }
     
     /// Directly access a key within the JSON object.
-    public subscript(key: String) -> JSON? {
+    subscript(key: String) -> JSON? {
         get {
             switch self {
             case .object(let value):
@@ -438,7 +438,7 @@ extension JSON {
     }
 
     /// Directly access or set a value within the JSON object using a key path.
-    public subscript<T: Codable>(keyPath keyPath: KeyPath) -> T? {
+    subscript<T: Codable>(keyPath keyPath: KeyPath) -> T? {
         get {
             var result: T? = nil
             switch self {
@@ -494,14 +494,14 @@ extension JSON {
     ///   - forKeyPath: The keypath within the object to retrieve.  eg: `context.device.ip`
     ///
     /// - Returns: The value as typed, or nil.
-    public func value<T: Codable>(forKeyPath keyPath: KeyPath) -> T? {
+    func value<T: Codable>(forKeyPath keyPath: KeyPath) -> T? {
         return self[keyPath: keyPath]
     }
     
     /// Directly access a value within the JSON object using a key path.
     /// - Parameters:
     ///   - forKeyPath: The keypath within the object to set.  eg: `context.device.ip`
-    public mutating func setValue<T: Codable>(_ value: T?, forKeyPath keyPath: KeyPath) {
+    mutating func setValue<T: Codable>(_ value: T?, forKeyPath keyPath: KeyPath) {
         self[keyPath: keyPath] = value
     }
 
@@ -510,7 +510,7 @@ extension JSON {
 // MARK: - Helpers
 
 extension Dictionary where Key == String, Value == Any {
-    public func mapTransform(_ keys: [String: String], valueTransform: ((_ key: Key, _ value: Value) -> Any)? = nil) throws -> [Key: Value] {
+    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: Key, _ value: Value) -> Any)? = nil) throws -> [Key: Value] {
         let mapped = Dictionary(uniqueKeysWithValues: self.map { key, value -> (Key, Value) in
             var newKey = key
             var newValue = value

@@ -13,19 +13,19 @@ import JSONSafeEncoding
 // MARK: - ObjC Compatibility
 
 @objc(SEGAnalytics)
-public class ObjCAnalytics: NSObject {
+class ObjCAnalytics: NSObject {
     /// The underlying Analytics object we're working with
-    public let analytics: Analytics
+    let analytics: Analytics
     
     @objc
-    public init(configuration: ObjCConfiguration) {
+    init(configuration: ObjCConfiguration) {
         self.analytics = Analytics(configuration: configuration.configuration)
     }
     
     /// Get a workable ObjC instance by wrapping a Swift instance
     /// Useful when you want additional flexibility or to share
     /// a single instance between ObjC<>Swift.
-    public init(wrapping analytics: Analytics) {
+    init(wrapping analytics: Analytics) {
         self.analytics = analytics
     }
 }
@@ -35,13 +35,13 @@ public class ObjCAnalytics: NSObject {
 @objc
 extension ObjCAnalytics {
     @objc(track:)
-    public func track(name: String) {
+    func track(name: String) {
         track(name: name, properties: nil)
     }
     
 
     @objc(track:properties:)
-    public func track(name: String, properties: [String: Any]?) {
+    func track(name: String, properties: [String: Any]?) {
         analytics.track(name: name, properties: properties)
     }
 
@@ -52,7 +52,7 @@ extension ObjCAnalytics {
     ///     https://segment.io/libraries/ios#ids
     /// In the case when user logs out, make sure to call ``reset()`` to clear user's identity info.
     @objc(identify:)
-    public func identify(userId: String) {
+    func identify(userId: String) {
         identify(userId: userId, traits: nil)
     }
 
@@ -64,7 +64,7 @@ extension ObjCAnalytics {
     ///   - traits: A dictionary of traits you know about the user. Things like: email, name, plan, etc.
     /// In the case when user logs out, make sure to call ``reset()`` to clear user's identity info.
     @objc(identify:traits:)
-    public func identify(userId: String?, traits: [String: Any]?) {
+    func identify(userId: String?, traits: [String: Any]?) {
         if let userId = userId {
             // at first glance this looks like recursion.  It's actually calling
             // into the swift version of this call where userId is NOT optional.
@@ -82,7 +82,7 @@ extension ObjCAnalytics {
     /// - Parameters:
     ///   - title: The title of the screen being tracked.
     @objc(screen:)
-    public func screen(title: String) {
+    func screen(title: String) {
         screen(title: title, category: nil, properties: nil)
     }
     
@@ -91,7 +91,7 @@ extension ObjCAnalytics {
     ///   - title: The title of the screen being tracked.
     ///   - category: A category to the type of screen if it applies.
     @objc(screen:category:)
-    public func screen(title: String, category: String?) {
+    func screen(title: String, category: String?) {
         analytics.screen(title: title, category: category, properties: nil)
     }
     /// Track a screen change with a title, category and other properties.
@@ -100,7 +100,7 @@ extension ObjCAnalytics {
     ///   - category: A category to the type of screen if it applies.
     ///   - properties: Any extra metadata associated with the screen. e.g. method of access, size, etc.
     @objc(screen:category:properties:)
-    public func screen(title: String, category: String?, properties: [String: Any]?) {
+    func screen(title: String, category: String?, properties: [String: Any]?) {
         analytics.screen(title: title, category: category, properties: properties)
     }
 
@@ -108,7 +108,7 @@ extension ObjCAnalytics {
     /// - Parameters:
     ///   - groupId: A unique identifier for the group identification in your system.
     @objc(group:)
-    public func group(groupId: String) {
+    func group(groupId: String) {
         group(groupId: groupId, traits: nil)
     }
 
@@ -117,7 +117,7 @@ extension ObjCAnalytics {
     ///   - groupId: A unique identifier for the group identification in your system.
     ///   - traits: Traits of the group you may be interested in such as email, phone or name.
     @objc(group:traits:)
-    public func group(groupId: String, traits: [String: Any]?) {
+    func group(groupId: String, traits: [String: Any]?) {
         analytics.group(groupId: groupId, traits: traits)
     }
     
@@ -125,7 +125,7 @@ extension ObjCAnalytics {
     /// The alias method is used to merge two user identities, effectively connecting two sets of user data
     /// as one. This is an advanced method, but it is required to manage user identities successfully in some of our destinations.
     /// - Parameter newId: The new id replacing the old user id.
-    public func alias(newId: String) {
+    func alias(newId: String) {
         analytics.alias(newId: newId)
     }
 }
@@ -136,32 +136,32 @@ extension ObjCAnalytics {
 @objc
 extension ObjCAnalytics {
     @objc
-    public var anonymousId: String {
+    var anonymousId: String {
         return analytics.anonymousId
     }
     
     @objc
-    public var userId: String? {
+    var userId: String? {
         return analytics.userId
     }
     
     @objc
-    public func traits() -> [String: Any]? {
+    func traits() -> [String: Any]? {
         return analytics.traits()
     }
     
     @objc
-    public func flush() {
+    func flush() {
         analytics.flush()
     }
     
     @objc
-    public func reset() {
+    func reset() {
         analytics.reset()
     }
     
     @objc
-    public func settings() -> [String: Any]? {
+    func settings() -> [String: Any]? {
         var result: [String: Any]? = nil
         if let system: System = analytics.store.currentState() {
             do {
@@ -179,12 +179,12 @@ extension ObjCAnalytics {
     }
     
     @objc
-    public func openURL(_ url: URL, options: [String: Any] = [:]) {
+    func openURL(_ url: URL, options: [String: Any] = [:]) {
         analytics.openURL(url, options: options)
     }
     
     @objc
-    public func version() -> String {
+    func version() -> String {
         return analytics.version()
     }
 }

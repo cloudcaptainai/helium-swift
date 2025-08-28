@@ -11,14 +11,14 @@ import Foundation
 import JSONSafeEncoding
 
 @objc(SEGConfiguration)
-public class ObjCConfiguration: NSObject {
+class ObjCConfiguration: NSObject {
     internal var configuration: Configuration
     
     /// Sets a reference to your application.  This can be useful in instances
     /// where referring back to your application is necessary, such as within plugins
     /// or async code.  The default value is `nil`.
     @objc
-    public var application: Any? {
+    var application: Any? {
         get {
             return configuration.values.application
         }
@@ -29,7 +29,7 @@ public class ObjCConfiguration: NSObject {
     
     /// Opt-in/out of tracking lifecycle events.  The default value is `false`.
     @objc
-    public var trackApplicationLifecycleEvents: Bool {
+    var trackApplicationLifecycleEvents: Bool {
         get {
             return configuration.values.trackApplicationLifecycleEvents
         }
@@ -41,7 +41,7 @@ public class ObjCConfiguration: NSObject {
     /// Set the number of events necessary to automatically flush. The default
     /// value is `20`.
     @objc
-    public var flushAt: Int {
+    var flushAt: Int {
         get {
             return configuration.values.flushAt
         }
@@ -53,7 +53,7 @@ public class ObjCConfiguration: NSObject {
     /// Set a time interval (in seconds) by which to trigger an automatic flush.
     /// The default value is `30`.
     @objc
-    public var flushInterval: TimeInterval {
+    var flushInterval: TimeInterval {
         get {
             return configuration.values.flushInterval
         }
@@ -72,7 +72,7 @@ public class ObjCConfiguration: NSObject {
     ///
     /// https://cdn-settings.segment.com/v1/projects/<writekey>/settings
     @objc
-    public var defaultSettings: [String: Any] {
+    var defaultSettings: [String: Any] {
         get {
             var result = [String: Any]()
             do {
@@ -103,7 +103,7 @@ public class ObjCConfiguration: NSObject {
     /// This can be useful in instances such as Consent Management, or in device
     /// mode only setups.  The default value is `true`.
     @objc
-    public var autoAddSegmentDestination: Bool {
+    var autoAddSegmentDestination: Bool {
         get {
             return configuration.values.autoAddSegmentDestination
         }
@@ -116,7 +116,7 @@ public class ObjCConfiguration: NSObject {
     /// events need to be routed to certain locales at all times (such as the EU).
     /// The default value is `api.segment.io/v1`.
     @objc
-    public var apiHost: String {
+    var apiHost: String {
         get {
             return configuration.values.apiHost
         }
@@ -129,7 +129,7 @@ public class ObjCConfiguration: NSObject {
     /// a proxy is in use, or settings need to be queried from certain locales at
     /// all times (such as the EU). The default value is `cdn-settings.segment.com/v1`.
     @objc
-    public var cdnHost: String {
+    var cdnHost: String {
         get {
             return configuration.values.cdnHost
         }
@@ -144,7 +144,7 @@ public class ObjCConfiguration: NSObject {
     /// - Parameter value: A block to call when requests are made.
     /// - Returns: The current Configuration.
     @objc
-    public var requestFactory: ((URLRequest) -> URLRequest)? {
+    var requestFactory: ((URLRequest) -> URLRequest)? {
         get {
             return configuration.values.requestFactory
         }
@@ -157,7 +157,7 @@ public class ObjCConfiguration: NSObject {
     ///
     /// - Parameter writeKey: Your Segment write key value
     @objc
-    public init(writeKey: String) {
+    init(writeKey: String) {
         self.configuration = Configuration(writeKey: writeKey)
     }
 }

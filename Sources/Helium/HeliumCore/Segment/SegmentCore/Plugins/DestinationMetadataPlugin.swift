@@ -11,11 +11,11 @@ import Foundation
  * DestinationMetadataPlugin adds `_metadata` information to payloads that Segment uses to
  * determine delivery of events to cloud/device-mode destinations
  */
-public class DestinationMetadataPlugin: Plugin {
-    public let type: PluginType = PluginType.enrichment
-    public weak var analytics: Analytics?
+class DestinationMetadataPlugin: Plugin {
+    let type: PluginType = PluginType.enrichment
+    weak var analytics: Analytics?
 
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         guard var modified = event else {
             return event
         }

@@ -13,7 +13,7 @@ import Foundation
  on a struct's built-in copy mechanism to function.  Behavior when applied to classes
  is currently undefined and will likely result in errors.
  */
-public protocol State: Any { }
+protocol State: Any { }
 
 /**
  Typealias for state handlers implemented by subscribers.  T represents
@@ -28,4 +28,4 @@ public protocol State: Any { }
  ```
  In the example above, `T` represents `MyState`.
  */
-public typealias Handler<T: State> = (T) -> Void
+typealias Handler<T: State> = (T) -> Void

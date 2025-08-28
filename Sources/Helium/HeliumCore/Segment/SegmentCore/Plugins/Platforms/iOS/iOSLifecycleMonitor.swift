@@ -12,7 +12,7 @@ import UIKit
 
 // NOTE: These method signatures are marked optional as application extensions may not have
 // a UIApplication object available.  See `safeShared` below.
-public protocol iOSLifecycle {
+protocol iOSLifecycle {
     func applicationDidEnterBackground(application: UIApplication?)
     func applicationWillEnterForeground(application: UIApplication?)
     func application(_ application: UIApplication?, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?)
@@ -24,7 +24,7 @@ public protocol iOSLifecycle {
     func applicationBackgroundRefreshDidChange(application: UIApplication?, refreshStatus: UIBackgroundRefreshStatus)
 }
 
-public extension iOSLifecycle {
+extension iOSLifecycle {
     func applicationDidEnterBackground(application: UIApplication?) { }
     func applicationWillEnterForeground(application: UIApplication?) { }
     func application(_ application: UIApplication?, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) { }
@@ -176,11 +176,11 @@ class iOSLifecycleMonitor: PlatformPlugin {
 
 
 extension SegmentDestination: iOSLifecycle {
-    public func applicationWillEnterForeground(application: UIApplication?) {
+    func applicationWillEnterForeground(application: UIApplication?) {
         enterForeground()
     }
     
-    public func applicationDidEnterBackground(application: UIApplication?) {
+    func applicationDidEnterBackground(application: UIApplication?) {
         enterBackground()
     }
 }
@@ -208,11 +208,11 @@ extension SegmentDestination.UploadTaskInfo {
 // MARK: - Interval Based Flush Policy Extension
 
 extension IntervalBasedFlushPolicy: iOSLifecycle {
-    public func applicationWillEnterForeground(application: UIApplication?) {
+    func applicationWillEnterForeground(application: UIApplication?) {
         enterForeground()
     }
     
-    public func applicationDidEnterBackground(application: UIApplication?) {
+    func applicationDidEnterBackground(application: UIApplication?) {
         enterBackground()
     }
 }

@@ -16,23 +16,23 @@ import Sovran
 import FoundationNetworking
 #endif
 
-public class SegmentAnonymousId: AnonymousIdGenerator {
-    public func newAnonymousId() -> String {
+class SegmentAnonymousId: AnonymousIdGenerator {
+    func newAnonymousId() -> String {
         return UUID().uuidString
     }
 }
 
-public class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
+class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
     internal enum Constants: String {
         case integrationName = "Segment.io"
         case apiHost = "apiHost"
         case apiKey = "apiKey"
     }
     
-    public let type = PluginType.destination
-    public let key: String = Constants.integrationName.rawValue
-    public let timeline = Timeline()
-    public weak var analytics: Analytics? {
+    let type = PluginType.destination
+    let key: String = Constants.integrationName.rawValue
+    let timeline = Timeline()
+    weak var analytics: Analytics? {
         didSet {
             initialSetup()
         }
@@ -63,7 +63,7 @@ public class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion 
         add(plugin: DestinationMetadataPlugin())
     }
     
-    public func update(settings: Settings, type: UpdateType) {
+    func update(settings: Settings, type: UpdateType) {
         guard let analytics = analytics else { return }
         let segmentInfo = settings.integrationSettings(forKey: self.key)
         // if customer cycles out a writekey at app.segment.com, this is necessary.
@@ -95,7 +95,7 @@ public class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion 
     }
     
     // MARK: - Event Handling Methods
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         guard let event = event else { return nil }
         let result = process(incomingEvent: event)
         if let r = result {
@@ -121,11 +121,11 @@ public class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion 
         }
     }
     
-    public func flush() {
+    func flush() {
         // unused .. see flush(group:completion:)
     }
     
-    public func flush(group: DispatchGroup) {
+    func flush(group: DispatchGroup) {
         group.enter()
         defer { group.leave() }
         
@@ -328,7 +328,7 @@ extension SegmentDestination {
 // MARK: Versioning
 
 extension SegmentDestination: VersionedPlugin {
-    public static func version() -> String {
+    static func version() -> String {
         return __segment_version
     }
 }

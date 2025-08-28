@@ -35,31 +35,31 @@ open class JSONSafeEncoder {
     // MARK: Options
 
     /// The formatting of the output JSON data.
-    public struct OutputFormatting: OptionSet {
+    struct OutputFormatting: OptionSet {
         /// The format's default value.
-        public let rawValue: UInt
+        let rawValue: UInt
 
         /// Creates an OutputFormatting value with the given raw value.
-        public init(rawValue: UInt) {
+        init(rawValue: UInt) {
             self.rawValue = rawValue
         }
 
         /// Produce human-readable JSON with indented output.
-        public static let prettyPrinted = OutputFormatting(rawValue: 1 << 0)
+        static let prettyPrinted = OutputFormatting(rawValue: 1 << 0)
 
         /// Produce JSON with dictionary keys sorted in lexicographic order.
         @available(macOS 10.13, iOS 11.0, watchOS 4.0, tvOS 11.0, *)
-        public static let sortedKeys    = OutputFormatting(rawValue: 1 << 1)
+        static let sortedKeys    = OutputFormatting(rawValue: 1 << 1)
 
         /// By default slashes get escaped ("/" → "\/", "http://apple.com/" → "http:\/\/apple.com\/")
         /// for security reasons, allowing outputted JSON to be safely embedded within HTML/XML.
         /// In contexts where this escaping is unnecessary, the JSON is known to not be embedded,
         /// or is intended only for display, this option avoids this escaping.
-        public static let withoutEscapingSlashes = OutputFormatting(rawValue: 1 << 3)
+        static let withoutEscapingSlashes = OutputFormatting(rawValue: 1 << 3)
     }
 
     /// The strategy to use for encoding `Date` values.
-    public enum DateEncodingStrategy {
+    enum DateEncodingStrategy {
         /// Defer to `Date` for choosing an encoding. This is the default strategy.
         case deferredToDate
 
@@ -83,7 +83,7 @@ open class JSONSafeEncoder {
     }
 
     /// The strategy to use for encoding `Data` values.
-    public enum DataEncodingStrategy {
+    enum DataEncodingStrategy {
         /// Defer to `Data` for choosing an encoding.
         case deferredToData
 
@@ -98,7 +98,7 @@ open class JSONSafeEncoder {
 
     /// TWILIO MODIFICATION - Add additional strategies
     /// The strategy to use for non-JSON-conforming floating-point values (IEEE 754 infinity and NaN).
-    public enum NonConformingFloatEncodingStrategy {
+    enum NonConformingFloatEncodingStrategy {
         /// Throw upon encountering non-conforming values. This is the default strategy.
         case `throw`
 
@@ -121,7 +121,7 @@ open class JSONSafeEncoder {
     /// TWILIO MODIFICATION - End
 
     /// The strategy to use for automatically changing the value of keys before encoding.
-    public enum KeyEncodingStrategy {
+    enum KeyEncodingStrategy {
         /// Use the keys specified by each type. This is the default strategy.
         case useDefaultKeys
 
@@ -235,7 +235,7 @@ open class JSONSafeEncoder {
     // MARK: - Constructing a JSON Encoder
 
     /// Initializes `self` with default strategies.
-    public init() {}
+    init() {}
 
     // MARK: - Encoding Values
 
@@ -1229,20 +1229,20 @@ extension JSONValue {
 //===----------------------------------------------------------------------===//
 
 internal struct _JSONKey: CodingKey {
-    public var stringValue: String
-    public var intValue: Int?
+    var stringValue: String
+    var intValue: Int?
 
-    public init?(stringValue: String) {
+    init?(stringValue: String) {
         self.stringValue = stringValue
         self.intValue = nil
     }
 
-    public init?(intValue: Int) {
+    init?(intValue: Int) {
         self.stringValue = "\(intValue)"
         self.intValue = intValue
     }
 
-    public init(stringValue: String, intValue: Int?) {
+    init(stringValue: String, intValue: Int?) {
         self.stringValue = stringValue
         self.intValue = intValue
     }

@@ -15,20 +15,20 @@ internal protocol ObjCEvent {
 }
 
 @objc(SEGDestinationMetadata)
-public class ObjCDestinationMetadata: NSObject {
+class ObjCDestinationMetadata: NSObject {
     internal var _metadata: DestinationMetadata
     
-    public var bundled: [String] {
+    var bundled: [String] {
         get { return _metadata.bundled }
         set(v) { _metadata.bundled = v }
     }
     
-    public var unbundled: [String] {
+    var unbundled: [String] {
         get { return _metadata.unbundled }
         set(v) { _metadata.unbundled = v }
     }
     
-    public var bundledIds: [String] {
+    var bundledIds: [String] {
         get { return _metadata.bundledIds }
         set(v) { _metadata.bundledIds = v }
     }
@@ -44,7 +44,7 @@ public class ObjCDestinationMetadata: NSObject {
 }
 
 @objc(SEGRawEvent)
-public protocol ObjCRawEvent: NSObjectProtocol {
+protocol ObjCRawEvent: NSObjectProtocol {
     var type: String? { get }
     var messageId: String? { get }
     var timestamp: String? { get }
@@ -81,36 +81,36 @@ internal func objcEventFromEvent<T: RawEvent>(_ event: T?) -> ObjCRawEvent? {
 }
 
 @objc(SEGTrackEvent)
-public class ObjCTrackEvent: NSObject, ObjCEvent, ObjCRawEvent {
+class ObjCTrackEvent: NSObject, ObjCEvent, ObjCRawEvent {
     internal var _event: TrackEvent
     
     // RawEvent components
     
-    public var type: String? { return _event.type }
-    public var messageId: String? { return _event.messageId }
-    public var timestamp: String? { return _event.timestamp }
+    var type: String? { return _event.type }
+    var messageId: String? { return _event.messageId }
+    var timestamp: String? { return _event.timestamp }
     
-    public var anonymousId: String? {
+    var anonymousId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var userId: String? {
+    var userId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var context: [String: Any]? {
+    var context: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var integrations: [String: Any]? {
+    var integrations: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var metadata: ObjCDestinationMetadata? {
+    var metadata: ObjCDestinationMetadata? {
         get { return ObjCDestinationMetadata(_metadata: _event._metadata) }
         set(v) { _event._metadata = v?._metadata }
     }
@@ -118,19 +118,19 @@ public class ObjCTrackEvent: NSObject, ObjCEvent, ObjCRawEvent {
     // Event Specific
     
     @objc
-    public var event: String {
+    var event: String {
         get { return _event.event }
         set(v) { _event.event = v }
     }
     
     @objc
-    public var properties: [String: Any]? {
+    var properties: [String: Any]? {
         get { return _event.properties?.dictionaryValue }
         set(v) { _event.properties = try? JSON(nilOrObject: v)}
     }
 
     @objc
-    public init(name: String, properties: [String: Any]? = nil) {
+    init(name: String, properties: [String: Any]? = nil) {
         _event = TrackEvent(event: name, properties: try? JSON(nilOrObject: properties))
     }
     
@@ -140,36 +140,36 @@ public class ObjCTrackEvent: NSObject, ObjCEvent, ObjCRawEvent {
 }
 
 @objc(SEGIdentifyEvent)
-public class ObjCIdentifyEvent: NSObject, ObjCEvent, ObjCRawEvent {
+class ObjCIdentifyEvent: NSObject, ObjCEvent, ObjCRawEvent {
     internal var _event: IdentifyEvent
     
     // RawEvent components
     
-    public var type: String? { return _event.type }
-    public var messageId: String? { return _event.messageId }
-    public var timestamp: String? { return _event.timestamp }
+    var type: String? { return _event.type }
+    var messageId: String? { return _event.messageId }
+    var timestamp: String? { return _event.timestamp }
 
-    public var anonymousId: String? {
+    var anonymousId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var userId: String? {
+    var userId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var context: [String: Any]? {
+    var context: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var integrations: [String: Any]? {
+    var integrations: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var metadata: ObjCDestinationMetadata? {
+    var metadata: ObjCDestinationMetadata? {
         get { return ObjCDestinationMetadata(_metadata: _event._metadata) }
         set(v) { _event._metadata = v?._metadata }
     }
@@ -177,13 +177,13 @@ public class ObjCIdentifyEvent: NSObject, ObjCEvent, ObjCRawEvent {
     // Event Specific
     
     @objc
-    public var traits: [String: Any]? {
+    var traits: [String: Any]? {
         get { return _event.traits?.dictionaryValue }
         set(v) { _event.traits = try? JSON(nilOrObject: v)}
     }
 
     @objc
-    public init(userId: String, traits: [String: Any]? = nil) {
+    init(userId: String, traits: [String: Any]? = nil) {
         _event = IdentifyEvent(userId: userId, traits: try? JSON(nilOrObject: traits))
     }
     
@@ -193,36 +193,36 @@ public class ObjCIdentifyEvent: NSObject, ObjCEvent, ObjCRawEvent {
 }
 
 @objc(SEGScreenEvent)
-public class ObjCScreenEvent: NSObject, ObjCEvent, ObjCRawEvent {
+class ObjCScreenEvent: NSObject, ObjCEvent, ObjCRawEvent {
     internal var _event: ScreenEvent
     
     // RawEvent components
     
-    public var type: String? { return _event.type }
-    public var messageId: String? { return _event.messageId }
-    public var timestamp: String? { return _event.timestamp }
+    var type: String? { return _event.type }
+    var messageId: String? { return _event.messageId }
+    var timestamp: String? { return _event.timestamp }
 
-    public var anonymousId: String? {
+    var anonymousId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var userId: String? {
+    var userId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var context: [String: Any]? {
+    var context: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var integrations: [String: Any]? {
+    var integrations: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var metadata: ObjCDestinationMetadata? {
+    var metadata: ObjCDestinationMetadata? {
         get { return ObjCDestinationMetadata(_metadata: _event._metadata) }
         set(v) { _event._metadata = v?._metadata }
     }
@@ -230,25 +230,25 @@ public class ObjCScreenEvent: NSObject, ObjCEvent, ObjCRawEvent {
     // Event Specific
     
     @objc
-    public var name: String? {
+    var name: String? {
         get { return _event.name }
         set(v) { _event.name = v}
     }
     
     @objc
-    public var category: String? {
+    var category: String? {
         get { return _event.category }
         set(v) { _event.category = v}
     }
     
     @objc
-    public var properties: [String: Any]? {
+    var properties: [String: Any]? {
         get { return _event.properties?.dictionaryValue }
         set(v) { _event.properties = try? JSON(nilOrObject: v)}
     }
 
     @objc
-    public init(name: String, category: String?, properties: [String: Any]? = nil) {
+    init(name: String, category: String?, properties: [String: Any]? = nil) {
         _event = ScreenEvent(title: name, category: category, properties: try? JSON(nilOrObject: properties))
     }
     
@@ -258,36 +258,36 @@ public class ObjCScreenEvent: NSObject, ObjCEvent, ObjCRawEvent {
 }
 
 @objc(SEGGroupEvent)
-public class ObjCGroupEvent: NSObject, ObjCEvent, ObjCRawEvent {
+class ObjCGroupEvent: NSObject, ObjCEvent, ObjCRawEvent {
     internal var _event: GroupEvent
     
     // RawEvent components
     
-    public var type: String? { return _event.type }
-    public var messageId: String? { return _event.messageId }
-    public var timestamp: String? { return _event.timestamp }
+    var type: String? { return _event.type }
+    var messageId: String? { return _event.messageId }
+    var timestamp: String? { return _event.timestamp }
 
-    public var anonymousId: String? {
+    var anonymousId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var userId: String? {
+    var userId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var context: [String: Any]? {
+    var context: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var integrations: [String: Any]? {
+    var integrations: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var metadata: ObjCDestinationMetadata? {
+    var metadata: ObjCDestinationMetadata? {
         get { return ObjCDestinationMetadata(_metadata: _event._metadata) }
         set(v) { _event._metadata = v?._metadata }
     }
@@ -295,19 +295,19 @@ public class ObjCGroupEvent: NSObject, ObjCEvent, ObjCRawEvent {
     // Event Specific
     
     @objc
-    public var groupId: String? {
+    var groupId: String? {
         get { return _event.groupId }
         set(v) { _event.groupId = v}
     }
     
     @objc
-    public var traits: [String: Any]? {
+    var traits: [String: Any]? {
         get { return _event.traits?.dictionaryValue }
         set(v) { _event.traits = try? JSON(nilOrObject: v)}
     }
 
     @objc
-    public init(groupId: String?, traits: [String: Any]? = nil) {
+    init(groupId: String?, traits: [String: Any]? = nil) {
         _event = GroupEvent(groupId: groupId, traits: try? JSON(nilOrObject: traits))
     }
     
@@ -317,36 +317,36 @@ public class ObjCGroupEvent: NSObject, ObjCEvent, ObjCRawEvent {
 }
 
 @objc(SEGAliasEvent)
-public class ObjCAliasEvent: NSObject, ObjCEvent, ObjCRawEvent {
+class ObjCAliasEvent: NSObject, ObjCEvent, ObjCRawEvent {
     internal var _event: AliasEvent
     
     // RawEvent components
     
-    public var type: String? { return _event.type }
-    public var messageId: String? { return _event.messageId }
-    public var timestamp: String? { return _event.timestamp }
+    var type: String? { return _event.type }
+    var messageId: String? { return _event.messageId }
+    var timestamp: String? { return _event.timestamp }
 
-    public var anonymousId: String? {
+    var anonymousId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var userId: String? {
+    var userId: String? {
         get { return _event.anonymousId }
         set(v) { _event.anonymousId = v}
     }
     
-    public var context: [String: Any]? {
+    var context: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var integrations: [String: Any]? {
+    var integrations: [String: Any]? {
         get { return _event.context?.dictionaryValue }
         set(v) { _event.context = try? JSON(nilOrObject: v)}
     }
     
-    public var metadata: ObjCDestinationMetadata? {
+    var metadata: ObjCDestinationMetadata? {
         get { return ObjCDestinationMetadata(_metadata: _event._metadata) }
         set(v) { _event._metadata = v?._metadata }
     }
@@ -354,13 +354,13 @@ public class ObjCAliasEvent: NSObject, ObjCEvent, ObjCRawEvent {
     // Event Specific
     
     @objc
-    public var previousId: String? {
+    var previousId: String? {
         get { return _event.previousId }
         set(v) { _event.previousId = v}
     }
 
     @objc
-    public init(newId: String?) {
+    init(newId: String?) {
         _event = AliasEvent(newId: newId)
     }
     

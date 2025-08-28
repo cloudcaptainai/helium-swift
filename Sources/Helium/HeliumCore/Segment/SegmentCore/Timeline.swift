@@ -11,10 +11,10 @@ import Sovran
 
 // MARK: - Main Timeline
 
-public class Timeline {
+class Timeline {
     internal let plugins: [PluginType: Mediator]
     
-    public init() {
+    init() {
         self.plugins = [
             .before: Mediator(),
             .enrichment: Mediator(),
@@ -160,22 +160,22 @@ extension Timeline {
 // MARK: - Plugin Timeline Execution
 
 extension Plugin {
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         // do nothing.
         return event
     }
     
-    public func update(settings: Settings, type: UpdateType) {
+    func update(settings: Settings, type: UpdateType) {
         // do nothing by default, user can override.
     }
 
-    public func shutdown() {
+    func shutdown() {
         // do nothing by default, user can override.
     }
 }
 
 extension EventPlugin {
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         var result: T? = event
         switch result {
             case let r as IdentifyEvent:
@@ -196,34 +196,34 @@ extension EventPlugin {
 
     // Default implementations that forward the event. This gives plugin
     // implementors the chance to interject on an event.
-    public func identify(event: IdentifyEvent) -> IdentifyEvent? {
+    func identify(event: IdentifyEvent) -> IdentifyEvent? {
         return event
     }
     
-    public func track(event: TrackEvent) -> TrackEvent? {
+    func track(event: TrackEvent) -> TrackEvent? {
         return event
     }
     
-    public func screen(event: ScreenEvent) -> ScreenEvent? {
+    func screen(event: ScreenEvent) -> ScreenEvent? {
         return event
     }
     
-    public func group(event: GroupEvent) -> GroupEvent? {
+    func group(event: GroupEvent) -> GroupEvent? {
         return event
     }
     
-    public func alias(event: AliasEvent) -> AliasEvent? {
+    func alias(event: AliasEvent) -> AliasEvent? {
         return event
     }
     
-    public func flush() { }
-    public func reset() { }
+    func flush() { }
+    func reset() { }
 }
 
 // MARK: - Destination Timeline
 
 extension DestinationPlugin {
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         var result: T? = event
         if let r = result {
             result = self.process(incomingEvent: r)

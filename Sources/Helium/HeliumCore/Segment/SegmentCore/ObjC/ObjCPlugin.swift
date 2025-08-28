@@ -11,9 +11,9 @@
 import Foundation
 
 @objc(SEGPlugin)
-public protocol ObjCPlugin {}
+protocol ObjCPlugin {}
 
-public protocol ObjCPluginShim {
+protocol ObjCPluginShim {
     func instance() -> EventPlugin
 }
 
@@ -21,26 +21,26 @@ public protocol ObjCPluginShim {
 /*
 
 @objc(SEGMixpanelDestination)
-public class ObjCSegmentMixpanel: NSObject, ObjCPlugin, ObjCPluginShim {
-    public func instance() -> EventPlugin { return MixpanelDestination() }
+class ObjCSegmentMixpanel: NSObject, ObjCPlugin, ObjCPluginShim {
+    func instance() -> EventPlugin { return MixpanelDestination() }
 }
 
 */
 
 @objc(SEGEventPlugin)
-public class ObjCEventPlugin: NSObject, EventPlugin, ObjCPlugin {
-    public var type: PluginType = .enrichment
-    public weak var analytics: Analytics? = nil
+class ObjCEventPlugin: NSObject, EventPlugin, ObjCPlugin {
+    var type: PluginType = .enrichment
+    weak var analytics: Analytics? = nil
     
     @objc(executeEvent:)
-    public func execute(event: ObjCRawEvent?) -> ObjCRawEvent? {
+    func execute(event: ObjCRawEvent?) -> ObjCRawEvent? {
         #if DEBUG
         print("SEGEventPlugin's execute: method must be overridden!")
         #endif
         return event
     }
     
-    public func execute<T>(event: T?) -> T? where T : RawEvent {
+    func execute<T>(event: T?) -> T? where T : RawEvent {
         let objcEvent = objcEventFromEvent(event)
         let result = execute(event: objcEvent)
         let newEvent = eventFromObjCEvent(result)
@@ -49,16 +49,16 @@ public class ObjCEventPlugin: NSObject, EventPlugin, ObjCPlugin {
 }
 
 @objc(SEGBlockPlugin)
-public class ObjCBlockPlugin: ObjCEventPlugin {
+class ObjCBlockPlugin: ObjCEventPlugin {
     let block: (ObjCRawEvent?) -> ObjCRawEvent?
     
     @objc(executeEvent:)
-    public override func execute(event: ObjCRawEvent?) -> ObjCRawEvent? {
+    override func execute(event: ObjCRawEvent?) -> ObjCRawEvent? {
         return block(event)
     }
     
     @objc(initWithBlock:)
-    public init(block: @escaping (ObjCRawEvent?) -> ObjCRawEvent?) {
+    init(block: @escaping (ObjCRawEvent?) -> ObjCRawEvent?) {
         self.block = block
     }
 }
@@ -66,7 +66,7 @@ public class ObjCBlockPlugin: ObjCEventPlugin {
 @objc
 extension ObjCAnalytics {
     @objc(addPlugin:)
-    public func add(plugin: ObjCPlugin?) {
+    func add(plugin: ObjCPlugin?) {
         if let p = plugin as? ObjCPluginShim {
             analytics.add(plugin: p.instance())
         } else if let p = plugin as? ObjCEventPlugin {
@@ -75,7 +75,7 @@ extension ObjCAnalytics {
     }
     
     @objc(addPlugin:destinationKey:)
-    public func add(plugin: ObjCPlugin?, destinationKey: String) {
+    func add(plugin: ObjCPlugin?, destinationKey: String) {
         guard let d = analytics.find(key: destinationKey) else { return }
         
         if let p = plugin as? ObjCPluginShim {

@@ -7,15 +7,15 @@
 
 import Foundation
 
-public class MemoryStore: DataStore {
-    public typealias StoreConfiguration = Configuration
+class MemoryStore: DataStore {
+    typealias StoreConfiguration = Configuration
     
-    public struct Configuration {
+    struct Configuration {
         let writeKey: String
         let maxItems: Int
         let maxFetchSize: Int
         
-        public init(writeKey: String, maxItems: Int, maxFetchSize: Int) {
+        init(writeKey: String, maxItems: Int, maxFetchSize: Int) {
             self.writeKey = writeKey
             self.maxItems = maxItems
             self.maxFetchSize = maxFetchSize
@@ -34,29 +34,29 @@ public class MemoryStore: DataStore {
     
     internal var items = [ItemData]()
     
-    public var hasData: Bool {
+    var hasData: Bool {
         return (items.count > 0)
     }
     
-    public var count: Int {
+    var count: Int {
         return items.count
     }
     
-    public var transactionType: DataTransactionType {
+    var transactionType: DataTransactionType {
         return .data
     }
     
     internal let config: Configuration
     
-    public required init(configuration: Configuration) {
+    required init(configuration: Configuration) {
         self.config = configuration
     }
     
-    public func reset() {
+    func reset() {
         items.removeAll()
     }
     
-    public func append(data: RawEvent) {
+    func append(data: RawEvent) {
         guard let d = data.toString().data(using: .utf8) else { return }
         items.append(ItemData(data: d))
         if items.count > config.maxItems {
@@ -64,7 +64,7 @@ public class MemoryStore: DataStore {
         }
     }
     
-    public func fetch(count: Int?, maxBytes: Int?) -> DataResult? {
+    func fetch(count: Int?, maxBytes: Int?) -> DataResult? {
         var accumulatedCount = 0
         var accumulatedSize: Int = 0
         var results = [ItemData]()
@@ -91,7 +91,7 @@ public class MemoryStore: DataStore {
         return nil
     }
     
-    public func remove(data: [DataStore.ItemID]) {
+    func remove(data: [DataStore.ItemID]) {
         items.removeAll { itemData in
             let present = data.contains { id in
                 guard let id = id as? UUID else { return false }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol OpeningURLs {
+protocol OpeningURLs {
     func openURL(_ url: URL, options: [String : Any])
 }
 
@@ -15,15 +15,15 @@ extension OpeningURLs {
     func openURL(_ url: URL, options: [String : Any]) {}
 }
 
-public class Context: PlatformPlugin {
-    public let type: PluginType = .before
-    public weak var analytics: Analytics?
+class Context: PlatformPlugin {
+    let type: PluginType = .before
+    weak var analytics: Analytics?
     
     internal var staticContext = staticContextData()
     internal static var device = VendorSystem.current
     internal let instanceId = UUID().uuidString
     
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         guard var workingEvent = event else { return event }
         
         var context = staticContext

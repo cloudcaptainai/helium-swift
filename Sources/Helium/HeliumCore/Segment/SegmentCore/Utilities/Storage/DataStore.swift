@@ -8,10 +8,10 @@
 import Foundation
 
 
-public struct DataResult {
-    public let data: Data?
-    public let dataFiles: [URL]?
-    public let removable: [DataStore.ItemID]?
+struct DataResult {
+    let data: Data?
+    let dataFiles: [URL]?
+    let removable: [DataStore.ItemID]?
     
     internal init(data: Data?, dataFiles: [URL]?, removable: [DataStore.ItemID]?) {
         self.data = data
@@ -19,21 +19,21 @@ public struct DataResult {
         self.removable = removable
     }
     
-    public init(data: Data?, removable: [DataStore.ItemID]?) {
+    init(data: Data?, removable: [DataStore.ItemID]?) {
         self.init(data: data, dataFiles: nil, removable: removable)
     }
     
-    public init(dataFiles: [URL]?, removable: [DataStore.ItemID]?) {
+    init(dataFiles: [URL]?, removable: [DataStore.ItemID]?) {
         self.init(data: nil, dataFiles: dataFiles, removable: removable)
     }
 }
 
-public enum DataTransactionType {
+enum DataTransactionType {
     case data
     case file
 }
 
-public protocol DataStore {
+protocol DataStore {
     typealias ItemID = any Equatable
     associatedtype StoreConfiguration
     var hasData: Bool { get }

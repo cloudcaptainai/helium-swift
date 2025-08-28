@@ -34,7 +34,7 @@ import Sovran
 
 // MARK: - Base Setup
 
-public class Analytics {
+class Analytics {
     internal var configuration: Configuration {
         get {
             // we're absolutely certain we will have a config
@@ -46,9 +46,9 @@ public class Analytics {
     internal var storage: Storage
     
     /// Enabled/disables debug logging to trace your data going through the SDK.
-    public static var debugLogsEnabled = false
+    static var debugLogsEnabled = false
     
-    public var timeline: Timeline
+    var timeline: Timeline
     
     static internal let deadInstance = "DEADINSTANCE"
     static internal weak var firstInstance: Analytics? = nil
@@ -82,7 +82,7 @@ public class Analytics {
     /// Initialize this instance of Analytics with a given configuration setup.
     /// - Parameters:
     ///    - configuration: The configuration to use
-    public init(configuration: Configuration) {
+    init(configuration: Configuration) {
         if Self.isActiveWriteKey(configuration.values.writeKey) {
             // If you're hitting this in testing, it could be a memory leak, or something async is still running
             // and holding a reference.  You can use XCTest.waitUntilFinished(...) to wait for things to complete.
@@ -136,7 +136,7 @@ public class Analytics {
     /// Process a raw event through the system.  Useful when one needs to queue and replay events at a later time.
     /// - Parameters:
     ///   - event: An event conforming to RawEvent that will be processed.
-    public func process(event: RawEvent) {
+    func process(event: RawEvent) {
         guard enabled == true else { return }
         switch event {
         case let e as TrackEvent:
@@ -159,7 +159,7 @@ public class Analytics {
 
 extension Analytics {
     /// Enable/Disable analytics capture
-    public var enabled: Bool {
+    var enabled: Bool {
         get {
             if let system: System = store.currentState() {
                 return system.enabled
@@ -173,12 +173,12 @@ extension Analytics {
     }
     
     /// Returns the writekey in use for this instance.
-    public var writeKey: String {
+    var writeKey: String {
         return configuration.values.writeKey
     }
     
     /// Returns the anonymousId currently in use.
-    public var anonymousId: String {
+    var anonymousId: String {
         if let userInfo: UserInfo = store.currentState() {
             return userInfo.anonymousId
         }
@@ -186,7 +186,7 @@ extension Analytics {
     }
     
     /// Returns the userId that was specified in the last identify call.
-    public var userId: String? {
+    var userId: String? {
         if let userInfo: UserInfo = store.currentState() {
             return userInfo.userId
         }
@@ -194,12 +194,12 @@ extension Analytics {
     }
     
     /// Returns the current operating mode this instance was given.
-    public var operatingMode: OperatingMode {
+    var operatingMode: OperatingMode {
         return configuration.values.operatingMode
     }
     
     /// Adjusts the flush interval post configuration.
-    public var flushInterval: TimeInterval {
+    var flushInterval: TimeInterval {
         get {
             configuration.values.flushInterval
         }
@@ -212,7 +212,7 @@ extension Analytics {
     }
     
     /// Adjusts the flush-at count post configuration.
-    public var flushAt: Int {
+    var flushAt: Int {
         get {
             configuration.values.flushAt
         }
@@ -225,14 +225,14 @@ extension Analytics {
     }
     
     /// Returns a list of currently active flush policies.
-    public var flushPolicies: [FlushPolicy] {
+    var flushPolicies: [FlushPolicy] {
         get {
             configuration.values.flushPolicies
         }
     }
     
     /// Returns the traits that were specified in the last identify call.
-    public func traits<T: Codable>() -> T? {
+    func traits<T: Codable>() -> T? {
         if let userInfo: UserInfo = store.currentState() {
             return userInfo.traits?.codableValue()
         }
@@ -240,7 +240,7 @@ extension Analytics {
     }
     
     /// Returns the traits that were specified in the last identify call, as a dictionary.
-    public func traits() -> [String: Any]? {
+    func traits() -> [String: Any]? {
         if let userInfo: UserInfo = store.currentState() {
             return userInfo.traits?.dictionaryValue
         }
@@ -250,7 +250,7 @@ extension Analytics {
     /// Tells this instance of Analytics to flush any queued events up to Segment.com.  This command will also
     /// be sent to each plugin present in the system.  A completion handler can be optionally given and will be
     /// called when flush has completed.
-    public func flush(completion: (() -> Void)? = nil) {
+    func flush(completion: (() -> Void)? = nil) {
         // only flush if we're enabled.
         guard enabled == true else { completion?(); return }
         
@@ -274,7 +274,7 @@ extension Analytics {
     
     /// Resets this instance of Analytics to a clean slate.  Traits, UserID's, anonymousId, etc are all cleared or reset.  This
     /// command will also be sent to each plugin present in the system.
-    public func reset() {
+    func reset() {
         store.dispatch(action: UserInfo.ResetAction())
         apply { plugin in
             if let p = plugin as? EventPlugin {
@@ -285,13 +285,13 @@ extension Analytics {
     
     /// Retrieve the version of this library in use.
     /// - Returns: A string representing the version in "BREAKING.FEATURE.FIX" format.
-    public func version() -> String {
+    func version() -> String {
         return Analytics.version()
     }
     
     /// Retrieve the version of this library in use.
     /// - Returns: A string representing the version in "BREAKING.FEATURE.FIX" format.
-    public static func version() -> String {
+    static func version() -> String {
         return __segment_version
     }
 }
@@ -299,7 +299,7 @@ extension Analytics {
 extension Analytics {
     /// Manually retrieve the settings that were supplied from Segment.com.
     /// - Returns: A Settings object containing integration settings, tracking plan, etc.
-    public func settings() -> Settings? {
+    func settings() -> Settings? {
         var settings: Settings?
         if let system: System = store.currentState() {
             settings = system.settings
@@ -311,14 +311,14 @@ extension Analytics {
     /// This will allow the destination to be processed in the same way within this library.
     /// - Parameters:
     ///   - plugin: The destination plugin to enable.
-    public func manuallyEnableDestination(plugin: DestinationPlugin) {
+    func manuallyEnableDestination(plugin: DestinationPlugin) {
         self.store.dispatch(action: System.AddDestinationToSettingsAction(key: plugin.key))
     }
 }
 
 extension Analytics {
     /// Determine if there are any events that have yet to be sent to Segment
-    public var hasUnsentEvents: Bool {
+    var hasUnsentEvents: Bool {
         if let segmentDest = self.find(pluginType: SegmentDestination.self) {
             if segmentDest.pendingUploads > 0 {
                 return true
@@ -332,17 +332,17 @@ extension Analytics {
     }
     
     /// Provides a list of finished, but unsent events.
-    public var pendingUploads: [URL]? {
+    var pendingUploads: [URL]? {
         return storage.read(Storage.Constants.events)?.dataFiles
     }
     
     /// Purge all pending event upload files.
-    public func purgeStorage() {
+    func purgeStorage() {
         storage.dataStore.reset()
     }
     
     /// Purge a single event upload file.
-    public func purgeStorage(fileURL: URL) {
+    func purgeStorage(fileURL: URL) {
         guard let dataFiles = storage.read(Storage.Constants.events)?.dataFiles else { return }
         if dataFiles.contains(fileURL) {
             try? FileManager.default.removeItem(at: fileURL)
@@ -354,7 +354,7 @@ extension Analytics {
     /// it's desirable to wait until the system is up and running
     /// before executing commands.  GUI apps could potentially use this via
     /// a background thread if needed.
-    public func waitUntilStarted() {
+    func waitUntilStarted() {
         if let startupQueue = find(pluginType: StartupQueue.self) {
             while startupQueue.running != true {
                 RunLoop.main.run(until: Date.distantPast)
@@ -378,7 +378,7 @@ extension Analytics {
      }
      ```
      */
-    public func openURL<T: Codable>(_ url: URL, options: T? = nil) {
+    func openURL<T: Codable>(_ url: URL, options: T? = nil) {
         guard let jsonProperties = try? JSON(with: options) else { return }
         guard let dict = jsonProperties.dictionaryValue else { return }
         openURL(url, options: dict)
@@ -397,7 +397,7 @@ extension Analytics {
      }
      ```
      */
-    public func openURL(_ url: URL, options: [String: Any] = [:]) {
+    func openURL(_ url: URL, options: [String: Any] = [:]) {
         store.dispatch(action: UserInfo.SetReferrerAction(url: url))
         
         // let any conforming plugins know

@@ -8,7 +8,7 @@
 #if os(macOS)
 import Cocoa
 
-public protocol macOSLifecycle {
+protocol macOSLifecycle {
     func applicationDidResignActive()
     func application(didFinishLaunchingWithOptions launchOptions: [String: Any]?)
     func applicationWillBecomeActive()
@@ -25,7 +25,7 @@ public protocol macOSLifecycle {
     func applicationDidChangeScreenParameters()
 }
 
-public extension macOSLifecycle {
+extension macOSLifecycle {
     func applicationDidResignActive() { }
     func application(didFinishLaunchingWithOptions launchOptions: [String: Any]?) { }
     func applicationWillBecomeActive() { }
@@ -230,11 +230,11 @@ class macOSLifecycleMonitor: PlatformPlugin {
 }
 
 extension SegmentDestination: macOSLifecycle {
-    public func applicationDidBecomeActive() {
+    func applicationDidBecomeActive() {
         enterForeground()
     }
     
-    public func applicationWillResignActive() {
+    func applicationWillResignActive() {
         enterBackground()
     }
 }
@@ -242,11 +242,11 @@ extension SegmentDestination: macOSLifecycle {
 // MARK: - Interval Based Flush Policy Extension
 
 extension IntervalBasedFlushPolicy: macOSLifecycle {
-    public func applicationWillEnterForeground() {
+    func applicationWillEnterForeground() {
         enterForeground()
     }
     
-    public func applicationDidEnterBackground() {
+    func applicationDidEnterBackground() {
         enterBackground()
     }
 }

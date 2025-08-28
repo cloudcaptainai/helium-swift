@@ -10,7 +10,7 @@ import Foundation
 /**
  PluginType specifies where in the chain a given plugin is to be executed.
  */
-public enum PluginType: Int, CaseIterable {
+enum PluginType: Int, CaseIterable {
     /// Executed before event processing begins.
     case before
     /// Executed as the first level of event processing.
@@ -23,12 +23,12 @@ public enum PluginType: Int, CaseIterable {
     case utility
 }
 
-public enum UpdateType {
+enum UpdateType {
     case initial
     case refresh
 }
 
-public protocol Plugin: AnyObject {
+protocol Plugin: AnyObject {
     var type: PluginType { get }
     var analytics: Analytics? { get set }
     
@@ -38,7 +38,7 @@ public protocol Plugin: AnyObject {
     func shutdown()
 }
 
-public protocol EventPlugin: Plugin {
+protocol EventPlugin: Plugin {
     func identify(event: IdentifyEvent) -> IdentifyEvent?
     func track(event: TrackEvent) -> TrackEvent?
     func group(event: GroupEvent) -> GroupEvent?
@@ -48,7 +48,7 @@ public protocol EventPlugin: Plugin {
     func flush()
 }
 
-public protocol DestinationPlugin: EventPlugin {
+protocol DestinationPlugin: EventPlugin {
     var key: String { get }
     var timeline: Timeline { get }
     func add(plugin: Plugin) -> Plugin
@@ -56,23 +56,23 @@ public protocol DestinationPlugin: EventPlugin {
     func remove(plugin: Plugin)
 }
 
-public protocol UtilityPlugin: EventPlugin { }
+protocol UtilityPlugin: EventPlugin { }
 
-public protocol VersionedPlugin {
+protocol VersionedPlugin {
     static func version() -> String
 }
 
-public protocol FlushCompletion {
+protocol FlushCompletion {
     func flush(group: DispatchGroup)
 }
 
 // For internal platform-specific bits
 internal protocol PlatformPlugin: Plugin { }
 
-public typealias EnrichmentClosure = (_ event: RawEvent?) -> RawEvent?
-public class ClosureEnrichment: Plugin {
-    public var type: PluginType = .enrichment
-    public weak var analytics: Analytics? = nil
+typealias EnrichmentClosure = (_ event: RawEvent?) -> RawEvent?
+class ClosureEnrichment: Plugin {
+    var type: PluginType = .enrichment
+    weak var analytics: Analytics? = nil
     
     internal let closure: EnrichmentClosure
     
@@ -80,7 +80,7 @@ public class ClosureEnrichment: Plugin {
         self.closure = closure
     }
     
-    public func execute<T: RawEvent>(event: T?) -> T? {
+    func execute<T: RawEvent>(event: T?) -> T? {
         return closure(event) as? T
     }
 }
@@ -88,7 +88,7 @@ public class ClosureEnrichment: Plugin {
 
 // MARK: - Plugin instance helpers
 extension Plugin {
-    public func configure(analytics: Analytics) {
+    func configure(analytics: Analytics) {
         self.analytics = analytics
     }
 }
@@ -96,7 +96,7 @@ extension Plugin {
 // MARK: - Adding/Removing Plugins
 
 extension DestinationPlugin {
-    public func configure(analytics: Analytics) {
+    func configure(analytics: Analytics) {
         self.analytics = analytics
         apply { plugin in
             plugin.configure(analytics: analytics)
@@ -109,7 +109,7 @@ extension DestinationPlugin {
      - Parameter closure: A closure that takes an plugin to be operated on as a parameter.
      
      */
-    public func apply(closure: (Plugin) -> Void) {
+    func apply(closure: (Plugin) -> Void) {
         timeline.apply(closure)
     }
     
@@ -121,7 +121,7 @@ extension DestinationPlugin {
      
      */
     @discardableResult
-    public func add(plugin: Plugin) -> Plugin {
+    func add(plugin: Plugin) -> Plugin {
         if let analytics = self.analytics {
             plugin.configure(analytics: analytics)
         }
@@ -138,7 +138,7 @@ extension DestinationPlugin {
      
      */
     @discardableResult
-    public func add(enrichment: @escaping EnrichmentClosure) -> Plugin {
+    func add(enrichment: @escaping EnrichmentClosure) -> Plugin {
         let plugin = ClosureEnrichment(closure: enrichment)
         if let analytics = self.analytics {
             plugin.configure(analytics: analytics)
@@ -152,15 +152,15 @@ extension DestinationPlugin {
      
      - Parameter pluginName: An plugin name.
      */
-    public func remove(plugin: Plugin) {
+    func remove(plugin: Plugin) {
         timeline.remove(plugin: plugin)
     }
 
-    public func find<T: Plugin>(pluginType: T.Type) -> T? {
+    func find<T: Plugin>(pluginType: T.Type) -> T? {
         return timeline.find(pluginType: pluginType)
     }
     
-    public func findAll<T: Plugin>(pluginType: T.Type) -> [T]? {
+    func findAll<T: Plugin>(pluginType: T.Type) -> [T]? {
         return timeline.findAll(pluginType: pluginType)
     }
 
@@ -174,7 +174,7 @@ extension Analytics {
      - Parameter closure: A closure that takes an plugin to be operated on as a parameter.
      
      */
-    public func apply(closure: (Plugin) -> Void) {
+    func apply(closure: (Plugin) -> Void) {
         timeline.apply(closure)
     }
     
@@ -186,7 +186,7 @@ extension Analytics {
      
      */
     @discardableResult
-    public func add(plugin: Plugin) -> Plugin {
+    func add(plugin: Plugin) -> Plugin {
         plugin.configure(analytics: self)
         timeline.add(plugin: plugin)
         updateIfNecessary(plugin: plugin)
@@ -201,7 +201,7 @@ extension Analytics {
      
      */
     @discardableResult
-    public func add(enrichment: @escaping EnrichmentClosure) -> Plugin {
+    func add(enrichment: @escaping EnrichmentClosure) -> Plugin {
         let plugin = ClosureEnrichment(closure: enrichment)
         plugin.configure(analytics: self)
         timeline.add(plugin: plugin)
@@ -213,19 +213,19 @@ extension Analytics {
      
      - Parameter pluginName: An plugin name.
      */
-    public func remove(plugin: Plugin) {
+    func remove(plugin: Plugin) {
         timeline.remove(plugin: plugin)
     }
     
-    public func find<T: Plugin>(pluginType: T.Type) -> T? {
+    func find<T: Plugin>(pluginType: T.Type) -> T? {
         return timeline.find(pluginType: pluginType)
     }
     
-    public func findAll<T: Plugin>(pluginType: T.Type) -> [T]? {
+    func findAll<T: Plugin>(pluginType: T.Type) -> [T]? {
         return timeline.findAll(pluginType: pluginType)
     }
     
-    public func find(key: String) -> DestinationPlugin? {
+    func find(key: String) -> DestinationPlugin? {
         return timeline.find(key: key)
     }
 }

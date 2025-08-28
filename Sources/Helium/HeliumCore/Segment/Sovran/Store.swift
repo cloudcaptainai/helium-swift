@@ -31,9 +31,9 @@ SOFTWARE.
 
 import Foundation
 
-public typealias SubscriptionID = Int
+typealias SubscriptionID = Int
 
-public class Store {
+class Store {
     // handles synchronizing state changes thru the system
     internal let updateQueue = DispatchQueue(label: "state.update.segment.com")
     // handles synchronizing subscription adds/removes
@@ -42,16 +42,16 @@ public class Store {
     internal var subscribers = [Subscription]()
     
     // bullshit
-    public required init(from decoder: Decoder) throws {
+    required init(from decoder: Decoder) throws {
     }
     
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
     }
     // end bullshit
 
     
     /// Creates a new Store instance.
-    public init() { }
+    init() { }
     
     /**
      Subscribe a closure to a particular type of state.
@@ -75,7 +75,7 @@ public class Store {
      ```
      */
     @discardableResult
-    public func subscribe<T: State>(_ subscriber: Subscriber, initialState: Bool = false, queue: DispatchQueue = .main, handler: @escaping Handler<T>) -> SubscriptionID {
+    func subscribe<T: State>(_ subscriber: Subscriber, initialState: Bool = false, queue: DispatchQueue = .main, handler: @escaping Handler<T>) -> SubscriptionID {
         let subscription = Subscription(owner: subscriber, queue: queue, handler: handler)
         syncQueue.sync {
             subscribers.append(subscription)
@@ -95,7 +95,7 @@ public class Store {
      - parameters:
         - identifier: The subscriberID given as a result from a previous subscribe() call.
      */
-    public func unsubscribe(identifier: SubscriptionID) {
+    func unsubscribe(identifier: SubscriptionID) {
         syncQueue.sync {
             subscribers.removeAll { (subscription) -> Bool in
                 return subscription.subscriptionID == identifier
@@ -110,7 +110,7 @@ public class Store {
      
      - parameter state: An struct instance conforming to `State`.
      */
-    public func provide<T: State>(state: T) {
+    func provide<T: State>(state: T) {
         let exists = existing(state: state)
         if exists.count != 0 {
             #if DEBUG
@@ -139,7 +139,7 @@ public class Store {
      
      - parameter action: The action to be dispatched.  Must conform to `Action`.
      */
-    public func dispatch<T: Action>(action: T) {
+    func dispatch<T: Action>(action: T) {
         // check if we have the isntance type requested.
         guard let target = existing(stateType: T.StateType.self).first else {
             return
@@ -171,7 +171,7 @@ public class Store {
      
      - parameter action: The action to be dispatched.  Must conform to `AsyncAction`.
      */
-    public func dispatch<T: AsyncAction>(action: T) {
+    func dispatch<T: AsyncAction>(action: T) {
         // do we even have an instance of the state type they're asking for?
         guard let target = existing(stateType: T.StateType.self).first else {
             return
@@ -207,7 +207,7 @@ public class Store {
      let state: MyState = store.currentState()
      ```
      */
-    public func currentState<T: State>() -> T? {
+    func currentState<T: State>() -> T? {
         guard let container = existing(stateType: T.self).first else {
             return nil
         }
