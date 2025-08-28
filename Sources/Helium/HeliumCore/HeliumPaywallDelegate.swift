@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Segment
 import StoreKit
 
 
