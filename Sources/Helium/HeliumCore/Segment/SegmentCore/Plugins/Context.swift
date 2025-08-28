@@ -44,7 +44,7 @@ class Context: PlatformPlugin {
         }
         
         do {
-            workingEvent.context = try JSON(context)
+            workingEvent.context = try SegmentJSON(context)
         } catch {
             analytics?.reportInternalError(error)
         }

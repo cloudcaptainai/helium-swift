@@ -22,7 +22,7 @@ extension Analytics {
     func track<P: Codable>(name: String, properties: P?) {
         do {
             if let properties = properties {
-                let jsonProperties = try JSON(with: properties)
+                let jsonProperties = try SegmentJSON(with: properties)
                 let event = TrackEvent(event: name, properties: jsonProperties)
                 process(incomingEvent: event)
             } else {
@@ -53,7 +53,7 @@ extension Analytics {
     func identify<T: Codable>(userId: String, traits: T?) {
         do {
             if let traits = traits {
-                let jsonTraits = try JSON(with: traits)
+                let jsonTraits = try SegmentJSON(with: traits)
                 store.dispatch(action: UserInfo.SetUserIdAndTraitsAction(userId: userId, traits: jsonTraits))
                 let event = IdentifyEvent(userId: userId, traits: jsonTraits)
                 process(incomingEvent: event)
@@ -72,7 +72,7 @@ extension Analytics {
     ///   - traits: A dictionary of traits you know about the user. Things like: email, name, plan, etc.
     func identify<T: Codable>(traits: T) {
         do {
-            let jsonTraits = try JSON(with: traits)
+            let jsonTraits = try SegmentJSON(with: traits)
             store.dispatch(action: UserInfo.SetTraitsAction(traits: jsonTraits))
             let event = IdentifyEvent(traits: jsonTraits)
             process(incomingEvent: event)
@@ -96,7 +96,7 @@ extension Analytics {
     func screen<P: Codable>(title: String, category: String? = nil, properties: P?) {
         do {
             if let properties = properties {
-                let jsonProperties = try JSON(with: properties)
+                let jsonProperties = try SegmentJSON(with: properties)
                 let event = ScreenEvent(title: title, category: category, properties: jsonProperties)
                 process(incomingEvent: event)
             } else {
@@ -115,7 +115,7 @@ extension Analytics {
     func group<T: Codable>(groupId: String, traits: T?) {
         do {
             if let traits = traits {
-                let jsonTraits = try JSON(with: traits)
+                let jsonTraits = try SegmentJSON(with: traits)
                 let event = GroupEvent(groupId: groupId, traits: jsonTraits)
                 process(incomingEvent: event)
             } else {
@@ -148,10 +148,10 @@ extension Analytics {
     ///     For example, an event with the name 'Purchased a Shirt' might have properties
     ///     like revenue or size.
     func track(name: String, properties: [String: Any]? = nil) {
-        var props: JSON? = nil
+        var props: SegmentJSON? = nil
         if let properties = properties {
             do {
-                props = try JSON(properties)
+                props = try SegmentJSON(properties)
             } catch {
                 reportInternalError(error, fatal: true)
             }
@@ -173,7 +173,7 @@ extension Analytics {
     func identify(userId: String, traits: [String: Any]? = nil) {
         do {
             if let traits = traits {
-                let traits = try JSON(traits as Any)
+                let traits = try SegmentJSON(traits as Any)
                 store.dispatch(action: UserInfo.SetUserIdAndTraitsAction(userId: userId, traits: traits))
                 let event = IdentifyEvent(userId: userId, traits: traits)
                 process(incomingEvent: event)
@@ -198,7 +198,7 @@ extension Analytics {
         // if we have properties, get a new one rolling.
         if let properties = properties {
             do {
-                let jsonProperties = try JSON(properties)
+                let jsonProperties = try SegmentJSON(properties)
                 event = ScreenEvent(title: title, category: category, properties: jsonProperties)
             } catch {
                 reportInternalError(error, fatal: true)
@@ -215,7 +215,7 @@ extension Analytics {
         var event = GroupEvent(groupId: groupId)
         if let traits = traits {
             do {
-                let jsonTraits = try JSON(traits)
+                let jsonTraits = try SegmentJSON(traits)
                 event = GroupEvent(groupId: groupId, traits: jsonTraits)
             } catch {
                 reportInternalError(error, fatal: true)

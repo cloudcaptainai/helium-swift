@@ -72,7 +72,7 @@ struct System: State {
             var settings = state.settings
             if var integrations = settings?.integrations?.dictionaryValue {
                 integrations[key] = true
-                settings?.integrations = try? JSON(integrations)
+                settings?.integrations = try? SegmentJSON(integrations)
             }
             return System(configuration: state.configuration,
                           settings: settings,
@@ -107,7 +107,7 @@ struct System: State {
 struct UserInfo: Codable, State {
     let anonymousId: String
     let userId: String?
-    let traits: JSON?
+    let traits: SegmentJSON?
     let referrer: URL?
     
     @Noncodable var anonIdGenerator: AnonymousIdGenerator?
@@ -133,7 +133,7 @@ struct UserInfo: Codable, State {
     }
     
     struct SetTraitsAction: Action {
-        let traits: JSON?
+        let traits: SegmentJSON?
         
         func reduce(state: UserInfo) -> UserInfo {
             return UserInfo(anonymousId: state.anonymousId, userId: state.userId, traits: traits, referrer: state.referrer, anonIdGenerator: state.anonIdGenerator)
@@ -142,7 +142,7 @@ struct UserInfo: Codable, State {
     
     struct SetUserIdAndTraitsAction: Action {
         let userId: String?
-        let traits: JSON?
+        let traits: SegmentJSON?
         
         func reduce(state: UserInfo) -> UserInfo {
             return UserInfo(anonymousId: state.anonymousId, userId: userId, traits: traits, referrer: state.referrer, anonIdGenerator: state.anonIdGenerator)
@@ -177,7 +177,7 @@ extension System {
 extension UserInfo {
     static func defaultState(from storage: Storage, anonIdGenerator: AnonymousIdGenerator) -> UserInfo {
         let userId: String? = storage.read(.userId)
-        let traits: JSON? = storage.read(.traits)
+        let traits: SegmentJSON? = storage.read(.traits)
         var anonymousId: String
         if let existingId: String = storage.read(.anonymousId) {
             anonymousId = existingId

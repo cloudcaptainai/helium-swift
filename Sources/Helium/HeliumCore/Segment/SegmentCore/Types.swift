@@ -24,9 +24,9 @@ protocol RawEvent: Codable {
     var userId: String? { get set }
     var timestamp: String? { get set }
     
-    var context: JSON? { get set }
-    var integrations: JSON? { get set }
-    var metrics: [JSON]? { get set }
+    var context: SegmentJSON? { get set }
+    var integrations: SegmentJSON? { get set }
+    var metrics: [SegmentJSON]? { get set }
     var _metadata: DestinationMetadata? { get set }
 }
 
@@ -36,15 +36,15 @@ struct TrackEvent: RawEvent {
     var messageId: String? = nil
     var userId: String? = nil
     var timestamp: String? = nil
-    var context: JSON? = nil
-    var integrations: JSON? = nil
-    var metrics: [JSON]? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
     var _metadata: DestinationMetadata? = nil
     
     var event: String
-    var properties: JSON?
+    var properties: SegmentJSON?
     
-    init(event: String, properties: JSON?) {
+    init(event: String, properties: SegmentJSON?) {
         self.event = event
         self.properties = properties
     }
@@ -61,15 +61,15 @@ struct IdentifyEvent: RawEvent {
     var messageId: String? = nil
     var userId: String?
     var timestamp: String? = nil
-    var context: JSON? = nil
-    var integrations: JSON? = nil
-    var metrics: [JSON]? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
     var _metadata: DestinationMetadata? = nil
     
-    var traits: JSON?
+    var traits: SegmentJSON?
     
     
-    init(userId: String? = nil, traits: JSON? = nil) {
+    init(userId: String? = nil, traits: SegmentJSON? = nil) {
         self.userId = userId
         self.traits = traits
     }
@@ -86,16 +86,16 @@ struct ScreenEvent: RawEvent {
     var messageId: String? = nil
     var userId: String? = nil
     var timestamp: String? = nil
-    var context: JSON? = nil
-    var integrations: JSON? = nil
-    var metrics: [JSON]? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
     var _metadata: DestinationMetadata? = nil
     
     var name: String?
     var category: String?
-    var properties: JSON?
+    var properties: SegmentJSON?
     
-    init(title: String? = nil, category: String?, properties: JSON? = nil) {
+    init(title: String? = nil, category: String?, properties: SegmentJSON? = nil) {
         self.name = title
         self.category = category
         self.properties = properties
@@ -113,15 +113,15 @@ struct GroupEvent: RawEvent {
     var messageId: String? = nil
     var userId: String? = nil
     var timestamp: String? = nil
-    var context: JSON? = nil
-    var integrations: JSON? = nil
-    var metrics: [JSON]? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
     var _metadata: DestinationMetadata? = nil
     
     var groupId: String?
-    var traits: JSON?
+    var traits: SegmentJSON?
     
-    init(groupId: String? = nil, traits: JSON? = nil) {
+    init(groupId: String? = nil, traits: SegmentJSON? = nil) {
         self.groupId = groupId
         self.traits = traits
     }
@@ -137,9 +137,9 @@ struct AliasEvent: RawEvent {
     var anonymousId: String? = nil
     var messageId: String? = nil
     var timestamp: String? = nil
-    var context: JSON? = nil
-    var integrations: JSON? = nil
-    var metrics: [JSON]? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
     var _metadata: DestinationMetadata? = nil
     
     var userId: String? = nil
@@ -188,7 +188,7 @@ extension RawEvent {
         }
         
         do {
-            integrations = try JSON(new)
+            integrations = try SegmentJSON(new)
         } catch {
             // this shouldn't happen, log it.
             Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
@@ -210,7 +210,7 @@ extension RawEvent {
         }
         
         do {
-            integrations = try JSON(new)
+            integrations = try SegmentJSON(new)
         } catch {
             // this shouldn't happen, log it.
             Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
@@ -234,7 +234,7 @@ extension RawEvent {
         new[key] = false
         
         do {
-            integrations = try JSON(new)
+            integrations = try SegmentJSON(new)
         } catch {
             // this shouldn't happen, log it.
             Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
@@ -263,7 +263,7 @@ extension RawEvent {
         }
         
         do {
-            integrations = try JSON(new)
+            integrations = try SegmentJSON(new)
         } catch {
             // this shouldn't happen, log it.
             Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
@@ -297,7 +297,7 @@ extension RawEvent {
         result.userId = userInfo.userId
         result.messageId = UUID().uuidString
         result.timestamp = Date().iso8601()
-        result.integrations = try? JSON([String: Any]())
+        result.integrations = try? SegmentJSON([String: Any]())
         result._metadata = DestinationMetadata()
         
         return result

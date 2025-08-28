@@ -39,20 +39,20 @@ extension JSONSafeEncoder {
             try container.encode(stringDate)
         })
 
-        e.nonConformingFloatEncodingStrategy = JSON.jsonNonConformingNumberStrategy
+        e.nonConformingFloatEncodingStrategy = SegmentJSON.jsonNonConformingNumberStrategy
         return e
     }
 }
 
 // MARK: - JSON Definition
 
-enum JSON: Equatable {
+enum SegmentJSON: Equatable {
     case null
     case bool(Bool)
     case number(Decimal)
     case string(String)
-    case array([JSON])
-    case object([String: JSON])
+    case array([SegmentJSON])
+    case object([String: SegmentJSON])
     
     static var jsonNonConformingNumberStrategy: JSONSafeEncoder.NonConformingFloatEncodingStrategy = .zero
     
@@ -63,7 +63,7 @@ enum JSON: Equatable {
     }
     
     init(_ object: [String: Any]) throws {
-        self = .object(try object.mapValues(JSON.init))
+        self = .object(try object.mapValues(SegmentJSON.init))
     }
     
     init?(nilOrObject object: [String: Any]?) throws {
@@ -105,12 +105,12 @@ enum JSON: Equatable {
         case let bool as Bool:
             self = .bool(bool)
         case let aSet as Set<AnyHashable>:
-            self = .array(try aSet.map(JSON.init))
+            self = .array(try aSet.map(SegmentJSON.init))
         case let array as Array<Any>:
-            self = .array(try array.map(JSON.init))
+            self = .array(try array.map(SegmentJSON.init))
         case let object as [String: Any]:
-            self = .object(try object.mapValues(JSON.init))
-        case let json as JSON:
+            self = .object(try object.mapValues(SegmentJSON.init))
+        case let json as SegmentJSON:
             self = json
         case let codable as Codable:
             self = try Self.init(with: codable)
@@ -124,7 +124,7 @@ enum JSON: Equatable {
 
 // MARK: - Codable conformance
 
-extension JSON: Codable {
+extension SegmentJSON: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         
@@ -154,9 +154,9 @@ extension JSON: Codable {
             self = .number(number)
         } else if let string = try? container.decode(String.self) {
             self = .string(string)
-        } else if let array = try? container.decode([JSON].self) {
+        } else if let array = try? container.decode([SegmentJSON].self) {
             self = .array(array)
-        } else if let object = try? container.decode([String: JSON].self) {
+        } else if let object = try? container.decode([String: SegmentJSON].self) {
             self = .object(object)
         } else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid JSON value!")
@@ -195,7 +195,7 @@ extension Encodable {
 
 // MARK: - Value Extraction & Conformance
 
-extension JSON {
+extension SegmentJSON {
     private func rawValue() -> Any {
         var result: Any? = nil
         switch self {
@@ -324,7 +324,7 @@ extension JSON {
 
 // MARK: - Mutation
 
-extension JSON {
+extension SegmentJSON {
     /// Maps keys supplied, in the format of ["Old": "New"].  Gives an optional value transformer that can be used to transform values based on the final key name.
     /// - Parameters:
     ///   - keys: A dictionary containing key mappings, in the format of ["Old": "New"].
@@ -332,10 +332,10 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the specified changes.
     /// - Throws: This method will throw if transformation or JSON cannot be properly completed.
-    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: String, _ value: Any) -> Any)? = nil) throws -> JSON {
+    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: String, _ value: Any) -> Any)? = nil) throws -> SegmentJSON {
         guard let dict = self.dictionaryValue else { return self }
         let mapped = try dict.mapTransform(keys, valueTransform: valueTransform)
-        let result = try JSON(mapped)
+        let result = try SegmentJSON(mapped)
         return result
     }
     
@@ -345,8 +345,8 @@ extension JSON {
     ///
     /// - Returns: A new JSON array with the supplied value added.
     /// - Throws: This method throws when a value is added and unable to be serialized.
-    func add(value: Any) throws -> JSON? {
-        var result: JSON? = nil
+    func add(value: Any) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
         switch self {
         case .array:
             var newArray = [Any]()
@@ -354,7 +354,7 @@ extension JSON {
                 newArray.append(contentsOf: existing)
             }
             newArray.append(value)
-            result = try JSON(newArray)
+            result = try SegmentJSON(newArray)
         default:
             throw JSONError.incorrectType
         }
@@ -368,8 +368,8 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the supplied Key/Value added.
     /// - Throws: This method throws when a value is added and unable to be serialized.
-    func add(value: Any, forKey key: String) throws -> JSON? {
-        var result: JSON? = nil
+    func add(value: Any, forKey key: String) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
         switch self {
         case .object:
             var newObject = [String: Any]()
@@ -377,7 +377,7 @@ extension JSON {
                 newObject = existing
             }
             newObject[key] = value
-            result = try JSON(newObject)
+            result = try SegmentJSON(newObject)
         default:
             throw JSONError.incorrectType
         }
@@ -390,8 +390,8 @@ extension JSON {
     ///
     /// - Returns: A new JSON object with the specified key and it's associated value removed.
     /// - Throws: This method throws when after modification, it is unable to be serialized.
-    func remove(key: String) throws -> JSON? {
-        var result: JSON? = nil
+    func remove(key: String) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
         switch self {
         case .object:
             var newObject = [String: Any]()
@@ -399,7 +399,7 @@ extension JSON {
                 newObject = existing
             }
             newObject.removeValue(forKey: key)
-            result = try JSON(newObject)
+            result = try SegmentJSON(newObject)
         default:
             throw JSONError.incorrectType
         }
@@ -408,7 +408,7 @@ extension JSON {
     }
         
     /// Directly access a specific index in the JSON array.
-    subscript(index: Int) -> JSON? {
+    subscript(index: Int) -> SegmentJSON? {
         get {
             switch self {
             case .array(let value):
@@ -424,7 +424,7 @@ extension JSON {
     }
     
     /// Directly access a key within the JSON object.
-    subscript(key: String) -> JSON? {
+    subscript(key: String) -> SegmentJSON? {
         get {
             switch self {
             case .object(let value):
@@ -470,14 +470,14 @@ extension JSON {
             switch self {
             case .object:
                 if var dict: [String: Any] = dictionaryValue {
-                    var json: JSON? = try? JSON(newValue as Any)
+                    var json: SegmentJSON? = try? SegmentJSON(newValue as Any)
                     if json == nil {
-                        json = try? JSON(with: newValue)
+                        json = try? SegmentJSON(with: newValue)
                     }
                     
                     if let json = json {
                         dict[keyPath: keyPath] = json
-                        if let newSelf = try? JSON(dict) {
+                        if let newSelf = try? SegmentJSON(dict) {
                             self = newSelf
                         }
                     }

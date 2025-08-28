@@ -75,10 +75,10 @@ class Configuration {
     /// - Parameter writeKey: Your Segment write key value
     init(writeKey: String) {
         self.values = Values(writeKey: writeKey)
-        JSON.jsonNonConformingNumberStrategy = self.values.jsonNonConformingNumberStrategy
+        SegmentJSON.jsonNonConformingNumberStrategy = self.values.jsonNonConformingNumberStrategy
         // enable segment destination by default
         var settings = Settings(writeKey: writeKey)
-        settings.integrations = try? JSON([
+        settings.integrations = try? SegmentJSON([
             "Segment.io": true
         ])
         
@@ -254,7 +254,7 @@ extension Configuration {
     @discardableResult
     func jsonNonConformingNumberStrategy(_ strategy: JSONSafeEncoder.NonConformingFloatEncodingStrategy) -> Configuration {
         values.jsonNonConformingNumberStrategy = strategy
-        JSON.jsonNonConformingNumberStrategy = values.jsonNonConformingNumberStrategy
+        SegmentJSON.jsonNonConformingNumberStrategy = values.jsonNonConformingNumberStrategy
         return self
     }
     

@@ -378,7 +378,7 @@ extension Analytics {
      ```
      */
     func openURL<T: Codable>(_ url: URL, options: T? = nil) {
-        guard let jsonProperties = try? JSON(with: options) else { return }
+        guard let jsonProperties = try? SegmentJSON(with: options) else { return }
         guard let dict = jsonProperties.dictionaryValue else { return }
         openURL(url, options: dict)
     }
@@ -406,12 +406,12 @@ extension Analytics {
             }
         }
         
-        var jsonProperties: JSON? = nil
-        if let json = try? JSON(options) {
+        var jsonProperties: SegmentJSON? = nil
+        if let json = try? SegmentJSON(options) {
             jsonProperties = json
             _ = try? jsonProperties?.add(value: url.absoluteString, forKey: "url")
         } else {
-            if let json = try? JSON(["url": url.absoluteString]) {
+            if let json = try? SegmentJSON(["url": url.absoluteString]) {
                 jsonProperties = json
             }
         }

@@ -47,7 +47,7 @@ extension Analytics {
             }
         }
         
-        if let e = error as? JSON.JSONError {
+        if let e = error as? SegmentJSON.JSONError {
             switch e {
             case .incorrectType:
                 return AnalyticsError.jsonUnableToDeserialize(e)

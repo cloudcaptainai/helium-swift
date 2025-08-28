@@ -20,7 +20,7 @@ class DeviceToken: PlatformPlugin {
         if var context = workingEvent.context?.dictionaryValue, let token = token {
             context[keyPath: "device.token"] = token
             do {
-                workingEvent.context = try JSON(context)
+                workingEvent.context = try SegmentJSON(context)
             } catch {
                 analytics?.reportInternalError(error)
             }

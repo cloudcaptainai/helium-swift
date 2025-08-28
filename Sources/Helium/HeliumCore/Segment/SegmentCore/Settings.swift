@@ -8,15 +8,15 @@
 import Foundation
 
 struct Settings: Codable {
-    var integrations: JSON? = nil
-    var plan: JSON? = nil
-    var edgeFunction: JSON? = nil
-    var middlewareSettings: JSON? = nil
-    var metrics: JSON? = nil
-    var consentSettings: JSON? = nil
+    var integrations: SegmentJSON? = nil
+    var plan: SegmentJSON? = nil
+    var edgeFunction: SegmentJSON? = nil
+    var middlewareSettings: SegmentJSON? = nil
+    var metrics: SegmentJSON? = nil
+    var consentSettings: SegmentJSON? = nil
 
     init(writeKey: String, apiHost: String) {
-        integrations = try! JSON([
+        integrations = try! SegmentJSON([
             SegmentDestination.Constants.integrationName.rawValue: [
                 SegmentDestination.Constants.apiKey.rawValue: writeKey,
                 SegmentDestination.Constants.apiHost.rawValue: apiHost
@@ -25,7 +25,7 @@ struct Settings: Codable {
     }
     
     init(writeKey: String) {
-        integrations = try! JSON([
+        integrations = try! SegmentJSON([
             SegmentDestination.Constants.integrationName.rawValue: [
                 SegmentDestination.Constants.apiKey.rawValue: writeKey,
                 SegmentDestination.Constants.apiHost.rawValue: HTTPClient.getDefaultAPIHost()
@@ -35,12 +35,12 @@ struct Settings: Codable {
     
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        self.integrations = try? values.decode(JSON.self, forKey: CodingKeys.integrations)
-        self.plan = try? values.decode(JSON.self, forKey: CodingKeys.plan)
-        self.edgeFunction = try? values.decode(JSON.self, forKey: CodingKeys.edgeFunction)
-        self.middlewareSettings = try? values.decode(JSON.self, forKey: CodingKeys.middlewareSettings)
-        self.metrics = try? values.decode(JSON.self, forKey: CodingKeys.metrics)
-        self.consentSettings = try? values.decode(JSON.self, forKey: CodingKeys.consentSettings)
+        self.integrations = try? values.decode(SegmentJSON.self, forKey: CodingKeys.integrations)
+        self.plan = try? values.decode(SegmentJSON.self, forKey: CodingKeys.plan)
+        self.edgeFunction = try? values.decode(SegmentJSON.self, forKey: CodingKeys.edgeFunction)
+        self.middlewareSettings = try? values.decode(SegmentJSON.self, forKey: CodingKeys.middlewareSettings)
+        self.metrics = try? values.decode(SegmentJSON.self, forKey: CodingKeys.metrics)
+        self.consentSettings = try? values.decode(SegmentJSON.self, forKey: CodingKeys.consentSettings)
     }
     
     static func load(from url: URL?) -> Settings? {
