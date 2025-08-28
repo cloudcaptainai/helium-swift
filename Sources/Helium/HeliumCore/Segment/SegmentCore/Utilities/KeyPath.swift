@@ -139,10 +139,10 @@ struct IfHandler: KeyPathHandler {
         let isBlank = conditional?["blank"] != nil
         let isExists = conditional?["exists"] != nil
         
-        let blank = conditional?[keyPath: "blank", reference: reference]
-        let exists = conditional?[keyPath: "exists", reference: reference]
-        let then = conditional?[keyPath: "then", reference: reference]
-        let elseCase = conditional?[keyPath: "else", reference: reference]
+        let blank = conditional?[keyPath: KeyPath("blank"), reference: reference]
+        let exists = conditional?[keyPath: KeyPath("exists"), reference: reference]
+        let then = conditional?[keyPath: KeyPath("then"), reference: reference]
+        let elseCase = conditional?[keyPath: KeyPath("else"), reference: reference]
         
         var result: Any? = nil
         
