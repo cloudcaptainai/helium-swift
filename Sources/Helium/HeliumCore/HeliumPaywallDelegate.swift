@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Segment
 import StoreKit
 
 
@@ -139,11 +138,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func setAnalytics(_ analytics: Analytics) {
+    func setAnalytics(_ analytics: Analytics) {
         self.analytics = analytics
     }
     
-    public func getAnalytics() -> Analytics? {
+    func getAnalytics() -> Analytics? {
         return analytics;
     }
     
@@ -221,7 +220,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         var analyticsForEvent = analytics
         
         if analytics == nil, let fallbackBundleConfig {
-            let configuration = Configuration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
+            let configuration = SegmentConfiguration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
                 .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
                 .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
                 .trackApplicationLifecycleEvents(false)

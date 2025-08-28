@@ -1,0 +1,305 @@
+//
+//  Types.swift
+//  Segment
+//
+//  Created by Brandon Sneed on 12/1/20.
+//
+
+import Foundation
+
+// MARK: - Supplementary Types
+
+struct DestinationMetadata: Codable {
+    var bundled: [String] = []
+    var unbundled: [String] = []
+    var bundledIds: [String] = []
+}
+
+// MARK: - Event Types
+
+protocol RawEvent: Codable {
+    var type: String? { get set }
+    var anonymousId: String? { get set }
+    var messageId: String? { get set }
+    var userId: String? { get set }
+    var timestamp: String? { get set }
+    
+    var context: SegmentJSON? { get set }
+    var integrations: SegmentJSON? { get set }
+    var metrics: [SegmentJSON]? { get set }
+    var _metadata: DestinationMetadata? { get set }
+}
+
+struct TrackEvent: RawEvent {
+    var type: String? = "track"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
+    var _metadata: DestinationMetadata? = nil
+    
+    var event: String
+    var properties: SegmentJSON?
+    
+    init(event: String, properties: SegmentJSON?) {
+        self.event = event
+        self.properties = properties
+    }
+    
+    init(existing: TrackEvent) {
+        self.init(event: existing.event, properties: existing.properties)
+        applyRawEventData(event: existing)
+    }
+}
+
+struct IdentifyEvent: RawEvent {
+    var type: String? = "identify"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String?
+    var timestamp: String? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
+    var _metadata: DestinationMetadata? = nil
+    
+    var traits: SegmentJSON?
+    
+    
+    init(userId: String? = nil, traits: SegmentJSON? = nil) {
+        self.userId = userId
+        self.traits = traits
+    }
+    
+    init(existing: IdentifyEvent) {
+        self.init(userId: existing.userId, traits: existing.traits)
+        applyRawEventData(event: existing)
+    }
+}
+
+struct ScreenEvent: RawEvent {
+    var type: String? = "screen"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
+    var _metadata: DestinationMetadata? = nil
+    
+    var name: String?
+    var category: String?
+    var properties: SegmentJSON?
+    
+    init(title: String? = nil, category: String?, properties: SegmentJSON? = nil) {
+        self.name = title
+        self.category = category
+        self.properties = properties
+    }
+    
+    init(existing: ScreenEvent) {
+        self.init(title: existing.name, category: existing.category, properties: existing.properties)
+        applyRawEventData(event: existing)
+    }
+}
+
+struct GroupEvent: RawEvent {
+    var type: String? = "group"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var userId: String? = nil
+    var timestamp: String? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
+    var _metadata: DestinationMetadata? = nil
+    
+    var groupId: String?
+    var traits: SegmentJSON?
+    
+    init(groupId: String? = nil, traits: SegmentJSON? = nil) {
+        self.groupId = groupId
+        self.traits = traits
+    }
+    
+    init(existing: GroupEvent) {
+        self.init(groupId: existing.groupId, traits: existing.traits)
+        applyRawEventData(event: existing)
+    }
+}
+
+struct AliasEvent: RawEvent {
+    var type: String? = "alias"
+    var anonymousId: String? = nil
+    var messageId: String? = nil
+    var timestamp: String? = nil
+    var context: SegmentJSON? = nil
+    var integrations: SegmentJSON? = nil
+    var metrics: [SegmentJSON]? = nil
+    var _metadata: DestinationMetadata? = nil
+    
+    var userId: String? = nil
+    var previousId: String? = nil
+    
+    init(newId: String?, previousId: String? = nil) {
+        self.userId = newId
+        self.previousId = previousId
+    }
+    
+    init(existing: AliasEvent) {
+        self.init(newId: existing.userId, previousId: existing.previousId)
+        applyRawEventData(event: existing)
+    }
+}
+
+// MARK: - RawEvent conveniences
+
+internal struct IntegrationConstants {
+    static let allIntegrationsKey = "All"
+}
+
+extension RawEvent {
+    /**
+     Disable all cloud-mode integrations for this event, except for any specific keys given.
+     This will preserve any per-integration specific settings if the integration is to remain enabled.
+     - Parameters:
+        - exceptKeys: A list of integration keys to exclude from disabling.
+     */
+    mutating func disableCloudIntegrations(exceptKeys: [String]? = nil) {
+        guard let existing = integrations?.dictionaryValue else {
+            // this shouldn't happen, might oughta log it.
+            Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)
+            return
+        }
+        var new = [String: Any]()
+        new[IntegrationConstants.allIntegrationsKey] = false
+        if let exceptKeys = exceptKeys {
+            for key in exceptKeys {
+                if let value = existing[key], value is [String: Any] {
+                    new[key] = value
+                } else {
+                    new[key] = true
+                }
+            }
+        }
+        
+        do {
+            integrations = try SegmentJSON(new)
+        } catch {
+            // this shouldn't happen, log it.
+            Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
+        }
+    }
+    
+    /**
+     Enable all cloud-mode integrations for this event, except for any specific keys given.
+     - Parameters:
+        - exceptKeys: A list of integration keys to exclude from enabling.
+     */
+    mutating func enableCloudIntegrations(exceptKeys: [String]? = nil) {
+        var new = [String: Any]()
+        new[IntegrationConstants.allIntegrationsKey] = true
+        if let exceptKeys = exceptKeys {
+            for key in exceptKeys {
+                new[key] = false
+            }
+        }
+        
+        do {
+            integrations = try SegmentJSON(new)
+        } catch {
+            // this shouldn't happen, log it.
+            Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
+        }
+    }
+    
+    /**
+     Disable a specific cloud-mode integration using it's key name.
+     - Parameters:
+        - key: The key name of the integration to disable.
+     */
+    mutating func disableIntegration(key: String) {
+        guard let existing = integrations?.dictionaryValue else {
+            // this shouldn't happen, might oughta log it.
+            Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)
+            return
+        }
+        // we don't really care what the value of this key was before, as
+        // a disabled one can only be false.
+        var new = existing
+        new[key] = false
+        
+        do {
+            integrations = try SegmentJSON(new)
+        } catch {
+            // this shouldn't happen, log it.
+            Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
+        }
+    }
+    
+    /**
+     Enable a specific cloud-mode integration using it's key name.
+     - Parameters:
+        - key: The key name of the integration to enable.
+     */
+    mutating func enableIntegration(key: String) {
+        guard let existing = integrations?.dictionaryValue else {
+            // this shouldn't happen, might oughta log it.
+            Analytics.segmentLog(message: "Unable to get what should be a valid list of integrations from event.", kind: .error)
+            return
+        }
+        
+        var new = existing
+        // if it's a dictionary already, it's considered enabled, so don't
+        // overwrite whatever they may have put there.  If that's not the case
+        // just set it to true since that's the only other value it could have
+        // to be considered `enabled`.
+        if (existing[key] as? [String: Any]) == nil {
+            new[key] = true
+        }
+        
+        do {
+            integrations = try SegmentJSON(new)
+        } catch {
+            // this shouldn't happen, log it.
+            Analytics.segmentLog(message: "Unable to convert list of integrations to JSON. \(error)", kind: .error)
+        }
+    }
+    
+}
+
+
+// MARK: - RawEvent data helpers
+
+extension RawEvent {
+    internal mutating func applyRawEventData(event: RawEvent?) {
+        if let e = event {
+            anonymousId = e.anonymousId
+            messageId = e.messageId
+            userId = e.userId
+            timestamp = e.timestamp
+            context = e.context
+            integrations = e.integrations
+            _metadata = e._metadata
+        }
+    }
+
+    internal func applyRawEventData(store: Store) -> Self {
+        var result: Self = self
+        
+        guard let userInfo: UserInfo = store.currentState() else { return self }
+        
+        result.anonymousId = userInfo.anonymousId
+        result.userId = userInfo.userId
+        result.messageId = UUID().uuidString
+        result.timestamp = Date().iso8601()
+        result.integrations = try? SegmentJSON([String: Any]())
+        result._metadata = DestinationMetadata()
+        
+        return result
+    }
+}
