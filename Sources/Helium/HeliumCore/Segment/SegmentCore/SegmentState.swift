@@ -9,8 +9,8 @@ import Foundation
 
 // MARK: - System (Overall)
 
-struct System: State {
-    let configuration: Configuration
+struct System: SovranState {
+    let configuration: SegmentConfiguration
     let settings: Settings?
     let running: Bool
     let enabled: Bool
@@ -54,7 +54,7 @@ struct System: State {
     }
     
     struct UpdateConfigurationAction: Action {
-        let configuration: Configuration
+        let configuration: SegmentConfiguration
         
         func reduce(state: System) -> System {
             return System(configuration: configuration,
@@ -104,7 +104,7 @@ struct System: State {
 
 // MARK: - User information
 
-struct UserInfo: Codable, State {
+struct UserInfo: Codable, SovranState {
     let anonymousId: String
     let userId: String?
     let traits: SegmentJSON?
@@ -161,7 +161,7 @@ struct UserInfo: Codable, State {
 // MARK: - Default State Setup
 
 extension System {
-    static func defaultState(configuration: Configuration, from storage: Storage) -> System {
+    static func defaultState(configuration: SegmentConfiguration, from storage: Storage) -> System {
         var settings: Settings? = storage.read(.settings)
         if settings == nil {
             if let defaults = configuration.values.defaultSettings {

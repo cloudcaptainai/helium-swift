@@ -75,7 +75,7 @@ class Store {
      ```
      */
     @discardableResult
-    func subscribe<T: State>(_ subscriber: Subscriber, initialState: Bool = false, queue: DispatchQueue = .main, handler: @escaping Handler<T>) -> SubscriptionID {
+    func subscribe<T: SovranState>(_ subscriber: Subscriber, initialState: Bool = false, queue: DispatchQueue = .main, handler: @escaping Handler<T>) -> SubscriptionID {
         let subscription = Subscription(owner: subscriber, queue: queue, handler: handler)
         syncQueue.sync {
             subscribers.append(subscription)
@@ -110,7 +110,7 @@ class Store {
      
      - parameter state: An struct instance conforming to `State`.
      */
-    func provide<T: State>(state: T) {
+    func provide<T: SovranState>(state: T) {
         let exists = existing(state: state)
         if exists.count != 0 {
             #if DEBUG
@@ -154,7 +154,7 @@ class Store {
             // perform data reduction.
             state = action.reduce(state: state)
             // state is final now, apply it back to storage.
-            target.state = state as State
+            target.state = state as SovranState
             return state
         }
 
@@ -188,7 +188,7 @@ class Store {
                 // perform data reduction.
                 state = action.reduce(state: state, operationResult: result)
                 // state is final now, apply it back to storage.
-                target.state = state as State
+                target.state = state as SovranState
             }
             
             // get any handlers that work against T.StateType
@@ -207,7 +207,7 @@ class Store {
      let state: MyState = store.currentState()
      ```
      */
-    func currentState<T: State>() -> T? {
+    func currentState<T: SovranState>() -> T? {
         guard let container = existing(stateType: T.self).first else {
             return nil
         }
@@ -238,15 +238,15 @@ internal struct Subscription {
 /// Containment for held state.  The state var is updated as state changes occur.
 internal class Container {
     // Note: this should only be accessed from the `Store.updateQueue`.
-    var state: State
-    init(state: State) { self.state = state }
+    var state: SovranState
+    init(state: SovranState) { self.state = state }
 }
 
-// MARK: State lookup
+// MARK: SovranState lookup
 
 extension Store {
     /// Returns any state instances matching T.
-    internal func existing<T: State>(state: T) -> [Container] {
+    internal func existing<T: SovranState>(state: T) -> [Container] {
         var result = [Container]()
         updateQueue.sync {
             result = states.filter {
@@ -256,7 +256,7 @@ extension Store {
         return result
     }
     /// Returns any state instances matching T.Type
-    internal func existing<T: State>(stateType: T.Type) -> [Container] {
+    internal func existing<T: SovranState>(stateType: T.Type) -> [Container] {
         var result = [Container]()
         updateQueue.sync {
             result = states.filter {
@@ -272,7 +272,7 @@ extension Store {
 
 extension Store {
     /// Notify any subscribers with the new state.
-    internal func notify<T: State>(subscribers: [Subscription], state: T) {
+    internal func notify<T: SovranState>(subscribers: [Subscription], state: T) {
         for sub in subscribers {
             guard let handler = sub.handler as? Handler<T> else { continue }
             // call said handlers to inform them of the new state.
@@ -305,7 +305,7 @@ extension Store {
 
 extension Store {
     /// Returns subscribers matching a given state type.
-    internal func existing<T: State>(handlerType: T.Type) -> [Subscription] {
+    internal func existing<T: SovranState>(handlerType: T.Type) -> [Subscription] {
         var result = [Subscription]()
         syncQueue.sync {
             result = subscribers.filter {

@@ -197,22 +197,22 @@ open class JSONSafeEncoder {
     }
 
     /// The output format to produce. Defaults to `[]`.
-    open var outputFormatting: OutputFormatting = []
+    var outputFormatting: OutputFormatting = []
 
     /// The strategy to use in encoding dates. Defaults to `.deferredToDate`.
-    open var dateEncodingStrategy: DateEncodingStrategy = .deferredToDate
+    var dateEncodingStrategy: DateEncodingStrategy = .deferredToDate
 
     /// The strategy to use in encoding binary data. Defaults to `.base64`.
-    open var dataEncodingStrategy: DataEncodingStrategy = .base64
+    var dataEncodingStrategy: DataEncodingStrategy = .base64
 
     /// The strategy to use in encoding non-conforming numbers. Defaults to `.zero`.
-    open var nonConformingFloatEncodingStrategy: NonConformingFloatEncodingStrategy = .zero
+    var nonConformingFloatEncodingStrategy: NonConformingFloatEncodingStrategy = .zero
 
     /// The strategy to use for encoding keys. Defaults to `.useDefaultKeys`.
-    open var keyEncodingStrategy: KeyEncodingStrategy = .useDefaultKeys
+    var keyEncodingStrategy: KeyEncodingStrategy = .useDefaultKeys
 
     /// Contextual user-provided information for use during encoding.
-    open var userInfo: [CodingUserInfoKey: Any] = [:]
+    var userInfo: [CodingUserInfoKey: Any] = [:]
 
     /// Options set on the top-level encoder to pass down the encoding hierarchy.
     fileprivate struct _Options {

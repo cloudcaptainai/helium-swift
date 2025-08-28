@@ -24,7 +24,7 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
-        let configuration = Configuration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
+        let configuration = SegmentConfiguration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
             .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
             .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
             .trackApplicationLifecycleEvents(false)
@@ -77,7 +77,7 @@ public class HeliumController {
             case .success(let fetchResult):
                 let fetchedConfig = fetchResult.fetchedConfig
                 let numFetchRequests = fetchResult.numRequests
-                let configuration = Configuration(writeKey: fetchedConfig.segmentBrowserWriteKey)
+                let configuration = SegmentConfiguration(writeKey: fetchedConfig.segmentBrowserWriteKey)
                     .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
                     .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)
                     .trackApplicationLifecycleEvents(false)
@@ -111,7 +111,7 @@ public class HeliumController {
                 // Use the config as needed
             case .failure(let error):
             
-                let configuration = Configuration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
+                let configuration = SegmentConfiguration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
                     .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
                     .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
                     .trackApplicationLifecycleEvents(false)

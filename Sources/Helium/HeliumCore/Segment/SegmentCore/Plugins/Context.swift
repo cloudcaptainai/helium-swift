@@ -15,7 +15,7 @@ extension OpeningURLs {
     func openURL(_ url: URL, options: [String : Any]) {}
 }
 
-class Context: PlatformPlugin {
+class SegmentContext: PlatformPlugin {
     let type: PluginType = .before
     weak var analytics: Analytics?
     

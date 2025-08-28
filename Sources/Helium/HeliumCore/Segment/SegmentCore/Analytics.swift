@@ -34,7 +34,7 @@ import Foundation
 // MARK: - Base Setup
 
 class Analytics {
-    internal var configuration: Configuration {
+    internal var configuration: SegmentConfiguration {
         get {
             // we're absolutely certain we will have a config
             let system: System = store.currentState()!

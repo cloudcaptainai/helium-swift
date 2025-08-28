@@ -19,7 +19,7 @@ protocol Action {
      Use of reference types to mutable objects may lead to unwanted state sharing, subverting
      the intent of the system.
      */
-    associatedtype StateType: State
+    associatedtype StateType: SovranState
     
     /**
      The reducer for this action.  Reducer implementations should be constructed as pure functions,
@@ -54,7 +54,7 @@ protocol AsyncAction {
      The type of state this action deals with.  Usually inferred by simply specifying it
      in the implementation of `reduce`.
      */
-    associatedtype StateType: State
+    associatedtype StateType: SovranState
     /**
      The type used for the result of an operation.  Usually inferred by simply specifying it
      in the implementation of `operation`.

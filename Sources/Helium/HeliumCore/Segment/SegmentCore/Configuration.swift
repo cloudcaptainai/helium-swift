@@ -46,7 +46,7 @@ enum StorageMode {
 
 // MARK: - Internal Configuration
 
-class Configuration {
+class SegmentConfiguration {
     internal struct Values {
         var writeKey: String
         var application: Any? = nil
@@ -89,7 +89,7 @@ class Configuration {
 
 // MARK: - Analytics Configuration
 
-extension Configuration {
+extension SegmentConfiguration {
     
     /// Sets a reference to your application.  This can be useful in instances
     /// where referring back to your application is necessary, such as within plugins
@@ -98,7 +98,7 @@ extension Configuration {
     /// - Parameter value: A reference to your application.
     /// - Returns: The current Configuration.
     @discardableResult
-    func application(_ value: Any?) -> Configuration {
+    func application(_ value: Any?) -> SegmentConfiguration {
         values.application = value
         return self
     }
@@ -108,7 +108,7 @@ extension Configuration {
     /// - Parameter enabled: A bool value
     /// - Returns: The current Configuration.
     @discardableResult
-    func trackApplicationLifecycleEvents(_ enabled: Bool) -> Configuration {
+    func trackApplicationLifecycleEvents(_ enabled: Bool) -> SegmentConfiguration {
         values.trackApplicationLifecycleEvents = enabled
         return self
     }
@@ -119,7 +119,7 @@ extension Configuration {
     /// - Parameter count: Event count to trigger a flush.
     /// - Returns: The current Configuration.
     @discardableResult
-    func flushAt(_ count: Int) -> Configuration {
+    func flushAt(_ count: Int) -> SegmentConfiguration {
         values.flushAt = count
         return self
     }
@@ -130,7 +130,7 @@ extension Configuration {
     /// - Parameter interval: A time interval
     /// - Returns: The current Configuration.
     @discardableResult
-    func flushInterval(_ interval: TimeInterval) -> Configuration {
+    func flushInterval(_ interval: TimeInterval) -> SegmentConfiguration {
         values.flushInterval = interval
         return self
     }
@@ -154,7 +154,7 @@ extension Configuration {
     /// - Parameter settings:
     /// - Returns: The current Configuration.
     @discardableResult
-    func defaultSettings(_ settings: Settings?) -> Configuration {
+    func defaultSettings(_ settings: Settings?) -> SegmentConfiguration {
         values.defaultSettings = settings
         return self
     }
@@ -166,7 +166,7 @@ extension Configuration {
     /// - Parameter value: true/false
     /// - Returns: The current Configuration.
     @discardableResult
-    func autoAddSegmentDestination(_ value: Bool) -> Configuration {
+    func autoAddSegmentDestination(_ value: Bool) -> SegmentConfiguration {
         values.autoAddSegmentDestination = value
         return self
     }
@@ -178,7 +178,7 @@ extension Configuration {
     /// - Parameter value: A string representing the desired API host.
     /// - Returns: The current Configuration.
     @discardableResult
-    func apiHost(_ value: String) -> Configuration {
+    func apiHost(_ value: String) -> SegmentConfiguration {
         values.apiHost = value
         return self
     }
@@ -190,7 +190,7 @@ extension Configuration {
     /// - Parameter value: A string representing the desired CDN host.
     /// - Returns: The current Configuration.
     @discardableResult
-    func cdnHost(_ value: String) -> Configuration {
+    func cdnHost(_ value: String) -> SegmentConfiguration {
         values.cdnHost = value
         return self
     }
@@ -201,7 +201,7 @@ extension Configuration {
     /// - Parameter value: A block to call when requests are made.
     /// - Returns: The current Configuration.
     @discardableResult
-    func requestFactory(_ value: @escaping (URLRequest) -> URLRequest) -> Configuration {
+    func requestFactory(_ value: @escaping (URLRequest) -> URLRequest) -> SegmentConfiguration {
         values.requestFactory = value
         return self
     }
@@ -213,13 +213,13 @@ extension Configuration {
     /// - Parameter value: A block to be called when an error occurs.
     /// - Returns: The current Configuration.
     @discardableResult
-    func errorHandler(_ value: @escaping (Error) -> Void) -> Configuration {
+    func errorHandler(_ value: @escaping (Error) -> Void) -> SegmentConfiguration {
         values.errorHandler = value
         return self
     }
     
     @discardableResult
-    func flushPolicies(_ policies: [FlushPolicy]) -> Configuration {
+    func flushPolicies(_ policies: [FlushPolicy]) -> SegmentConfiguration {
         values.flushPolicies = policies
         return self
     }
@@ -229,7 +229,7 @@ extension Configuration {
     /// is desired.  Use `.client` when operating in a long lived process,
     /// desktop/mobile application.
     @discardableResult
-    func operatingMode(_ mode: OperatingMode) -> Configuration {
+    func operatingMode(_ mode: OperatingMode) -> SegmentConfiguration {
         values.operatingMode = mode
         return self
     }
@@ -237,14 +237,14 @@ extension Configuration {
     /// Specify a custom queue to use when performing a flush operation.  The default
     /// value is a Segment owned background queue.
     @discardableResult
-    func flushQueue(_ queue: DispatchQueue) -> Configuration {
+    func flushQueue(_ queue: DispatchQueue) -> SegmentConfiguration {
         values.flushQueue = queue
         return self
     }
 
     /// Specify a custom UserAgent string.  This bypasses the OS dependent check entirely.
     @discardableResult
-    func userAgent(_ userAgent: String) -> Configuration {
+    func userAgent(_ userAgent: String) -> SegmentConfiguration {
         values.userAgent = userAgent
         return self
     }
@@ -252,7 +252,7 @@ extension Configuration {
     /// This option specifies how NaN/Infinity are handled when encoding JSON.
     /// The default is .zero.  See JSONSafeEncoder.NonConformingFloatEncodingStrategy for more informatino.
     @discardableResult
-    func jsonNonConformingNumberStrategy(_ strategy: JSONSafeEncoder.NonConformingFloatEncodingStrategy) -> Configuration {
+    func jsonNonConformingNumberStrategy(_ strategy: JSONSafeEncoder.NonConformingFloatEncodingStrategy) -> SegmentConfiguration {
         values.jsonNonConformingNumberStrategy = strategy
         SegmentJSON.jsonNonConformingNumberStrategy = values.jsonNonConformingNumberStrategy
         return self
@@ -260,14 +260,14 @@ extension Configuration {
     
     /// Specify the storage mode to use.  The default is `.disk`.
     @discardableResult
-    func storageMode(_ mode: StorageMode) -> Configuration {
+    func storageMode(_ mode: StorageMode) -> SegmentConfiguration {
         values.storageMode = mode
         return self
     }
     
     /// Specify a custom anonymousId generator.  The default is and instance of `SegmentAnonymousId`.
     @discardableResult
-    func anonymousIdGenerator(_ generator: AnonymousIdGenerator) -> Configuration {
+    func anonymousIdGenerator(_ generator: AnonymousIdGenerator) -> SegmentConfiguration {
         values.anonymousIdGenerator = generator
         return self
     }
