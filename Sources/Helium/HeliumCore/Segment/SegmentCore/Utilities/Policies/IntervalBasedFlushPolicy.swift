@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Sovran
 
 
 class IntervalBasedFlushPolicy: FlushPolicy,

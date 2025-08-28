@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Sovran
 
 class StartupQueue: Plugin, Subscriber {
     static let maxSize = 1000

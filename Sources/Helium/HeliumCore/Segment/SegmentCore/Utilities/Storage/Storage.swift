@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Sovran
 
 internal class Storage: Subscriber {
     let writeKey: String

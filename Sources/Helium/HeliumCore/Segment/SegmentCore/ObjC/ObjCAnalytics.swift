@@ -8,7 +8,6 @@
 #if !os(Linux)
 
 import Foundation
-import JSONSafeEncoding
 
 // MARK: - ObjC Compatibility
 

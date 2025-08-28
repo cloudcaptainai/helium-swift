@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import JSONSafeEncoding
 #if os(Linux)
 import FoundationNetworking
 #endif

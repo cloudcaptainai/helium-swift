@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import JSONSafeEncoding
 
 extension JSONDecoder {
     enum JSONDecodingError: Error {
