@@ -139,11 +139,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func setAnalytics(_ analytics: Analytics) {
+    func setAnalytics(_ analytics: Analytics) {
         self.analytics = analytics
     }
     
-    public func getAnalytics() -> Analytics? {
+    func getAnalytics() -> Analytics? {
         return analytics;
     }
     
