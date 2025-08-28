@@ -75,13 +75,13 @@ class Analytics {
         }
         #endif
         
-        return Analytics(configuration: Configuration(writeKey: deadInstance))
+        return Analytics(configuration: SegmentConfiguration(writeKey: deadInstance))
     }
     
     /// Initialize this instance of Analytics with a given configuration setup.
     /// - Parameters:
     ///    - configuration: The configuration to use
-    init(configuration: Configuration) {
+    init(configuration: SegmentConfiguration) {
         if Self.isActiveWriteKey(configuration.values.writeKey) {
             // If you're hitting this in testing, it could be a memory leak, or something async is still running
             // and holding a reference.  You can use XCTest.waitUntilFinished(...) to wait for things to complete.

@@ -42,7 +42,7 @@ extension Analytics: Subscriber {
         
         // add context plugin as well as it's platform specific internally.
         // this must come first.
-        plugins.append(Context())
+        plugins.append(SegmentContext())
         
         plugins += VendorSystem.current.requiredPlugins
 

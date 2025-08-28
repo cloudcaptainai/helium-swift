@@ -220,7 +220,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         var analyticsForEvent = analytics
         
         if analytics == nil, let fallbackBundleConfig {
-            let configuration = Configuration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
+            let configuration = SegmentConfiguration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
                 .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
                 .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
                 .trackApplicationLifecycleEvents(false)
