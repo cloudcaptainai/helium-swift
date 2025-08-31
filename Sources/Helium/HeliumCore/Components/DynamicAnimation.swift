@@ -1,11 +1,10 @@
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicAnimation: View {
     let animationType: AnimationType
     let libraryAnimation: LibraryAnimation?
     
-    public init(json: JSON) {
+    init(json: JSON) {
         if json["type"].stringValue == "library" {
             self.animationType = .library
             self.libraryAnimation = LibraryAnimation(json: json["animationProps"])

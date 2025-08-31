@@ -1,9 +1,8 @@
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 
-public protocol BaseTemplateView: View {
+protocol BaseTemplateView: View {
     init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
 }
 
@@ -17,7 +16,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     var templateValues: JSON
     var triggerName: String?
     
-    public init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));

@@ -17,5 +17,4 @@ Pod::Spec.new do |s|
   s.source_files = ['Sources/Helium/**/*']
 
   s.dependency 'AnalyticsSwiftCocoapod', '~> 1.7'
-  s.dependency 'SwiftyJSON', '~> 5.0.2'
 end

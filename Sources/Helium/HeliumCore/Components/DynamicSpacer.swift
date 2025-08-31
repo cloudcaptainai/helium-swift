@@ -7,13 +7,12 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 // DynamicSpacer
 public struct DynamicSpacer: View {
     let minLength: CGFloat?
     
-    public init(json: JSON) {
+    init(json: JSON) {
         self.minLength = json["minLength"].double.map { CGFloat($0) }
     }
     

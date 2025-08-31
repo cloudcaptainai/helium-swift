@@ -7,9 +7,8 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
-public extension Encodable {
+extension Encodable {
     /// Converting object to postable JSON
     func toJSON(_ encoder: JSONEncoder = JSONEncoder()) throws -> String {
         let data = try encoder.encode(self)
@@ -24,7 +23,7 @@ public extension Encodable {
     }
 }
 
-public extension JSON {
+extension JSON {
     func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [:]
         
