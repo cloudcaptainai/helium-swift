@@ -18,9 +18,6 @@ let package = Package(
             targets: ["HeliumRevenueCat", "Helium"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.0")),
-        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
-        .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0"),
         .package(url: "https://github.com/RevenueCat/purchases-ios-spm", .upToNextMajor(from: "5.0.0"))
     ],
     targets: [
@@ -28,11 +25,7 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "Helium",
-            dependencies: [
-                .product(name: "AnyCodable", package: "AnyCodable"),
-                .product(name: "SwiftyJSON", package: "SwiftyJSON"),
-                .product(name: "DeviceKit", package: "DeviceKit")
-            ]
+            dependencies: []
         ),
         .target(
             name: "HeliumRevenueCat",
