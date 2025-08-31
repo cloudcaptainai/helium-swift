@@ -7,7 +7,6 @@
 
 import Foundation
 import UIKit
-import AnyCodable
 
 struct CodableLocale: Codable {
     var currentCountry: String?
