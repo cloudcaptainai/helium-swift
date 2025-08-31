@@ -20,7 +20,6 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/segmentio/analytics-swift", .upToNextMajor(from: "1.5.11")),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", .upToNextMajor(from: "5.0.2")),
-        .package(url: "https://github.com/devicekit/DeviceKit.git", from: "4.0.0"),
         .package(url: "https://github.com/RevenueCat/purchases-ios-spm", .upToNextMajor(from: "5.0.0"))
     ],
     targets: [
@@ -31,7 +30,6 @@ let package = Package(
             dependencies: [
                 .product(name: "Segment", package: "analytics-swift"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),
-                .product(name: "DeviceKit", package: "DeviceKit")
             ]
         ),
         .target(

@@ -18,5 +18,4 @@ Pod::Spec.new do |s|
 
   s.dependency 'AnalyticsSwiftCocoapod', '~> 1.7'
   s.dependency 'SwiftyJSON', '~> 5.0.2'
-  s.dependency 'DeviceKit', '~> 4.0.0'
 end
