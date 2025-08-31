@@ -16,7 +16,5 @@ Pod::Spec.new do |s|
   
   s.source_files = ['Sources/Helium/**/*']
 
-  s.dependency 'AnyCodable-FlightSchool', '~> 0.6.0'
   s.dependency 'AnalyticsSwiftCocoapod', '~> 1.7'
-  s.dependency 'DeviceKit', '~> 4.0.0'
 end

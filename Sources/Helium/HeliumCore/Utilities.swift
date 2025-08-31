@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import AnyCodable
 import SwiftUI
 
 extension Encodable {
@@ -50,7 +49,7 @@ extension JSON {
     }
 }
 
-public extension AnyCodable {
+extension AnyCodable {
     func value<T>(at path: String, default defaultValue: T) -> T {
         let components = path.components(separatedBy: CharacterSet(charactersIn: ".[]"))
                             .filter { !$0.isEmpty }

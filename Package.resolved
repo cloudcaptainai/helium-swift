@@ -11,24 +11,6 @@
       }
     },
     {
-      "identity" : "anycodable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Flight-School/AnyCodable",
-      "state" : {
-        "revision" : "862808b2070cd908cb04f9aafe7de83d35f81b05",
-        "version" : "0.6.7"
-      }
-    },
-    {
-      "identity" : "devicekit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/devicekit/DeviceKit.git",
-      "state" : {
-        "revision" : "d37e70cb2646666dcf276d7d3d4a9760a41ff8a6",
-        "version" : "4.9.0"
-      }
-    },
-    {
       "identity" : "jsonsafeencoding-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/segmentio/jsonsafeencoding-swift.git",
