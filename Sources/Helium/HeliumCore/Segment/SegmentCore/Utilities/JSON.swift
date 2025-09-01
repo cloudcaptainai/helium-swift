@@ -1,0 +1,576 @@
+//
+//  JSON.swift
+//  Segment-Tests
+//
+//  Created by Brandon Sneed on 12/2/20.
+//
+
+import Foundation
+
+extension JSONDecoder {
+    enum JSONDecodingError: Error {
+        case couldNotDecodeDate(String)
+    }
+
+    static var `default`: JSONDecoder {
+        let d = JSONDecoder()
+
+        d.dateDecodingStrategy = .custom({ decoder throws -> Date in
+            let stringDate = try decoder.singleValueContainer().decode(String.self)
+
+            guard let date = stringDate.iso8601() else {
+                throw JSONDecodingError.couldNotDecodeDate(stringDate)
+            }
+
+            return date
+        })
+
+        return d
+    }
+}
+
+extension JSONSafeEncoder {
+    static var `default`: JSONSafeEncoder {
+        let e = JSONSafeEncoder()
+
+        e.dateEncodingStrategy = .custom({ date, encoder in
+            let stringDate = date.iso8601()
+            var container = encoder.singleValueContainer()
+            try container.encode(stringDate)
+        })
+
+        e.nonConformingFloatEncodingStrategy = SegmentJSON.jsonNonConformingNumberStrategy
+        return e
+    }
+}
+
+// MARK: - JSON Definition
+
+enum SegmentJSON: Equatable {
+    case null
+    case bool(Bool)
+    case number(Decimal)
+    case string(String)
+    case array([SegmentJSON])
+    case object([String: SegmentJSON])
+    
+    static var jsonNonConformingNumberStrategy: JSONSafeEncoder.NonConformingFloatEncodingStrategy = .zero
+    
+    internal enum JSONError: Error {
+        case unknown
+        case nonJSONType(type: String)
+        case incorrectType
+    }
+    
+    init(_ object: [String: Any]) throws {
+        self = .object(try object.mapValues(SegmentJSON.init))
+    }
+    
+    init?(nilOrObject object: [String: Any]?) throws {
+        guard let object = object else { return nil }
+        try self.init(object)
+    }
+    
+    // For Value types
+    init<T: Codable>(with value: T) throws {
+        let encoder = JSONSafeEncoder.default
+        let json = try encoder.encode(value)
+        let output = try JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed)
+        try self.init(output)
+    }
+    
+    // For primitives??
+    init(_ value: Any) throws {
+        switch value {
+        // handle NS values
+        case _ as NSNull:
+            self = .null
+        case let number as NSNumber:
+            // need to see if it's a bool or not
+            if number.isBool() {
+                self = .bool(number.boolValue)
+            } else {
+                self = .number(number.decimalValue)
+            }
+            
+        // handle swift types
+        case Optional<Any>.none:
+            self = .null
+        case let date as Date:
+            self = .string(date.iso8601())
+        case let url as URL:
+            self = .string(url.absoluteString)
+        case let string as String:
+            self = .string(string)
+        case let bool as Bool:
+            self = .bool(bool)
+        case let aSet as Set<AnyHashable>:
+            self = .array(try aSet.map(SegmentJSON.init))
+        case let array as Array<Any>:
+            self = .array(try array.map(SegmentJSON.init))
+        case let object as [String: Any]:
+            self = .object(try object.mapValues(SegmentJSON.init))
+        case let json as SegmentJSON:
+            self = json
+        case let codable as Codable:
+            self = try Self.init(with: codable)
+        // we don't work with whatever is being supplied
+        default:
+            throw JSONError.nonJSONType(type: "\(value.self)")
+        }
+    }
+}
+
+
+// MARK: - Codable conformance
+
+extension SegmentJSON: Codable {
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch self {
+        case .null:
+            try container.encodeNil()
+        case let .bool(bool):
+            try container.encode(bool)
+        case let .number(number):
+            try container.encode(number)
+        case let .string(string):
+            try container.encode(string)
+        case let .array(array):
+            try container.encode(array)
+        case let .object(object):
+            try container.encode(object)
+        }
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let number = try? container.decode(Decimal.self) {
+            self = .number(number)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let array = try? container.decode([SegmentJSON].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: SegmentJSON].self) {
+            self = .object(object)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid JSON value!")
+        }
+    }
+}
+
+extension Encodable {
+    func prettyPrint() -> String {
+        return toString(pretty: true)
+    }
+    
+    func toString() -> String {
+        return toString(pretty: false)
+    }
+    
+    func toString(pretty: Bool) -> String {
+        var returnString = ""
+        do {
+            let encoder = JSONSafeEncoder.default
+            if pretty {
+                encoder.outputFormatting = .prettyPrinted
+            }
+
+            let json = try encoder.encode(self)
+            if let printed = String(data: json, encoding: .utf8) {
+                returnString = printed
+            }
+        } catch {
+            returnString = error.localizedDescription
+        }
+        return returnString
+    }
+}
+
+
+// MARK: - Value Extraction & Conformance
+
+extension SegmentJSON {
+    private func rawValue() -> Any {
+        var result: Any? = nil
+        switch self {
+        case .null:
+            result = NSNull()
+        case .bool(let value):
+            result = value
+        case .number(let value):
+            // automatic type conversion between number types
+            // fails if this isn't typecast to NSDecimalNumber first.
+            result = value as NSDecimalNumber
+        case .string(let value):
+            result = value
+        case .array(let value):
+            result = value.map { item in
+                return item.rawValue()
+            }
+        case .object(let value):
+            result = value.mapValues { item in
+                return item.rawValue()
+            }
+        }
+        return result as Any
+    }
+    
+    func codableValue<T: Codable>() -> T? {
+        var result: T? = nil
+        if let dict = dictionaryValue, let jsonData = try? JSONSerialization.data(withJSONObject: dict) {
+            do {
+                result = try JSONDecoder.default.decode(T.self, from: jsonData)
+            } catch {
+                print(error)
+            }
+        }
+        return result
+    }
+
+    var boolValue: Bool? {
+        switch self {
+        case .bool(let value):
+            return value
+        default:
+            return nil
+        }
+    }
+    
+    var decimalValue: Decimal? {
+        switch self {
+        case .number(let value):
+            return value
+        default:
+            return nil
+        }
+    }
+    
+    var intValue: Int? {
+        switch self {
+        case .number(let value):
+            return (value as NSDecimalNumber).intValue
+        default:
+            return nil
+        }
+    }
+    
+    var uintValue: UInt? {
+        switch self {
+        case .number(let value):
+            return (value as NSDecimalNumber).uintValue
+        default:
+            return nil
+        }
+    }
+    
+    var floatValue: Float? {
+        switch self {
+        case .number(let value):
+            return (value as NSDecimalNumber).floatValue
+        default:
+            return nil
+        }
+    }
+    
+    var doubleValue: Double? {
+        switch self {
+        case .number(let value):
+            return (value as NSDecimalNumber).doubleValue
+        default:
+            return nil
+        }
+    }
+    
+    var stringValue: String? {
+        switch self {
+        case .string(let value):
+            return value
+        default:
+            return nil
+        }
+    }
+    
+    var arrayValue: [Any]? {
+        switch self {
+        case .array(let value):
+            let result = value.map { item in
+                return item.rawValue()
+            }
+            return result
+        default:
+            return nil
+        }
+    }
+    
+
+    var dictionaryValue: [String: Any]? {
+        switch self {
+        case .object(let value):
+            let result = value.mapValues { item in
+                return item.rawValue()
+            }
+            return result
+        default:
+            return nil
+        }
+    }
+}
+
+// MARK: - Mutation
+
+extension SegmentJSON {
+    /// Maps keys supplied, in the format of ["Old": "New"].  Gives an optional value transformer that can be used to transform values based on the final key name.
+    /// - Parameters:
+    ///   - keys: A dictionary containing key mappings, in the format of ["Old": "New"].
+    ///   - valueTransform: An optional value transform closure.  Key represents the new key name.
+    ///
+    /// - Returns: A new JSON object with the specified changes.
+    /// - Throws: This method will throw if transformation or JSON cannot be properly completed.
+    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: String, _ value: Any) -> Any)? = nil) throws -> SegmentJSON {
+        guard let dict = self.dictionaryValue else { return self }
+        let mapped = try dict.mapTransform(keys, valueTransform: valueTransform)
+        let result = try SegmentJSON(mapped)
+        return result
+    }
+    
+    /// Adds a new value to an array and returns a new JSON object.  Function will throw if value cannot be serialized.
+    /// - Parameters:
+    ///   - value: Value to add to the JSON array.
+    ///
+    /// - Returns: A new JSON array with the supplied value added.
+    /// - Throws: This method throws when a value is added and unable to be serialized.
+    func add(value: Any) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
+        switch self {
+        case .array:
+            var newArray = [Any]()
+            if let existing = arrayValue {
+                newArray.append(contentsOf: existing)
+            }
+            newArray.append(value)
+            result = try SegmentJSON(newArray)
+        default:
+            throw JSONError.incorrectType
+        }
+        return result
+    }
+    
+    /// Adds a new key, value pair to and returns a new JSON object.  Function will throw if value cannot be serialized.
+    /// - Parameters:
+    ///   - value: Value to add to the JSON array.
+    ///   - forKey: The key name of the given value.
+    ///
+    /// - Returns: A new JSON object with the supplied Key/Value added.
+    /// - Throws: This method throws when a value is added and unable to be serialized.
+    func add(value: Any, forKey key: String) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
+        switch self {
+        case .object:
+            var newObject = [String: Any]()
+            if let existing = dictionaryValue {
+                newObject = existing
+            }
+            newObject[key] = value
+            result = try SegmentJSON(newObject)
+        default:
+            throw JSONError.incorrectType
+        }
+        return result
+    }
+    
+    /// Removes the key and associated value pair from this JSON object.
+    /// - Parameters:
+    ///   - key: The key of the value to be removed.
+    ///
+    /// - Returns: A new JSON object with the specified key and it's associated value removed.
+    /// - Throws: This method throws when after modification, it is unable to be serialized.
+    func remove(key: String) throws -> SegmentJSON? {
+        var result: SegmentJSON? = nil
+        switch self {
+        case .object:
+            var newObject = [String: Any]()
+            if let existing = dictionaryValue {
+                newObject = existing
+            }
+            newObject.removeValue(forKey: key)
+            result = try SegmentJSON(newObject)
+        default:
+            throw JSONError.incorrectType
+        }
+        return result
+
+    }
+        
+    /// Directly access a specific index in the JSON array.
+    subscript(index: Int) -> SegmentJSON? {
+        get {
+            switch self {
+            case .array(let value):
+                if index < value.count {
+                    let v = value[index]
+                    return v
+                }
+            default:
+                break
+            }
+            return nil
+        }
+    }
+    
+    /// Directly access a key within the JSON object.
+    subscript(key: String) -> SegmentJSON? {
+        get {
+            switch self {
+            case .object(let value):
+                return value[key]
+            default:
+                break
+            }
+            return nil
+        }
+    }
+
+    /// Directly access or set a value within the JSON object using a key path.
+    subscript<T: Codable>(keyPath keyPath: KeyPath) -> T? {
+        get {
+            var result: T? = nil
+            switch self {
+            case .object:
+                var value: Any? = nil
+                if let dict = dictionaryValue {
+                    value = dict[keyPath: keyPath]
+                    if let v = value as? [String: Any] {
+                        if let jsonData = try? JSONSerialization.data(withJSONObject: v) {
+                            do {
+                                result = try JSONDecoder.default.decode(T.self, from: jsonData)
+                            } catch {
+                                Analytics.segmentLog(message: "Unable to decode object (\(keyPath)) to a Codable: \(error)", kind: .error)
+                            }
+                        }
+                        if result == nil {
+                            result = v as? T
+                        }
+                    } else {
+                        result = value as? T
+                    }
+                }
+            default:
+                break
+            }
+            return result
+        }
+        
+        set(newValue) {
+            switch self {
+            case .object:
+                if var dict: [String: Any] = dictionaryValue {
+                    var json: SegmentJSON? = try? SegmentJSON(newValue as Any)
+                    if json == nil {
+                        json = try? SegmentJSON(with: newValue)
+                    }
+                    
+                    if let json = json {
+                        dict[keyPath: keyPath] = json
+                        if let newSelf = try? SegmentJSON(dict) {
+                            self = newSelf
+                        }
+                    }
+                }
+            default:
+                break
+            }
+        }
+    }
+    
+    /// Directly access a value within the JSON object using a key path.
+    /// - Parameters:
+    ///   - forKeyPath: The keypath within the object to retrieve.  eg: `context.device.ip`
+    ///
+    /// - Returns: The value as typed, or nil.
+    func value<T: Codable>(forKeyPath keyPath: KeyPath) -> T? {
+        return self[keyPath: keyPath]
+    }
+    
+    /// Directly access a value within the JSON object using a key path.
+    /// - Parameters:
+    ///   - forKeyPath: The keypath within the object to set.  eg: `context.device.ip`
+    mutating func setValue<T: Codable>(_ value: T?, forKeyPath keyPath: KeyPath) {
+        self[keyPath: keyPath] = value
+    }
+
+}
+
+// MARK: - Helpers
+
+extension Dictionary where Key == String, Value == Any {
+    func mapTransform(_ keys: [String: String], valueTransform: ((_ key: Key, _ value: Value) -> Any)? = nil) throws -> [Key: Value] {
+        let mapped = Dictionary(uniqueKeysWithValues: self.map { key, value -> (Key, Value) in
+            var newKey = key
+            var newValue = value
+            
+            // does this key have a mapping?
+            if keys.keys.contains(key) {
+                if let mappedKey = keys[key] {
+                    // if so, lets change the key to the new value.
+                    newKey = mappedKey
+                }
+            }
+            // is this value a dictionary?
+            if let dictValue = value as? [Key: Value] {
+                if let r = try? dictValue.mapTransform(keys, valueTransform: valueTransform) {
+                    // if so, lets recurse...
+                    newValue = r
+                }
+            } else if let arrayValue = value as? [Value] {
+                // if it's an array, we need to see if any dictionaries are within and process
+                // those as well.
+                newValue = arrayValue.map { item -> Value in
+                    var newValue = item
+                    if let dictValue = item as? [Key: Value] {
+                        if let r = try? dictValue.mapTransform(keys, valueTransform: valueTransform) {
+                            newValue = r
+                        }
+                    }
+                    return newValue
+                }
+            }
+            
+            if !(newValue is [Key: Value]), let transform = valueTransform {
+                // it's not a dictionary so apply our transform.
+                
+                // note: if it's an array, we've processed any dictionaries inside
+                // already, but this gives the opportunity to apply a transform to the other
+                // items in the array that weren't dictionaries.
+                newValue = transform(newKey, newValue)
+            }
+            
+            return (newKey, newValue)
+        })
+        
+        return mapped
+    }
+}
+
+
+fileprivate extension NSNumber {
+    static let trueValue = NSNumber(value: true)
+    static let trueObjCType = trueValue.objCType
+    static let falseValue = NSNumber(value: false)
+    static let falseObjCType = falseValue.objCType
+    
+    func isBool() -> Bool {
+        let type = self.objCType
+        if (compare(NSNumber.trueValue) == .orderedSame && type == NSNumber.trueObjCType) ||
+           (compare(NSNumber.falseValue) == .orderedSame && type == NSNumber.falseObjCType) {
+            return true
+        }
+        return false
+    }
+}
+

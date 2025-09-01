@@ -8,8 +8,6 @@
 import Foundation
 import SwiftUI
 
-import SwiftUI
-
 // MARK: - Base Value Types
 public enum DimensionValue: Equatable {
     case fixed(CGFloat)
