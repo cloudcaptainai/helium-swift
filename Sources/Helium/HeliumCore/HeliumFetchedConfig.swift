@@ -1,5 +1,4 @@
 import Foundation
-import SwiftyJSON
 import SwiftUI
 import WebKit
 import Network
@@ -37,7 +36,7 @@ class NetworkReachability {
     }
 }
 
-public func fetchEndpoint(
+func fetchEndpoint(
     endpoint: String,
     params: [String: Any]
 ) async throws -> (HeliumFetchedConfig?, JSON?) {
@@ -292,7 +291,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return fetchedConfig?.organizationID;
     }
     
-    public func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
+    func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
         return fetchedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
     }
     

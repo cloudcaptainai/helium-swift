@@ -6,11 +6,9 @@
 //
 
 import Foundation
-import AnyCodable
 import SwiftUI
-import SwiftyJSON
 
-public extension Encodable {
+extension Encodable {
     /// Converting object to postable JSON
     func toJSON(_ encoder: JSONEncoder = JSONEncoder()) throws -> String {
         let data = try encoder.encode(self)
@@ -25,7 +23,7 @@ public extension Encodable {
     }
 }
 
-public extension JSON {
+extension JSON {
     func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [:]
         
@@ -51,7 +49,7 @@ public extension JSON {
     }
 }
 
-public extension AnyCodable {
+extension AnyCodable {
     func value<T>(at path: String, default defaultValue: T) -> T {
         let components = path.components(separatedBy: CharacterSet(charactersIn: ".[]"))
                             .filter { !$0.isEmpty }

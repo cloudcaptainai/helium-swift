@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 // Represents a color stop in a gradient
 public struct GradientStop: Equatable {
@@ -57,7 +56,7 @@ public struct BackgroundConfig {
     }
     
     // Initialize from JSON
-    public init(json: JSON) {
+    init(json: JSON) {
         switch json["type"].stringValue {
         case "color":
             if let colorString = json["value"].string {

@@ -7,10 +7,8 @@
 
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
 import SwiftUI
-import SwiftyJSON
 
 // MARK: - Base Value Types
 public enum DimensionValue: Equatable {

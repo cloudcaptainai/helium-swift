@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftyJSON
 
 public struct DynamicRoundedRectangle: View {
     var fillColor: ColorConfig? = nil
