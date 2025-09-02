@@ -19,9 +19,6 @@ Pod::Spec.new do |s|
   # Core subspec - base Helium functionality without RevenueCat
   s.subspec 'Core' do |core|
     core.source_files = 'Sources/Helium/**/*'
-    core.dependency 'AnyCodable-FlightSchool', '~> 0.6.0'
-    core.dependency 'SwiftyJSON', '~> 5.0.2'
-    core.dependency 'DeviceKit', '~> 4.0.0'
   end
   
   # RevenueCat subspec - adds RevenueCat integration
