@@ -1,11 +1,9 @@
 import Foundation
 import SwiftUI
 
-
 protocol BaseTemplateView: View {
     init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
 }
-
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
     
@@ -26,25 +24,14 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     }
     
     public var body: some View {
-        GeometryReader { reader in
-            DynamicPositionedComponent(
-                json: templateValues["baseStack"],
-                geometryProxy: reader,
-                triggerName: triggerName
-            )
-            .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
-                if let modalScreenToShow = actionsDelegate.showingModalScreen,
-                   templateValues[modalScreenToShow].exists() {
-                    DynamicPositionedComponent(
-                        json: templateValues[modalScreenToShow],
-                        geometryProxy: reader
-                    )
-                }
-            }
-        }
+        // Directly use DynamicWebView
+        DynamicWebView(
+            json: templateValues,
+            actionsDelegate: actionsDelegateWrapper,
+            triggerName: triggerName
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
-        .environmentObject(actionsDelegateWrapper)
         .onAppear {
             actionsDelegate.setDismissAction {
                 dismiss()
