@@ -19,6 +19,13 @@ class AppReceiptsHelper {
             return
         }
         setupCompleted = true
+        if Bundle.main.appStoreReceiptURL != nil {
+            // Just rely on appStoreReceiptURL if available, even though it is deprecated.
+            // AppTransaction.shared can trigger Apple account sign-in dialog in debug/sandbox
+            // if not signed into a sandbox account, which is annoying for sdk integrators.
+            return
+        }
+#if !DEBUG
         if #available(iOS 16.0, *) {
             Task {
                 let verificationResult = try? await AppTransaction.shared
@@ -46,12 +53,13 @@ class AppReceiptsHelper {
                 }
             }
         }
+#endif
     }
     
     func getEnvironment() -> String {
-        #if DEBUG
+#if DEBUG
         return "debug"
-        #else
+#else
         if let appTransactionEnvironment {
             return appTransactionEnvironment
         }
@@ -68,7 +76,7 @@ class AppReceiptsHelper {
             return "production"
             #endif
         }
-        #endif
+#endif
     }
     
 }
