@@ -25,7 +25,7 @@ class AppReceiptsHelper {
             // if not signed into a sandbox account, which is annoying for sdk integrators.
             return
         }
-#if !DEBUG
+#if !DEBUG && !targetEnvironment(simulator)
         if #available(iOS 16.0, *) {
             Task {
                 let verificationResult = try? await AppTransaction.shared
@@ -57,7 +57,7 @@ class AppReceiptsHelper {
     }
     
     func getEnvironment() -> String {
-#if DEBUG
+#if DEBUG || targetEnvironment(simulator)
         return "debug"
 #else
         if let appTransactionEnvironment {
@@ -67,15 +67,7 @@ class AppReceiptsHelper {
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
         
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        if isTestFlight {
-            return "sandbox"
-        } else {
-            #if targetEnvironment(simulator)
-            return "sandbox"
-            #else
-            return "production"
-            #endif
-        }
+        return isTestFlight ? "sandbox" : "production"
 #endif
     }
     
