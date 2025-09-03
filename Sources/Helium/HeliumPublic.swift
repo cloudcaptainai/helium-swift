@@ -148,9 +148,9 @@ public class Helium {
         fallbackBundleURL: URL? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
-         if initialized {
-             return
-         }
+        if initialized {
+            return
+        }
         initialized = true
         
         if (customUserId != nil) {
