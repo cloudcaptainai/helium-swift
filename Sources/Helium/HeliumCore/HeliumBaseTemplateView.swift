@@ -1,8 +1,12 @@
 import Foundation
 import SwiftUI
 
+enum TemplateError: Error {
+    case missingRequiredFields(String)
+}
+
 protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?)
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) throws
 }
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
@@ -11,22 +15,30 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
-    var templateValues: JSON
+    var componentPropsJSON: JSON
     var triggerName: String?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
-        self.templateValues = resolvedConfig ?? JSON([:]);
+        let templateValues = resolvedConfig ?? JSON([:])
+        
+        // Validate required fields exist
+        guard templateValues["baseStack"].exists(),
+              templateValues["baseStack"]["componentProps"].exists() else {
+            throw TemplateError.missingRequiredFields("Missing baseStack or componentProps in template configuration")
+        }
+        
+        self.componentPropsJSON = templateValues["baseStack"]["componentProps"]
         self.triggerName = trigger;
     }
     
     public var body: some View {
-        // Directly use DynamicWebView
+        // Use validated componentProps
         DynamicWebView(
-            json: templateValues,
+            json: componentPropsJSON,
             actionsDelegate: actionsDelegateWrapper,
             triggerName: triggerName
         )
