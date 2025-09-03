@@ -90,7 +90,7 @@ public class PriceFetcher {
     /// Fetches the localized price for multiple SKUs using async/await
     /// - Parameter skus: Array of product identifiers
     /// - Returns: Dictionary mapping SKUs to their localized price information
-    @available(iOS 15.0, *)
+    @available(iOS 15.0, *) // StoreKit 2 is iOS 15+
     public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
         do {
@@ -169,52 +169,12 @@ public class PriceFetcher {
         return priceMap
     }
     
-    /// Fetches the localized price for a specific set of product IDs
-    /// - Parameters:
-    ///   - skus: Array of product identifiers
-    ///   - productFilter: Specific product IDs to include
-    /// - Returns: Dictionary with only the filtered product IDs
-    @available(iOS 15.0, *)
-    public static func localizedPricing(for skus: [String], filteredBy productFilter: [String]) async -> [String: LocalizedPrice] {
-        let allPrices = await localizedPricing(for: skus)
-        // Filter to only include products in productFilter
-        return allPrices.filter { productFilter.contains($0.key) }
-    }
-    
-    /// Fetches the localized price for a single SKU using async/await
-    /// - Parameter sku: The product identifier
-    /// - Returns: The localized price information or nil if not found
-    @available(iOS 15.0, *)
-    public static func localizedPricing(for sku: String) async -> LocalizedPrice? {
-        let prices = await localizedPricing(for: [sku])
-        return prices[sku]
-    }
-    
     /// Fetches the localized price for multiple SKUs using completion handler
     /// - Parameters:
     ///   - skus: Array of product identifiers
     ///   - completion: A closure that returns a dictionary mapping SKUs to their localized price information
     public static func localizedPricing(for skus: [String], completion: @escaping ([String: LocalizedPrice]) -> Void) {
-        if #available(iOS 15.0, *) {
-            Task {
-                let prices = await localizedPricing(for: skus)
-                DispatchQueue.main.async {
-                    completion(prices)
-                }
-            }
-        } else {
-            fallbackToStoreKit1(for: skus, completion: completion)
-        }
-    }
-    
-    /// Fetches the localized price for a single SKU using completion handler
-    /// - Parameters:
-    ///   - sku: The product identifier
-    ///   - completion: A closure that returns the localized price information or nil if not found
-    public static func localizedPricing(for sku: String, completion: @escaping (LocalizedPrice?) -> Void) {
-        localizedPricing(for: [sku]) { prices in
-            completion(prices[sku])
-        }
+        fallbackToStoreKit1(for: skus, completion: completion)
     }
     
     /// Fallback method using StoreKit 1

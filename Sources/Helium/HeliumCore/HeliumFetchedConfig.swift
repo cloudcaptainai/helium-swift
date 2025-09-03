@@ -230,9 +230,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
             
             // Fetch prices for all products in one shot
             if #available(iOS 15.0, *) {
+                // StoreKit 2 available
                 self.localizedPriceMap = await PriceFetcher.localizedPricing(for: Array(allProductIds))
             } else {
-                // Fallback for older iOS versions
+                // Fallback for older iOS versions (StoreKit 1)
                 await withCheckedContinuation { continuation in
                     PriceFetcher.localizedPricing(for: Array(allProductIds)) { prices in
                         self.localizedPriceMap = prices
@@ -240,8 +241,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     }
                 }
             }
-        } catch {
-            print("Error fetching localized prices");
         }
     }
     
