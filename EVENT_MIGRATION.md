@@ -46,7 +46,7 @@ class MyPaywallDelegate: HeliumPaywallDelegate {
             ])
             
         case .subscriptionSucceeded(let productKey, let trigger, let template):
-            print("Purchase successful: \(productKey)")
+            print("Subscription successful: \(productKey)")
             updateSubscription(productKey)
             
         case .subscriptionFailed(let productKey, let trigger, let template, let error):
@@ -170,7 +170,7 @@ The SDK supports both event systems simultaneously, allowing gradual migration:
 2. **Phase 2**: Test and verify the new implementation
 3. **Phase 3**: Remove the old `onHeliumPaywallEvent(event:)` method
 
-**Important**: If you implement both methods, only the new `onPaywallEvent(_:)` will be called to avoid duplicate event handling.
+**Important**: During migration, both methods may be called. The new `onPaywallEvent(_:)` is called for v2 events, while `onHeliumPaywallEvent(event:)` is still called for legacy events fired from parts of the SDK not yet migrated. To avoid duplicate handling, you should implement your logic in only one method during the transition period.
 
 ## Benefits After Migration
 

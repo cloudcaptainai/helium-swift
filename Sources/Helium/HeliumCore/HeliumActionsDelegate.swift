@@ -100,7 +100,12 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     }
     
     public func logRenderTime(timeTakenMS: UInt64) {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallWebViewRendered(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, webviewRenderTimeTakenMS: timeTakenMS))
+        let event = PaywallWebViewRenderedEvent(
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName,
+            webviewRenderTimeTakenMS: timeTakenMS
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
     
     public func getIsLoading() -> Bool {
@@ -114,9 +119,11 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     public func dismiss(dispatchEvent: Bool) {
         if (!isLoading) {
             if dispatchEvent {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
+                let event = PaywallDismissedEvent(
+                    triggerName: trigger,
+                    paywallName: paywallInfo.paywallTemplateName
                 )
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
             let dismissed = HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
             if !dismissed {
@@ -129,9 +136,12 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     public func dismissAll(dispatchEvent: Bool) {
         if (!isLoading) {
             if dispatchEvent {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                    event: .paywallDismissed(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, dismissAll: true)
+                let event = PaywallDismissedEvent(
+                    triggerName: trigger,
+                    paywallName: paywallInfo.paywallTemplateName,
+                    dismissAll: true
                 )
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
             HeliumPaywallPresenter.shared.hideAllUpsells(onComplete: { [weak self] in
                 self?.dismissAction?()
@@ -149,22 +159,23 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             else if let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger)
             } else {
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                    event: .paywallOpenFailed(triggerName: secondTryTrigger, paywallTemplateName: "unknown")
+                let event = PaywallOpenFailedEvent(
+                    triggerName: secondTryTrigger,
+                    paywallName: "unknown"
                 )
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
         }
     }
     
     public func onCTAPress(contentComponentName: String) {
         if (!isLoading) {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .ctaPressed(
-                    ctaName: contentComponentName,
-                    triggerName: trigger,
-                    paywallTemplateName: paywallInfo.paywallTemplateName
-                )
+            let event = PaywallButtonPressedEvent(
+                buttonName: contentComponentName,
+                triggerName: trigger,
+                paywallName: paywallInfo.paywallTemplateName
             )
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
         }
     }
     

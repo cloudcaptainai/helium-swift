@@ -27,7 +27,26 @@ public protocol HeliumPaywallDelegate: AnyObject {
     @available(*, deprecated, message: "Use onPaywallEvent(_:) instead for typed events")
     func onHeliumPaywallEvent(event: HeliumPaywallEvent)
     
-    /// New typed event handler for v2 events
+    /// Called when any paywall-related event occurs
+    /// - Parameter event: The specific event that occurred. Cast to concrete types for access to event-specific properties.
+    /// - Note: Common event types include:
+    ///   - `PaywallOpenEvent`: Paywall displayed
+    ///   - `PurchaseSucceededEvent`: Purchase completed
+    ///   - `PurchaseFailedEvent`: Purchase failed
+    ///   - `PaywallCloseEvent`: Paywall closed
+    /// - Example:
+    /// ```swift
+    /// func onPaywallEvent(_ event: PaywallEvent) {
+    ///     switch event {
+    ///     case let openEvent as PaywallOpenEvent:
+    ///         print("Paywall opened: \(openEvent.paywallName)")
+    ///     case let purchaseEvent as PurchaseSucceededEvent:
+    ///         print("Purchased: \(purchaseEvent.productId)")
+    ///     default:
+    ///         print("Event: \(event.eventName)")
+    ///     }
+    /// }
+    /// ```
     func onPaywallEvent(_ event: PaywallEvent)
     
     func getCustomVariableValues() -> [String: Any?]
