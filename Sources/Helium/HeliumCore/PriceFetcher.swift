@@ -14,10 +14,17 @@ public struct BasePriceInfo: Codable {
 // Subscription specific info
 public struct SubscriptionInfo: Codable {
     public let period: String
-    public let introPrice: String?
-    public let introPeriod: String?
-    public let familyShareable: Bool
     public let introOfferEligible: Bool
+    public let introOffer: SubscriptionOffer?
+}
+
+public struct SubscriptionOffer: Codable {
+    public let type: String
+    public let price: Decimal
+    public let displayPrice: String
+    public let period: String
+    public let periodCount: Int
+    public let paymentMode: String
 }
 
 // IAP specific info (combines consumable and non-consumable)
@@ -35,6 +42,7 @@ public struct LocalizedPrice: Codable {
     public let description: String?
     public let subscriptionInfo: SubscriptionInfo?
     public let iapInfo: IAPInfo?
+    public let familyShareable: Bool
     
     public var json: [String: Any] {
         var dict: [String: Any] = [
@@ -44,7 +52,8 @@ public struct LocalizedPrice: Codable {
             "formattedPrice": baseInfo.formattedPrice,
             "currencySymbol": baseInfo.currencySymbol,
             "decimalSeparator": baseInfo.decimalSeparator,
-            "productType": productType
+            "productType": productType,
+            "familyShareable": familyShareable,
         ]
         
         if let title = localizedTitle {
@@ -64,13 +73,17 @@ public struct LocalizedPrice: Codable {
         if let subInfo = subscriptionInfo {
             var subDict: [String: Any] = [
                 "period": subInfo.period,
-                "familyShareable": subInfo.familyShareable
+                "introOfferEligible": subInfo.introOfferEligible,
             ]
-            if let intro = subInfo.introPrice {
-                subDict["introPrice"] = intro
-            }
-            if let period = subInfo.introPeriod {
-                subDict["introPeriod"] = period
+            if let introOffer = subInfo.introOffer {
+                subDict["introOffer"] = [
+                    "type": introOffer.type,
+                    "price": introOffer.price,
+                    "displayPrice": introOffer.displayPrice,
+                    "period": introOffer.period,
+                    "periodCount": introOffer.periodCount,
+                    "paymentMode": introOffer.paymentMode,
+                ]
             }
             dict["subscription"] = subDict
         }
@@ -115,25 +128,24 @@ public class PriceFetcher {
                 
                 // Handle different product types
                 if let sub = product.subscription {
-                    let unitString: String
-                    switch sub.subscriptionPeriod.unit {
-                    case .day:
-                        unitString = "day"
-                    case .week:
-                        unitString = "week"
-                    case .month:
-                        unitString = "month"
-                    case .year:
-                        unitString = "year"
-                    @unknown default:
-                        unitString = "unknown"
+                    let unitString: String = formatSubscriptionPeriod(sub.subscriptionPeriod.unit)
+                    
+                    var introOfferData: SubscriptionOffer? = nil
+                    if let introOffer = sub.introductoryOffer {
+                        introOfferData = SubscriptionOffer(
+                            type: introOffer.type.rawValue,
+                            price: introOffer.price,
+                            displayPrice: introOffer.displayPrice,
+                            period: formatSubscriptionPeriod(introOffer.period.unit),
+                            periodCount: introOffer.periodCount,
+                            paymentMode: introOffer.paymentMode.rawValue
+                        )
                     }
+                    
                     subscriptionInfo = SubscriptionInfo(
                         period: unitString,
-                        introPrice: sub.introductoryOffer?.price.description,
-                        introPeriod: sub.introductoryOffer != nil ? String(describing: sub.introductoryOffer!.period) : nil,
-                        familyShareable: false,
-                        introOfferEligible: await checkIntroOfferEligibility(for: product)
+                        introOfferEligible: await checkIntroOfferEligibility(for: product),
+                        introOffer: introOfferData
                     )
                 } else {
                     // Any non-subscription product is an IAP
@@ -148,7 +160,8 @@ public class PriceFetcher {
                     displayName: nil,
                     description: nil,
                     subscriptionInfo: subscriptionInfo,
-                    iapInfo: iapInfo
+                    iapInfo: iapInfo,
+                    familyShareable: product.isFamilyShareable
                 )
                 
                 priceMap[product.id] = price
@@ -206,6 +219,25 @@ public class PriceFetcher {
         let isEligible = await subscription.isEligibleForIntroOffer
         return isEligible
     }
+    
+    @available(iOS 15.0, *)
+    private static func formatSubscriptionPeriod(_ periodUnit: Product.SubscriptionPeriod.Unit) -> String {
+        let unitString: String
+        switch periodUnit {
+        case .day:
+            unitString = "day"
+        case .week:
+            unitString = "week"
+        case .month:
+            unitString = "month"
+        case .year:
+            unitString = "year"
+        @unknown default:
+            unitString = "unknown"
+        }
+        return unitString
+    }
+    
 }
 
 /// Helper class for StoreKit 1 requests
@@ -244,10 +276,8 @@ private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
                     // Create subscription info if available
                     subscriptionInfo = SubscriptionInfo(
                         period: "unknown",
-                        introPrice: nil,
-                        introPeriod: nil,
-                        familyShareable: false,
-                        introOfferEligible: false
+                        introOfferEligible: false,
+                        introOffer: nil
                     )
                 } else {
                     productTypeString = "iap"
@@ -262,7 +292,8 @@ private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
                     displayName: nil,
                     description: nil,
                     subscriptionInfo: subscriptionInfo,
-                    iapInfo: iapInfo
+                    iapInfo: iapInfo,
+                    familyShareable: product.isFamilyShareable
                 )
                 priceMap[product.productIdentifier] = price
             }
