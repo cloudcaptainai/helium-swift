@@ -19,6 +19,13 @@ class AppReceiptsHelper {
             return
         }
         setupCompleted = true
+        if Bundle.main.appStoreReceiptURL != nil {
+            // Just rely on appStoreReceiptURL if available, even though it is deprecated.
+            // AppTransaction.shared can trigger Apple account sign-in dialog in debug/sandbox
+            // if not signed into a sandbox account, which is annoying for sdk integrators.
+            return
+        }
+#if !DEBUG && !targetEnvironment(simulator)
         if #available(iOS 16.0, *) {
             Task {
                 let verificationResult = try? await AppTransaction.shared
@@ -46,12 +53,13 @@ class AppReceiptsHelper {
                 }
             }
         }
+#endif
     }
     
     func getEnvironment() -> String {
-        #if DEBUG
+#if DEBUG || targetEnvironment(simulator)
         return "debug"
-        #else
+#else
         if let appTransactionEnvironment {
             return appTransactionEnvironment
         }
@@ -59,16 +67,8 @@ class AppReceiptsHelper {
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
         
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        if isTestFlight {
-            return "sandbox"
-        } else {
-            #if targetEnvironment(simulator)
-            return "sandbox"
-            #else
-            return "production"
-            #endif
-        }
-        #endif
+        return isTestFlight ? "sandbox" : "production"
+#endif
     }
     
 }
