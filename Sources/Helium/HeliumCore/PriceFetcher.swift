@@ -17,6 +17,7 @@ public struct SubscriptionInfo: Codable {
     public let introPrice: String?
     public let introPeriod: String?
     public let familyShareable: Bool
+    public let introOfferEligible: Bool
 }
 
 // IAP specific info (combines consumable and non-consumable)
@@ -131,7 +132,8 @@ public class PriceFetcher {
                         period: unitString,
                         introPrice: sub.introductoryOffer?.price.description,
                         introPeriod: sub.introductoryOffer != nil ? String(describing: sub.introductoryOffer!.period) : nil,
-                        familyShareable: false
+                        familyShareable: false,
+                        introOfferEligible: await checkIntroOfferEligibility(for: product)
                     )
                 } else {
                     // Any non-subscription product is an IAP
@@ -188,6 +190,22 @@ public class PriceFetcher {
         
         request.start()
     }
+    
+    @available(iOS 15.0, *)
+    static func checkIntroOfferEligibility(for product: Product) async -> Bool {
+        guard let subscription = product.subscription else {
+            return false
+        }
+        
+        // Check if product has an intro offer
+        guard subscription.introductoryOffer != nil else {
+            return false
+        }
+        
+        // Check if user is eligible
+        let isEligible = await subscription.isEligibleForIntroOffer
+        return isEligible
+    }
 }
 
 /// Helper class for StoreKit 1 requests
@@ -228,7 +246,8 @@ private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
                         period: "unknown",
                         introPrice: nil,
                         introPeriod: nil,
-                        familyShareable: false
+                        familyShareable: false,
+                        introOfferEligible: false
                     )
                 } else {
                     productTypeString = "iap"
