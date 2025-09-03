@@ -178,8 +178,13 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     }
     
     public func makePurchase() async -> HeliumPaywallTransactionStatus {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event:
-            .subscriptionPressed(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+        // Use new typed event
+        let pressedEvent = PurchasePressedEvent(
+            productId: selectedProductId,
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent)
         
         isLoading = true
         let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
@@ -208,11 +213,22 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     }
     
     public func logImpression(viewType: PaywallOpenViewType) {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, viewType: viewType.rawValue))
+        // Use new typed event
+        let event = PaywallOpenEvent(
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName,
+            viewType: viewType
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
     
     public func logClosure() {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName))
+        // Use new typed event
+        let event = PaywallCloseEvent(
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
 }
 

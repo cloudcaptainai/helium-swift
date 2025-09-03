@@ -23,14 +23,25 @@ public protocol HeliumPaywallDelegate: AnyObject {
     
     func restorePurchases() async -> Bool
     
+    /// Legacy event handler - deprecated in favor of onPaywallEvent
+    @available(*, deprecated, message: "Use onPaywallEvent(_:) instead for typed events")
     func onHeliumPaywallEvent(event: HeliumPaywallEvent)
+    
+    /// New typed event handler for v2 events
+    func onPaywallEvent(_ event: PaywallEvent)
     
     func getCustomVariableValues() -> [String: Any?]
 }
 
 // Extension to provide default implementation
 public extension HeliumPaywallDelegate {
+    /// Default implementation for legacy events - does nothing
     func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Default implementation does nothing
+    }
+    
+    /// Default implementation for v2 typed events - does nothing
+    func onPaywallEvent(_ event: PaywallEvent) {
         // Default implementation does nothing
     }
     
@@ -214,7 +225,24 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     
+    /// Fire a v2 typed event
+    public func fireEvent(_ event: PaywallEvent) {
+        // First fire the new typed event
+        delegate?.onPaywallEvent(event)
+        
+        // Then convert to legacy format and handle internally (analytics, etc)
+        // but skip the delegate call since we already called the new method
+        let legacyEvent = event.toLegacyEvent()
+        onHeliumPaywallEventInternal(event: legacyEvent, skipDelegateCall: true)
+    }
+    
+    /// Legacy event handler - maintains all existing functionality
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        onHeliumPaywallEventInternal(event: event, skipDelegateCall: false)
+    }
+    
+    /// Internal event handler with option to skip delegate call
+    private func onHeliumPaywallEventInternal(event: HeliumPaywallEvent, skipDelegateCall: Bool) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
         var analyticsForEvent = analytics
@@ -239,7 +267,10 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         }
         
         do {
-            delegate?.onHeliumPaywallEvent(event: event);
+            // Only call the legacy method if not skipped (i.e., when new method wasn't called)
+            if !skipDelegateCall {
+                delegate?.onHeliumPaywallEvent(event: event);
+            }
             if (isAnalyticsEnabled && analyticsForEvent != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
