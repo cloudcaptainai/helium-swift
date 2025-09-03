@@ -102,12 +102,12 @@ public class HeliumController {
                     }
                 }
                 
-                let event: HeliumPaywallEvent = .paywallsDownloadSuccess(
-                    configId: fetchedConfig.fetchedConfigID,
-                    downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
-                    numAttempts: numFetchRequests
-                );
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: event)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallsDownloadSuccessEvent(
+                        downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
+                        numAttempts: numFetchRequests
+                    )
+                )
                 // Use the config as needed
             case .failure(let error):
             
@@ -132,7 +132,12 @@ public class HeliumController {
                     HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
                 }
 
-                HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallsDownloadError(error: error.localizedDescription, numAttempts: HeliumFetchedConfigManager.MAX_NUM_RETRIES + 1))
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallsDownloadErrorEvent(
+                        error: error.localizedDescription,
+                        numAttempts: HeliumFetchedConfigManager.MAX_NUM_RETRIES + 1
+                    )
+                )
             }
         }
     }

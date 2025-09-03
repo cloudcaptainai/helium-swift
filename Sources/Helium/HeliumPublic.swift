@@ -14,11 +14,21 @@ public class Helium {
     
     public static let shared = Helium()
     
-    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventService: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) {
+        // Wire up event service if provided
+        if let eventService = eventService {
+            HeliumPaywallDelegateWrapper.shared.setEventService(eventService)
+        }
+        
+        // Set custom paywall traits for this presentation
+        if let customTraits = customPaywallTraits {
+            HeliumPaywallDelegateWrapper.shared.setCustomPaywallTraits(customTraits)
+        }
+        
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-                event: .paywallSkipped(triggerName: trigger)
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallSkippedEvent(triggerName: trigger)
             )
             return
         }
@@ -38,7 +48,17 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
-    public func upsellViewForTrigger(trigger: String) -> AnyView {
+    public func upsellViewForTrigger(trigger: String, eventService: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
+        // Wire up event service if provided
+        if let eventService = eventService {
+            HeliumPaywallDelegateWrapper.shared.setEventService(eventService)
+        }
+        
+        // Set custom paywall traits for this presentation
+        if let customTraits = customPaywallTraits {
+            HeliumPaywallDelegateWrapper.shared.setCustomPaywallTraits(customTraits)
+        }
+        
         return upsellViewResultFor(trigger: trigger).view
     }
     

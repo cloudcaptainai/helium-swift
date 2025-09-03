@@ -91,14 +91,25 @@ class HeliumPaywallPresenter {
         let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         let templateName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templateName, viewType: PaywallOpenViewType.presented.rawValue))
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallOpenEvent(
+                triggerName: trigger,
+                paywallName: templateName,
+                viewType: .presented
+            )
+        )
     }
     
     private func dispatchCloseEvent(trigger: String) {
         let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         let templateName = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallClose(triggerName: trigger, paywallTemplateName: templateName))
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallCloseEvent(
+                triggerName: trigger,
+                paywallName: templateName
+            )
+        )
     }
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {

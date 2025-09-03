@@ -208,10 +208,13 @@ public struct DynamicWebView: View {
     }
     
     private func webViewLoadFail(templateNameForEvent: String) {
-        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-            triggerName: triggerName ?? "",
-            paywallTemplateName: templateNameForEvent
-        ));
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallOpenFailedEvent(
+                triggerName: triggerName ?? "",
+                paywallName: templateNameForEvent,
+                error: "WebView failed to load"
+            )
+        );
         if fallbackPaywall != nil {
             shouldShowFallback = true
         }

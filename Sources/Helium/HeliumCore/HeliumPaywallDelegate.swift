@@ -49,6 +49,7 @@ public protocol HeliumPaywallDelegate: AnyObject {
     /// ```
     func onPaywallEvent(_ event: PaywallEvent)
     
+    @available(*, deprecated, message: "Use customPaywallTraits parameter on presentation methods instead")
     func getCustomVariableValues() -> [String: Any?]
 }
 
@@ -69,6 +70,7 @@ public extension HeliumPaywallDelegate {
         return false;
     }
     
+    @available(*, deprecated, message: "Use customPaywallTraits parameter on presentation methods instead")
     func getCustomVariableValues() -> [String: Any?] {
         // Default implementation returns empty dictionary
         return [:];
@@ -163,9 +165,23 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
     private var isAnalyticsEnabled: Bool = true
+    private var eventService: PaywallEventService?
+    private var customPaywallTraits: [String: Any] = [:]
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
+    }
+    
+    public func setEventService(_ eventService: PaywallEventService) {
+        self.eventService = eventService
+    }
+    
+    public func setCustomPaywallTraits(_ traits: [String: Any]) {
+        self.customPaywallTraits = traits
+    }
+    
+    public func clearCustomPaywallTraits() {
+        self.customPaywallTraits = [:]
     }
     
     func setAnalytics(_ analytics: Analytics) {
@@ -185,22 +201,24 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     public func getCustomVariableValues() -> [String: Any?] {
-        return self.delegate?.getCustomVariableValues() ?? [:];
+        // Return the custom paywall traits set via the presentation methods
+        // Convert [String: Any] to [String: Any?] for compatibility
+        return customPaywallTraits.mapValues { $0 as Any? }
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
         case .cancelled:
-            self.onHeliumPaywallEvent(event: .subscriptionCancelled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         case .failed(let error):
-            self.onHeliumPaywallEvent(event: .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error.localizedDescription))
+            self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error))
         case .restored:
-            self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         case .purchased:
-            self.onHeliumPaywallEvent(event: .subscriptionSucceeded(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         case .pending:
-            self.onHeliumPaywallEvent(event: .subscriptionPending(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         default:
             break
         }
@@ -213,9 +231,9 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         }
         let result = await delegate!.restorePurchases();
         if (result) {
-            self.onHeliumPaywallEvent(event: .subscriptionRestored(productKey: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName))
         } else {
-            self.onHeliumPaywallEvent(event: .subscriptionRestoreFailed(triggerName: triggerName, paywallTemplateName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName))
             await MainActor.run {
                let alert = UIAlertController(
                    title: "Restore Failed",
@@ -246,8 +264,16 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     /// Fire a v2 typed event
     public func fireEvent(_ event: PaywallEvent) {
-        // First fire the new typed event
+        // First, call the event service if configured
+        eventService?.handleEvent(event)
+        
+        // Then fire the new typed event to delegate
         delegate?.onPaywallEvent(event)
+        
+        // Clear custom paywall traits on close events to prevent persistence
+        if event is PaywallCloseEvent {
+            clearCustomPaywallTraits()
+        }
         
         // Then convert to legacy format and handle internally (analytics, etc)
         // but skip the delegate call since we already called the new method
@@ -338,15 +364,16 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?) {
         if isOpen {
-            onHeliumPaywallEvent(event: .paywallOpen(
+            let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
+            fireEvent(PaywallOpenEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME,
-                viewType: viewType ?? PaywallOpenViewType.embedded.rawValue
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
+                viewType: viewTypeEnum
             ))
         } else {
-            onHeliumPaywallEvent(event: .paywallClose(
+            fireEvent(PaywallCloseEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallTemplateName: HELIUM_FALLBACK_PAYWALL_NAME
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME
             ))
         }
     }
