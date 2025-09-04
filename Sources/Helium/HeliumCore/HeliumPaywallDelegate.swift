@@ -79,6 +79,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
                 let productsList = try await Product.products(for: [productId])
                 if productsList.count > 0 {
                     product = productsList[0]
+                    productMappings[productId] = product
                 }
             }
             
