@@ -51,7 +51,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
     
     private(set) var productMappings: [String: Product] = [:]
     
-    /// @param productIds  (Optional) An array of product IDs that paywalls may use. This is not required but may provide a slight performance benefit.
+    /// @param productIds  (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     public init(productIds: [String] = []) {
         guard !productIds.isEmpty else {
             return
