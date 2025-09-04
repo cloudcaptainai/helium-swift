@@ -172,7 +172,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func setEventService(_ eventService: PaywallEventService) {
+    public func setEventService(_ eventService: PaywallEventService?) {
         self.eventService = eventService
     }
     
@@ -181,6 +181,19 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     public func clearCustomPaywallTraits() {
+        self.customPaywallTraits = [:]
+    }
+    
+    /// Consolidated method to set both event service and custom traits for a paywall presentation
+    public func configurePresentationContext(eventService: PaywallEventService?, customPaywallTraits: [String: Any]?) {
+        // Always set both, even if nil, to ensure proper reset
+        self.eventService = eventService
+        self.customPaywallTraits = customPaywallTraits ?? [:]
+    }
+    
+    /// Clear both event service and custom traits after paywall closes
+    private func clearPresentationContext() {
+        self.eventService = nil
         self.customPaywallTraits = [:]
     }
     
@@ -201,9 +214,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     public func getCustomVariableValues() -> [String: Any?] {
-        // Return the custom paywall traits set via the presentation methods
-        // Convert [String: Any] to [String: Any?] for compatibility
-        return customPaywallTraits.mapValues { $0 as Any? }
+        return customPaywallTraits;
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
@@ -262,7 +273,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     
-    /// Fire a v2 typed event
+    /// Fire a v2 typed event - main entry point for all SDK events
     public func fireEvent(_ event: PaywallEvent) {
         // First, call the event service if configured
         eventService?.handleEvent(event)
@@ -270,24 +281,19 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         // Then fire the new typed event to delegate
         delegate?.onPaywallEvent(event)
         
-        // Clear custom paywall traits on close events to prevent persistence
+        // Clear presentation context (event service and custom traits) on close events
         if event is PaywallCloseEvent {
-            clearCustomPaywallTraits()
+            clearPresentationContext()
         }
         
         // Then convert to legacy format and handle internally (analytics, etc)
-        // but skip the delegate call since we already called the new method
+        // AND call the legacy delegate method for backward compatibility
         let legacyEvent = event.toLegacyEvent()
-        onHeliumPaywallEventInternal(event: legacyEvent, skipDelegateCall: true)
+        onHeliumPaywallEvent(event: legacyEvent)
     }
     
-    /// Legacy event handler - maintains all existing functionality
+    /// Legacy event handler - handles analytics and calls delegate
     public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        onHeliumPaywallEventInternal(event: event, skipDelegateCall: false)
-    }
-    
-    /// Internal event handler with option to skip delegate call
-    private func onHeliumPaywallEventInternal(event: HeliumPaywallEvent, skipDelegateCall: Bool) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
         var analyticsForEvent = analytics
@@ -312,10 +318,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         }
         
         do {
-            // Only call the legacy method if not skipped (i.e., when new method wasn't called)
-            if !skipDelegateCall {
-                delegate?.onHeliumPaywallEvent(event: event);
-            }
+            // Call the legacy delegate method for backward compatibility
+            delegate?.onHeliumPaywallEvent(event: event);
             if (isAnalyticsEnabled && analyticsForEvent != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
