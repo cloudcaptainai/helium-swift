@@ -166,25 +166,34 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// - Note: Template name from Helium configuration (may be empty if paywall not found)
     public let paywallName: String
     
+    /// Optional error message describing why the paywall failed to open
+    /// - Note: Provides context for debugging (e.g., "WebView failed to load", "Template not found")
+    public let error: String?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, error: String? = nil, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.error = error
         self.timestamp = timestamp
     }
     
     public var eventName: String { "paywallOpenFailed" }
     
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let error = error {
+            dict["error"] = error
+        }
+        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {

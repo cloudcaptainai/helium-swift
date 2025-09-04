@@ -114,30 +114,6 @@ func onPaywallEvent(_ event: PaywallEvent) {
 }
 ```
 
-### Step 3: Creating Events (SDK Internal Use)
-
-If you're creating events directly:
-
-#### Before (v1):
-```swift
-HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(
-    event: .paywallOpen(
-        triggerName: "premium",
-        paywallTemplateName: "PremiumPaywall",
-        viewType: "presented"
-    )
-)
-```
-
-#### After (v2):
-```swift
-let event = PaywallOpenEvent(
-    triggerName: "premium",
-    paywallName: "PremiumPaywall",
-    viewType: .presented
-)
-HeliumPaywallDelegateWrapper.shared.fireEvent(event)
-```
 
 ## Event Mapping Reference
 
