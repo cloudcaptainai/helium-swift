@@ -49,16 +49,20 @@ public extension HeliumPaywallDelegate {
 @available(iOS 15.0, *)
 open class StoreKitDelegate: HeliumPaywallDelegate {
     
-    private(set) var productMappings: [String: Product] = [:];
+    private(set) var productMappings: [String: Product] = [:]
     
-    public init(productIds: [String]) {
+    /// @param productIds  (Optional) An array of product IDs that paywalls may use. This is not required but may provide a slight performance benefit.
+    public init(productIds: [String] = []) {
+        guard !productIds.isEmpty else {
+            return
+        }
         Task {
             do {
                 let fetchedProducts = try await Product.products(for: productIds)
-                var mappings: [String: Product] = [:];
-                // First create the direct mappings from test product IDs
+                var mappings: [String: Product] = [:]
+                // Create product mappings from product IDs
                 for fetchedProduct in fetchedProducts {
-                    mappings[fetchedProduct.id] = fetchedProduct;
+                    mappings[fetchedProduct.id] = fetchedProduct
                 }
                 productMappings = mappings
             } catch {
@@ -69,7 +73,16 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
-            guard let product: Product = productMappings[productId] else {
+            var product: Product? = productMappings[productId]
+            
+            if product == nil {
+                let productsList = try await Product.products(for: [productId])
+                if productsList.count > 0 {
+                    product = productsList[0]
+                }
+            }
+            
+            guard let product else {
                 print("[Helium] StoreKitDelegate - makePurchase could not find product!")
                 return .failed(StoreKitDelegateError.cannotFindProduct)
             }
