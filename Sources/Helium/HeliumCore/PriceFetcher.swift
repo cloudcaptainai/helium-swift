@@ -22,7 +22,8 @@ public struct SubscriptionOffer: Codable {
     public let type: String
     public let price: Decimal
     public let displayPrice: String
-    public let period: String
+    public let periodUnit: String
+    public let periodValue: Int
     public let periodCount: Int
     public let paymentMode: String
 }
@@ -80,7 +81,8 @@ public struct LocalizedPrice: Codable {
                     "type": introOffer.type,
                     "price": introOffer.price,
                     "displayPrice": introOffer.displayPrice,
-                    "period": introOffer.period,
+                    "periodUnit": introOffer.periodUnit,
+                    "periodValue": introOffer.periodValue,
                     "periodCount": introOffer.periodCount,
                     "paymentMode": introOffer.paymentMode,
                 ]
@@ -136,7 +138,8 @@ public class PriceFetcher {
                             type: introOffer.type.rawValue,
                             price: introOffer.price,
                             displayPrice: introOffer.displayPrice,
-                            period: formatSubscriptionPeriod(introOffer.period.unit),
+                            periodUnit: formatSubscriptionPeriod(introOffer.period.unit),
+                            periodValue: introOffer.period.value,
                             periodCount: introOffer.periodCount,
                             paymentMode: introOffer.paymentMode.rawValue
                         )
