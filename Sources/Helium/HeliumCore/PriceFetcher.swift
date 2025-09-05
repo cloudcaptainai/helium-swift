@@ -13,7 +13,8 @@ public struct BasePriceInfo: Codable {
 
 // Subscription specific info
 public struct SubscriptionInfo: Codable {
-    public let period: String
+    public let periodUnit: String
+    public let periodValue: Int
     public let introOfferEligible: Bool
     public let introOffer: SubscriptionOffer?
 }
@@ -130,8 +131,6 @@ public class PriceFetcher {
                 
                 // Handle different product types
                 if let sub = product.subscription {
-                    let unitString: String = formatSubscriptionPeriod(sub.subscriptionPeriod.unit)
-                    
                     var introOfferData: SubscriptionOffer? = nil
                     if let introOffer = sub.introductoryOffer {
                         introOfferData = SubscriptionOffer(
@@ -146,7 +145,8 @@ public class PriceFetcher {
                     }
                     
                     subscriptionInfo = SubscriptionInfo(
-                        period: unitString,
+                        periodUnit: formatSubscriptionPeriod(sub.subscriptionPeriod.unit),
+                        periodValue: sub.subscriptionPeriod.value,
                         introOfferEligible: await checkIntroOfferEligibility(for: product),
                         introOffer: introOfferData
                     )
@@ -278,7 +278,8 @@ private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
                     productTypeString = "autoRenewable"
                     // Create subscription info if available
                     subscriptionInfo = SubscriptionInfo(
-                        period: "unknown",
+                        periodUnit: "unknown",
+                        periodValue: 1,
                         introOfferEligible: false,
                         introOffer: nil
                     )
