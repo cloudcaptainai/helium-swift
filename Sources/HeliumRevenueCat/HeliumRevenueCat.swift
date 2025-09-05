@@ -35,6 +35,8 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
         
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
+        } else if !Purchases.isConfigured {
+            print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.") 
         }
         
         Task {
