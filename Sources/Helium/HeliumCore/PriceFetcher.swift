@@ -74,7 +74,8 @@ public struct LocalizedPrice: Codable {
         // Add type-specific info
         if let subInfo = subscriptionInfo {
             var subDict: [String: Any] = [
-                "period": subInfo.period,
+                "periodUnit": subInfo.periodUnit,
+                "periodValue": subInfo.periodValue,
                 "introOfferEligible": subInfo.introOfferEligible,
             ]
             if let introOffer = subInfo.introOffer {
