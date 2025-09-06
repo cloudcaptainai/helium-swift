@@ -152,8 +152,8 @@ public class Helium {
     /// Initializes the Helium paywall system with configuration options.
     ///
     /// @param apiKey Helium API key
-    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
     /// @param fallbackConfig Configuration for loading states and fallback behavior
+    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks. Defaults to StoreKitDelegate if not provided.
     /// @param triggers  Optional array of trigger identifiers to configure
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
@@ -161,10 +161,11 @@ public class Helium {
     /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
     ///
+    @available(iOS 15.0, *)
     public func initialize(
         apiKey: String,
-        heliumPaywallDelegate: HeliumPaywallDelegate,
         fallbackConfig: HeliumFallbackConfig,
+        heliumPaywallDelegate: HeliumPaywallDelegate? = nil,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
@@ -217,7 +218,9 @@ public class Helium {
         )
         self.controller?.logInitializeEvent();
         
-        HeliumPaywallDelegateWrapper.shared.setDelegate(heliumPaywallDelegate);
+        // Use provided delegate or default to StoreKitDelegate
+        let delegate = heliumPaywallDelegate ?? StoreKitDelegate()
+        HeliumPaywallDelegateWrapper.shared.setDelegate(delegate);
         if (customAPIEndpoint != nil) {
             self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
         } else {
