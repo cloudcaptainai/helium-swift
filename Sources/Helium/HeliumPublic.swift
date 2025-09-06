@@ -11,7 +11,7 @@ public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
-    var fallbackConfig: HeliumFallbackConfig = .default
+    var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
     public static let shared = Helium()
     
@@ -31,7 +31,7 @@ public class Helium {
         }
         
         // Use loading budget approach if configured
-        if fallbackConfig.useLoadingState {
+        if fallbackConfig?.useLoadingState ?? true {
             HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
         } else {
             HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
@@ -97,7 +97,7 @@ public class Helium {
         var result: AnyView
         
         // First check onFallback handler
-        if let onFallbackHandler = fallbackConfig.onFallback,
+        if let onFallbackHandler = fallbackConfig?.onFallback,
            let fallbackView = onFallbackHandler(trigger) {
             result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
                 fallbackView
@@ -164,7 +164,7 @@ public class Helium {
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
-        fallbackConfig: HeliumFallbackConfig = .default,
+        fallbackConfig: HeliumFallbackConfig,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,

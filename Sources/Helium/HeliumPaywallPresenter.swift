@@ -32,7 +32,7 @@ class HeliumPaywallPresenter {
             }
             
             // Get fallback configuration
-            let fallbackConfig = Helium.shared.fallbackConfig
+            let fallbackConfig = Helium.shared.fallbackConfig ?? HeliumFallbackConfig.withFallbackView(EmptyView())
             
             // If loading state disabled, show fallback immediately
             if !fallbackConfig.useLoadingState {
