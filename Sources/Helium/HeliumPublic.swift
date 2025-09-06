@@ -11,6 +11,7 @@ public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
+    var fallbackConfig: HeliumFallbackConfig = .default
     
     public static let shared = Helium()
     
@@ -29,7 +30,12 @@ public class Helium {
             return
         }
         
-        HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController);
+        // Use loading budget approach if configured
+        if fallbackConfig.useLoadingState {
+            HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+        } else {
+            HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
+        }
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -89,6 +95,17 @@ public class Helium {
     
     private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
         var result: AnyView
+        
+        // First check onFallback handler
+        if let onFallbackHandler = fallbackConfig.onFallback,
+           let fallbackView = onFallbackHandler(trigger) {
+            result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                fallbackView
+            })
+            return UpsellViewResult(view: result, isFallback: true)
+        }
+        
+        // Then check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             do {
                 result = try AnyView(
@@ -136,34 +153,32 @@ public class Helium {
     ///
     /// @param apiKey Helium API key
     /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks
-    /// @param fallbackPaywall  Default view to display when paywall fails to load. fallbackAssetsConfig and fallbackPaywallPerTrigger will take precedence over this.
-    /// @param baseTemplateView  Optional custom base template view type (defaults to DynamicBaseTemplateView)
+    /// @param fallbackConfig Configuration for loading states and fallback behavior
     /// @param triggers  Optional array of trigger identifiers to configure
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
     /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    /// @param fallbackBundleURL (Optional) The URL to a fallback bundle downloaded from the dashboard..
-    /// @param fallbackPaywallPerTrigger  Optional trigger-specific fallback views
     ///
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate,
-        fallbackPaywall: (any View),
+        fallbackConfig: HeliumFallbackConfig = .default,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
-        revenueCatAppUserId: String? = nil,
-        fallbackBundleURL: URL? = nil,
-        fallbackPaywallPerTrigger: [String: any View]? = nil
+        revenueCatAppUserId: String? = nil
     ) {
         if initialized {
             return
         }
         initialized = true
+        
+        // Store fallback configuration
+        self.fallbackConfig = fallbackConfig
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -182,18 +197,18 @@ public class Helium {
         
         AppReceiptsHelper.shared.setUp()
         
-        HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall));
-        
-        // Set up trigger-specific fallback views if provided
-        if let triggerFallbacks = fallbackPaywallPerTrigger {
-            var triggerToViewMap: [String: AnyView] = [:]
-            for (trigger, view) in triggerFallbacks {
-                triggerToViewMap[trigger] = AnyView(view)
-            }
-            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
+        // Set up fallback view if provided
+        if let fallbackView = fallbackConfig.fallbackView {
+            HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: fallbackView);
         }
         
-        if let fallbackBundleURL {
+        // Set up trigger-specific fallback views if provided
+        if let triggerFallbacks = fallbackConfig.fallbackPerTrigger {
+            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerFallbacks)
+        }
+        
+        // Set up fallback bundle if provided
+        if let fallbackBundleURL = fallbackConfig.fallbackBundle {
             HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
         }
         
