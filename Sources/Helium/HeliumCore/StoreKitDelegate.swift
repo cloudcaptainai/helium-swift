@@ -9,41 +9,20 @@
 @available(iOS 15.0, *)
 open class StoreKitDelegate: HeliumPaywallDelegate {
     
-    private(set) var productMappings: [String: Product] = [:]
-    
     /// @param productIds  (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     public init(productIds: [String] = []) {
         guard !productIds.isEmpty else {
             return
         }
         Task {
-            do {
-                let fetchedProducts = try await Product.products(for: productIds)
-                var mappings: [String: Product] = [:]
-                // Create product mappings from product IDs
-                for fetchedProduct in fetchedProducts {
-                    mappings[fetchedProduct.id] = fetchedProduct
-                }
-                productMappings = mappings
-            } catch {
-                print("[Helium] StoreKitDelegate - error fetching products. \(error)")
-            }
+            // Prefetch products into cache for better performance
+            await ProductsCache.shared.prefetchProducts(productIds)
         }
     }
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
-            var product: Product? = productMappings[productId]
-            
-            if product == nil {
-                let productsList = try await Product.products(for: [productId])
-                if productsList.count > 0 {
-                    product = productsList[0]
-                    productMappings[productId] = product
-                }
-            }
-            
-            guard let product else {
+            guard let product = try await ProductsCache.shared.getProduct(id: productId) else {
                 print("[Helium] StoreKitDelegate - makePurchase could not find product!")
                 return .failed(StoreKitDelegateError.cannotFindProduct)
             }

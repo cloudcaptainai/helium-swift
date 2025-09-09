@@ -112,7 +112,7 @@ public class PriceFetcher {
     public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
         do {
-            let products = try await Product.products(for: Set(skus))
+            let products = try await ProductsCache.shared.fetchProducts(for: skus)
             for product in products {
                 let formatter = NumberFormatter()
                 formatter.numberStyle = .currency
@@ -193,7 +193,7 @@ public class PriceFetcher {
     ///   - skus: Array of product identifiers
     ///   - completion: A closure that returns a dictionary mapping SKUs to their localized price information
     public static func localizedPricing(for skus: [String], completion: @escaping ([String: LocalizedPrice]) -> Void) {
-        fallbackToStoreKit1(for: skus, completion: completion)
+        fallbackToStoreKit1(for: Array(Set(skus)), completion: completion)
     }
     
     /// Fallback method using StoreKit 1
