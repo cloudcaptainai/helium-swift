@@ -12,14 +12,14 @@ struct DynamicPaywallModifier: ViewModifier {
     @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .triggered)
     @Binding var isPresented: Bool
     let trigger: String
-    let eventService: PaywallEventService?
+    let eventHandlers: PaywallEventService?
     let customPaywallTraits: [String: Any]?
     
     @ViewBuilder
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: $isPresented) {
-                Helium.shared.upsellViewForTrigger(trigger: trigger, eventService: eventService, customPaywallTraits: customPaywallTraits)
+                Helium.shared.upsellViewForTrigger(trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits)
                     .environment(\.paywallPresentationState, presentationState)
             }
             .onChange(of: isPresented) { newValue in
@@ -30,7 +30,7 @@ struct DynamicPaywallModifier: ViewModifier {
 
 // Extension to make DynamicPaywallModifier easier to use
 public extension View {
-    func triggerUpsell(isPresented: Binding<Bool>, trigger: String, eventService: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> some View {
-        self.modifier(DynamicPaywallModifier(isPresented: isPresented, trigger: trigger, eventService: eventService, customPaywallTraits: customPaywallTraits))
+    func triggerUpsell(isPresented: Binding<Bool>, trigger: String, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> some View {
+        self.modifier(DynamicPaywallModifier(isPresented: isPresented, trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits))
     }
 }

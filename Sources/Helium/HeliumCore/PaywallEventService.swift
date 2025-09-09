@@ -99,18 +99,27 @@ extension PaywallEventService {
 
 extension PaywallEventService {
     
-    /// Create a service with all essential handlers
-    /// - Note: Provides a quick way to set up tracking for the complete paywall lifecycle
+    /// Create a service with optional handlers
+    /// - Note: Provides a quick way to set up tracking for the paywall lifecycle. All handlers are optional.
     public static func withHandlers(
-        onOpen: @escaping (PaywallOpenEvent) -> Void,
-        onClose: @escaping (PaywallCloseEvent) -> Void,
-        onDismissed: @escaping (PaywallDismissedEvent) -> Void,
-        onPurchaseSucceeded: @escaping (PurchaseSucceededEvent) -> Void
+        onOpen: ((PaywallOpenEvent) -> Void)? = nil,
+        onClose: ((PaywallCloseEvent) -> Void)? = nil,
+        onDismissed: ((PaywallDismissedEvent) -> Void)? = nil,
+        onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil
     ) -> PaywallEventService {
-        return PaywallEventService()
-            .onOpen(onOpen)
-            .onClose(onClose)
-            .onDismissed(onDismissed)
-            .onPurchaseSucceeded(onPurchaseSucceeded)
+        var service = PaywallEventService()
+        if let onOpen = onOpen {
+            service = service.onOpen(onOpen)
+        }
+        if let onClose = onClose {
+            service = service.onClose(onClose)
+        }
+        if let onDismissed = onDismissed {
+            service = service.onDismissed(onDismissed)
+        }
+        if let onPurchaseSucceeded = onPurchaseSucceeded {
+            service = service.onPurchaseSucceeded(onPurchaseSucceeded)
+        }
+        return service
     }
 }

@@ -66,11 +66,17 @@ public class HeliumFallbackViewManager {
         return defaultFallback
     }
     
+    
     public func getFallbackForTrigger(trigger: String) -> AnyView {
         if let fallbackView = triggerToFallbackView[trigger] {
             return fallbackView
         }
-        return defaultFallback!
+        // Safe handling of optional defaultFallback
+        if let defaultFallback = defaultFallback {
+            return defaultFallback
+        }
+        // Return empty view if no fallback is configured
+        return AnyView(EmptyView())
     }
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
@@ -82,6 +88,21 @@ public class HeliumFallbackViewManager {
     
     public func getConfig() -> HeliumFetchedConfig? {
         return loadedConfig
+    }
+    
+    public func getBackgroundConfigForTrigger(_ trigger: String) -> BackgroundConfig? {
+        // Try the direct path first (for newer configs)
+        if let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]["backgroundConfig"],
+           json.type != .null {
+            return BackgroundConfig(json: json)
+        }
+        
+        // Fall back to nested path under baseStack.componentProps (for current configs)
+        guard let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]["baseStack"]["componentProps"]["backgroundConfig"],
+              json.type != .null else {
+            return nil
+        }
+        return BackgroundConfig(json: json)
     }
     
 }

@@ -15,10 +15,10 @@ public class Helium {
     
     public static let shared = Helium()
     
-    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventService: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) {
+    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            eventService: eventService,
+            eventService: eventHandlers,
             customPaywallTraits: customPaywallTraits
         )
         
@@ -30,8 +30,10 @@ public class Helium {
             return
         }
         
-        // Use loading budget approach if configured
-        if fallbackConfig?.useLoadingState ?? true {
+        // Use loading budget approach if configured for this trigger
+        // Default to false if fallbackConfig is nil (backward compatibility with deprecated init)
+        let useLoadingForTrigger = fallbackConfig?.useLoadingState(for: trigger) ?? false
+        if useLoadingForTrigger {
             HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
         } else {
             HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
@@ -50,10 +52,10 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
-    public func upsellViewForTrigger(trigger: String, eventService: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
+    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            eventService: eventService,
+            eventService: eventHandlers,
             customPaywallTraits: customPaywallTraits
         )
         
@@ -151,35 +153,109 @@ public class Helium {
     
     /// Initializes the Helium paywall system with configuration options.
     ///
+    /// This method supports both the new `fallbackConfig` approach and the deprecated individual fallback parameters.
+    /// **Important:** You must use EITHER `fallbackConfig` OR the deprecated parameters (`fallbackPaywall`, `fallbackBundleURL`, 
+    /// `fallbackPaywallPerTrigger`), but not both. Mixing approaches will result in a fatal error.
+    ///
     /// @param apiKey Helium API key
-    /// @param fallbackConfig Configuration for loading states and fallback behavior
     /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks. Defaults to StoreKitDelegate if not provided.
+    /// @param fallbackPaywall  **Deprecated:** Default view to display when paywall fails to load. Use `fallbackConfig` instead.
+    /// @param fallbackConfig Configuration for loading states and fallback behavior. Cannot be used with deprecated parameters.
     /// @param triggers  Optional array of trigger identifiers to configure
     /// @param customUserId  Optional custom user ID to override default user identification
     /// @param customAPIEndpoint  Optional custom API endpoint URL
     /// @param customUserTraits  Optional custom user traits for targeting
     /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
     /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
+    /// @param fallbackBundleURL **Deprecated:** The URL to a fallback bundle downloaded from the dashboard. Use `fallbackConfig` instead.
+    /// @param fallbackPaywallPerTrigger  **Deprecated:** Optional trigger-specific fallback views. Use `fallbackConfig` instead.
+    ///
+    /// - Note: When using deprecated parameters, loading states are disabled to maintain backward compatibility.
+    /// - Warning: Using both `fallbackConfig` and deprecated parameters will trigger a fatal error.
     ///
     @available(iOS 15.0, *)
     public func initialize(
         apiKey: String,
-        fallbackConfig: HeliumFallbackConfig,
         heliumPaywallDelegate: HeliumPaywallDelegate? = nil,
+        fallbackPaywall: (any View)? = nil,
+        fallbackConfig: HeliumFallbackConfig? = nil,
         triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
-        revenueCatAppUserId: String? = nil
+        revenueCatAppUserId: String? = nil,
+        fallbackBundleURL: URL? = nil,
+        fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
             return
         }
         initialized = true
         
-        // Store fallback configuration
-        self.fallbackConfig = fallbackConfig
+        // Validate that only one fallback approach is used
+        let hasDeprecatedParams = fallbackPaywall != nil || fallbackBundleURL != nil || fallbackPaywallPerTrigger != nil
+        let hasNewConfig = fallbackConfig != nil
+        
+        precondition(
+            !(hasDeprecatedParams && hasNewConfig),
+            """
+            Helium initialization error: Cannot use both fallbackConfig and deprecated fallback parameters simultaneously.
+            Please use either:
+            - fallbackConfig (recommended) for new implementations
+            - OR fallbackPaywall/fallbackBundleURL/fallbackPaywallPerTrigger (deprecated) for backward compatibility
+            But not both.
+            """
+        )
+        
+        // Determine the fallback configuration to use
+        let finalFallbackConfig: HeliumFallbackConfig?
+        
+        if let providedConfig = fallbackConfig {
+            // Use the new fallbackConfig if provided
+            finalFallbackConfig = providedConfig
+        } else if hasDeprecatedParams {
+            // Create a HeliumFallbackConfig from the deprecated parameters
+            if let triggerFallbacks = fallbackPaywallPerTrigger, let bundleURL = fallbackBundleURL {
+                // Both per-trigger and bundle
+                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
+                    fallbackView: fallbackPaywall,
+                    fallbackPerTrigger: triggerFallbacks,
+                    fallbackBundle: bundleURL,
+                    onFallback: nil,
+                    useLoadingState: false  // Maintain old behavior - no loading state
+                )
+            } else if let triggerFallbacks = fallbackPaywallPerTrigger {
+                // Only per-trigger fallbacks
+                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
+                    fallbackView: fallbackPaywall,
+                    fallbackPerTrigger: triggerFallbacks,
+                    fallbackBundle: nil,
+                    onFallback: nil,
+                    useLoadingState: false
+                )
+            } else if let bundleURL = fallbackBundleURL {
+                // Only bundle URL
+                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
+                    fallbackView: fallbackPaywall,
+                    fallbackPerTrigger: nil,
+                    fallbackBundle: bundleURL,
+                    onFallback: nil,
+                    useLoadingState: false
+                )
+            } else if let fallback = fallbackPaywall {
+                // Only default fallback
+                finalFallbackConfig = HeliumFallbackConfig.withFallbackView(fallback, useLoadingState: false)
+            } else {
+                finalFallbackConfig = nil
+            }
+        } else {
+            // No fallback configuration provided
+            finalFallbackConfig = nil
+        }
+        
+        // Store the final fallback configuration
+        self.fallbackConfig = finalFallbackConfig
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -199,18 +275,31 @@ public class Helium {
         AppReceiptsHelper.shared.setUp()
         
         // Set up fallback view if provided
-        if let fallbackView = fallbackConfig.fallbackView {
+        if let fallbackView = finalFallbackConfig?.fallbackView {
             HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: fallbackView);
+        } else if fallbackPaywall != nil {
+            // Handle deprecated fallbackPaywall parameter directly
+            HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall!));
         }
         
         // Set up trigger-specific fallback views if provided
-        if let triggerFallbacks = fallbackConfig.fallbackPerTrigger {
+        if let triggerFallbacks = finalFallbackConfig?.fallbackPerTrigger {
             HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerFallbacks)
+        } else if let triggerFallbacks = fallbackPaywallPerTrigger {
+            // Handle deprecated fallbackPaywallPerTrigger parameter directly
+            var triggerToViewMap: [String: AnyView] = [:]
+            for (trigger, view) in triggerFallbacks {
+                triggerToViewMap[trigger] = AnyView(view)
+            }
+            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
         }
         
         // Set up fallback bundle if provided
-        if let fallbackBundleURL = fallbackConfig.fallbackBundle {
+        if let fallbackBundleURL = finalFallbackConfig?.fallbackBundle {
             HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
+        } else if let bundleURL = fallbackBundleURL {
+            // Handle deprecated fallbackBundleURL parameter directly
+            HeliumFallbackViewManager.shared.setFallbackBundleURL(bundleURL)
         }
         
         self.controller = HeliumController(
@@ -230,6 +319,7 @@ public class Helium {
         
         WebViewManager.shared.preCreateFirstWebView()
     }
+    
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {

@@ -34,19 +34,27 @@ class HeliumPaywallPresenter {
             // Get fallback configuration
             let fallbackConfig = Helium.shared.fallbackConfig ?? HeliumFallbackConfig.withFallbackView(EmptyView())
             
-            // If loading state disabled, show fallback immediately
-            if !fallbackConfig.useLoadingState {
+            // Get trigger-specific loading configuration
+            let useLoading = fallbackConfig.useLoadingState(for: trigger)
+            let loadingBudget = fallbackConfig.loadingBudget(for: trigger)
+            let triggerLoadingView = fallbackConfig.loadingView(for: trigger)
+            
+            // If loading state disabled for this trigger, show fallback immediately
+            if !useLoading {
                 presentUpsell(trigger: trigger, from: viewController)
                 return
             }
             
-            // Show loading state
-            let loadingView = fallbackConfig.loadingView ?? createDefaultLoadingView()
+            // Get background config from fallback bundle if available
+            let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
+            
+            // Show loading state with trigger-specific or default loading view
+            let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
             presentPaywall(trigger: trigger, isFallback: false, contentView: loadingView, from: viewController, isLoading: true)
             
-            // Schedule timeout
+            // Schedule timeout with trigger-specific budget
             Task {
-                try? await Task.sleep(nanoseconds: UInt64(fallbackConfig.loadingBudget * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
                 await MainActor.run {
                     // Update to real paywall or fallback if still not ready
                     self.updateLoadingPaywall(trigger: trigger)
@@ -84,7 +92,7 @@ class HeliumPaywallPresenter {
         }
     }
     
-    private func createDefaultLoadingView() -> AnyView {
+    private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
         // Use shimmer view to match the app open PR approach
         let defaultShimmerConfig = JSON([
             "layout": [
@@ -148,7 +156,13 @@ class HeliumPaywallPresenter {
         
         return AnyView(
             ZStack {
-                Color.white
+                // Use provided background config or default to white
+                if let bgConfig = backgroundConfig {
+                    bgConfig.makeBackgroundView()
+                } else {
+                    Color.white
+                }
+                
                 VStack {
                     Spacer()
                     EmptyView()
