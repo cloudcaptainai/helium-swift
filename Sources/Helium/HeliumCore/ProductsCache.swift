@@ -2,7 +2,7 @@ import Foundation
 import StoreKit
 
 @available(iOS 15.0, *)
-class ProductsCache {
+actor ProductsCache {
     static let shared = ProductsCache()
     
     private var cache: [String: Product] = [:]
