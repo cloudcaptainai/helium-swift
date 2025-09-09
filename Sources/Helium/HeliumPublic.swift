@@ -52,6 +52,59 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
+    /// Clears all cached Helium state and allows safe re-initialization.
+    ///
+    /// **Warning:** This method is intended for debugging, testing, and development scenarios only.
+    /// In production apps, configurations should be managed through normal fetch cycles.
+    ///
+    /// This comprehensive reset will:
+    /// - Clear all downloaded bundle files from disk
+    /// - Clear fetched paywall configurations from memory
+    /// - Clear fallback bundle cache
+    /// - Reset download status to `.notDownloadedYet`
+    /// - Reset initialization state to allow `initialize()` to be called again
+    /// - Clear the controller instance
+    /// - Force fallback views to be shown until next successful fetch
+    ///
+    /// Use cases:
+    /// - Testing different configurations
+    /// - Switching between environments (staging/production)
+    /// - Debugging configuration issues
+    /// - Forcing a complete fresh state during development
+    ///
+    /// After calling this method, you MUST call `initialize()` again before using any
+    /// Helium functionality. The SDK will be in an uninitialized state.
+    ///
+    /// Example:
+    /// ```swift
+    /// // Clear everything and reinitialize with new config
+    /// Helium.shared.clearAllCachedState()
+    /// Helium.shared.initialize(
+    ///     apiKey: newApiKey,
+    ///     fallbackConfig: newFallbackConfig
+    /// )
+    /// ```
+    ///
+    /// - Note: This does NOT clear user identification or session data
+    public func clearAllCachedState() {
+        // Clear physical bundle files from disk
+        HeliumAssetManager.shared.clearCache()
+        
+        // Clear fetched configuration from memory
+        HeliumFetchedConfigManager.shared.clearAllFetchedState()
+        
+        // Completely reset all fallback configurations
+        HeliumFallbackViewManager.shared.resetAllFallbacks()
+        
+        // Reset initialization state to allow re-initialization
+        initialized = false
+        controller = nil
+        fallbackConfig = nil
+        baseTemplateViewType = nil
+        
+        print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
+    }
+    
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
@@ -177,7 +230,6 @@ public class Helium {
     /// 1. **Fallback bundle** - If trigger exists in bundle JSON
     /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
     /// 3. **Global fallback view** - From `fallbackView`
-    /// 4. **EmptyView** - If no fallback configured (not recommended!)
     ///
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard

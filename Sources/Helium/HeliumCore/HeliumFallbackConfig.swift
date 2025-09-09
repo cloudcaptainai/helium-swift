@@ -60,7 +60,8 @@ public struct TriggerLoadingConfig {
 /// showing a fallback.
 ///
 /// ## Fallback Priority
-/// When a paywall cannot be fetched from the network, fallbacks are resolved in this order:
+/// When paywalls are not available (network failure, timeout, or missing configuration), 
+/// fallbacks are resolved in this order:
 /// 1. **Fallback bundle** - If a trigger exists in the bundle JSON, uses that configuration
 /// 2. **Per-trigger fallback views** - Trigger-specific SwiftUI views (from `fallbackPerTrigger`)
 /// 3. **Global fallback view** - Single SwiftUI view for all triggers (from `fallbackView`)
