@@ -5,6 +5,8 @@
 //  Created by Kyle Gorlick on 9/8/25.
 //
 
+import StoreKit
+
 /// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
 @available(iOS 15.0, *)
 open class StoreKitDelegate: HeliumPaywallDelegate {

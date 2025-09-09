@@ -5,9 +5,7 @@
 //  Created by Anish Doshi on 8/19/24.
 //
 
-import Foundation
-import StoreKit
-
+import UIKit
 
 public enum HeliumPaywallTransactionStatus {
     case purchased

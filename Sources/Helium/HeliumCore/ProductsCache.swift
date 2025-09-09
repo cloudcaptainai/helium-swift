@@ -15,7 +15,7 @@ class ProductsCache {
         
         // Fetch only the missing products
         if !missingIds.isEmpty {
-            let products = try await Product.products(for: Set(missingIds))
+            let products = try await Product.products(for: missingIds)
             for product in products {
                 cache[product.id] = product
             }
@@ -33,7 +33,7 @@ class ProductsCache {
     
     func fetchProducts(for productIds: [String]) async throws -> [Product] {
         let productMap = try await fetchProductsMap(for: productIds)
-        return productMap.values
+        return Array(productMap.values)
     }
     
     func getProduct(id: String) async throws -> Product? {

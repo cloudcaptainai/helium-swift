@@ -157,15 +157,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     
-                    // Prefetch products and build localized price map
-                    let allProductIds = getAllProductIds()
-                    if #available(iOS 15.0, *) {
-                        await ProductsCache.shared.prefetchProducts(Array(allProductIds))
-                    }
-                    await buildLocalizedPriceMap(allProductIds)
-                    
-                    await self.updateDownloadState(.downloadSuccess)
-                    completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+                    await handleConfigFetchSuccess(newConfig: newConfig,retryCount: retryCount, completion: completion)
                     
                 } catch {
                     // Retry on asset processing failure
@@ -189,15 +181,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                // Prefetch products and build localized price map
-                let allProductIds = getAllProductIds()
-                if #available(iOS 15.0, *) {
-                    await ProductsCache.shared.prefetchProducts(Array(allProductIds))
-                }
-                await buildLocalizedPriceMap(allProductIds)
-                
-                await self.updateDownloadState(.downloadSuccess)
-                completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+                await handleConfigFetchSuccess(newConfig: newConfig,retryCount: retryCount, completion: completion)
             }
         } catch {
             // Retry on network/fetch failure
@@ -224,6 +208,24 @@ public class HeliumFetchedConfigManager: ObservableObject {
     private func calculateBackoffDelay(attempt: Int) -> Double {
         // Simple exponential backoff: 2^attempt seconds
         return pow(2.0, Double(attempt))
+    }
+    
+    private func handleConfigFetchSuccess(
+        newConfig: HeliumFetchedConfig,
+        retryCount: Int,
+        completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
+    ) async {
+        let numRequestsTaken = retryCount + 1
+        
+        // Prefetch products and build localized price map
+        let allProductIds = getAllProductIds()
+        if #available(iOS 15.0, *) {
+            await ProductsCache.shared.prefetchProducts(Array(allProductIds))
+        }
+        await buildLocalizedPriceMap(allProductIds)
+        
+        await updateDownloadState(.downloadSuccess)
+        completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: numRequestsTaken)))
     }
     
     private func getAllProductIds() -> [String] {
