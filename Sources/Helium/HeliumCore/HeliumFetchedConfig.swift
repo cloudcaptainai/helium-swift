@@ -147,17 +147,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
             self.fetchedConfigJSON = newConfigJSON
             
             // Download assets
-            let startTimeConfig = Date()
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                 do {
                     let bundles = (self.fetchedConfig?.bundles)!
-                    let endTimeNewConfig = Date()
-                    let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                     
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     
-                    await handleConfigFetchSuccess(newConfig: newConfig,retryCount: retryCount, completion: completion)
+                    await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
                     
                 } catch {
                     // Retry on asset processing failure
@@ -181,7 +178,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                await handleConfigFetchSuccess(newConfig: newConfig,retryCount: retryCount, completion: completion)
+                await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
             }
         } catch {
             // Retry on network/fetch failure
