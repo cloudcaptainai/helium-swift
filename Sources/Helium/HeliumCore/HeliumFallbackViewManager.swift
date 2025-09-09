@@ -91,14 +91,18 @@ public class HeliumFallbackViewManager {
     }
     
     public func getBackgroundConfigForTrigger(_ trigger: String) -> BackgroundConfig? {
+        guard let resolvedConfig = getResolvedConfigJSONForTrigger(trigger) else {
+            return nil
+        }
+        
         // Try the direct path first (for newer configs)
-        if let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]["backgroundConfig"],
+        if let json = resolvedConfig["backgroundConfig"],
            json.type != .null {
             return BackgroundConfig(json: json)
         }
         
         // Fall back to nested path under baseStack.componentProps (for current configs)
-        guard let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]["baseStack"]["componentProps"]["backgroundConfig"],
+        guard let json = resolvedConfig["baseStack"]["componentProps"]["backgroundConfig"],
               json.type != .null else {
             return nil
         }

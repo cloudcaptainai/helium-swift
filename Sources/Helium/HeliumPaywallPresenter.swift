@@ -31,6 +31,11 @@ class HeliumPaywallPresenter {
                 return
             }
             
+            // Check if any loading paywall is already in progress
+            if paywallsDisplayed.contains(where: { $0.isLoading }) {
+                return
+            }
+            
             // Get fallback configuration
             let fallbackConfig = Helium.shared.fallbackConfig ?? HeliumFallbackConfig.withFallbackView(EmptyView())
             

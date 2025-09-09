@@ -180,14 +180,14 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     private var isAnalyticsEnabled: Bool = true
-    private var eventService: PaywallEventService?
+    private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
     }
     
-    public func setEventService(_ eventService: PaywallEventService?) {
+    public func setEventService(_ eventService: PaywallEventHandlers?) {
         self.eventService = eventService
     }
     
@@ -200,7 +200,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(eventService: PaywallEventService?, customPaywallTraits: [String: Any]?) {
+    public func configurePresentationContext(eventService: PaywallEventHandlers?, customPaywallTraits: [String: Any]?) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]

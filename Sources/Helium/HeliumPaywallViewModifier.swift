@@ -12,7 +12,7 @@ struct DynamicPaywallModifier: ViewModifier {
     @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .triggered)
     @Binding var isPresented: Bool
     let trigger: String
-    let eventHandlers: PaywallEventService?
+    let eventHandlers: PaywallEventHandlers?
     let customPaywallTraits: [String: Any]?
     
     @ViewBuilder
@@ -30,7 +30,7 @@ struct DynamicPaywallModifier: ViewModifier {
 
 // Extension to make DynamicPaywallModifier easier to use
 public extension View {
-    func triggerUpsell(isPresented: Binding<Bool>, trigger: String, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> some View {
+    func triggerUpsell(isPresented: Binding<Bool>, trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> some View {
         self.modifier(DynamicPaywallModifier(isPresented: isPresented, trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits))
     }
 }

@@ -28,8 +28,6 @@ public struct HeliumFallbackConfig {
     // Per-trigger loading overrides
     public var perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     
-    // Fallback options (checked in priority order)
-    public var onFallback: ((String) -> AnyView?)? = nil
     public var fallbackPerTrigger: [String: AnyView]? = nil
     public var fallbackBundle: URL? = nil
     public var fallbackView: AnyView? = nil
@@ -42,8 +40,7 @@ public struct HeliumFallbackConfig {
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]?,
         fallbackView: AnyView?,
         fallbackPerTrigger: [String: AnyView]?,
-        fallbackBundle: URL?,
-        onFallback: ((String) -> AnyView?)?
+        fallbackBundle: URL?
     ) {
         self.useLoadingState = useLoadingState
         self.loadingBudget = loadingBudget
@@ -52,7 +49,6 @@ public struct HeliumFallbackConfig {
         self.fallbackView = fallbackView
         self.fallbackPerTrigger = fallbackPerTrigger
         self.fallbackBundle = fallbackBundle
-        self.onFallback = onFallback
     }
     
     /// Creates config with a single fallback view
@@ -70,8 +66,7 @@ public struct HeliumFallbackConfig {
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: AnyView(view),
             fallbackPerTrigger: nil,
-            fallbackBundle: nil,
-            onFallback: nil
+            fallbackBundle: nil
         )
     }
     
@@ -94,8 +89,7 @@ public struct HeliumFallbackConfig {
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: nil,
             fallbackPerTrigger: anyViewMap,
-            fallbackBundle: nil,
-            onFallback: nil
+            fallbackBundle: nil
         )
     }
     
@@ -114,28 +108,7 @@ public struct HeliumFallbackConfig {
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: nil,
             fallbackPerTrigger: nil,
-            fallbackBundle: url,
-            onFallback: nil
-        )
-    }
-    
-    /// Creates config with dynamic fallback handler
-    public static func withFallbackHandler(
-        _ handler: @escaping (String) -> AnyView?,
-        useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = 2.0,
-        loadingView: AnyView? = nil,
-        perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
-    ) -> HeliumFallbackConfig {
-        return HeliumFallbackConfig(
-            useLoadingState: useLoadingState,
-            loadingBudget: loadingBudget,
-            loadingView: loadingView,
-            perTriggerLoadingConfig: perTriggerLoadingConfig,
-            fallbackView: nil,
-            fallbackPerTrigger: nil,
-            fallbackBundle: nil,
-            onFallback: handler
+            fallbackBundle: url
         )
     }
     
@@ -144,14 +117,14 @@ public struct HeliumFallbackConfig {
         fallbackView: (any View)? = nil,
         fallbackPerTrigger: [String: any View]? = nil,
         fallbackBundle: URL? = nil,
-        onFallback: ((String) -> AnyView?)? = nil,
         useLoadingState: Bool = true,
         loadingBudget: TimeInterval = 2.0,
         loadingView: AnyView? = nil,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig? {
         // Require at least one fallback mechanism
-        guard fallbackView != nil || fallbackPerTrigger != nil || fallbackBundle != nil || onFallback != nil else {
+        guard fallbackView != nil || fallbackPerTrigger != nil || fallbackBundle != nil else {
+            print("[Helium] Fallback not configured correctly")
             return nil
         }
         
@@ -170,8 +143,7 @@ public struct HeliumFallbackConfig {
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: fallbackView.map { AnyView($0) },
             fallbackPerTrigger: anyViewPerTrigger,
-            fallbackBundle: fallbackBundle,
-            onFallback: onFallback
+            fallbackBundle: fallbackBundle
         )
     }
     
@@ -199,8 +171,7 @@ public struct HeliumFallbackConfig {
             perTriggerLoadingConfig: perTriggerConfig.isEmpty ? nil : perTriggerConfig,
             fallbackView: nil,
             fallbackPerTrigger: nil,
-            fallbackBundle: bundleURL,
-            onFallback: nil
+            fallbackBundle: bundleURL
         )
     }
     

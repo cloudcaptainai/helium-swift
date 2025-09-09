@@ -15,7 +15,7 @@ public class Helium {
     
     public static let shared = Helium()
     
-    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) {
+    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
@@ -52,7 +52,7 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
-    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventService? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
+    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
@@ -98,16 +98,7 @@ public class Helium {
     private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
         var result: AnyView
         
-        // First check onFallback handler
-        if let onFallbackHandler = fallbackConfig?.onFallback,
-           let fallbackView = onFallbackHandler(trigger) {
-            result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                fallbackView
-            })
-            return UpsellViewResult(view: result, isFallback: true)
-        }
-        
-        // Then check existing fallback mechanisms
+        // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             do {
                 result = try AnyView(
@@ -222,7 +213,6 @@ public class Helium {
                     fallbackView: fallbackPaywall,
                     fallbackPerTrigger: triggerFallbacks,
                     fallbackBundle: bundleURL,
-                    onFallback: nil,
                     useLoadingState: false  // Maintain old behavior - no loading state
                 )
             } else if let triggerFallbacks = fallbackPaywallPerTrigger {
@@ -231,7 +221,6 @@ public class Helium {
                     fallbackView: fallbackPaywall,
                     fallbackPerTrigger: triggerFallbacks,
                     fallbackBundle: nil,
-                    onFallback: nil,
                     useLoadingState: false
                 )
             } else if let bundleURL = fallbackBundleURL {
@@ -240,7 +229,6 @@ public class Helium {
                     fallbackView: fallbackPaywall,
                     fallbackPerTrigger: nil,
                     fallbackBundle: bundleURL,
-                    onFallback: nil,
                     useLoadingState: false
                 )
             } else if let fallback = fallbackPaywall {
@@ -256,6 +244,22 @@ public class Helium {
         
         // Store the final fallback configuration
         self.fallbackConfig = finalFallbackConfig
+        
+        // Validate that at least some fallback is configured
+        precondition(
+            finalFallbackConfig != nil,
+            """
+            Helium initialization error: No fallback configuration provided!
+            
+            We weren't able to get a fallback paywall! Please configure fallbacks by going to https://docs.tryhelium.com/guides/fallback-bundle to get set up.
+            
+            You must provide at least one of the following:
+            - fallbackConfig (recommended): Use HeliumFallbackConfig.withFallbackBundle(), .withFallbackView(), etc.
+            - fallbackPaywall (deprecated): A default SwiftUI view
+            - fallbackBundleURL (deprecated): URL to a fallback bundle JSON
+            - fallbackPaywallPerTrigger (deprecated): Trigger-specific fallback views
+            """
+        )
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
