@@ -66,11 +66,17 @@ public class HeliumFallbackViewManager {
         return defaultFallback
     }
     
+    
     public func getFallbackForTrigger(trigger: String) -> AnyView {
         if let fallbackView = triggerToFallbackView[trigger] {
             return fallbackView
         }
-        return defaultFallback!
+        // Safe handling of optional defaultFallback
+        if let defaultFallback = defaultFallback {
+            return defaultFallback
+        }
+        // Return empty view if no fallback is configured
+        return AnyView(EmptyView())
     }
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
@@ -82,6 +88,58 @@ public class HeliumFallbackViewManager {
     
     public func getConfig() -> HeliumFetchedConfig? {
         return loadedConfig
+    }
+    
+    public func getBackgroundConfigForTrigger(_ trigger: String) -> BackgroundConfig? {
+        guard let resolvedConfig = getResolvedConfigJSONForTrigger(trigger) else {
+            return nil
+        }
+        
+        // Try the direct path first (for newer configs)
+        let json = resolvedConfig["backgroundConfig"]
+        if json.type != .null {
+            return BackgroundConfig(json: json)
+        }
+        
+        // Fall back to nested path under baseStack.componentProps (for current configs)
+        let nestedJson = resolvedConfig["baseStack"]["componentProps"]["backgroundConfig"]
+        if nestedJson.type != .null {
+            return BackgroundConfig(json: nestedJson)
+        }
+        
+        return nil
+    }
+    
+    /// Clears the loaded fallback bundle configuration from memory.
+    ///
+    /// **Warning:** This is intended for debugging and testing scenarios only.
+    /// 
+    /// This method clears the in-memory fallback bundle configuration but does NOT
+    /// clear the bundle URL or other fallback views. To fully reset, you may also need
+    /// to call `HeliumAssetManager.shared.clearCache()` and 
+    /// `HeliumFetchedConfigManager.shared.clearAllFetchedState()`.
+    public func clearFallbackBundleCache() {
+        loadedConfig = nil
+        loadedConfigJSON = nil
+    }
+    
+    /// Completely resets all fallback configurations.
+    ///
+    /// **Warning:** This is intended for debugging and testing scenarios only.
+    /// 
+    /// This method clears ALL fallback state including:
+    /// - Loaded fallback bundle configuration
+    /// - Fallback bundle URL
+    /// - Per-trigger fallback views
+    /// - Default fallback view
+    ///
+    /// After calling this, you must re-initialize Helium with new fallback configuration.
+    public func resetAllFallbacks() {
+        loadedConfig = nil
+        loadedConfigJSON = nil
+        fallbackBundleURL = nil
+        triggerToFallbackView = [:]
+        defaultFallback = nil
     }
     
 }

@@ -1,5 +1,5 @@
 //
-//  PaywallEventService.swift
+//  PaywallEventHandlers.swift
 //  Helium
 //
 //  Event handler service for paywall lifecycle events using the v2 typed event system
@@ -9,7 +9,7 @@ import Foundation
 
 /// Service for handling essential paywall lifecycle events with a builder pattern API
 /// - Note: Provides handlers for the key paywall events: open, close, dismiss, and purchase success
-public struct PaywallEventService {
+public struct PaywallEventHandlers {
     
     // MARK: - Event Handlers
     
@@ -60,11 +60,11 @@ public struct PaywallEventService {
 
 // MARK: - Builder Pattern Extension
 
-extension PaywallEventService {
+extension PaywallEventHandlers {
     
     /// Set handler for when a paywall is displayed
     /// - Note: Use this to track when users see your paywall (impressions)
-    public func onOpen(_ handler: @escaping (PaywallOpenEvent) -> Void) -> PaywallEventService {
+    public func onOpen(_ handler: @escaping (PaywallOpenEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onOpen = handler
         return service
@@ -72,7 +72,7 @@ extension PaywallEventService {
     
     /// Set handler for when a paywall is closed
     /// - Note: This fires after BOTH dismissal and successful purchase. Use for cleanup logic.
-    public func onClose(_ handler: @escaping (PaywallCloseEvent) -> Void) -> PaywallEventService {
+    public func onClose(_ handler: @escaping (PaywallCloseEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onClose = handler
         return service
@@ -80,7 +80,7 @@ extension PaywallEventService {
     
     /// Set handler for when user dismisses a paywall
     /// - Note: Track when users close without purchasing. Always followed by onClose.
-    public func onDismissed(_ handler: @escaping (PaywallDismissedEvent) -> Void) -> PaywallEventService {
+    public func onDismissed(_ handler: @escaping (PaywallDismissedEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onDismissed = handler
         return service
@@ -88,7 +88,7 @@ extension PaywallEventService {
     
     /// Set handler for when a purchase completes successfully
     /// - Note: Track conversions. Paywall auto-closes after, triggering onClose.
-    public func onPurchaseSucceeded(_ handler: @escaping (PurchaseSucceededEvent) -> Void) -> PaywallEventService {
+    public func onPurchaseSucceeded(_ handler: @escaping (PurchaseSucceededEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onPurchaseSucceeded = handler
         return service
@@ -97,20 +97,29 @@ extension PaywallEventService {
 
 // MARK: - Convenience Extensions
 
-extension PaywallEventService {
+extension PaywallEventHandlers {
     
-    /// Create a service with all essential handlers
-    /// - Note: Provides a quick way to set up tracking for the complete paywall lifecycle
+    /// Create a service with optional handlers
+    /// - Note: Provides a quick way to set up tracking for the paywall lifecycle. All handlers are optional.
     public static func withHandlers(
-        onOpen: @escaping (PaywallOpenEvent) -> Void,
-        onClose: @escaping (PaywallCloseEvent) -> Void,
-        onDismissed: @escaping (PaywallDismissedEvent) -> Void,
-        onPurchaseSucceeded: @escaping (PurchaseSucceededEvent) -> Void
-    ) -> PaywallEventService {
-        return PaywallEventService()
-            .onOpen(onOpen)
-            .onClose(onClose)
-            .onDismissed(onDismissed)
-            .onPurchaseSucceeded(onPurchaseSucceeded)
+        onOpen: ((PaywallOpenEvent) -> Void)? = nil,
+        onClose: ((PaywallCloseEvent) -> Void)? = nil,
+        onDismissed: ((PaywallDismissedEvent) -> Void)? = nil,
+        onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil
+    ) -> PaywallEventHandlers {
+        var service = PaywallEventHandlers()
+        if let onOpen = onOpen {
+            service = service.onOpen(onOpen)
+        }
+        if let onClose = onClose {
+            service = service.onClose(onClose)
+        }
+        if let onDismissed = onDismissed {
+            service = service.onDismissed(onDismissed)
+        }
+        if let onPurchaseSucceeded = onPurchaseSucceeded {
+            service = service.onPurchaseSucceeded(onPurchaseSucceeded)
+        }
+        return service
     }
 }
