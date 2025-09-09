@@ -96,17 +96,18 @@ public class HeliumFallbackViewManager {
         }
         
         // Try the direct path first (for newer configs)
-        if let json = resolvedConfig["backgroundConfig"],
-           json.type != .null {
+        let json = resolvedConfig["backgroundConfig"]
+        if json.type != .null {
             return BackgroundConfig(json: json)
         }
         
         // Fall back to nested path under baseStack.componentProps (for current configs)
-        guard let json = resolvedConfig["baseStack"]["componentProps"]["backgroundConfig"],
-              json.type != .null else {
-            return nil
+        let nestedJson = resolvedConfig["baseStack"]["componentProps"]["backgroundConfig"]
+        if nestedJson.type != .null {
+            return BackgroundConfig(json: nestedJson)
         }
-        return BackgroundConfig(json: json)
+        
+        return nil
     }
     
 }

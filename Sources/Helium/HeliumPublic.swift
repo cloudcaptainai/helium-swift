@@ -144,25 +144,57 @@ public class Helium {
     
     /// Initializes the Helium paywall system with configuration options.
     ///
-    /// This method supports both the new `fallbackConfig` approach and the deprecated individual fallback parameters.
-    /// **Important:** You must use EITHER `fallbackConfig` OR the deprecated parameters (`fallbackPaywall`, `fallbackBundleURL`, 
-    /// `fallbackPaywallPerTrigger`), but not both. Mixing approaches will result in a fatal error.
+    /// This method sets up the Helium SDK with your API key and configuration. It supports both the modern
+    /// `fallbackConfig` approach and deprecated individual fallback parameters for backward compatibility.
     ///
-    /// @param apiKey Helium API key
-    /// @param heliumPaywallDelegate Delegate to handle paywall events and callbacks. Defaults to StoreKitDelegate if not provided.
-    /// @param fallbackPaywall  **Deprecated:** Default view to display when paywall fails to load. Use `fallbackConfig` instead.
-    /// @param fallbackConfig Configuration for loading states and fallback behavior. Cannot be used with deprecated parameters.
-    /// @param triggers  Optional array of trigger identifiers to configure
-    /// @param customUserId  Optional custom user ID to override default user identification
-    /// @param customAPIEndpoint  Optional custom API endpoint URL
-    /// @param customUserTraits  Optional custom user traits for targeting
-    /// @param appAttributionToken - Optional Set this if you use a custom appAccountToken with your StoreKit purchases.
-    /// @param revenueCatAppUserId  Optional RevenueCat user ID for integration. Important if you are using RevenueCat to handle purchases!
-    /// @param fallbackBundleURL **Deprecated:** The URL to a fallback bundle downloaded from the dashboard. Use `fallbackConfig` instead.
-    /// @param fallbackPaywallPerTrigger  **Deprecated:** Optional trigger-specific fallback views. Use `fallbackConfig` instead.
+    /// ## Fallback Configuration (Required)
+    /// **Important:** You MUST provide at least one fallback mechanism, using EITHER:
+    /// - `fallbackConfig` (recommended) - Modern approach with loading states
+    /// - OR deprecated parameters (`fallbackPaywall`, `fallbackBundleURL`, `fallbackPaywallPerTrigger`)
+    /// 
+    /// Initialization will fail with a precondition if no fallback is provided.
     ///
-    /// - Note: When using deprecated parameters, loading states are disabled to maintain backward compatibility.
-    /// - Warning: Using both `fallbackConfig` and deprecated parameters will trigger a fatal error.
+    /// ### Modern Approach (Recommended):
+    /// ```swift
+    /// Helium.shared.initialize(
+    ///     apiKey: "your-api-key",
+    ///     heliumPaywallDelegate: myDelegate,
+    ///     fallbackConfig: .withFallbackBundle(
+    ///         Bundle.main.url(forResource: "fallback-bundle", withExtension: "json")!,
+    ///         loadingBudget: 3.0
+    ///     )
+    /// )
+    /// ```
+    ///
+    /// ### Loading States
+    /// When using `fallbackConfig`, you can control loading behavior:
+    /// - `useLoadingState`: Show a loading view while fetching paywalls (default: true)
+    /// - `loadingBudget`: Maximum seconds to show loading before fallback (default: 2.0)
+    /// - `loadingView`: Custom loading view or nil for default shimmer animation
+    ///
+    /// ### Fallback Priority
+    /// When paywalls cannot be fetched, fallbacks are shown in this order:
+    /// 1. **Fallback bundle** - If trigger exists in bundle JSON
+    /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
+    /// 3. **Global fallback view** - From `fallbackView`
+    /// 4. **EmptyView** - If no fallback configured (not recommended!)
+    ///
+    /// - Parameters:
+    ///   - apiKey: Your Helium API key from the dashboard
+    ///   - heliumPaywallDelegate: Delegate for paywall events and purchases. Defaults to StoreKitDelegate if nil
+    ///   - fallbackPaywall: **Deprecated** - Use `fallbackConfig` instead. Global fallback view
+    ///   - fallbackConfig: **Recommended** - Comprehensive fallback and loading configuration
+    ///   - triggers: Optional array of trigger names to prefetch
+    ///   - customUserId: Override the auto-generated user ID
+    ///   - customAPIEndpoint: Custom API endpoint for development/testing
+    ///   - customUserTraits: User attributes for targeting and personalization
+    ///   - appAttributionToken: Custom appAccountToken for StoreKit purchases
+    ///   - revenueCatAppUserId: User ID for RevenueCat integration
+    ///   - fallbackBundleURL: **Deprecated** - Use `fallbackConfig` instead
+    ///   - fallbackPaywallPerTrigger: **Deprecated** - Use `fallbackConfig` instead
+    ///
+    /// - Note: Deprecated parameters disable loading states for backward compatibility
+    /// - Warning: Mixing `fallbackConfig` with deprecated parameters causes a fatal error
     ///
     @available(iOS 15.0, *)
     public func initialize(
