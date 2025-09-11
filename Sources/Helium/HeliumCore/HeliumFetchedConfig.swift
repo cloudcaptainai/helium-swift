@@ -147,21 +147,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
             self.fetchedConfigJSON = newConfigJSON
             
             // Download assets
-            let startTimeConfig = Date()
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                 do {
                     let bundles = (self.fetchedConfig?.bundles)!
-                    let endTimeNewConfig = Date()
-                    let timeElapsed = endTimeNewConfig.timeIntervalSince(startTimeConfig)
                     
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     
-                    // Fetch localized prices for all products
-                    await fetchLocalizedPrices()
-                    
-                    await self.updateDownloadState(.downloadSuccess)
-                    completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+                    await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
                     
                 } catch {
                     // Retry on asset processing failure
@@ -185,11 +178,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                // Fetch localized prices for all products
-                await fetchLocalizedPrices()
-                
-                await self.updateDownloadState(.downloadSuccess)
-                completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: retryCount + 1)))
+                await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
             }
         } catch {
             // Retry on network/fetch failure
@@ -218,24 +207,45 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(attempt))
     }
     
-    private func fetchLocalizedPrices() async {
-        do {
-            // Get all unique product IDs from all paywalls
-            var allProductIds = Set<String>()
-            if let config = fetchedConfig {
-                for paywall in config.triggerToPaywalls.values {
-                    allProductIds.formUnion(paywall.productsOffered)
-                }
+    private func handleConfigFetchSuccess(
+        newConfig: HeliumFetchedConfig,
+        retryCount: Int,
+        completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
+    ) async {
+        let numRequestsTaken = retryCount + 1
+        
+        // Prefetch products and build localized price map
+        let allProductIds = getAllProductIds()
+        if #available(iOS 15.0, *) {
+            await ProductsCache.shared.prefetchProducts(Array(allProductIds))
+        }
+        await buildLocalizedPriceMap(allProductIds)
+        
+        await updateDownloadState(.downloadSuccess)
+        completion(.success(HeliumFetchResult(fetchedConfig: newConfig, numRequests: numRequestsTaken)))
+    }
+    
+    private func getAllProductIds() -> [String] {
+        // Get all unique product IDs from all paywalls
+        var allProductIds: [String] = []
+        if let config = fetchedConfig {
+            for paywall in config.triggerToPaywalls.values {
+                allProductIds.append(contentsOf: paywall.productsOffered)
             }
-            
-            // Fetch prices for all products in one shot
+        }
+        return allProductIds
+    }
+    
+    
+    private func buildLocalizedPriceMap(_ productIds: [String]) async {
+        do {
             if #available(iOS 15.0, *) {
                 // StoreKit 2 available
-                self.localizedPriceMap = await PriceFetcher.localizedPricing(for: Array(allProductIds))
+                self.localizedPriceMap = await PriceFetcher.localizedPricing(for: productIds)
             } else {
                 // Fallback for older iOS versions (StoreKit 1)
                 await withCheckedContinuation { continuation in
-                    PriceFetcher.localizedPricing(for: Array(allProductIds)) { prices in
+                    PriceFetcher.localizedPricing(for: productIds) { prices in
                         self.localizedPriceMap = prices
                         continuation.resume()
                     }
