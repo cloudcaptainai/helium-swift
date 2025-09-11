@@ -23,9 +23,165 @@ class HeliumPaywallPresenter {
         }
     }
     
+    func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil) {
+        Task { @MainActor in
+            // Check if paywall is ready
+            if Helium.shared.paywallsLoaded() {
+                presentUpsell(trigger: trigger, from: viewController)
+                return
+            }
+            
+            // Check if any loading paywall is already in progress
+            if paywallsDisplayed.contains(where: { $0.isLoading }) {
+                return
+            }
+            
+            // Get fallback configuration
+            let fallbackConfig = Helium.shared.fallbackConfig ?? HeliumFallbackConfig.withFallbackView(EmptyView())
+            
+            // Get trigger-specific loading configuration
+            let useLoading = fallbackConfig.useLoadingState(for: trigger)
+            let loadingBudget = fallbackConfig.loadingBudget(for: trigger)
+            let triggerLoadingView = fallbackConfig.loadingView(for: trigger)
+            
+            // If loading state disabled for this trigger, show fallback immediately
+            if !useLoading {
+                presentUpsell(trigger: trigger, from: viewController)
+                return
+            }
+            
+            // Get background config from fallback bundle if available
+            let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
+            
+            // Show loading state with trigger-specific or default loading view
+            let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
+            presentPaywall(trigger: trigger, isFallback: false, contentView: loadingView, from: viewController, isLoading: true)
+            
+            // Schedule timeout with trigger-specific budget
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
+                await MainActor.run {
+                    // Update to real paywall or fallback if still not ready
+                    self.updateLoadingPaywall(trigger: trigger)
+                }
+            }
+            
+            // Also listen for download completion
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleDownloadComplete(_:)),
+                name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                object: nil
+            )
+        }
+    }
+    
     @MainActor
-    private func presentPaywall(trigger: String, isFallback: Bool, contentView: AnyView, from viewController: UIViewController? = nil) {
-        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView)
+    private func updateLoadingPaywall(trigger: String) {
+        guard let loadingPaywall = paywallsDisplayed.first(where: { $0.trigger == trigger && $0.isLoading }) else {
+            return
+        }
+        
+        let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
+        loadingPaywall.updateContent(upsellViewResult.view)
+        loadingPaywall.isFallback = upsellViewResult.isFallback
+        loadingPaywall.isLoading = false
+    }
+    
+    @objc private func handleDownloadComplete(_ notification: Notification) {
+        Task { @MainActor in
+            // Update any loading paywalls
+            for paywall in paywallsDisplayed where paywall.isLoading {
+                updateLoadingPaywall(trigger: paywall.trigger)
+            }
+        }
+    }
+    
+    private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
+        // Use shimmer view to match the app open PR approach
+        let defaultShimmerConfig = JSON([
+            "layout": [
+                "type": "vStack",
+                "spacing": 20,
+                "content": [
+                    [
+                        "type": "element",
+                        "content": [
+                            "elementType": "rectangle",
+                            "width": 80,
+                            "height": 15,
+                            "cornerRadius": 8
+                        ]
+                    ],
+                    [
+                        "type": "element",
+                        "content": [
+                            "elementType": "rectangle",
+                            "width": 90,
+                            "height": 40,
+                            "cornerRadius": 12
+                        ]
+                    ],
+                    [
+                        "type": "hStack",
+                        "spacing": 10,
+                        "content": [
+                            [
+                                "type": "element",
+                                "content": [
+                                    "elementType": "rectangle",
+                                    "width": 40,
+                                    "height": 60,
+                                    "cornerRadius": 8
+                                ]
+                            ],
+                            [
+                                "type": "element",
+                                "content": [
+                                    "elementType": "rectangle",
+                                    "width": 40,
+                                    "height": 60,
+                                    "cornerRadius": 8
+                                ]
+                            ]
+                        ]
+                    ],
+                    [
+                        "type": "element",
+                        "content": [
+                            "elementType": "rectangle",
+                            "width": 80,
+                            "height": 15,
+                            "cornerRadius": 8
+                        ]
+                    ]
+                ]
+            ]
+        ])
+        
+        return AnyView(
+            ZStack {
+                // Use provided background config or default to white
+                if let bgConfig = backgroundConfig {
+                    bgConfig.makeBackgroundView()
+                } else {
+                    Color.white
+                }
+                
+                VStack {
+                    Spacer()
+                    EmptyView()
+                        .shimmer(config: defaultShimmerConfig)
+                    Spacer()
+                }
+            }
+            .edgesIgnoringSafeArea(.all)
+        )
+    }
+    
+    @MainActor
+    private func presentPaywall(trigger: String, isFallback: Bool, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()

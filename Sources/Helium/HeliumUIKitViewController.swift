@@ -77,16 +77,27 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    let isFallback: Bool
-    private let contentView: AnyView
+    var isFallback: Bool
+    var isLoading: Bool
+    private var contentView: AnyView
+    private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
-    init(trigger: String, isFallback: Bool, contentView: AnyView) {
+    init(trigger: String, isFallback: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
         self.isFallback = isFallback
+        self.isLoading = isLoading
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
         super.init(nibName: nil, bundle: nil)
+    }
+    
+    func updateContent(_ newContent: AnyView) {
+        self.contentView = AnyView(newContent
+            .environment(\.paywallPresentationState, presentationState))
+        
+        // Update the hosting controller's root view
+        hostingController?.rootView = self.contentView
     }
     
     required init?(coder: NSCoder) {
@@ -99,6 +110,7 @@ class HeliumViewController: UIViewController {
         presentationState.heliumViewController = self
         
         let modalView = UIHostingController(rootView: contentView)
+        self.hostingController = modalView
         addChild(modalView)
         view.addSubview(modalView.view)
         modalView.view.frame = view.bounds

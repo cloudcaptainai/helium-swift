@@ -82,15 +82,16 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
+    private var currentWriteKey: String?
     private var isAnalyticsEnabled: Bool = true
-    private var eventService: PaywallEventService?
+    private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
     }
     
-    public func setEventService(_ eventService: PaywallEventService?) {
+    public func setEventService(_ eventService: PaywallEventHandlers?) {
         self.eventService = eventService
     }
     
@@ -103,11 +104,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(eventService: PaywallEventService?, customPaywallTraits: [String: Any]?) {
+    public func configurePresentationContext(eventService: PaywallEventHandlers?, customPaywallTraits: [String: Any]?) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]
     }
+    
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
@@ -115,12 +117,17 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.customPaywallTraits = [:]
     }
     
-    func setAnalytics(_ analytics: Analytics) {
+    func setAnalytics(_ analytics: Analytics, writeKey: String? = nil) {
         self.analytics = analytics
+        self.currentWriteKey = writeKey ?? analytics.writeKey
     }
     
     func getAnalytics() -> Analytics? {
         return analytics;
+    }
+    
+    func hasAnalyticsForWriteKey(_ writeKey: String) -> Bool {
+        return currentWriteKey == writeKey && analytics != nil
     }
     
     public func setIsAnalyticsEnabled(shouldEnable: Bool) {
@@ -217,16 +224,27 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         var analyticsForEvent = analytics
         
         if analytics == nil, let fallbackBundleConfig {
-            let configuration = SegmentConfiguration(writeKey: fallbackBundleConfig.segmentBrowserWriteKey)
-                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            analyticsForEvent = Analytics(configuration: configuration)
-            analyticsForEvent?.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            );
+            let neededWriteKey = fallbackBundleConfig.segmentBrowserWriteKey
+            
+            // Check if we already have Analytics with this write key
+            if HeliumPaywallDelegateWrapper.shared.hasAnalyticsForWriteKey(neededWriteKey) {
+                // Reuse existing Analytics instance
+                analyticsForEvent = HeliumPaywallDelegateWrapper.shared.getAnalytics()
+            } else {
+                // Create new Analytics instance (should only happen if no config was downloaded yet)
+                let configuration = SegmentConfiguration(writeKey: neededWriteKey)
+                    .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                    .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                    .trackApplicationLifecycleEvents(false)
+                    .flushInterval(10)
+                analyticsForEvent = Analytics(configuration: configuration)
+                analyticsForEvent?.identify(
+                    userId: HeliumIdentityManager.shared.getUserId(),
+                    traits: HeliumIdentityManager.shared.getUserContext()
+                );
+                // Store this Analytics instance for future use
+                HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!, writeKey: neededWriteKey)
+            }
         }
         
         if case .paywallOpen = event {

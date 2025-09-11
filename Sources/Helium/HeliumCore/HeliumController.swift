@@ -96,7 +96,7 @@ public class HeliumController {
                             userId: HeliumIdentityManager.shared.getUserId(),
                             traits: HeliumIdentityManager.shared.getUserContext()
                         );
-                        HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                        HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics, writeKey: fetchedConfig.segmentBrowserWriteKey);
                     } catch {
                         // no op
                     }
@@ -129,7 +129,7 @@ public class HeliumController {
                         userId: HeliumIdentityManager.shared.getUserId(),
                         traits: HeliumIdentityManager.shared.getUserContext()
                     );
-                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
+                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics, writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY);
                 }
 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
