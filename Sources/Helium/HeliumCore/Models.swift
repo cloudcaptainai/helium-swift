@@ -345,7 +345,6 @@ public enum HeliumPaywallEvent: Codable {
         }
     }
     
-    // Note - this is used by Expo SDK
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "type": self.caseString()
