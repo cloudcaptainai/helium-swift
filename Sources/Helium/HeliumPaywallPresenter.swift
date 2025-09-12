@@ -24,15 +24,19 @@ class HeliumPaywallPresenter {
     }
     
     func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil) {
+        if !paywallsDisplayed.isEmpty {
+            // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
+            print("[Helium] A paywall is already being presented.")
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallSkippedEvent(triggerName: trigger)
+            )
+            return
+        }
+        
         Task { @MainActor in
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, from: viewController)
-                return
-            }
-            
-            // Check if any loading paywall is already in progress
-            if paywallsDisplayed.contains(where: { $0.isLoading }) {
                 return
             }
             

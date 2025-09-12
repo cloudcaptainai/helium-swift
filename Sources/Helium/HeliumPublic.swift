@@ -15,13 +15,12 @@ public class Helium {
     
     public static let shared = Helium()
     
-    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) {
-        // Configure presentation context (always set both to ensure proper reset)
-        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits
-        )
-        
+    public func presentUpsell(
+        trigger: String,
+        from viewController: UIViewController? = nil,
+        eventHandlers: PaywallEventHandlers? = nil,
+        customPaywallTraits: [String: Any]? = nil
+    ) {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -30,14 +29,17 @@ public class Helium {
             return
         }
         
-        // Use loading budget approach if configured for this trigger
-        // Default to false if fallbackConfig is nil (backward compatibility with deprecated init)
-        let useLoadingForTrigger = fallbackConfig?.useLoadingState(for: trigger) ?? false
-        if useLoadingForTrigger {
-            HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
-        } else {
-            HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
-        }
+        // Configure presentation context (always set both to ensure proper reset)
+        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            eventService: eventHandlers,
+            customPaywallTraits: customPaywallTraits
+        )
+        
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+    }
+    
+    public func loadingStateEnabledFor(trigger: String) -> Bool {
+        return fallbackConfig?.useLoadingState(for: trigger) ?? false
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
