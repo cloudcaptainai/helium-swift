@@ -31,7 +31,9 @@ public protocol PaywallContextEvent: PaywallEvent {
 }
 
 extension PaywallContextEvent {
-    public var isSecondTry: Bool { triggerName.hasSuffix("_second_try") }
+    public var isSecondTry: Bool {
+        HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName)
+    }
 }
 
 /// Events related to products/subscriptions
