@@ -18,7 +18,16 @@ class HeliumPaywallPresenter {
     func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
         Task { @MainActor in
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-            let contentView = upsellViewResult.view
+            guard let contentView = upsellViewResult.view else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        error: "No fallback available when present called."
+                    )
+                )
+                return
+            }
             presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, contentView: contentView, from: viewController)
         }
     }
@@ -87,7 +96,17 @@ class HeliumPaywallPresenter {
         }
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-        loadingPaywall.updateContent(upsellViewResult.view)
+        guard let upsellView = upsellViewResult.view else {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: upsellViewResult.templateName ?? "unknown",
+                    error: "No fallback available after load complete."
+                )
+            )
+            hideUpsell()
+            return
+        }
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
     }
