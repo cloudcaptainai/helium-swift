@@ -27,6 +27,11 @@ public protocol PaywallEvent {
 public protocol PaywallContextEvent: PaywallEvent {
     var triggerName: String { get }
     var paywallName: String { get }
+    var isSecondTry: Bool { get }
+}
+
+extension PaywallContextEvent {
+    public var isSecondTry: Bool { triggerName.hasSuffix("_second_try") }
 }
 
 /// Events related to products/subscriptions
@@ -67,6 +72,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "viewType": viewType.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
@@ -105,6 +111,7 @@ public struct PaywallCloseEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -147,6 +154,7 @@ public struct PaywallDismissedEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "dismissAll": dismissAll,
             "timestamp": timestamp.timeIntervalSince1970
         ]
@@ -188,6 +196,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let error = error {
@@ -264,6 +273,7 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
             "buttonName": buttonName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -309,6 +319,7 @@ public struct ProductSelectedEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -352,6 +363,7 @@ public struct PurchasePressedEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -395,6 +407,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -438,6 +451,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -486,6 +500,7 @@ public struct PurchaseFailedEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let error = error {
@@ -533,6 +548,7 @@ public struct PurchaseRestoredEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -570,6 +586,7 @@ public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -613,6 +630,7 @@ public struct PurchasePendingEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -804,6 +822,7 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let renderTime = webviewRenderTimeTakenMS {
