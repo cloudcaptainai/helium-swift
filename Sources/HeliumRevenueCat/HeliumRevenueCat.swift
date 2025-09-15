@@ -42,6 +42,10 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
         // Keep this value as up-to-date as possible
         Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
         
+        Purchases.shared.attribution.setAttributes([
+            "helium_hpid" : HeliumIdentityManager.shared.getHeliumPersistentId()
+        ])
+        
         Task {
             do {
                 offerings = try await Purchases.shared.offerings()
