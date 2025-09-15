@@ -79,13 +79,15 @@ class HeliumViewController: UIViewController {
     let trigger: String
     var isFallback: Bool
     var isLoading: Bool
+    let isSecondTry: Bool
     private var contentView: AnyView
     private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
-    init(trigger: String, isFallback: Bool, contentView: AnyView, isLoading: Bool = false) {
+    init(trigger: String, isFallback: Bool, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
         self.isFallback = isFallback
+        self.isSecondTry = isSecondTry
         self.isLoading = isLoading
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))

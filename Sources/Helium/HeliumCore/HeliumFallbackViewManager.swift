@@ -67,7 +67,7 @@ public class HeliumFallbackViewManager {
     }
     
     
-    public func getFallbackForTrigger(trigger: String) -> AnyView {
+    public func getFallbackForTrigger(trigger: String) -> AnyView? {
         if let fallbackView = triggerToFallbackView[trigger] {
             return fallbackView
         }
@@ -75,8 +75,7 @@ public class HeliumFallbackViewManager {
         if let defaultFallback = defaultFallback {
             return defaultFallback
         }
-        // Return empty view if no fallback is configured
-        return AnyView(EmptyView())
+        return nil
     }
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {

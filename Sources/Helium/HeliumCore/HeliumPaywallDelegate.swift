@@ -91,25 +91,12 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.delegate = delegate
     }
     
-    public func setEventService(_ eventService: PaywallEventHandlers?) {
-        self.eventService = eventService
-    }
-    
-    public func setCustomPaywallTraits(_ traits: [String: Any]) {
-        self.customPaywallTraits = traits
-    }
-    
-    public func clearCustomPaywallTraits() {
-        self.customPaywallTraits = [:]
-    }
-    
     /// Consolidated method to set both event service and custom traits for a paywall presentation
     public func configurePresentationContext(eventService: PaywallEventHandlers?, customPaywallTraits: [String: Any]?) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]
     }
-    
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
@@ -207,7 +194,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         delegate?.onPaywallEvent(event)
         
         // Clear presentation context (event service and custom traits) on close events
-        if event is PaywallCloseEvent {
+        if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
             clearPresentationContext()
         }
         

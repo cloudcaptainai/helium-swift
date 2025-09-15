@@ -15,11 +15,26 @@ class HeliumPaywallPresenter {
     
     private var paywallsDisplayed: [HeliumViewController] = []
     
-    func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+    func isSecondTryPaywall(trigger: String) -> Bool {
+        return paywallsDisplayed.contains {
+            $0.isSecondTry
+        }
+    }
+    
+    func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil) {
         Task { @MainActor in
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-            let contentView = upsellViewResult.view
-            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, contentView: contentView, from: viewController)
+            guard let contentView = upsellViewResult.view else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        error: "No fallback available when present called."
+                    )
+                )
+                return
+            }
+            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -87,7 +102,17 @@ class HeliumPaywallPresenter {
         }
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-        loadingPaywall.updateContent(upsellViewResult.view)
+        guard let upsellView = upsellViewResult.view else {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: upsellViewResult.templateName ?? "unknown",
+                    error: "No fallback available after load complete."
+                )
+            )
+            hideUpsell()
+            return
+        }
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
     }
@@ -184,8 +209,8 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, isFallback: Bool, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, isFallback: Bool, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()
