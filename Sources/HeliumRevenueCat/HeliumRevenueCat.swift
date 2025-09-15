@@ -26,10 +26,12 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
     /// - Parameter entitlementId: (Optional). The id of the [entitlement](https://www.revenuecat.com/docs/getting-started/entitlements) that you have configured with RevenueCat. If provided, the "restore purchases" action will look for this entitlement otherwise it will look for any active entitlement.
     /// - Parameter productIds: (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     /// - Parameter revenueCatApiKey: (Optional). Only set if you want Helium to handle RevenueCat initialization for you. Otherwise make sure to [initialize RevenueCat](https://www.revenuecat.com/docs/getting-started/quickstart#initialize-and-configure-the-sdk) before initializing Helium.
+    /// - Parameter allowHeliumUserAttribute: (Optional) Allow Helium to set [customer attributes](https://www.revenuecat.com/docs/customers/customer-attributes)
     public init(
         entitlementId: String? = nil,
         productIds: [String]? = nil,
-        revenueCatApiKey: String? = nil
+        revenueCatApiKey: String? = nil,
+        allowHeliumUserAttribute: Bool = true
     ) {
         self.entitlementId = entitlementId
         
@@ -37,6 +39,15 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
         } else if !Purchases.isConfigured {
             print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.") 
+        }
+        
+        // Keep this value as up-to-date as possible
+        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        
+        if allowHeliumUserAttribute {
+            Purchases.shared.attribution.setAttributes([
+                "helium_hpid" : HeliumIdentityManager.shared.getHeliumPersistentId()
+            ])
         }
         
         Task {
@@ -58,6 +69,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
     }
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+        // Keep this value as up-to-date as possible
+        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        
         do {
             var result: PurchaseResultData? = nil
             

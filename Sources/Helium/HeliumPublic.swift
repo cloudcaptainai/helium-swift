@@ -358,7 +358,9 @@ public class Helium {
             HeliumIdentityManager.shared.setDefaultAppAttributionToken()
         }
         
-        HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
+        if let revenueCatAppUserId {
+            HeliumIdentityManager.shared.setRevenueCatAppUserId(revenueCatAppUserId)
+        }
         
         AppReceiptsHelper.shared.setUp()
         
@@ -426,6 +428,12 @@ public class Helium {
     /// This helps Helium provide more accurate dashboard metrics.
     public func setAppAttributionToken(_ token: UUID) {
         HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
+    }
+    
+    /// If using RevenueCat for purchases, let Helium know the latest RevenueCat appUserId value for more accurate metrics.
+    /// Note - You DO NOT have to set this if using Helium's RevenueCatPurchaseDelegate.
+    public func setRevenueCatAppUserId(_ rcAppUserId: String) {
+        HeliumIdentityManager.shared.setRevenueCatAppUserId(rcAppUserId)
     }
     
     /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
