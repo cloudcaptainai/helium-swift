@@ -39,6 +39,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.") 
         }
         
+        // Keep this value as up-to-date as possible
+        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        
         Task {
             do {
                 offerings = try await Purchases.shared.offerings()
@@ -58,6 +61,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
     }
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+        // Keep this value as up-to-date as possible
+        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        
         do {
             var result: PurchaseResultData? = nil
             
