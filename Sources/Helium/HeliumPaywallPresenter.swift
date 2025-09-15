@@ -4,6 +4,9 @@ import UIKit
 
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
+    
+    private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
+    
     private init() {
         NotificationCenter.default.addObserver(
             self,
@@ -82,6 +85,7 @@ class HeliumPaywallPresenter {
                 await MainActor.run {
                     // Update to real paywall or fallback if still not ready
                     self.updateLoadingPaywall(trigger: trigger)
+                    NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
                 }
             }
             
@@ -89,7 +93,7 @@ class HeliumPaywallPresenter {
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(handleDownloadComplete(_:)),
-                name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                name: configDownloadEventName,
                 object: nil
             )
         }
@@ -113,6 +117,7 @@ class HeliumPaywallPresenter {
             hideUpsell()
             return
         }
+        loadingPaywall.updateContent(upsellView)
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
     }
@@ -124,6 +129,7 @@ class HeliumPaywallPresenter {
                 updateLoadingPaywall(trigger: paywall.trigger)
             }
         }
+        NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
     
     private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {

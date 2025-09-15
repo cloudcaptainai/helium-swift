@@ -161,7 +161,8 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
-                    paywallName: "unknown"
+                    paywallName: "unknown",
+                    error: "Second try - no paywall found for trigger."
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
