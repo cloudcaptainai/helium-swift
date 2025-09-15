@@ -69,7 +69,7 @@ public enum HeliumPaywallEvent: Codable {
     case subscriptionRestoreFailed(triggerName: String, paywallTemplateName: String)
     case subscriptionPending(productKey: String, triggerName: String, paywallTemplateName: String)
     case paywallOpen(triggerName: String, paywallTemplateName: String, viewType: String)
-    case paywallOpenFailed(triggerName: String, paywallTemplateName: String)
+    case paywallOpenFailed(triggerName: String, paywallTemplateName: String, error: String)
     case paywallClose(triggerName: String, paywallTemplateName: String)
     case paywallDismissed(triggerName: String, paywallTemplateName: String, dismissAll: Bool = false)
     case paywallSkipped(triggerName: String)
@@ -106,9 +106,10 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallOpen(let triggerName, let paywallTemplateName, let viewType):
             return triggerName;
             
-        case .paywallOpenFailed(let triggerName, let paywallTemplateName),
-             .paywallClose(let triggerName, let paywallTemplateName):
-            return triggerName;
+        case .paywallOpenFailed(let triggerName, _, _):
+            return triggerName
+        case .paywallClose(let triggerName, _):
+            return triggerName
             
         case .paywallDismissed(let triggerName, let paywallTemplateName, let dismissAll):
             return triggerName;
@@ -140,9 +141,10 @@ public enum HeliumPaywallEvent: Codable {
             return paywallTemplateName;
         case .paywallOpen(let triggerName, let paywallTemplateName, let viewType):
             return paywallTemplateName;
-        case .paywallOpenFailed(let triggerName, let paywallTemplateName),
-             .paywallClose(let triggerName, let paywallTemplateName):
-            return paywallTemplateName;
+        case .paywallOpenFailed( _, let paywallTemplateName, _):
+            return paywallTemplateName
+        case .paywallClose(_, let paywallTemplateName):
+            return paywallTemplateName
         case .paywallDismissed(let triggerName, let paywallTemplateName, let dismissAll):
             return paywallTemplateName;
         case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
@@ -188,8 +190,12 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encode(viewType, forKey: .viewType)
-        case .paywallOpenFailed(let triggerName, let paywallTemplateName),
-             .paywallClose(let triggerName, let paywallTemplateName):
+        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error):
+            try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
+            try container.encode(triggerName, forKey: .triggerName)
+            try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
+            try container.encode(error, forKey: .errorDescription)
+        case .paywallClose(let triggerName, let paywallTemplateName):
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
@@ -280,7 +286,8 @@ public enum HeliumPaywallEvent: Codable {
         case "paywallOpenFailed":
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
-            self = .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallTemplateName)
+            let error = try container.decode(String.self, forKey: .errorDescription)
+            self = .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error)
         case "paywallClose":
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
@@ -345,7 +352,6 @@ public enum HeliumPaywallEvent: Codable {
         }
     }
     
-    // Note - this is used by Expo SDK
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "type": self.caseString()
@@ -395,6 +401,11 @@ public enum HeliumPaywallEvent: Codable {
             dict["paywallTemplateName"] = paywallTemplateName
             dict["viewType"] = viewType
             
+        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error):
+            dict["triggerName"] = triggerName;
+            dict["paywallTemplateName"] = paywallTemplateName
+            dict["errorDescription"] = error
+            
         case .paywallClose(let triggerName, let paywallTemplateName):
             dict["triggerName"] = triggerName;
             dict["paywallTemplateName"] = paywallTemplateName
@@ -411,10 +422,6 @@ public enum HeliumPaywallEvent: Codable {
             dict["errorDescription"] = error
             dict["numAttempts"] = numAttempts
             
-        default:
-            if let trigger = self.getTriggerIfExists() {
-                dict["triggerName"] = trigger
-            }
         }
         
         return dict

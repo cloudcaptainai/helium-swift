@@ -194,7 +194,7 @@ public struct DynamicWebView: View {
                     try await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
                     webView = preparedWebView
                 } catch {
-                    webViewLoadFail(templateNameForEvent: "WebViewLoadFail")
+                    webViewLoadFail(reason: "WebViewLoadFail")
                 }
             }
             Task {
@@ -203,22 +203,25 @@ public struct DynamicWebView: View {
                 lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
             }
         } catch {
-            webViewLoadFail(templateNameForEvent: "WebViewContextError")
+            webViewLoadFail(reason: "WebViewContextError")
         }
     }
     
-    private func webViewLoadFail(templateNameForEvent: String) {
-        HeliumPaywallDelegateWrapper.shared.fireEvent(
-            PaywallOpenFailedEvent(
-                triggerName: triggerName ?? "",
-                paywallName: templateNameForEvent,
-                error: "WebView failed to load"
-            )
-        );
+    private func webViewLoadFail(reason: String) {
         if fallbackPaywall != nil {
             shouldShowFallback = true
+        } else {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: triggerName ?? "",
+                    paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
+                    error: "WebView failed to load - \(reason)"
+                )
+            )
+            if presentationState.viewType == .presented {
+                Helium.shared.hideUpsell()
+            }
         }
-        // else should we show a generic fallback/error screen?
     }
     
     private func lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: Bool = true) {

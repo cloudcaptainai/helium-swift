@@ -4,6 +4,9 @@ import UIKit
 
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
+    
+    private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
+    
     private init() {
         NotificationCenter.default.addObserver(
             self,
@@ -15,24 +18,47 @@ class HeliumPaywallPresenter {
     
     private var paywallsDisplayed: [HeliumViewController] = []
     
-    func presentUpsell(trigger: String, from viewController: UIViewController? = nil) {
+    func isSecondTryPaywall(trigger: String) -> Bool {
+        return paywallsDisplayed.contains {
+            $0.isSecondTry
+        }
+    }
+    
+    func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil) {
         Task { @MainActor in
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-            let contentView = upsellViewResult.view
-            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, contentView: contentView, from: viewController)
+            guard let contentView = upsellViewResult.view else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        error: "No paywall for trigger and no fallback available when present called."
+                    )
+                )
+                return
+            }
+            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
     func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil) {
+        if !paywallsDisplayed.isEmpty {
+            // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
+            print("[Helium] A paywall is already being presented.")
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    error: "A paywall is already being presented."
+                )
+            )
+            return
+        }
+        
         Task { @MainActor in
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, from: viewController)
-                return
-            }
-            
-            // Check if any loading paywall is already in progress
-            if paywallsDisplayed.contains(where: { $0.isLoading }) {
                 return
             }
             
@@ -63,6 +89,7 @@ class HeliumPaywallPresenter {
                 await MainActor.run {
                     // Update to real paywall or fallback if still not ready
                     self.updateLoadingPaywall(trigger: trigger)
+                    NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
                 }
             }
             
@@ -70,7 +97,7 @@ class HeliumPaywallPresenter {
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(handleDownloadComplete(_:)),
-                name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                name: configDownloadEventName,
                 object: nil
             )
         }
@@ -83,7 +110,18 @@ class HeliumPaywallPresenter {
         }
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-        loadingPaywall.updateContent(upsellViewResult.view)
+        guard let upsellView = upsellViewResult.view else {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: upsellViewResult.templateName ?? "unknown",
+                    error: "No paywall for trigger and no fallback available after load complete."
+                )
+            )
+            hideUpsell()
+            return
+        }
+        loadingPaywall.updateContent(upsellView)
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
     }
@@ -95,6 +133,7 @@ class HeliumPaywallPresenter {
                 updateLoadingPaywall(trigger: paywall.trigger)
             }
         }
+        NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
     
     private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
@@ -180,8 +219,8 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, isFallback: Bool, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, isFallback: Bool, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         let presenter = viewController ?? findTopMostViewController()

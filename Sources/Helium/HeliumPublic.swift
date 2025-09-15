@@ -3,8 +3,9 @@ import SwiftUI
 import StoreKit
 
 struct UpsellViewResult {
-    let view: AnyView
+    let view: AnyView?
     let isFallback: Bool
+    let templateName: String?
 }
 
 public class Helium {
@@ -15,13 +16,12 @@ public class Helium {
     
     public static let shared = Helium()
     
-    public func presentUpsell(trigger: String, from viewController: UIViewController? = nil, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) {
-        // Configure presentation context (always set both to ensure proper reset)
-        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits
-        )
-        
+    public func presentUpsell(
+        trigger: String,
+        from viewController: UIViewController? = nil,
+        eventHandlers: PaywallEventHandlers? = nil,
+        customPaywallTraits: [String: Any]? = nil
+    ) {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -30,14 +30,17 @@ public class Helium {
             return
         }
         
-        // Use loading budget approach if configured for this trigger
-        // Default to false if fallbackConfig is nil (backward compatibility with deprecated init)
-        let useLoadingForTrigger = fallbackConfig?.useLoadingState(for: trigger) ?? false
-        if useLoadingForTrigger {
-            HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
-        } else {
-            HeliumPaywallPresenter.shared.presentUpsell(trigger: trigger, from: viewController)
-        }
+        // Configure presentation context (always set both to ensure proper reset)
+        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            eventService: eventHandlers,
+            customPaywallTraits: customPaywallTraits
+        )
+        
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+    }
+    
+    public func loadingStateEnabledFor(trigger: String) -> Bool {
+        return fallbackConfig?.useLoadingState(for: trigger) ?? false
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -105,7 +108,7 @@ public class Helium {
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
     
-    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView {
+    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
@@ -137,7 +140,7 @@ public class Helium {
                     trigger: trigger,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
-                return UpsellViewResult(view: paywallView, isFallback: false)
+                return UpsellViewResult(view: paywallView, isFallback: false, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
                 print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
                 return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
@@ -149,7 +152,17 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
-        var result: AnyView
+        var result: AnyView?
+        
+        let getFallbackViewForTrigger: () -> AnyView? = {
+            if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                    fallbackView
+                })
+            } else {
+                return nil
+            }
+        }
         
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
@@ -162,18 +175,12 @@ public class Helium {
                     )
                 )
             } catch {
-                let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-                result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                    fallbackView
-                })
+                result = getFallbackViewForTrigger()
             }
         } else {
-            let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger)
-            result = AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
-                fallbackView
-            })
+            result = getFallbackViewForTrigger()
         }
-        return UpsellViewResult(view: result, isFallback: true)
+        return UpsellViewResult(view: result, isFallback: true, templateName: templateName)
     }
     
     public func getHeliumUserId() -> String? {
