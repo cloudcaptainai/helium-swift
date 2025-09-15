@@ -358,7 +358,9 @@ public class Helium {
             HeliumIdentityManager.shared.setDefaultAppAttributionToken()
         }
         
-        HeliumIdentityManager.shared.revenueCatAppUserId = revenueCatAppUserId
+        if let revenueCatAppUserId {
+            HeliumIdentityManager.shared.setRevenueCatAppUserId(revenueCatAppUserId)
+        }
         
         AppReceiptsHelper.shared.setUp()
         

@@ -14,7 +14,7 @@ public class HeliumIdentityManager {
     private var heliumPaywallSessionId: String?
     
     private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
-    var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
+    private(set) var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
     
     private var cachedUserContext: CodableUserContext? = nil
     
