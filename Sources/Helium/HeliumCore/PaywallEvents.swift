@@ -178,13 +178,13 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     
     /// Optional error message describing why the paywall failed to open
     /// - Note: Provides context for debugging (e.g., "WebView failed to load", "Template not found")
-    public let error: String?
+    public let error: String
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, error: String? = nil, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, error: String, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
@@ -199,16 +199,14 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "error": error,
             "timestamp": timestamp.timeIntervalSince1970
         ]
-        if let error = error {
-            dict["error"] = error
-        }
         return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName)
+        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error)
     }
 }
 

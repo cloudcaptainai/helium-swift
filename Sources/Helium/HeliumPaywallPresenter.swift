@@ -32,7 +32,7 @@ class HeliumPaywallPresenter {
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
-                        error: "No fallback available when present called."
+                        error: "No paywall for trigger and no fallback available when present called."
                     )
                 )
                 return
@@ -46,7 +46,11 @@ class HeliumPaywallPresenter {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
             print("[Helium] A paywall is already being presented.")
             HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallSkippedEvent(triggerName: trigger)
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    error: "A paywall is already being presented."
+                )
             )
             return
         }
@@ -111,7 +115,7 @@ class HeliumPaywallPresenter {
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: upsellViewResult.templateName ?? "unknown",
-                    error: "No fallback available after load complete."
+                    error: "No paywall for trigger and no fallback available after load complete."
                 )
             )
             hideUpsell()
