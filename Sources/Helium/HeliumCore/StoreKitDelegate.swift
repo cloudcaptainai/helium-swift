@@ -65,6 +65,10 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
     open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         // Override in a subclass if desired
     }
+    
+    open func onPaywallEvent(_ event: PaywallEvent) {
+        // Override in a subclass if desired
+    }
 }
 public enum StoreKitDelegateError: LocalizedError {
     case cannotFindProduct

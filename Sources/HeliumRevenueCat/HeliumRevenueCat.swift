@@ -6,7 +6,12 @@
 //
 
 import Helium
-import RevenueCat
+import class RevenueCat.Purchases
+import class RevenueCat.Offerings
+import class RevenueCat.CustomerInfo
+import class RevenueCat.StoreProduct
+import typealias RevenueCat.PurchaseResultData
+import class RevenueCat.Package
 import Foundation
 
 /// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
@@ -54,7 +59,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             do {
                 offerings = try await Purchases.shared.offerings()
                 if let productIds {
-                    let products = try await Purchases.shared.products(productIds)
+                    let products = await Purchases.shared.products(productIds)
                     var mappings: [String: StoreProduct] = [:]
                     // Create product mappings from product IDs
                     for product in products {
@@ -102,7 +107,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             }
             
             if result == nil {
-                let productToPurchase = try await Purchases.shared.products([productId])
+                let productToPurchase = await Purchases.shared.products([productId])
                 if let product = productToPurchase.first {
                     productMappings[productId] = product
                     result = try await Purchases.shared.purchase(product: product)
@@ -141,6 +146,10 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
     }
     
     open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Override in a subclass if desired
+    }
+    
+    open func onPaywallEvent(_ event: PaywallEvent) {
         // Override in a subclass if desired
     }
     
