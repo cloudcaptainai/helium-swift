@@ -71,7 +71,7 @@ class HeliumPaywallPresenter {
             let triggerLoadingView = fallbackConfig.loadingView(for: trigger)
             
             // If loading state disabled for this trigger, show fallback immediately
-            if !useLoading {
+            if !useLoading || Helium.shared.getDownloadStatus() != .inProgress {
                 presentUpsell(trigger: trigger, from: viewController)
                 return
             }
