@@ -128,6 +128,8 @@ class HeliumPaywallPresenter {
         loadingPaywall.updateContent(upsellView)
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
+        
+        dispatchOpenEvent(trigger: trigger)
     }
     
     @objc private func handleDownloadComplete(_ notification: Notification) {
@@ -231,8 +233,10 @@ class HeliumPaywallPresenter {
         presenter.present(modalVC, animated: true)
         
         paywallsDisplayed.append(modalVC)
-                
-        dispatchOpenEvent(trigger: trigger)
+
+        if !isLoading {
+            dispatchOpenEvent(trigger: trigger)
+        }
     }
     
     @MainActor

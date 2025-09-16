@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Base Protocol
 
 /// Base protocol for all paywall events in the v2 system
-public enum HeliumEvent {
+public enum HeliumEvent { // Use the enum as a namespace for PaywallEvent
     public protocol PaywallEvent {
         var eventName: String { get }
         var timestamp: Date { get }
