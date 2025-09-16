@@ -109,6 +109,10 @@ class HeliumPaywallPresenter {
             return
         }
         
+        if Helium.shared.skipPaywallIfNeeded(trigger: trigger) {
+            return
+        }
+        
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
         guard let upsellView = upsellViewResult.view else {
             HeliumPaywallDelegateWrapper.shared.fireEvent(

@@ -22,11 +22,7 @@ public class Helium {
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil
     ) {
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        if paywallInfo?.shouldShow == false {
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallSkippedEvent(triggerName: trigger)
-            )
+        if skipPaywallIfNeeded(trigger: trigger) {
             return
         }
         
@@ -37,6 +33,17 @@ public class Helium {
         )
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+    }
+    
+    func skipPaywallIfNeeded(trigger: String) -> Bool {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallInfo?.shouldShow == false {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallSkippedEvent(triggerName: trigger)
+            )
+            return true
+        }
+        return false
     }
     
     public func loadingStateEnabledFor(trigger: String) -> Bool {
