@@ -126,7 +126,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     public func getCustomVariableValues() -> [String: Any?] {
-        return customPaywallTraits;
+        return !customPaywallTraits.isEmpty ? customPaywallTraits : delegate?.getCustomVariableValues() ?? [:]
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
