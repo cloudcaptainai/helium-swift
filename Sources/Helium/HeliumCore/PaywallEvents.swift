@@ -10,16 +10,20 @@ import Foundation
 // MARK: - Base Protocol
 
 /// Base protocol for all paywall events in the v2 system
-public protocol PaywallEvent {
-    var eventName: String { get }
-    var timestamp: Date { get }
-    
-    /// Convert to dictionary for analytics/logging
-    func toDictionary() -> [String: Any]
-    
-    /// Convert to legacy enum format for backward compatibility
-    func toLegacyEvent() -> HeliumPaywallEvent
+public enum HeliumEvent {
+    public protocol PaywallEvent {
+        var eventName: String { get }
+        var timestamp: Date { get }
+        
+        /// Convert to dictionary for analytics/logging
+        func toDictionary() -> [String: Any]
+        
+        /// Convert to legacy enum format for backward compatibility
+        func toLegacyEvent() -> HeliumPaywallEvent
+    }
 }
+
+public typealias PaywallEvent = HeliumEvent.PaywallEvent
 
 // MARK: - Event Context Protocols
 

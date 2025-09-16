@@ -6,12 +6,7 @@
 //
 
 import Helium
-import class RevenueCat.Purchases
-import class RevenueCat.Offerings
-import class RevenueCat.CustomerInfo
-import class RevenueCat.StoreProduct
-import typealias RevenueCat.PurchaseResultData
-import class RevenueCat.Package
+import RevenueCat
 import Foundation
 
 /// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
@@ -149,7 +144,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
         // Override in a subclass if desired
     }
     
-    open func onPaywallEvent(_ event: PaywallEvent) {
+    open func onPaywallEvent(_ event: HeliumEvent.PaywallEvent) {
         // Override in a subclass if desired
     }
     
