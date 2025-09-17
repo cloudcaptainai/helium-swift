@@ -290,6 +290,14 @@ class HeliumPaywallPresenter {
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
+        dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
+    }
+    
+    private func dispatchCloseEvent(paywallVC: HeliumViewController) {
+        dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
+    }
+    
+    private func dispatchOpenOrCloseEvent(openEvent: Bool, paywallVC: HeliumViewController) {
         if paywallVC.isLoading {
             return // don't fire an event in this case
         }
@@ -298,30 +306,21 @@ class HeliumPaywallPresenter {
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
         let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
-        HeliumPaywallDelegateWrapper.shared.fireEvent(
-            PaywallOpenEvent(
+        
+        let event: PaywallEvent
+        if openEvent {
+            event = PaywallOpenEvent(
                 triggerName: trigger,
                 paywallName: templateName,
                 viewType: .presented
             )
-        )
-    }
-    
-    private func dispatchCloseEvent(paywallVC: HeliumViewController) {
-        if paywallVC.isLoading {
-            return // don't fire an event in this case
-        }
-        let trigger = paywallVC.trigger
-        let isFallback = paywallVC.isFallback
-        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
-        let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
-        HeliumPaywallDelegateWrapper.shared.fireEvent(
-            PaywallCloseEvent(
+        } else {
+            event = PaywallCloseEvent(
                 triggerName: trigger,
                 paywallName: templateName
             )
-        )
+        }
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {
