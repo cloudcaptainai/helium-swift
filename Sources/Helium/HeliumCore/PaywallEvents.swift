@@ -10,25 +10,21 @@ import Foundation
 // MARK: - Base Protocol
 
 /// Base protocol for all paywall events in the v2 system
-public enum HeliumEvent { // Use the enum as a namespace for PaywallEvent
-    public protocol PaywallEvent {
-        var eventName: String { get }
-        var timestamp: Date { get }
-        
-        /// Convert to dictionary for analytics/logging
-        func toDictionary() -> [String: Any]
-        
-        /// Convert to legacy enum format for backward compatibility
-        func toLegacyEvent() -> HeliumPaywallEvent
-    }
+public protocol HeliumEvent {
+    var eventName: String { get }
+    var timestamp: Date { get }
+    
+    /// Convert to dictionary for analytics/logging
+    func toDictionary() -> [String: Any]
+    
+    /// Convert to legacy enum format for backward compatibility
+    func toLegacyEvent() -> HeliumPaywallEvent
 }
-
-public typealias PaywallEvent = HeliumEvent.PaywallEvent
 
 // MARK: - Event Context Protocols
 
 /// Events that have paywall context
-public protocol PaywallContextEvent: PaywallEvent {
+public protocol PaywallContextEvent: HeliumEvent {
     var triggerName: String { get }
     var paywallName: String { get }
     var isSecondTry: Bool { get }
@@ -214,7 +210,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     }
 }
 
-public struct PaywallSkippedEvent: PaywallEvent {
+public struct PaywallSkippedEvent: HeliumEvent {
     /// The trigger identifier that was skipped
     /// - Note: Trigger key from Helium dashboard where shouldShow=false in config
     public let triggerName: String
@@ -648,7 +644,7 @@ public struct PurchasePendingEvent: ProductEvent {
 
 /// Event fired at the beginning of Helium.shared.initialize() method
 /// - Note: Marks the start of SDK initialization process
-public struct InitializeStartEvent: PaywallEvent {
+public struct InitializeStartEvent: HeliumEvent {
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
@@ -673,7 +669,7 @@ public struct InitializeStartEvent: PaywallEvent {
 
 /// Event fired after successful network fetch and parsing of paywall configuration from Helium servers
 /// - Note: Includes timing metrics for download, image fetch, font fetch, and bundle download
-public struct PaywallsDownloadSuccessEvent: PaywallEvent {
+public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// Total time taken to download configuration in milliseconds
     /// - Note: Measured from start of network request to successful response parsing
     public let downloadTimeTakenMS: UInt64?
@@ -755,7 +751,7 @@ public struct PaywallsDownloadSuccessEvent: PaywallEvent {
 
 /// Event fired when paywall configuration download fails
 /// - Note: Event fired when network fetch or parsing of paywall configuration fails. Fired after all retry attempts have been exhausted.
-public struct PaywallsDownloadErrorEvent: PaywallEvent {
+public struct PaywallsDownloadErrorEvent: HeliumEvent {
     /// The error message describing what went wrong
     /// - Note: Network error, parsing error, or timeout message
     public let error: String

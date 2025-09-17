@@ -144,7 +144,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
         // Override in a subclass if desired
     }
     
-    open func onPaywallEvent(_ event: HeliumEvent.PaywallEvent) {
+    open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
     }
     

@@ -66,7 +66,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
         // Override in a subclass if desired
     }
     
-    open func onPaywallEvent(_ event: PaywallEvent) {
+    open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
     }
 }

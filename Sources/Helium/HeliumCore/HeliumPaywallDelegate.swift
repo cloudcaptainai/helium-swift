@@ -45,7 +45,7 @@ public protocol HeliumPaywallDelegate: AnyObject {
     ///     }
     /// }
     /// ```
-    func onPaywallEvent(_ event: PaywallEvent)
+    func onPaywallEvent(_ event: HeliumEvent)
     
     @available(*, deprecated, message: "Use customPaywallTraits parameter on presentation methods instead")
     func getCustomVariableValues() -> [String: Any?]
@@ -59,7 +59,7 @@ public extension HeliumPaywallDelegate {
     }
     
     /// Default implementation for v2 typed events - does nothing
-    func onPaywallEvent(_ event: PaywallEvent) {
+    func onPaywallEvent(_ event: HeliumEvent) {
         // Default implementation does nothing
     }
     
@@ -186,7 +186,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     
     /// Fire a v2 typed event - main entry point for all SDK events
-    public func fireEvent(_ event: PaywallEvent) {
+    public func fireEvent(_ event: HeliumEvent) {
         // First, call the event service if configured
         eventService?.handleEvent(event)
         
