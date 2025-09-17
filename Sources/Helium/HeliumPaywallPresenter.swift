@@ -63,12 +63,12 @@ class HeliumPaywallPresenter {
             }
             
             // Get fallback configuration
-            let fallbackConfig = Helium.shared.fallbackConfig ?? HeliumFallbackConfig.withFallbackView(EmptyView())
+            let fallbackConfig = Helium.shared.fallbackConfig
             
             // Get trigger-specific loading configuration
-            let useLoading = fallbackConfig.useLoadingState(for: trigger)
-            let loadingBudget = fallbackConfig.loadingBudget(for: trigger)
-            let triggerLoadingView = fallbackConfig.loadingView(for: trigger)
+            let useLoading = fallbackConfig?.useLoadingState(for: trigger) ?? false
+            let loadingBudget = fallbackConfig?.loadingBudget(for: trigger) ?? 0
+            let triggerLoadingView = fallbackConfig?.loadingView(for: trigger)
             
             // If loading state disabled for this trigger, show fallback immediately
             if !useLoading || Helium.shared.getDownloadStatus() != .inProgress {

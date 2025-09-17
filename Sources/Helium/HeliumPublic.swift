@@ -97,6 +97,8 @@ public class Helium {
     ///
     /// - Note: This does NOT clear user identification or session data
     public func clearAllCachedState() {
+        hideAllUpsells()
+        
         // Clear physical bundle files from disk
         HeliumAssetManager.shared.clearCache()
         
@@ -111,7 +113,7 @@ public class Helium {
         controller = nil
         fallbackConfig = nil
         baseTemplateViewType = nil
-        
+                
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
     
@@ -305,38 +307,14 @@ public class Helium {
             finalFallbackConfig = providedConfig
         } else if hasDeprecatedParams {
             // Create a HeliumFallbackConfig from the deprecated parameters
-            if let triggerFallbacks = fallbackPaywallPerTrigger, let bundleURL = fallbackBundleURL {
-                // Both per-trigger and bundle
-                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
-                    fallbackView: fallbackPaywall,
-                    fallbackPerTrigger: triggerFallbacks,
-                    fallbackBundle: bundleURL,
-                    useLoadingState: false  // Maintain old behavior - no loading state
-                )
-            } else if let triggerFallbacks = fallbackPaywallPerTrigger {
-                // Only per-trigger fallbacks
-                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
-                    fallbackView: fallbackPaywall,
-                    fallbackPerTrigger: triggerFallbacks,
-                    fallbackBundle: nil,
-                    useLoadingState: false
-                )
-            } else if let bundleURL = fallbackBundleURL {
-                // Only bundle URL
-                finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
-                    fallbackView: fallbackPaywall,
-                    fallbackPerTrigger: nil,
-                    fallbackBundle: bundleURL,
-                    useLoadingState: false
-                )
-            } else if let fallback = fallbackPaywall {
-                // Only default fallback
-                finalFallbackConfig = HeliumFallbackConfig.withFallbackView(fallback, useLoadingState: false)
-            } else {
-                finalFallbackConfig = nil
-            }
+            finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
+                fallbackView: fallbackPaywall,
+                fallbackPerTrigger: fallbackPaywallPerTrigger,
+                fallbackBundle: fallbackBundleURL,
+                useLoadingState: false  // Maintain old behavior - no loading state
+            )
         } else {
-            // No fallback configuration provided
+            // No fallback configuration provided; should not be possible!
             finalFallbackConfig = nil
         }
         
