@@ -57,20 +57,32 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     /// - Note: Values: .presented (modal), .triggered (SwiftUI view modifier), .embedded (inline in view hierarchy)
     public let viewType: PaywallOpenViewType
     
+    /// How long loading state was shown for in milliseconds. Will be nil if no loading state shown.
+    public let loadTimeTakenMS: UInt64?
+    
+    /// Loading budget for this trigger in milliseconds. Will be nil if no loading state shown.
+    public let loadingBudgetMS: UInt64?
+    
     /// When this event occurred
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, viewType: PaywallOpenViewType, timestamp: Date = Date()) {
+    public init(
+        triggerName: String, paywallName: String, viewType: PaywallOpenViewType,
+        loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil,
+        timestamp: Date = Date()
+    ) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.viewType = viewType
+        self.loadTimeTakenMS = loadTimeTakenMS
+        self.loadingBudgetMS = loadingBudgetMS
         self.timestamp = timestamp
     }
     
     public var eventName: String { "paywallOpen" }
     
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
@@ -78,6 +90,13 @@ public struct PaywallOpenEvent: PaywallContextEvent {
             "viewType": viewType.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let loadTimeTakenMS {
+            dict["loadTimeTakenMS"] = loadTimeTakenMS
+        }
+        if let loadingBudgetMS {
+            dict["loadingBudgetMS"] = loadingBudgetMS
+        }
+        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {

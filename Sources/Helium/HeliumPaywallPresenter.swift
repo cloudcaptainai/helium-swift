@@ -126,9 +126,7 @@ class HeliumPaywallPresenter {
             hideUpsell()
             return
         }
-        loadingPaywall.updateContent(upsellView)
-        loadingPaywall.isFallback = upsellViewResult.isFallback
-        loadingPaywall.isLoading = false
+        loadingPaywall.updateContent(upsellView, isFallback: upsellViewResult.isFallback, isLoading: false)
         
         // Dispatch the official open event
         dispatchOpenEvent(paywallVC: loadingPaywall)
@@ -310,10 +308,18 @@ class HeliumPaywallPresenter {
         
         let event: HeliumEvent
         if openEvent {
+            let loadTimeTakenMS = paywallVC.loadTimeTakenMS
+            let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger)
+            var loadingBudgetMS: UInt64? = nil
+            if loadTimeTakenMS != nil, let loadingBudget {
+                loadingBudgetMS = UInt64(loadingBudget * 1000)
+            }
             event = PaywallOpenEvent(
                 triggerName: trigger,
                 paywallName: templateName,
-                viewType: .presented
+                viewType: .presented,
+                loadTimeTakenMS: loadTimeTakenMS,
+                loadingBudgetMS: loadingBudgetMS
             )
         } else {
             event = PaywallCloseEvent(
