@@ -310,8 +310,7 @@ public class Helium {
             finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
                 fallbackView: fallbackPaywall,
                 fallbackPerTrigger: fallbackPaywallPerTrigger,
-                fallbackBundle: fallbackBundleURL,
-                useLoadingState: false  // Maintain old behavior - no loading state
+                fallbackBundle: fallbackBundleURL
             )
         } else {
             // No fallback configuration provided; should not be possible!
