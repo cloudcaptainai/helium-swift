@@ -110,6 +110,7 @@ class HeliumPaywallPresenter {
         }
         
         if Helium.shared.skipPaywallIfNeeded(trigger: trigger) {
+            hideUpsell()
             return
         }
         
