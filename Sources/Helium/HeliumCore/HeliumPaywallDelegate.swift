@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import StoreKit
 
 public enum HeliumPaywallTransactionStatus {
     case purchased
@@ -143,6 +144,55 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         case .restored:
             self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         case .purchased:
+            var transaction: Transaction? = nil
+            if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction {
+                transaction = transactionDelegate.getLatestCompletedTransaction()
+            }
+            // Backup option 1 - try to get directly from product
+            if transaction == nil {
+                if let productVerificationResult = try? await ProductsCache.shared.getProduct(id: productKey)?.latestTransaction {
+                    switch productVerificationResult {
+                    case .verified(let productTransaction):
+                        transaction = productTransaction
+                        break
+                    default:
+                        break
+                    }
+                }
+            }
+            // Backup option 2 - try to get latest transaction directly
+            if transaction == nil {
+                if let verificationResult = await Transaction.latest(for: productKey) {
+                    switch verificationResult {
+                    case .verified(let productTransaction):
+                        transaction = productTransaction
+                        break
+                    default:
+                        break
+                    }
+                }
+            }
+            
+            if let transaction {
+                print("Transaction retrieved!")
+                print("Transaction ID \(transaction.id)")
+                print("Transaction Original ID \(transaction.originalID)")
+                print("Transaction expirationDate \(transaction.expirationDate)")
+                print("Transaction subscriptionGroupID \(transaction.subscriptionGroupID)")
+                print("Transaction appAccountToken \(transaction.appAccountToken)")
+                print("Transaction environment \(transaction.environment)")
+                print("Transaction ownershipType \(transaction.ownershipType)")
+                print("Transaction purchasedQuantity \(transaction.purchasedQuantity)")
+                print("Transaction productType \(transaction.productType)")
+                print("Transaction price \(transaction.price)")
+                if #available(iOS 17.2, *) {
+                    print("Transaction Offer ID \(transaction.offer?.id)")
+                }
+                
+                // todo fire new transaction occurred event and/or pass in transaction ids to PurchaseSucceededEvent
+                
+            }
+            
             self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
