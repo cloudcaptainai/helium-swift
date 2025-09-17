@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Base Protocol
 
 /// Base protocol for all paywall events in the v2 system
-public protocol PaywallEvent {
+public protocol HeliumEvent {
     var eventName: String { get }
     var timestamp: Date { get }
     
@@ -24,7 +24,7 @@ public protocol PaywallEvent {
 // MARK: - Event Context Protocols
 
 /// Events that have paywall context
-public protocol PaywallContextEvent: PaywallEvent {
+public protocol PaywallContextEvent: HeliumEvent {
     var triggerName: String { get }
     var paywallName: String { get }
     var isSecondTry: Bool { get }
@@ -57,20 +57,32 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     /// - Note: Values: .presented (modal), .triggered (SwiftUI view modifier), .embedded (inline in view hierarchy)
     public let viewType: PaywallOpenViewType
     
+    /// How long loading state was shown for in milliseconds. Will be nil if no loading state shown.
+    public let loadTimeTakenMS: UInt64?
+    
+    /// Loading budget for this trigger in milliseconds. Will be nil if no loading state shown.
+    public let loadingBudgetMS: UInt64?
+    
     /// When this event occurred
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, viewType: PaywallOpenViewType, timestamp: Date = Date()) {
+    public init(
+        triggerName: String, paywallName: String, viewType: PaywallOpenViewType,
+        loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil,
+        timestamp: Date = Date()
+    ) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.viewType = viewType
+        self.loadTimeTakenMS = loadTimeTakenMS
+        self.loadingBudgetMS = loadingBudgetMS
         self.timestamp = timestamp
     }
     
     public var eventName: String { "paywallOpen" }
     
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "triggerName": triggerName,
             "paywallName": paywallName,
@@ -78,10 +90,17 @@ public struct PaywallOpenEvent: PaywallContextEvent {
             "viewType": viewType.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let loadTimeTakenMS {
+            dict["loadTimeTakenMS"] = loadTimeTakenMS
+        }
+        if let loadingBudgetMS {
+            dict["loadingBudgetMS"] = loadingBudgetMS
+        }
+        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue)
+        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS)
     }
 }
 
@@ -210,7 +229,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     }
 }
 
-public struct PaywallSkippedEvent: PaywallEvent {
+public struct PaywallSkippedEvent: HeliumEvent {
     /// The trigger identifier that was skipped
     /// - Note: Trigger key from Helium dashboard where shouldShow=false in config
     public let triggerName: String
@@ -644,7 +663,7 @@ public struct PurchasePendingEvent: ProductEvent {
 
 /// Event fired at the beginning of Helium.shared.initialize() method
 /// - Note: Marks the start of SDK initialization process
-public struct InitializeStartEvent: PaywallEvent {
+public struct InitializeStartEvent: HeliumEvent {
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
@@ -669,7 +688,7 @@ public struct InitializeStartEvent: PaywallEvent {
 
 /// Event fired after successful network fetch and parsing of paywall configuration from Helium servers
 /// - Note: Includes timing metrics for download, image fetch, font fetch, and bundle download
-public struct PaywallsDownloadSuccessEvent: PaywallEvent {
+public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// Total time taken to download configuration in milliseconds
     /// - Note: Measured from start of network request to successful response parsing
     public let downloadTimeTakenMS: UInt64?
@@ -751,7 +770,7 @@ public struct PaywallsDownloadSuccessEvent: PaywallEvent {
 
 /// Event fired when paywall configuration download fails
 /// - Note: Event fired when network fetch or parsing of paywall configuration fails. Fired after all retry attempts have been exhausted.
-public struct PaywallsDownloadErrorEvent: PaywallEvent {
+public struct PaywallsDownloadErrorEvent: HeliumEvent {
     /// The error message describing what went wrong
     /// - Note: Network error, parsing error, or timeout message
     public let error: String

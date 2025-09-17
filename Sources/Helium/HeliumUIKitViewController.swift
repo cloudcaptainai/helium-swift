@@ -77,12 +77,15 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    var isFallback: Bool
-    var isLoading: Bool
+    private(set) var isFallback: Bool
+    private(set) var isLoading: Bool
     let isSecondTry: Bool
     private var contentView: AnyView
     private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
+    
+    private let loadStartTime: DispatchTime?
+    private var displayTime: DispatchTime? = nil
     
     init(trigger: String, isFallback: Bool, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
@@ -91,15 +94,35 @@ class HeliumViewController: UIViewController {
         self.isLoading = isLoading
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
+        if isLoading {
+            loadStartTime = DispatchTime.now()
+        } else {
+            loadStartTime = nil
+            displayTime = DispatchTime.now()
+        }
         super.init(nibName: nil, bundle: nil)
     }
     
-    func updateContent(_ newContent: AnyView) {
+    func updateContent(_ newContent: AnyView, isFallback: Bool, isLoading: Bool) {
         self.contentView = AnyView(newContent
             .environment(\.paywallPresentationState, presentationState))
         
         // Update the hosting controller's root view
         hostingController?.rootView = self.contentView
+        
+        let completedLoading = !isLoading && self.isLoading
+        self.isFallback = isFallback
+        self.isLoading = isLoading
+        if completedLoading {
+            displayTime = DispatchTime.now()
+        }
+    }
+    
+    var loadTimeTakenMS: UInt64? {
+        if let loadStartTime, let displayTime {
+            return UInt64(Double(displayTime.uptimeNanoseconds - loadStartTime.uptimeNanoseconds) / 1_000_000.0)
+        }
+        return nil
     }
     
     required init?(coder: NSCoder) {

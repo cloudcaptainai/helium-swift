@@ -98,6 +98,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) {
         Task {
+            await updateDownloadState(.inProgress)
+            
             await fetchConfigWithRetry(
                 endpoint: endpoint,
                 params: params,

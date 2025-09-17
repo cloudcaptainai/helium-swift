@@ -54,7 +54,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             do {
                 offerings = try await Purchases.shared.offerings()
                 if let productIds {
-                    let products = try await Purchases.shared.products(productIds)
+                    let products = await Purchases.shared.products(productIds)
                     var mappings: [String: StoreProduct] = [:]
                     // Create product mappings from product IDs
                     for product in products {
@@ -102,7 +102,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
             }
             
             if result == nil {
-                let productToPurchase = try await Purchases.shared.products([productId])
+                let productToPurchase = await Purchases.shared.products([productId])
                 if let product = productToPurchase.first {
                     productMappings[productId] = product
                     result = try await Purchases.shared.purchase(product: product)
@@ -141,6 +141,10 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
     }
     
     open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+        // Override in a subclass if desired
+    }
+    
+    open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
     }
     

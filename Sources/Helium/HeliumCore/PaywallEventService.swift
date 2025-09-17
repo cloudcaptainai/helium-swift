@@ -37,7 +37,7 @@ public struct PaywallEventHandlers {
     // MARK: - Internal Handler
     
     /// Internal method to handle v2 paywall events and dispatch to appropriate handlers
-    internal func handleEvent(_ event: PaywallEvent) {
+    internal func handleEvent(_ event: HeliumEvent) {
         switch event {
         case let e as PaywallOpenEvent:
             onOpen?(e)
