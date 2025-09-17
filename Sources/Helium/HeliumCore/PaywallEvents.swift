@@ -100,7 +100,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue)
+        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS)
     }
 }
 
