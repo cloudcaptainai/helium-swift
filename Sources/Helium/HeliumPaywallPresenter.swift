@@ -129,7 +129,8 @@ class HeliumPaywallPresenter {
         loadingPaywall.isFallback = upsellViewResult.isFallback
         loadingPaywall.isLoading = false
         
-        dispatchOpenEvent(trigger: trigger)
+        // Dispatch the official open event
+        dispatchOpenEvent(paywallVC: loadingPaywall)
     }
     
     @objc private func handleDownloadComplete(_ notification: Notification) {
@@ -234,9 +235,7 @@ class HeliumPaywallPresenter {
         
         paywallsDisplayed.append(modalVC)
 
-        if !isLoading {
-            dispatchOpenEvent(trigger: trigger)
-        }
+        dispatchOpenEvent(paywallVC: modalVC)
     }
     
     @MainActor
@@ -262,7 +261,7 @@ class HeliumPaywallPresenter {
         }
         Task { @MainActor in
             currentPaywall.dismiss(animated: animated) { [weak self] in
-                self?.dispatchCloseEvent(trigger: currentPaywall.trigger)
+                self?.dispatchCloseEvent(paywallVC: currentPaywall)
             }
         }
         return true
@@ -290,10 +289,15 @@ class HeliumPaywallPresenter {
         paywallsDisplayed.removeAll { $0 === heliumViewController }
     }
     
-    private func dispatchOpenEvent(trigger: String) {
-        let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
+    private func dispatchOpenEvent(paywallVC: HeliumViewController) {
+        if paywallVC.isLoading {
+            return // don't fire an event in this case
+        }
+        let trigger = paywallVC.trigger
+        let isFallback = paywallVC.isFallback
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
+        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
+        let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
         HeliumPaywallDelegateWrapper.shared.fireEvent(
             PaywallOpenEvent(
                 triggerName: trigger,
@@ -303,10 +307,15 @@ class HeliumPaywallPresenter {
         )
     }
     
-    private func dispatchCloseEvent(trigger: String) {
-        let isFallback = paywallsDisplayed.first { $0.trigger == trigger }?.isFallback ?? false
+    private func dispatchCloseEvent(paywallVC: HeliumViewController) {
+        if paywallVC.isLoading {
+            return // don't fire an event in this case
+        }
+        let trigger = paywallVC.trigger
+        let isFallback = paywallVC.isFallback
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateName = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
+        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
+        let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
         HeliumPaywallDelegateWrapper.shared.fireEvent(
             PaywallCloseEvent(
                 triggerName: trigger,
@@ -317,7 +326,7 @@ class HeliumPaywallPresenter {
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {
         for paywallDisplay in paywallVCs {
-            dispatchCloseEvent(trigger: paywallDisplay.trigger)
+            dispatchCloseEvent(paywallVC: paywallDisplay)
         }
     }
     
