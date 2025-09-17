@@ -180,7 +180,9 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                 print("Transaction expirationDate \(transaction.expirationDate)")
                 print("Transaction subscriptionGroupID \(transaction.subscriptionGroupID)")
                 print("Transaction appAccountToken \(transaction.appAccountToken)")
-                print("Transaction environment \(transaction.environment)")
+                if #available(iOS 16.0, *) {
+                    print("Transaction environment \(transaction.environment)")
+                }
                 print("Transaction ownershipType \(transaction.ownershipType)")
                 print("Transaction purchasedQuantity \(transaction.purchasedQuantity)")
                 print("Transaction productType \(transaction.productType)")
