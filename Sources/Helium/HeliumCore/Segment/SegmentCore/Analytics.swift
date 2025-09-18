@@ -85,7 +85,8 @@ class Analytics {
         if Self.isActiveWriteKey(configuration.values.writeKey) {
             // If you're hitting this in testing, it could be a memory leak, or something async is still running
             // and holding a reference.  You can use XCTest.waitUntilFinished(...) to wait for things to complete.
-            fatalError("Cannot initialize multiple instances of Analytics with the same write key")
+            print("Cannot initialize multiple instances of Analytics with the same write key")
+            return
         } else {
             Self.addActiveWriteKey(configuration.values.writeKey)
         }
