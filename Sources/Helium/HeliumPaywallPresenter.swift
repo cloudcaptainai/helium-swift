@@ -28,7 +28,12 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, contentView: contentView)
         modalVC.modalPresentationStyle = .fullScreen
         
-        let presenter = viewController ?? findTopMostViewController()
+        guard let presenter = viewController ?? findTopMostViewController() else {
+            // Failed to find a view controller to present on - dispatch open failed event
+            dispatchOpenFailedEvent(trigger: trigger, error: "No root view controller found")
+            return
+        }
+        
         presenter.present(modalVC, animated: true)
         
         paywallsDisplayed.append(modalVC)
@@ -37,11 +42,11 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func findTopMostViewController() -> UIViewController {
+    private func findTopMostViewController() -> UIViewController? {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }),
               var topController = keyWindow.rootViewController else {
-            fatalError("No root view controller found")
+            return nil
         }
         
         while let presentedViewController = topController.presentedViewController {
@@ -92,6 +97,12 @@ class HeliumPaywallPresenter {
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         let templateName  = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
         HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpen(triggerName: trigger, paywallTemplateName: templateName, viewType: PaywallOpenViewType.presented.rawValue))
+    }
+    
+    private func dispatchOpenFailedEvent(trigger: String, error: String) {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        let templateName = paywallInfo?.paywallTemplateName ?? HELIUM_FALLBACK_PAYWALL_NAME
+        HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(triggerName: trigger, paywallTemplateName: templateName))
     }
     
     private func dispatchCloseEvent(trigger: String) {

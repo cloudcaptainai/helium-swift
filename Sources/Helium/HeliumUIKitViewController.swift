@@ -89,8 +89,11 @@ class HeliumViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
+    @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        // This should never be called due to @available(*, unavailable)
+        // But if it somehow is, return nil instead of crashing
+        return nil
     }
     
     override func viewDidLoad() {
