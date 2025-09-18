@@ -8,14 +8,17 @@
 import Helium
 import RevenueCat
 import Foundation
+import StoreKit
 
 /// A HeliumPaywallDelegate implementation specifically intended for apps that use RevenueCat to handle
 /// in-app purchases & subscriptions. Do not use if you don't plan on configuring your purchases with RevenueCat.
-open class RevenueCatDelegate: HeliumPaywallDelegate {
+open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
     
     public let entitlementId: String?
     private var offerings: Offerings?
     private(set) var productMappings: [String: StoreProduct] = [:]
+    
+    private var latestSuccessfulPurchaseResult: PurchaseResultData? = nil
     
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
@@ -117,6 +120,8 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
                 return .cancelled
             }
             
+            latestSuccessfulPurchaseResult = result
+            
             if isProductActive(customerInfo: result.customerInfo, productId: productId) {
                 return .purchased
             } else {
@@ -164,6 +169,14 @@ open class RevenueCatDelegate: HeliumPaywallDelegate {
         }
         return false
     }
+    
+    public func getLatestCompletedPurchaseResult() -> PurchaseResultData? {
+        return latestSuccessfulPurchaseResult
+    }
+    public func getLatestCompletedTransaction() -> Transaction? {
+        return getLatestCompletedPurchaseResult()?.transaction?.sk2Transaction
+    }
+    
 }
 
 public enum RevenueCatDelegateError: LocalizedError {

@@ -7,9 +7,15 @@
 
 import StoreKit
 
+public protocol HeliumDelegateReturnsTransaction {
+    func getLatestCompletedTransaction() -> Transaction?
+}
+
 /// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
 @available(iOS 15.0, *)
-open class StoreKitDelegate: HeliumPaywallDelegate {
+open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
+    
+    private var latestCompletedTransaction: Transaction? = nil
     
     /// @param productIds  (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     public init(productIds: [String] = []) {
@@ -35,6 +41,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
             case .success(let verification):
                 switch verification {
                 case .verified(let transaction):
+                    latestCompletedTransaction = transaction
                     await transaction.finish()
                     return .purchased
                 case .unverified(_, let error):
@@ -69,6 +76,12 @@ open class StoreKitDelegate: HeliumPaywallDelegate {
     open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
     }
+    
+    /// Returns the most recent successful purchase transaction processed by this delegated, if there is one.
+    public func getLatestCompletedTransaction() -> Transaction? {
+        return latestCompletedTransaction
+    }
+    
 }
 public enum StoreKitDelegateError: LocalizedError {
     case cannotFindProduct
