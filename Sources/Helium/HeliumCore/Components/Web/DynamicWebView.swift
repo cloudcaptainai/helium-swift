@@ -297,14 +297,16 @@ class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
     
+    private var preloadWebViewBundle: PaywallWebViewBundle? = nil
     private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
     
     func preCreateFirstWebView() {
         Task {
-            let bundle = await createWebViewBundle(filePath: nil)
-            preparedWebViewBundles.append(
-                bundle
-            )
+            // Just use this one for preloading purposes
+            preloadWebViewBundle = await createWebViewBundle(filePath: nil)
+            // Speed things up slightly by having first one ready for use
+            let initialEmptyBundle = await createWebViewBundle(filePath: nil)
+            preparedWebViewBundles.append(initialEmptyBundle)
         }
     }
     
@@ -401,9 +403,7 @@ class WebViewManager {
     
     @MainActor
     fileprivate func preloadFilePath(_ filePath: String) {
-        // can use any webview for preloading
-        var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
-        guard let webView = webViewBundle?.preparedWebView else {
+        guard let webView = preloadWebViewBundle?.preparedWebView else {
             return
         }
         try? loadFilePath(filePath, toWebView: webView)
