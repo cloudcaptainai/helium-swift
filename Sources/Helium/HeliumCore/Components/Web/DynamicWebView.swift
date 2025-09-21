@@ -191,7 +191,7 @@ public struct DynamicWebView: View {
                 _ = Date()
                 
                 do {
-                    try await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
+                    try WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
                     webView = preparedWebView
                 } catch {
                     webViewLoadFail(reason: "WebViewLoadFail")
@@ -245,7 +245,7 @@ public struct DynamicWebView: View {
                     try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                     
                     // Second attempt
-                    await forceVideoPlay()
+                    let _ = await forceVideoPlay()
                 }
             }
         }
@@ -293,6 +293,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
 /**
  Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebViews, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
  */
+@MainActor
 class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
@@ -336,15 +337,13 @@ class WebViewManager {
         config.userContentController = contentController
         config.websiteDataStore = WKWebsiteDataStore.default()
         
-        let webView = await WKWebView(frame: .zero, configuration: config)
-        await webView.configuration.preferences.javaScriptEnabled = true
+        let webView = WKWebView(frame: .zero, configuration: config)
         
         return PaywallWebViewHolder(
             filePath: filePath, webView: webView, msgHandler: messageHandler
         )
     }
     
-    @MainActor
     fileprivate func prepareForShowing(
         filePath: String,
         shouldEnableScroll: Bool,
@@ -396,12 +395,11 @@ class WebViewManager {
         let startTime = Date()
         
         Task {
-            await preloadFilePath(filePath)
+            preloadFilePath(filePath)
             print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
         }
     }
     
-    @MainActor
     fileprivate func preloadFilePath(_ filePath: String) {
         guard let webView = preloadWebViewHolder?.preparedWebView else {
             return
@@ -409,7 +407,6 @@ class WebViewManager {
         try? loadFilePath(filePath, toWebView: webView)
     }
     
-    @MainActor
     fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) throws {
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
