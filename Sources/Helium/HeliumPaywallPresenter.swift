@@ -229,7 +229,17 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        let presenter = viewController ?? findTopMostViewController()
+        guard let presenter = viewController ?? findTopMostViewController() else {
+            // Failed to find a view controller to present on - dispatch open failed event
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    error: "No root view controller found"
+                )
+            )
+            return
+        }
         presenter.present(modalVC, animated: true)
         
         paywallsDisplayed.append(modalVC)
@@ -238,11 +248,10 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func findTopMostViewController() -> UIViewController {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }),
-              var topController = keyWindow.rootViewController else {
-            fatalError("No root view controller found")
+    private func findTopMostViewController() -> UIViewController? {
+        guard let activeWindow = findActiveWindow(),
+              var topController = activeWindow.rootViewController else {
+            return nil
         }
         
         while let presentedViewController = topController.presentedViewController {
@@ -250,6 +259,21 @@ class HeliumPaywallPresenter {
         }
         
         return topController
+    }
+    @MainActor
+    private func findActiveWindow() -> UIWindow? {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+        return allWindows.first { $0.isKeyWindow } ?? allWindows.first
     }
     
     @discardableResult

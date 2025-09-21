@@ -128,8 +128,9 @@ public class Helium {
     }
     
     func upsellViewResultFor(trigger: String) -> UpsellViewResult {
-        if (!initialized) {
-            fatalError("Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!");
+        if !initialized {
+            print("[Helium] Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!")
+            return UpsellViewResult(view: nil, isFallback: true, templateName: nil)
         }
         
         
