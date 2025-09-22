@@ -151,30 +151,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             if transaction == nil {
                 transaction = await TransactionTools.shared.retrieveTransaction(productId: productKey)
             }
-            
-            if let transaction {
-                print("Transaction retrieved!")
-                print("Transaction ID \(transaction.id)")
-                print("Transaction Original ID \(transaction.originalID)")
-                print("Transaction expirationDate \(transaction.expirationDate)")
-                print("Transaction subscriptionGroupID \(transaction.subscriptionGroupID)")
-                print("Transaction appAccountToken \(transaction.appAccountToken)")
-                if #available(iOS 16.0, *) {
-                    print("Transaction environment \(transaction.environment)")
-                }
-                print("Transaction ownershipType \(transaction.ownershipType)")
-                print("Transaction purchasedQuantity \(transaction.purchasedQuantity)")
-                print("Transaction productType \(transaction.productType)")
-                print("Transaction price \(transaction.price)")
-                if #available(iOS 17.2, *) {
-                    print("Transaction Offer ID \(transaction.offer?.id)")
-                }
-                
-                // todo fire new transaction occurred event and/or pass in transaction ids to PurchaseSucceededEvent
-                
-            }
-            
-            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, transactionId: transaction?.id.description, originalTransactionId: transaction?.originalID.description))
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         default:

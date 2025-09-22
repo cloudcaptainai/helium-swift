@@ -407,14 +407,22 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: Template name from Helium configuration
     public let paywallName: String
     
+    /// StoreKit transaction ID
+    public let transactionId: String?
+    
+    /// StoreKit original transaction ID
+    public let originalTransactionId: String?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, transactionId: String?, originalTransactionId: String?, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.transactionId = transactionId
+        self.originalTransactionId = originalTransactionId
         self.timestamp = timestamp
     }
     
@@ -426,13 +434,15 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "transactionId": transactionId,
+            "originalTransactionId": originalTransactionId,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, transactionId: transactionId, originalTransactionId: originalTransactionId)
     }
 }
 
