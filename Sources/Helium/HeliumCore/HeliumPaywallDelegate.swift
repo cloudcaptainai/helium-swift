@@ -148,29 +148,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction {
                 transaction = transactionDelegate.getLatestCompletedTransaction()
             }
-            // Backup option 1 - try to get directly from product
             if transaction == nil {
-                if let productVerificationResult = try? await ProductsCache.shared.getProduct(id: productKey)?.latestTransaction {
-                    switch productVerificationResult {
-                    case .verified(let productTransaction):
-                        transaction = productTransaction
-                        break
-                    default:
-                        break
-                    }
-                }
-            }
-            // Backup option 2 - try to get latest transaction directly
-            if transaction == nil {
-                if let verificationResult = await Transaction.latest(for: productKey) {
-                    switch verificationResult {
-                    case .verified(let productTransaction):
-                        transaction = productTransaction
-                        break
-                    default:
-                        break
-                    }
-                }
+                transaction = await TransactionTools.shared.retrieveTransaction(productId: productKey)
             }
             
             if let transaction {
