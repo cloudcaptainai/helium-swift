@@ -46,6 +46,9 @@ class TransactionTools {
             }
         }
         
+        return nil
+    }
+    
     func retrieveTransactionIDs(productId: String) async -> TransactionIdPair? {
         // Try StoreKit1 first in case a custom StoreKit1 delegate was used.
         if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId) {
