@@ -135,6 +135,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     }
     
     public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
+        StoreKit1Listener.ensureListening()
+        
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
         case .cancelled:
