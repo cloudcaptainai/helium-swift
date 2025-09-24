@@ -101,7 +101,7 @@ actor HeliumEntitlementsManager {
     
     // MARK: - Public Methods
     
-    public func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
+    func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
         let entitlements = await getCachedEntitlements()
         
         for transaction in entitlements {
@@ -114,22 +114,22 @@ actor HeliumEntitlementsManager {
         return false
     }
     
-    public func hasAnyEntitlement() async -> Bool {
+    func hasAnyEntitlement() async -> Bool {
         let entitlements = await getCachedEntitlements()
         return !entitlements.isEmpty
     }
     
-    public func purchasedProductIds() async -> [String] {
+    func purchasedProductIds() async -> [String] {
         let entitlements = await getCachedEntitlements()
         return entitlements.map { $0.productID }
     }
     
-    public func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
+    func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
         let status = await subscriptionStatusFor(subscriptionGroupID: subscriptionGroupID)
         return isSubscriptionStateActive(status?.state)
     }
     
-    public func subscriptionStatusFor(subscriptionGroupID: String) async -> Product.SubscriptionInfo.Status? {
+    func subscriptionStatusFor(subscriptionGroupID: String) async -> Product.SubscriptionInfo.Status? {
         let entitlements = await getCachedEntitlements()
         
         for transaction in entitlements where transaction.productType == .autoRenewable {
@@ -143,7 +143,7 @@ actor HeliumEntitlementsManager {
         return nil
     }
     
-    public func hasActiveEntitlementFor(productId: String) async -> Bool {
+    func hasActiveEntitlementFor(productId: String) async -> Bool {
         let entitlements = await getCachedEntitlements()
         for transaction in entitlements {
             if transaction.productType != .autoRenewable && transaction.productID == productId {
@@ -153,16 +153,16 @@ actor HeliumEntitlementsManager {
         return await hasActiveSubscriptionFor(productId: productId)
     }
     
-    public func hasActiveSubscriptionFor(productId: String) async -> Bool {
+    func hasActiveSubscriptionFor(productId: String) async -> Bool {
         let status = await subscriptionStatusFor(productId: productId)
         return isSubscriptionStateActive(status?.state)
     }
     
-    public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
+    func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await getSubscriptionStatus(for: productId)
     }
     
-    public func activeSubscriptions(includeNonRenewing: Bool) async -> [String: Product.SubscriptionInfo.Status] {
+    func activeSubscriptions(includeNonRenewing: Bool) async -> [String: Product.SubscriptionInfo.Status] {
         let entitlements = await getCachedEntitlements()
         var subscriptions: [String: Product.SubscriptionInfo.Status] = [:]
         
@@ -179,7 +179,7 @@ actor HeliumEntitlementsManager {
     }
     
     /// Clears all cached data and forces a refresh on the next access.
-    public func invalidateCache() async {
+    func invalidateCache() async {
         clearCache()
     }
     
