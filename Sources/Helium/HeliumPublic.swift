@@ -401,6 +401,8 @@ public class Helium {
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
+            
+            await HeliumEntitlementsManager.shared.configure()
         }
     }
     
@@ -483,6 +485,72 @@ public class Helium {
         
         presentUpsell(trigger: trigger)
         return true
+    }
+    
+    // MARK: - Entitlements / Subscription Status
+    
+    /// Checks if the user has any active subscription (auto-renewable or optionally non-renewing).
+    /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions in the check (default: true)
+    /// - Returns: `true` if the user has at least one active subscription, `false` otherwise
+    public func hasAnyActiveSubscription(includeNonRenewing: Bool = true) async -> Bool {
+        return await HeliumEntitlementsManager.shared.hasAnyActiveSubscription(includeNonRenewing: includeNonRenewing)
+    }
+    
+    /// Checks if the user has any entitlement (any non-consumable purchase or subscription).
+    /// - Returns: `true` if the user has at least one entitlement, `false` otherwise
+    /// - Note: This method does not include consumable purchases
+    public func hasAnyEntitlement() async -> Bool {
+        return await HeliumEntitlementsManager.shared.hasAnyEntitlement()
+    }
+    
+    /// Checks if the user has entitlement for this product (any non-consumable purchase or subscription).
+    /// - Parameter productId: The product ID to check
+    /// - Returns: `true` if the user has an active entitlement for the product, `false` otherwise
+    /// - Note: This method does not work for consumable purchases
+    public func hasActiveEntitlementFor(productId: String) async -> Bool {
+        return await HeliumEntitlementsManager.shared.hasActiveEntitlementFor(productId: productId)
+    }
+    
+    /// Checks if the user has an active subscription for a specific product.
+    /// - Parameter productId: The product ID to check
+    /// - Returns: `true` if the user has an active subscription for the product, `false` otherwise
+    public func hasActiveSubscriptionFor(productId: String) async -> Bool {
+        return await HeliumEntitlementsManager.shared.hasActiveSubscriptionFor(productId: productId)
+    }
+    
+    /// Checks if the user has an active entitlement for a specific subscription group.
+    /// - Parameter subscriptionGroupID: The subscription group ID to check
+    /// - Returns: `true` if the user has an active subscription in the specified group, `false` otherwise
+    public func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
+        return await HeliumEntitlementsManager.shared.hasActiveSubscriptionFor(subscriptionGroupID: subscriptionGroupID)
+    }
+    
+    /// Returns a dictionary of all active subscriptions with their current status.
+    /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions (default: true)
+    /// - Returns: Dictionary mapping product IDs to their subscription status
+    public func activeSubscriptions(includeNonRenewing: Bool = true) async -> [String: Product.SubscriptionInfo.Status] {
+        return await HeliumEntitlementsManager.shared.activeSubscriptions(includeNonRenewing: includeNonRenewing)
+    }
+    
+    /// Returns an array of all purchased product IDs that the user currently has access to.
+    /// - Returns: Array of product ID strings for all current entitlements
+    /// - Note: This method does not include consumable purchases
+    public func purchasedProductIds() async -> [String] {
+        return await HeliumEntitlementsManager.shared.purchasedProductIds()
+    }
+    
+    /// Gets the subscription status for a specific subscription group.
+    /// - Parameter subscriptionGroupID: The subscription group ID to check
+    /// - Returns: The subscription status if found, `nil` otherwise
+    public func subscriptionStatusFor(subscriptionGroupID: String) async -> Product.SubscriptionInfo.Status? {
+        return await HeliumEntitlementsManager.shared.subscriptionStatusFor(subscriptionGroupID: subscriptionGroupID)
+    }
+    
+    /// Gets the subscription status for a specific product.
+    /// - Parameter productId: The product ID to check
+    /// - Returns: The subscription status if found, `nil` otherwise
+    public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
+        return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
     
 }
