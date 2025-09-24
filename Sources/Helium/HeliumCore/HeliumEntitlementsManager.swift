@@ -11,41 +11,72 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
+    private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
+    
+    /// Debounce interval for transaction updates in seconds
+    private let debounceInterval: TimeInterval = 2
+    
     // MARK: - Cache Structure
     private struct EntitlementsCache {
         var transactions: [Transaction] = []
         var subscriptionStatuses: [String: Product.SubscriptionInfo.Status] = [:] // productID -> status
         var isLoaded: Bool = false
+        var lastLoadedTime: Date?
+        
+        func needsReset(resetInterval: TimeInterval) -> Bool {
+            guard let lastLoadedTime = lastLoadedTime else { return true }
+            return Date().timeIntervalSince(lastLoadedTime) > resetInterval
+        }
     }
     
     private var cache = EntitlementsCache()
     private var updateListenerTask: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
     
     deinit {
         updateListenerTask?.cancel()
+        debounceTask?.cancel()
     }
     
     // MARK: - Transaction Update Listener
+    
     private func startTransactionListener() {
         updateListenerTask = Task {
             for await _ in Transaction.updates {
-                clearCache()
+                // Cancel any existing debounce task
+                debounceTask?.cancel()
+                
+                // Create new debounced refresh task
+                debounceTask = Task {
+                    try? await Task.sleep(nanoseconds: UInt64(debounceInterval * 1_000_000_000))
+                    
+                    if !Task.isCancelled {
+                        clearCache()
+                    }
+                }
             }
         }
     }
     
     // MARK: - Cache Management
+    
     private func clearCache() {
         cache = EntitlementsCache()
     }
     
+    /// Configures the entitlements manager by starting the transaction listener
+    /// and performing an initial load of entitlements.
+    /// Call this method once during app initialization.
     public func configure() async {
         startTransactionListener()
         await loadEntitlementsIfNeeded()
     }
     
     private func loadEntitlementsIfNeeded() async {
-        guard !cache.isLoaded else { return }
+        // Check if cache is still valid
+        if cache.isLoaded && !cache.needsReset(resetInterval: cacheResetInterval) {
+            return
+        }
         
         var transactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {
@@ -56,6 +87,10 @@ actor HeliumEntitlementsManager {
         
         cache.transactions = transactions
         cache.isLoaded = true
+        cache.lastLoadedTime = Date()
+        
+        // Clear subscription status cache when reloading transactions
+        cache.subscriptionStatuses = [:]
     }
     
     private func getCachedEntitlements() async -> [Transaction] {
@@ -65,7 +100,9 @@ actor HeliumEntitlementsManager {
     
     // MARK: - Public Methods
     
-    // does not include consumables
+    /// Checks if the user has any active subscription (auto-renewable or optionally non-renewing).
+    /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions in the check (default: true)
+    /// - Returns: `true` if the user has at least one active subscription, `false` otherwise
     public func hasAnyActiveSubscription(includeNonRenewing: Bool = true) async -> Bool {
         let entitlements = await getCachedEntitlements()
         
@@ -79,23 +116,33 @@ actor HeliumEntitlementsManager {
         return false
     }
     
-    // does not include consumables
+    /// Checks if the user has any entitlement (any non-consumable purchase or subscription).
+    /// - Returns: `true` if the user has at least one entitlement, `false` otherwise
+    /// - Note: This method does not include consumable purchases
     public func hasAnyEntitlement() async -> Bool {
         let entitlements = await getCachedEntitlements()
         return !entitlements.isEmpty
     }
     
-    // does not include consumables
+    /// Returns an array of all purchased product IDs that the user currently has access to.
+    /// - Returns: Array of product ID strings for all current entitlements
+    /// - Note: This method does not include consumable purchases
     public func purchasedProductIds() async -> [String] {
         let entitlements = await getCachedEntitlements()
         return entitlements.map { $0.productID }
     }
     
+    /// Checks if the user has an active entitlement for a specific subscription group.
+    /// - Parameter subscriptionGroupID: The subscription group ID to check
+    /// - Returns: `true` if the user has an active subscription in the specified group, `false` otherwise
     public func hasActiveEntitlementFor(subscriptionGroupID: String) async -> Bool {
-        let subscriptionState = await subscriptionStatusFor(subscriptionGroupID: subscriptionGroupID)?.state
-        return subscriptionState != .expired && subscriptionState != .revoked
+        let status = await subscriptionStatusFor(subscriptionGroupID: subscriptionGroupID)
+        return isSubscriptionStateActive(status?.state)
     }
     
+    /// Gets the subscription status for a specific subscription group.
+    /// - Parameter subscriptionGroupID: The subscription group ID to check
+    /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(subscriptionGroupID: String) async -> Product.SubscriptionInfo.Status? {
         let entitlements = await getCachedEntitlements()
         
@@ -110,15 +157,24 @@ actor HeliumEntitlementsManager {
         return nil
     }
     
+    /// Checks if the user has an active entitlement for a specific product.
+    /// - Parameter productId: The product ID to check
+    /// - Returns: `true` if the user has an active entitlement for the product, `false` otherwise
     public func hasActiveEntitlementFor(productId: String) async -> Bool {
-        let subscriptionState = await subscriptionStatusFor(productId: productId)?.state
-        return subscriptionState != .expired && subscriptionState != .revoked
+        let status = await subscriptionStatusFor(productId: productId)
+        return isSubscriptionStateActive(status?.state)
     }
     
+    /// Gets the subscription status for a specific product.
+    /// - Parameter productId: The product ID to check
+    /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await getSubscriptionStatus(for: productId)
     }
     
+    /// Returns a dictionary of all active subscriptions with their current status.
+    /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions (default: true)
+    /// - Returns: Dictionary mapping product IDs to their subscription status
     public func activeSubscriptions(includeNonRenewing: Bool = true) async -> [String: Product.SubscriptionInfo.Status] {
         let entitlements = await getCachedEntitlements()
         var subscriptions: [String: Product.SubscriptionInfo.Status] = [:]
@@ -135,8 +191,20 @@ actor HeliumEntitlementsManager {
         return subscriptions
     }
     
-    // MARK: - Private Helper for Lazy Loading Subscription Status
+    /// Clears all cached data and forces a refresh on the next access.
+    public func invalidateCache() async {
+        clearCache()
+    }
+    
+    // MARK: - Private Helper Methods
+    
+    /// Lazily loads and caches subscription status for a product
     private func getSubscriptionStatus(for productId: String) async -> Product.SubscriptionInfo.Status? {
+        // Check if subscription status cache needs refresh based on main cache expiration
+        if cache.needsReset(resetInterval: cacheResetInterval) {
+            cache.subscriptionStatuses.removeAll()
+        }
+        
         // Check cache first
         if let cachedStatus = cache.subscriptionStatuses[productId] {
             return cachedStatus
@@ -151,6 +219,19 @@ actor HeliumEntitlementsManager {
         // Cache the status
         cache.subscriptionStatuses[productId] = status
         return status
+    }
+    
+    /// Checks if a subscription state is considered active
+    private func isSubscriptionStateActive(_ state: Product.SubscriptionInfo.RenewalState?) -> Bool {
+        guard let state = state else { return false }
+        switch state {
+        case .subscribed, .inBillingRetryPeriod, .inGracePeriod:
+            return true
+        case .expired, .revoked:
+            return false
+        default:
+            return false
+        }
     }
 }
 
