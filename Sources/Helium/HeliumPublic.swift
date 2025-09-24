@@ -20,7 +20,8 @@ public class Helium {
         trigger: String,
         from viewController: UIViewController? = nil,
         eventHandlers: PaywallEventHandlers? = nil,
-        customPaywallTraits: [String: Any]? = nil
+        customPaywallTraits: [String: Any]? = nil,
+        skipIfAlreadyEntitled: Bool = false
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -29,7 +30,8 @@ public class Helium {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits
+            customPaywallTraits: customPaywallTraits,
+            skipIfAlreadyEntitled: skipIfAlreadyEntitled
         )
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
@@ -488,6 +490,17 @@ public class Helium {
     }
     
     // MARK: - Entitlements / Subscription Status
+    
+    /// Checks if the user has an active entitlement for any product attached to the paywall that will show for provided trigger.
+    /// - Parameter trigger: Trigger that would be used to show the paywall.
+    /// - Parameter considerAssociatedSubscriptions: If true, look at subscription groups associated with products in the paywall, otherwise just look at exact products in the paywall.
+    /// - Returns: `true` if the user has bought one of the products on the paywall or is actively subscribed to a subscription group that includes one of the products. `false` if not. Returns `nil` if not known (i.e. the paywall is not downloaded yet).
+    func hasEntitlementForPaywall(
+        trigger: String,
+        considerAssociatedSubscriptions: Bool = false
+    ) async -> Bool? {
+        return await HeliumEntitlementsManager.shared.hasEntitlementForPaywall(trigger: trigger, considerAssociatedSubscriptions: considerAssociatedSubscriptions)
+    }
     
     /// Checks if the user has any active subscription (auto-renewable or optionally non-renewing).
     /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions in the check (default: true)

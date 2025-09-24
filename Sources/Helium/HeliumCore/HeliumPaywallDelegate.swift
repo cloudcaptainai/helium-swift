@@ -85,24 +85,32 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     private var isAnalyticsEnabled: Bool = true
+    
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
+    private(set) var skipIfAlreadyEntitled: Bool = false
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(eventService: PaywallEventHandlers?, customPaywallTraits: [String: Any]?) {
+    public func configurePresentationContext(
+        eventService: PaywallEventHandlers?,
+        customPaywallTraits: [String: Any]?,
+        skipIfAlreadyEntitled: Bool = false,
+    ) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]
+        self.skipIfAlreadyEntitled = skipIfAlreadyEntitled
     }
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
         self.eventService = nil
         self.customPaywallTraits = [:]
+        self.skipIfAlreadyEntitled = false
     }
     
     func setAnalytics(_ analytics: Analytics, writeKey: String? = nil) {

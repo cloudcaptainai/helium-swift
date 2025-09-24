@@ -101,6 +101,34 @@ actor HeliumEntitlementsManager {
     
     // MARK: - Public Methods
     
+    func hasEntitlementForPaywall(
+        trigger: String,
+        considerAssociatedSubscriptions: Bool
+    ) async -> Bool? {
+        if !Helium.shared.paywallsLoaded() {
+            return nil
+        }
+        
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        
+        let productIds = paywallInfo?.productsOffered ?? []
+        
+        // Just see if any of the paywall products are purchased/active
+        if !considerAssociatedSubscriptions {
+            return await purchasedProductIds().contains { productIds.contains($0) }
+        }
+        
+        // Otherwise check products and associated subscription groups
+        for productId in productIds {
+            let entitled = await Helium.shared.hasActiveEntitlementFor(productId: productId)
+            if entitled {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
         let entitlements = await getCachedEntitlements()
         
