@@ -301,14 +301,12 @@ class WebViewManager {
     private var preloadWebViewHolder: PaywallWebViewHolder? = nil
     private(set) var preparedWebViewHolders: [PaywallWebViewHolder] = []
     
-    func preCreateFirstWebView() {
-        Task {
-            // Just use this one for preloading purposes
-            preloadWebViewHolder = await createWebViewHolder(filePath: nil)
-            // Speed things up slightly by having first one ready for use
-            let initialWebViewHolder = await createWebViewHolder(filePath: nil)
-            preparedWebViewHolders.append(initialWebViewHolder)
-        }
+    func preCreateFirstWebView() async {
+        // Just use this one for preloading purposes
+        preloadWebViewHolder = await createWebViewHolder(filePath: nil)
+        // Speed things up slightly by having first one ready for use
+        let initialWebViewHolder = await createWebViewHolder(filePath: nil)
+        preparedWebViewHolders.append(initialWebViewHolder)
     }
     
     fileprivate func createWebViewHolder(filePath: String? = nil) async -> PaywallWebViewHolder {
@@ -391,13 +389,11 @@ class WebViewManager {
         return webView
     }
     
-    func preLoad(filePath: String) {
+    func preLoad(filePath: String) async {
         let startTime = Date()
         
-        Task {
-            preloadFilePath(filePath)
-            print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
-        }
+        preloadFilePath(filePath)
+        print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
     }
     
     fileprivate func preloadFilePath(_ filePath: String) {

@@ -399,7 +399,9 @@ public class Helium {
         }
         self.controller!.downloadConfig();
         
-        WebViewManager.shared.preCreateFirstWebView()
+        Task {
+            await WebViewManager.shared.preCreateFirstWebView()
+        }
     }
     
     
