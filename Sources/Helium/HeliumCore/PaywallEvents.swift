@@ -413,36 +413,48 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// StoreKit original transaction ID
     public let storeKitOriginalTransactionId: String?
     
+    /// Time taken to retrieve StoreKit transaction IDs after purchase successs in milliseconds
+    public let skPostPurchaseTxnTimeMS: UInt64?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
         self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
+        self.skPostPurchaseTxnTimeMS = skPostPurchaseTxnTimeMS
         self.timestamp = timestamp
     }
     
     public var eventName: String { "purchaseSucceeded" }
     
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
-            "storeKitTransactionId": storeKitTransactionId,
-            "storeKitOriginalTransactionId": storeKitOriginalTransactionId,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let storeKitTransactionId {
+            dict["storeKitTransactionId"] = storeKitTransactionId
+        }
+        if let storeKitOriginalTransactionId {
+            dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
+        }
+        if let skPostPurchaseTxnTimeMS {
+            dict["skPostPurchaseTxnTimeMS"] = skPostPurchaseTxnTimeMS
+        }
+        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS)
     }
 }
 
