@@ -408,21 +408,21 @@ public struct PurchaseSucceededEvent: ProductEvent {
     public let paywallName: String
     
     /// StoreKit transaction ID
-    public let transactionId: String?
+    public let storeKitTransactionId: String?
     
     /// StoreKit original transaction ID
-    public let originalTransactionId: String?
+    public let storeKitOriginalTransactionId: String?
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, transactionId: String?, originalTransactionId: String?, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
-        self.transactionId = transactionId
-        self.originalTransactionId = originalTransactionId
+        self.storeKitTransactionId = storeKitTransactionId
+        self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
         self.timestamp = timestamp
     }
     
@@ -434,15 +434,15 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
-            "transactionId": transactionId,
-            "originalTransactionId": originalTransactionId,
+            "storeKitTransactionId": storeKitTransactionId,
+            "storeKitOriginalTransactionId": storeKitOriginalTransactionId,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, transactionId: transactionId, originalTransactionId: originalTransactionId)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
     }
 }
 

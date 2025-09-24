@@ -63,7 +63,7 @@ public enum HeliumPaywallEvent: Codable {
     case offerSelected(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionPressed(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionCancelled(productKey: String, triggerName: String, paywallTemplateName: String)
-    case subscriptionSucceeded(productKey: String, triggerName: String, paywallTemplateName: String, transactionId: String?, originalTransactionId: String?)
+    case subscriptionSucceeded(productKey: String, triggerName: String, paywallTemplateName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?)
     case subscriptionFailed(productKey: String, triggerName: String, paywallTemplateName: String, error: String? = nil)
     case subscriptionRestored(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionRestoreFailed(triggerName: String, paywallTemplateName: String)
@@ -78,7 +78,7 @@ public enum HeliumPaywallEvent: Codable {
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, transactionId, originalTransactionId
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId
     }
     
     public func getTriggerIfExists() -> String?{
@@ -165,13 +165,13 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(ctaName, forKey: .ctaName)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-        case .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName, let transactionId, let originalTransactionId):
+        case .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName, let storeKitTransactionId, let storeKitOriginalTransactionId):
             try container.encode("subscriptionSucceeded", forKey: .type)
             try container.encode(productKey, forKey: .productKey)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-            try container.encodeIfPresent(transactionId, forKey: .transactionId)
-            try container.encodeIfPresent(originalTransactionId, forKey: .originalTransactionId)
+            try container.encodeIfPresent(storeKitTransactionId, forKey: .storeKitTransactionId)
+            try container.encodeIfPresent(storeKitOriginalTransactionId, forKey: .storeKitOriginalTransactionId)
         case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
@@ -265,9 +265,9 @@ public enum HeliumPaywallEvent: Codable {
             let productKey = try container.decode(String.self, forKey: .productKey)
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
-            let transactionId = try container.decodeIfPresent(String.self, forKey: .transactionId)
-            let originalTransactionId = try container.decodeIfPresent(String.self, forKey: .originalTransactionId)
-            self = .subscriptionSucceeded(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, transactionId: transactionId, originalTransactionId: originalTransactionId)
+            let storeKitTransactionId = try container.decodeIfPresent(String.self, forKey: .storeKitTransactionId)
+            let storeKitOriginalTransactionId = try container.decodeIfPresent(String.self, forKey: .storeKitOriginalTransactionId)
+            self = .subscriptionSucceeded(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
         case "subscriptionFailed":
             let productKey = try container.decode(String.self, forKey: .productKey)
             let triggerName = try container.decode(String.self, forKey: .triggerName)

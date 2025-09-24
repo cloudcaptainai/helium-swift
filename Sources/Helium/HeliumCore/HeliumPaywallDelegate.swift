@@ -154,7 +154,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
-            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, transactionId: transactionIds?.transactionId, originalTransactionId: transactionIds?.originalTransactionId))
+            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId))
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
         default:
