@@ -287,6 +287,21 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
                 webView.bottomAnchor.constraint(equalTo: superview.bottomAnchor)
             ])
         }
+        
+        guard let window = UIWindowHelper.findActiveWindow() else {
+            return
+        }
+        let insets = window.safeAreaInsets
+        
+        let js = """
+            window.heliumUpdateSafeAreaInsets({
+                top: \(insets.top),
+                bottom: \(insets.bottom),
+                left: \(insets.left),
+                right: \(insets.right)
+            });
+        """
+        webView.evaluateJavaScript(js)
     }
 }
 
