@@ -538,11 +538,10 @@ public class Helium {
         return await HeliumEntitlementsManager.shared.hasActiveSubscriptionFor(subscriptionGroupID: subscriptionGroupID)
     }
     
-    /// Returns a dictionary of all active subscriptions with their current status.
-    /// - Parameter includeNonRenewing: Whether to include non-renewing subscriptions (default: true)
-    /// - Returns: Dictionary mapping product IDs to their subscription status
-    public func activeSubscriptions(includeNonRenewing: Bool = true) async -> [String: Product.SubscriptionInfo.Status] {
-        return await HeliumEntitlementsManager.shared.activeSubscriptions(includeNonRenewing: includeNonRenewing)
+    /// Returns a dictionary of all active auto-renewable subscriptions with their current subscription info.
+    /// - Returns: Dictionary mapping product IDs to their subscription info
+    public func activeSubscriptions() async -> [String: Product.SubscriptionInfo] {
+        return await HeliumEntitlementsManager.shared.activeSubscriptions()
     }
     
     /// Returns an array of all purchased product IDs that the user currently has access to.

@@ -85,6 +85,12 @@ actor HeliumEntitlementsManager {
         var transactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
+                if transaction.productType == .nonRenewable {
+                    let nonRenewingExpired = transaction.expirationDate != nil && transaction.expirationDate! < Date()
+                    if nonRenewingExpired {
+                        continue
+                    }
+                }
                 transactions.append(transaction)
             }
         }
@@ -120,7 +126,7 @@ actor HeliumEntitlementsManager {
         
         // Otherwise check products and associated subscription groups
         for productId in productIds {
-            let entitled = await Helium.shared.hasActiveEntitlementFor(productId: productId)
+            let entitled = await hasActiveEntitlementFor(productId: productId)
             if entitled {
                 return true
             }
@@ -161,8 +167,7 @@ actor HeliumEntitlementsManager {
         let entitlements = await getCachedEntitlements()
         
         for transaction in entitlements where transaction.productType == .autoRenewable {
-            if let product = try? await ProductsCache.shared.getProduct(id: transaction.productID),
-               product.subscription?.subscriptionGroupID == subscriptionGroupID {
+            if transaction.subscriptionGroupID == subscriptionGroupID {
                 // Get status from cache or load it
                 let status = await getSubscriptionStatus(for: transaction.productID)
                 return status
@@ -174,7 +179,7 @@ actor HeliumEntitlementsManager {
     func hasActiveEntitlementFor(productId: String) async -> Bool {
         let entitlements = await getCachedEntitlements()
         for transaction in entitlements {
-            if transaction.productType != .autoRenewable && transaction.productID == productId {
+            if transaction.productID == productId {
                 return true
             }
         }
@@ -190,16 +195,15 @@ actor HeliumEntitlementsManager {
         return await getSubscriptionStatus(for: productId)
     }
     
-    func activeSubscriptions(includeNonRenewing: Bool) async -> [String: Product.SubscriptionInfo.Status] {
+    func activeSubscriptions() async -> [String: Product.SubscriptionInfo] {
         let entitlements = await getCachedEntitlements()
-        var subscriptions: [String: Product.SubscriptionInfo.Status] = [:]
+        var subscriptions: [String: Product.SubscriptionInfo] = [:]
         
         for transaction in entitlements {
-            if transaction.productType == .autoRenewable ||
-                (includeNonRenewing && transaction.productType == .nonRenewable) {
-                if let status = await getSubscriptionStatus(for: transaction.productID) {
-                    subscriptions[transaction.productID] = status
-                }
+            if transaction.productType == .autoRenewable,
+               let product = try? await ProductsCache.shared.getProduct(id: transaction.productID),
+               let subscription = product.subscription {
+                subscriptions[transaction.productID] = subscription
             }
         }
         
@@ -213,7 +217,7 @@ actor HeliumEntitlementsManager {
     
     // MARK: - Private Helper Methods
     
-    /// Lazily loads and caches subscription status for a product
+    /// Lazily loads and caches (auto-renewable) subscription status for a product
     private func getSubscriptionStatus(for productId: String) async -> Product.SubscriptionInfo.Status? {
         // Check if subscription status cache needs refresh based on main cache expiration
         if cache.needsReset(resetInterval: cacheResetInterval) {
@@ -239,6 +243,7 @@ actor HeliumEntitlementsManager {
     /// Checks if a subscription state is considered active
     private func isSubscriptionStateActive(_ state: Product.SubscriptionInfo.RenewalState?) -> Bool {
         guard let state = state else { return false }
+        // including inBillingRetryPeriod as true but note that Transaction.currentEntitlements does not seem to include inBillingRetryPeriod
         switch state {
         case .subscribed, .inBillingRetryPeriod, .inGracePeriod:
             return true
