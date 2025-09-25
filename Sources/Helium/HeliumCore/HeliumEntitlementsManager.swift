@@ -16,15 +16,21 @@ actor HeliumEntitlementsManager {
     /// Debounce interval for transaction updates in seconds
     private let debounceInterval: TimeInterval = 1
     
+    private struct SubscriptionStatusCache {
+        let status: Product.SubscriptionInfo.Status
+        let syncTime: Date
+    }
+    
     // MARK: - Cache Structure
     private struct EntitlementsCache {
         var transactions: [Transaction] = []
-        var subscriptionStatuses: [String: Product.SubscriptionInfo.Status] = [:] // productID -> status
-        var lastLoadedTime: Date?
+        var subscriptionStatuses: [String: SubscriptionStatusCache] = [:] // productID is key
         
-        func needsLoad(resetInterval: TimeInterval) -> Bool {
-            guard let lastLoadedTime = lastLoadedTime else { return true }
-            return Date().timeIntervalSince(lastLoadedTime) > resetInterval
+        var lastTransactionsLoadedTime: Date?
+        
+        func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
+            guard let lastSyncTime = lastTransactionsLoadedTime else { return true }
+            return Date().timeIntervalSince(lastSyncTime) > resetInterval
         }
     }
     
@@ -50,18 +56,12 @@ actor HeliumEntitlementsManager {
                     try? await Task.sleep(nanoseconds: UInt64(debounceInterval * 1_000_000_000))
                     
                     if !Task.isCancelled {
-                        resetCache()
+                        cache.lastTransactionsLoadedTime = nil
                         await loadEntitlementsIfNeeded()
                     }
                 }
             }
         }
-    }
-    
-    // MARK: - Cache Management
-    
-    private func resetCache() {
-        cache.lastLoadedTime = nil
     }
     
     private var isConfigured = false
@@ -77,7 +77,7 @@ actor HeliumEntitlementsManager {
     
     private func loadEntitlementsIfNeeded() async {
         // Check if cache is still valid
-        if !cache.needsLoad(resetInterval: cacheResetInterval) {
+        if !cache.needsTransactionsSync(resetInterval: cacheResetInterval) {
             return
         }
         
@@ -95,7 +95,7 @@ actor HeliumEntitlementsManager {
         }
         
         cache.transactions = transactions
-        cache.lastLoadedTime = Date()
+        cache.lastTransactionsLoadedTime = Date()
     }
     
     private func getCachedEntitlements() async -> [Transaction] {
@@ -157,8 +157,14 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
-        let status = await subscriptionStatusFor(subscriptionGroupID: subscriptionGroupID)
-        return isSubscriptionStateActive(status?.state)
+        let entitlements = await getCachedEntitlements()
+        
+        for transaction in entitlements where transaction.productType == .autoRenewable {
+            if transaction.subscriptionGroupID == subscriptionGroupID {
+                return true
+            }
+        }
+        return false
     }
     
     func subscriptionStatusFor(subscriptionGroupID: String) async -> Product.SubscriptionInfo.Status? {
@@ -184,7 +190,16 @@ actor HeliumEntitlementsManager {
         return await hasActiveSubscriptionFor(productId: productId)
     }
     
+    // Note that this should return true if user has purchased product OR a different subscription within same subscription group as supplied product.
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
+        let entitlements = await getCachedEntitlements()
+        for transaction in entitlements {
+            if transaction.productID == productId
+                && (transaction.productType == .autoRenewable || transaction.productType == .nonRenewable) {
+                return true
+            }
+        }
+        
         let status = await subscriptionStatusFor(productId: productId)
         return isSubscriptionStateActive(status?.state)
     }
@@ -210,40 +225,41 @@ actor HeliumEntitlementsManager {
     
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
-        resetCache()
+        cache = EntitlementsCache()
     }
     
     func ensureSuccessTransactionAdded(transaction: Transaction) async {
         if !cache.transactions.contains(where: { $0.productID == transaction.productID }) {
-            cache.transactions.append(transaction)
+            cache.lastTransactionsLoadedTime = nil
+            await loadEntitlementsIfNeeded()
+            // If it's STILL not there, add it manually
+            if !cache.transactions.contains(where: { $0.productID == transaction.productID }) {
+                cache.transactions.append(transaction)
+            }
         }
-        if cache.subscriptionStatuses[transaction.productID] == nil {
-            let _ = await getSubscriptionStatus(for: transaction.productID)
-        }
+        cache.subscriptionStatuses[transaction.productID] = nil
+        let _ = await getSubscriptionStatus(for: transaction.productID)
     }
     
     // MARK: - Private Helper Methods
     
     /// Lazily loads and caches (auto-renewable) subscription status for a product
     private func getSubscriptionStatus(for productId: String) async -> Product.SubscriptionInfo.Status? {
-        // Check if subscription status cache needs refresh based on main cache expiration
-        if cache.needsLoad(resetInterval: cacheResetInterval) {
-            cache.subscriptionStatuses.removeAll()
-        }
-        
         // Check cache first
         if let cachedStatus = cache.subscriptionStatuses[productId] {
-            return cachedStatus
+            if Date().timeIntervalSince(cachedStatus.syncTime) < cacheResetInterval {
+                return cachedStatus.status
+            }
         }
         
-        // Load and cache if not found
+        // Load and cache
         guard let product = try? await ProductsCache.shared.getProduct(id: productId),
               let status = try? await product.subscription?.status.first else {
             return nil
         }
         
         // Cache the status
-        cache.subscriptionStatuses[productId] = status
+        cache.subscriptionStatuses[productId] = SubscriptionStatusCache(status: status, syncTime: Date())
         return status
     }
     
