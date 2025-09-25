@@ -20,10 +20,9 @@ actor HeliumEntitlementsManager {
     private struct EntitlementsCache {
         var transactions: [Transaction] = []
         var subscriptionStatuses: [String: Product.SubscriptionInfo.Status] = [:] // productID -> status
-        var isLoaded: Bool = false
         var lastLoadedTime: Date?
         
-        func needsReset(resetInterval: TimeInterval) -> Bool {
+        func needsLoad(resetInterval: TimeInterval) -> Bool {
             guard let lastLoadedTime = lastLoadedTime else { return true }
             return Date().timeIntervalSince(lastLoadedTime) > resetInterval
         }
@@ -51,7 +50,7 @@ actor HeliumEntitlementsManager {
                     try? await Task.sleep(nanoseconds: UInt64(debounceInterval * 1_000_000_000))
                     
                     if !Task.isCancelled {
-                        clearCache()
+                        resetCache()
                         await loadEntitlementsIfNeeded()
                     }
                 }
@@ -61,8 +60,8 @@ actor HeliumEntitlementsManager {
     
     // MARK: - Cache Management
     
-    private func clearCache() {
-        cache = EntitlementsCache()
+    private func resetCache() {
+        cache.lastLoadedTime = nil
     }
     
     private var isConfigured = false
@@ -78,7 +77,7 @@ actor HeliumEntitlementsManager {
     
     private func loadEntitlementsIfNeeded() async {
         // Check if cache is still valid
-        if cache.isLoaded && !cache.needsReset(resetInterval: cacheResetInterval) {
+        if !cache.needsLoad(resetInterval: cacheResetInterval) {
             return
         }
         
@@ -96,7 +95,6 @@ actor HeliumEntitlementsManager {
         }
         
         cache.transactions = transactions
-        cache.isLoaded = true
         cache.lastLoadedTime = Date()
     }
     
@@ -212,7 +210,16 @@ actor HeliumEntitlementsManager {
     
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
-        clearCache()
+        resetCache()
+    }
+    
+    func ensureSuccessTransactionAdded(transaction: Transaction) async {
+        if !cache.transactions.contains(where: { $0.productID == transaction.productID }) {
+            cache.transactions.append(transaction)
+        }
+        if cache.subscriptionStatuses[transaction.productID] == nil {
+            let _ = await getSubscriptionStatus(for: transaction.productID)
+        }
     }
     
     // MARK: - Private Helper Methods
@@ -220,7 +227,7 @@ actor HeliumEntitlementsManager {
     /// Lazily loads and caches (auto-renewable) subscription status for a product
     private func getSubscriptionStatus(for productId: String) async -> Product.SubscriptionInfo.Status? {
         // Check if subscription status cache needs refresh based on main cache expiration
-        if cache.needsReset(resetInterval: cacheResetInterval) {
+        if cache.needsLoad(resetInterval: cacheResetInterval) {
             cache.subscriptionStatuses.removeAll()
         }
         
