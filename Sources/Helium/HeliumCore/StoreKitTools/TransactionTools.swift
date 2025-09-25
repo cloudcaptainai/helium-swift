@@ -10,15 +10,18 @@ import StoreKit
 struct TransactionIdPair {
     let transactionId: String?
     let originalTransactionId: String?
+    let transaction: Transaction?
     
     init(transaction: Transaction) {
         transactionId = transaction.id.description
         originalTransactionId = transaction.originalID.description
+        self.transaction = transaction
     }
     
     init(storeKit1Purchase: SKPaymentTransaction) {
         transactionId = storeKit1Purchase.transactionIdentifier
         originalTransactionId = storeKit1Purchase.original?.transactionIdentifier
+        transaction = nil
     }
 }
 
