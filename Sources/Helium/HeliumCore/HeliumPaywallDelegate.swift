@@ -88,7 +88,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
-    private(set) var skipIfAlreadyEntitled: Bool = false
+    private(set) var dontShowIfAlreadyEntitled: Bool = false
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
@@ -98,19 +98,19 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     public func configurePresentationContext(
         eventService: PaywallEventHandlers?,
         customPaywallTraits: [String: Any]?,
-        skipIfAlreadyEntitled: Bool = false,
+        dontShowIfAlreadyEntitled: Bool = false,
     ) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]
-        self.skipIfAlreadyEntitled = skipIfAlreadyEntitled
+        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
     }
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
         self.eventService = nil
         self.customPaywallTraits = [:]
-        self.skipIfAlreadyEntitled = false
+        self.dontShowIfAlreadyEntitled = false
     }
     
     func setAnalytics(_ analytics: Analytics, writeKey: String? = nil) {
@@ -164,8 +164,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
             
-            if let transaction = transactionIds?.transaction {
-                await HeliumEntitlementsManager.shared.ensureSuccessTransactionAdded(transaction: transaction)
+            Task {
+                await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
             }
             
             let skPostPurchaseTxnTimeMS = UInt64(Double(DispatchTime.now().uptimeNanoseconds - transactionRetrievalStartTime.uptimeNanoseconds) / 1_000_000.0)

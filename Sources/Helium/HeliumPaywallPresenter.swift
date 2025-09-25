@@ -25,7 +25,7 @@ class HeliumPaywallPresenter {
     }
     
     private func paywallEntitlementsCheck(trigger: String) async -> Bool {
-        if HeliumPaywallDelegateWrapper.shared.skipIfAlreadyEntitled {
+        if HeliumPaywallDelegateWrapper.shared.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
                 print("[Helium] Did not show paywall, user already has entitlement.")

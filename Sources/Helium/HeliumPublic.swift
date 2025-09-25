@@ -21,7 +21,7 @@ public class Helium {
         from viewController: UIViewController? = nil,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        skipIfAlreadyEntitled: Bool = false
+        dontShowIfAlreadyEntitled: Bool = false
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -31,7 +31,7 @@ public class Helium {
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
             customPaywallTraits: customPaywallTraits,
-            skipIfAlreadyEntitled: skipIfAlreadyEntitled
+            dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
         )
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)

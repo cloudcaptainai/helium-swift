@@ -228,17 +228,22 @@ actor HeliumEntitlementsManager {
         cache = EntitlementsCache()
     }
     
-    func ensureSuccessTransactionAdded(transaction: Transaction) async {
-        if !cache.transactions.contains(where: { $0.productID == transaction.productID }) {
+    func updateAfterPurchase(productID: String, transaction: Transaction?) async {
+        if !cache.transactions.contains(where: { $0.productID == productID }) {
             cache.lastTransactionsLoadedTime = nil
             await loadEntitlementsIfNeeded()
-            // If it's STILL not there, add it manually
-            if !cache.transactions.contains(where: { $0.productID == transaction.productID }) {
-                cache.transactions.append(transaction)
+            // If it's still not there, add it manually (if transaction available)
+            if let transaction {
+                if !cache.transactions.contains(where: { $0.productID == productID }) {
+                    cache.transactions.append(transaction)
+                }
+            } else {
+                cache.lastTransactionsLoadedTime = nil
             }
         }
-        cache.subscriptionStatuses[transaction.productID] = nil
-        let _ = await getSubscriptionStatus(for: transaction.productID)
+        
+        cache.subscriptionStatuses[productID] = nil
+        let _ = await getSubscriptionStatus(for: productID)
     }
     
     // MARK: - Private Helper Methods
@@ -253,11 +258,57 @@ actor HeliumEntitlementsManager {
         }
         
         // Load and cache
-        guard let product = try? await ProductsCache.shared.getProduct(id: productId),
-              let status = try? await product.subscription?.status.first else {
+        guard let product = try? await ProductsCache.shared.getProduct(id: productId) else {
             return nil
         }
         
+        guard let statusList = try? await product.subscription?.status else {
+            return nil
+        }
+        var latestStatus: Product.SubscriptionInfo.Status? = nil
+        for statusOption in statusList {
+            if isSubscriptionStateActive(statusOption.state) {
+                if latestStatus == nil {
+                    latestStatus = statusOption
+                } else {
+                    // Compare expiration dates and set latestStatus to the later expiration date
+                    let currentExpiration: Date?
+                    let newExpiration: Date?
+
+                    // Extract expiration dates from verified renewal info
+                    if case .verified(let currentRenewalInfo) = latestStatus?.renewalInfo {
+                        currentExpiration = currentRenewalInfo.renewalDate
+                    } else {
+                        currentExpiration = nil
+                    }
+
+                    if case .verified(let newRenewalInfo) = statusOption.renewalInfo {
+                        newExpiration = newRenewalInfo.renewalDate
+                    } else {
+                        newExpiration = nil
+                    }
+
+                    // If new status has no expiration or expires later, use it
+                    if let newExp = newExpiration {
+                        if let currentExp = currentExpiration {
+                            // Both have expiration dates, keep the later one
+                            if newExp > currentExp {
+                                latestStatus = statusOption
+                            }
+                        } else {
+                            // Current has no expiration but new does, keep current (lifetime)
+                        }
+                    } else {
+                        // New has no expiration, prefer it
+                        latestStatus = statusOption
+                    }
+                }
+            }
+        }
+        
+        guard let status = latestStatus else {
+            return nil
+        }
         // Cache the status
         cache.subscriptionStatuses[productId] = SubscriptionStatusCache(status: status, syncTime: Date())
         return status
