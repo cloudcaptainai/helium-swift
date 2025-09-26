@@ -108,7 +108,11 @@ public class HeliumController {
                         numAttempts: numFetchRequests
                     )
                 )
-                // Use the config as needed
+                
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                    object: nil
+                )
             case .failure(let error):
             
                 let configuration = SegmentConfiguration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
