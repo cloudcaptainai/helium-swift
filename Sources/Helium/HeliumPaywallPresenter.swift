@@ -230,7 +230,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        guard let presenter = viewController ?? findTopMostViewController() else {
+        guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
             // Failed to find a view controller to present on - dispatch open failed event
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
@@ -246,35 +246,6 @@ class HeliumPaywallPresenter {
         paywallsDisplayed.append(modalVC)
 
         dispatchOpenEvent(paywallVC: modalVC)
-    }
-    
-    @MainActor
-    private func findTopMostViewController() -> UIViewController? {
-        guard let activeWindow = findActiveWindow(),
-              var topController = activeWindow.rootViewController else {
-            return nil
-        }
-        
-        while let presentedViewController = topController.presentedViewController {
-            topController = presentedViewController
-        }
-        
-        return topController
-    }
-    @MainActor
-    private func findActiveWindow() -> UIWindow? {
-        if let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
-        }
-        
-        if let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
-            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
-        }
-        
-        let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
-        return allWindows.first { $0.isKeyWindow } ?? allWindows.first
     }
     
     @discardableResult

@@ -117,3 +117,37 @@ public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 
     }
     return EdgeInsets(top: topPadding + additionalTopPadding, leading: leftPadding, bottom: bottomPadding + additionalBottomPadding, trailing: rightPadding);
 }
+
+
+@MainActor
+class UIWindowHelper {
+    
+    static func findTopMostViewController() -> UIViewController? {
+        guard let activeWindow = findActiveWindow(),
+              var topController = activeWindow.rootViewController else {
+            return nil
+        }
+        
+        while let presentedViewController = topController.presentedViewController {
+            topController = presentedViewController
+        }
+        
+        return topController
+    }
+    
+    static func findActiveWindow() -> UIWindow? {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+        return allWindows.first { $0.isKeyWindow } ?? allWindows.first
+    }
+    
+}
