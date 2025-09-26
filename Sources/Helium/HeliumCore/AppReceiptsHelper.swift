@@ -8,10 +8,16 @@
 import StoreKit
 
 class AppReceiptsHelper {
+
+    enum Environment: String {
+        case debug = "debug"
+        case sandbox = "sandbox"
+        case production = "production"
+    }
     
     static let shared = AppReceiptsHelper()
     
-    private var appTransactionEnvironment: String? = nil
+    private var appTransactionEnvironment: Environment? = nil
     private var setupCompleted: Bool = false
     
     func setUp() {
@@ -20,10 +26,12 @@ class AppReceiptsHelper {
         }
         setupCompleted = true
         if Bundle.main.appStoreReceiptURL != nil {
-            // Just rely on appStoreReceiptURL if available, even though it is deprecated.
             // AppTransaction.shared can trigger Apple account sign-in dialog in debug/sandbox
-            // if not signed into a sandbox account, which is annoying for sdk integrators.
-            return
+            // if not signed into a sandbox account, which is annoying for sdk integrators. So avoid
+            // that call if can determine sandbox from receipt.
+            if getEnvironment() == Environment.sandbox.rawValue {
+                return
+            }
         }
 #if !DEBUG && !targetEnvironment(simulator)
         if #available(iOS 16.0, *) {
@@ -35,14 +43,16 @@ class AppReceiptsHelper {
                     // the properties in the AppTransaction instance.
                     switch appTransaction.environment {
                     case .xcode:
-                        appTransactionEnvironment = "debug"
+                        appTransactionEnvironment = .debug
                     case .sandbox:
-                        appTransactionEnvironment = "sandbox"
+                        appTransactionEnvironment = .sandbox
                     case .production:
-                        appTransactionEnvironment = "production"
+                        appTransactionEnvironment = .production
                     default:
                         break
                     }
+                    
+                    HeliumIdentityManager.shared.appTransactionID = appTransaction.appTransactionID
                 case .unverified(let appTransaction, let verificationError):
                     // The app transaction didn't pass StoreKit's verification.
                     // Handle unverified app transaction information according
@@ -58,16 +68,16 @@ class AppReceiptsHelper {
     
     func getEnvironment() -> String {
 #if DEBUG || targetEnvironment(simulator)
-        return "debug"
+        return Environment.debug.rawValue
 #else
         if let appTransactionEnvironment {
-            return appTransactionEnvironment
+            return appTransactionEnvironment.rawValue
         }
-        
+
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
-        
+
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        return isTestFlight ? "sandbox" : "production"
+        return isTestFlight ? Environment.sandbox.rawValue : Environment.production.rawValue
 #endif
     }
     
