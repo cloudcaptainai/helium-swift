@@ -116,14 +116,15 @@ class HeliumPaywallPresenter {
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
         guard let upsellView = upsellViewResult.view else {
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallOpenFailedEvent(
-                    triggerName: trigger,
-                    paywallName: upsellViewResult.templateName ?? "unknown",
-                    error: "No paywall for trigger and no fallback available after load complete."
+            hideUpsell {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        error: "No paywall for trigger and no fallback available after load complete."
+                    )
                 )
-            )
-            hideUpsell()
+            }
             return
         }
         loadingPaywall.updateContent(upsellView, isFallback: upsellViewResult.isFallback, isLoading: false)
@@ -277,14 +278,18 @@ class HeliumPaywallPresenter {
     }
     
     @discardableResult
-    func hideUpsell(animated: Bool = true) -> Bool {
+    func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
         guard let currentPaywall = paywallsDisplayed.popLast(),
               currentPaywall.presentingViewController != nil else {
             return false
         }
         Task { @MainActor in
             currentPaywall.dismiss(animated: animated) { [weak self] in
-                self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                if let overrideCloseEvent {
+                    overrideCloseEvent()
+                } else {
+                    self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                }
             }
         }
         return true

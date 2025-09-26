@@ -211,15 +211,17 @@ public struct DynamicWebView: View {
         if fallbackPaywall != nil {
             shouldShowFallback = true
         } else {
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallOpenFailedEvent(
-                    triggerName: triggerName ?? "",
-                    paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
-                    error: "WebView failed to load - \(reason)"
-                )
+            let openFailEvent = PaywallOpenFailedEvent(
+                triggerName: triggerName ?? "",
+                paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
+                error: "WebView failed to load - \(reason)"
             )
             if presentationState.viewType == .presented {
-                Helium.shared.hideUpsell()
+                HeliumPaywallPresenter.shared.hideUpsell {
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+                }
+            } else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
             }
         }
     }
