@@ -18,6 +18,8 @@ public class HeliumIdentityManager {
     
     private var cachedUserContext: CodableUserContext? = nil
     
+    var appTransactionID: String? = nil
+    
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
     private let heliumUserIdKey = "heliumUserId"

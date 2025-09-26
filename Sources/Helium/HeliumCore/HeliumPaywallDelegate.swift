@@ -155,6 +155,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
+            
+            if let atID = transactionIds?.transaction?.appTransactionID {
+                HeliumIdentityManager.shared.appTransactionID = atID
+            }
+            
             let skPostPurchaseTxnTimeMS = UInt64(Double(DispatchTime.now().uptimeNanoseconds - transactionRetrievalStartTime.uptimeNanoseconds) / 1_000_000.0)
             self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS))
         case .pending:
