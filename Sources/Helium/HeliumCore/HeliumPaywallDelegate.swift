@@ -85,24 +85,32 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     private var isAnalyticsEnabled: Bool = true
+    
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
+    private(set) var dontShowIfAlreadyEntitled: Bool = false
     
     public func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(eventService: PaywallEventHandlers?, customPaywallTraits: [String: Any]?) {
+    public func configurePresentationContext(
+        eventService: PaywallEventHandlers?,
+        customPaywallTraits: [String: Any]?,
+        dontShowIfAlreadyEntitled: Bool = false,
+    ) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
         self.customPaywallTraits = customPaywallTraits ?? [:]
+        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
     }
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
         self.eventService = nil
         self.customPaywallTraits = [:]
+        self.dontShowIfAlreadyEntitled = false
     }
     
     func setAnalytics(_ analytics: Analytics, writeKey: String? = nil) {
@@ -156,6 +164,9 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
             
+            Task {
+                await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+            }
             if let atID = transactionIds?.transaction?.appTransactionID {
                 HeliumIdentityManager.shared.appTransactionID = atID
             }
