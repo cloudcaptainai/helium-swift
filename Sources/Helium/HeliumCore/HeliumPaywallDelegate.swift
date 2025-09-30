@@ -98,7 +98,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
     public func configurePresentationContext(
         eventService: PaywallEventHandlers?,
         customPaywallTraits: [String: Any]?,
-        dontShowIfAlreadyEntitled: Bool = false,
+        dontShowIfAlreadyEntitled: Bool = false
     ) {
         // Always set both, even if nil, to ensure proper reset
         self.eventService = eventService
@@ -167,9 +167,11 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             Task {
                 await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
             }
+            #if compiler(>=6.2)
             if let atID = transactionIds?.transaction?.appTransactionID {
                 HeliumIdentityManager.shared.appTransactionID = atID
             }
+            #endif
             
             let skPostPurchaseTxnTimeMS = UInt64(Double(DispatchTime.now().uptimeNanoseconds - transactionRetrievalStartTime.uptimeNanoseconds) / 1_000_000.0)
             self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS))
