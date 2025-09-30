@@ -92,6 +92,10 @@ public class HeliumIdentityManager {
         revenueCatAppUserId = rcAppUserId
     }
     
+    public func getAppTransactionID() -> String? {
+        return appTransactionID
+    }
+    
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
     public func getUserContext(
