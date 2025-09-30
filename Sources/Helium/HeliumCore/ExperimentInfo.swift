@@ -19,7 +19,7 @@ struct ExperimentFieldsResponse: Codable {
     let allocations: [Int]
     let chosenAllocation: Int
     let audienceId: String?
-    let audienceData: JSON?
+    let audienceData: AnyCodable?
 }
 
 // MARK: - Targeting Details
@@ -32,9 +32,9 @@ public struct TargetingDetails: Codable {
     
     /// Raw audience data containing targeting criteria
     /// - Note: JSON mapping with audience configuration details
-    public let audienceData: JSON?
+    public let audienceData: AnyCodable?
     
-    public init(audienceId: String?, audienceData: JSON?) {
+    public init(audienceId: String?, audienceData: AnyCodable?) {
         self.audienceId = audienceId
         self.audienceData = audienceData
     }
@@ -183,7 +183,7 @@ public struct ExperimentInfo: Codable {
                     dict["experiment_info_audience_id"] = audienceId
                 }
                 if let audienceData = targeting.audienceData {
-                    dict["experiment_info_audience_data"] = audienceData.dictionaryValue ?? [:]
+                    dict["experiment_info_audience_data"] = audienceData.value
                 }
             }
         }
