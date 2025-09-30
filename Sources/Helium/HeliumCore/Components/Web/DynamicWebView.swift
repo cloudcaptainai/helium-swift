@@ -211,15 +211,17 @@ public struct DynamicWebView: View {
         if fallbackPaywall != nil {
             shouldShowFallback = true
         } else {
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallOpenFailedEvent(
-                    triggerName: triggerName ?? "",
-                    paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
-                    error: "WebView failed to load - \(reason)"
-                )
+            let openFailEvent = PaywallOpenFailedEvent(
+                triggerName: triggerName ?? "",
+                paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
+                error: "WebView failed to load - \(reason)"
             )
             if presentationState.viewType == .presented {
-                Helium.shared.hideUpsell()
+                HeliumPaywallPresenter.shared.hideUpsell {
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+                }
+            } else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
             }
         }
     }
@@ -287,6 +289,21 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
                 webView.bottomAnchor.constraint(equalTo: superview.bottomAnchor)
             ])
         }
+        
+        guard let window = UIWindowHelper.findActiveWindow() else {
+            return
+        }
+        let insets = window.safeAreaInsets
+        
+        let js = """
+            window.heliumUpdateSafeAreaInsets({
+                top: \(insets.top),
+                bottom: \(insets.bottom),
+                left: \(insets.left),
+                right: \(insets.right)
+            });
+        """
+        webView.evaluateJavaScript(js)
     }
 }
 

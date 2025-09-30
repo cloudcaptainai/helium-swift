@@ -132,14 +132,15 @@ class HeliumPaywallPresenter {
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
         guard let upsellView = upsellViewResult.view else {
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallOpenFailedEvent(
-                    triggerName: trigger,
-                    paywallName: upsellViewResult.templateName ?? "unknown",
-                    error: "No paywall for trigger and no fallback available after load complete."
+            hideUpsell {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        error: "No paywall for trigger and no fallback available after load complete."
+                    )
                 )
-            )
-            hideUpsell()
+            }
             return
         }
         loadingPaywall.updateContent(upsellView, isFallback: upsellViewResult.isFallback, isLoading: false)
@@ -245,7 +246,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        guard let presenter = viewController ?? findTopMostViewController() else {
+        guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
             // Failed to find a view controller to present on - dispatch open failed event
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
@@ -263,44 +264,19 @@ class HeliumPaywallPresenter {
         dispatchOpenEvent(paywallVC: modalVC)
     }
     
-    @MainActor
-    private func findTopMostViewController() -> UIViewController? {
-        guard let activeWindow = findActiveWindow(),
-              var topController = activeWindow.rootViewController else {
-            return nil
-        }
-        
-        while let presentedViewController = topController.presentedViewController {
-            topController = presentedViewController
-        }
-        
-        return topController
-    }
-    @MainActor
-    private func findActiveWindow() -> UIWindow? {
-        if let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
-        }
-        
-        if let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
-            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
-        }
-        
-        let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
-        return allWindows.first { $0.isKeyWindow } ?? allWindows.first
-    }
-    
     @discardableResult
-    func hideUpsell(animated: Bool = true) -> Bool {
+    func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
         guard let currentPaywall = paywallsDisplayed.popLast(),
               currentPaywall.presentingViewController != nil else {
             return false
         }
         Task { @MainActor in
             currentPaywall.dismiss(animated: animated) { [weak self] in
-                self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                if let overrideCloseEvent {
+                    overrideCloseEvent()
+                } else {
+                    self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                }
             }
         }
         return true

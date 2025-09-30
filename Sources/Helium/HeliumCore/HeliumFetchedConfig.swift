@@ -276,14 +276,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     @MainActor private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
         self.downloadStatus = status
-        
-        // Post notification when download completes successfully
-        if case .downloadSuccess = status {
-            NotificationCenter.default.post(
-                name: NSNotification.Name("HeliumConfigDownloadComplete"),
-                object: nil
-            )
-        }
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
