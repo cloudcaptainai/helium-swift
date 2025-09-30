@@ -18,7 +18,7 @@ public class HeliumIdentityManager {
     
     private var cachedUserContext: CodableUserContext? = nil
     
-    public private(set) var appTransactionID: String? = nil
+    var appTransactionID: String? = nil
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
@@ -90,6 +90,10 @@ public class HeliumIdentityManager {
     
     func setRevenueCatAppUserId(_ rcAppUserId: String) {
         revenueCatAppUserId = rcAppUserId
+    }
+    
+    public func getAppTransactionID() -> String? {
+        return appTransactionID
     }
     
     /// Gets the current user context, creating it if necessary

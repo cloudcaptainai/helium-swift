@@ -78,7 +78,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         // Keep this value as up-to-date as possible
         Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
         if allowHeliumUserAttribute {
-            if let appTransactionID = HeliumIdentityManager.shared.appTransactionID {
+            if let appTransactionID = HeliumIdentityManager.shared.getAppTransactionID() {
                 Purchases.shared.attribution.setAttributes([
                     "helium_atid" : appTransactionID,
                 ])
