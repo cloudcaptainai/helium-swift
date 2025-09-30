@@ -38,6 +38,12 @@ public class Helium {
     func skipPaywallIfNeeded(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
+            // Fire allocation event even when paywall is skipped
+            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+                trigger: trigger,
+                isFallback: false
+            )
+            
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallSkippedEvent(triggerName: trigger)
             )
@@ -60,6 +66,10 @@ public class Helium {
     
     public func hideAllUpsells() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
+    }
+
+    public func getHeliumExperimentInfo() -> HeliumExperimentInfo? {
+        return HeliumFetchedConfigManager.shared.getExperimentInfo();
     }
     
     /// Clears all cached Helium state and allows safe re-initialization.
@@ -107,6 +117,9 @@ public class Helium {
         
         // Completely reset all fallback configurations
         HeliumFallbackViewManager.shared.resetAllFallbacks()
+        
+        // Reset experiment allocation tracking
+        ExperimentAllocationTracker.shared.reset()
         
         // Reset initialization state to allow re-initialization
         initialized = false
@@ -210,6 +223,49 @@ public class Helium {
             return nil
         }
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
+    }
+    
+    /// Returns experiment allocation information for a specific trigger.
+    ///
+    /// Use this method to retrieve detailed information about the experiment variant that the current user
+    /// has been allocated to for a given trigger. This is useful for:
+    /// - Logging experiment exposure in your own analytics
+    /// - Debugging experiment assignments
+    /// - Conditional logic based on experiment variants
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let experimentInfo = Helium.shared.getExperimentInfo(for: "onboarding") {
+    ///     print("Experiment: \(experimentInfo.experimentDetails?.name ?? "unknown")")
+    ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    ///     print("Hash bucket: \(experimentInfo.userHashDetails?.hashedUserIdBucket1To100 ?? 0)")
+    /// } else {
+    ///     print("No experiment running for this trigger")
+    /// }
+    /// ```
+    ///
+    /// ## Experiment Info Contents
+    /// The returned `ExperimentInfo` object contains:
+    /// - **Experiment Details**: Name, ID, type, and targeting criteria (audience ID/rules)
+    /// - **Variant Details**: Allocation index, paywall UUID, allocation timestamp
+    /// - **User Hash Details**: Hash bucket (1-100), hashed user ID, hash type
+    ///
+    /// - Parameter trigger: The trigger name to get experiment info for (e.g., "onboarding", "premium_upgrade")
+    /// - Returns: An `ExperimentInfo` object containing complete experiment allocation details, or `nil` if:
+    ///   - No paywall configuration exists for the trigger
+    ///   - The trigger is not part of an active experiment
+    ///   - Paywall configuration hasn't been downloaded yet
+    ///
+    /// - Note: This method returns the experiment info regardless of whether the paywall has been shown.
+    ///   The `UserAllocatedEvent` analytics event is only fired once when the paywall is first displayed.
+    ///
+    /// - SeeAlso: `ExperimentInfo`, `ExperimentDetails`, `VariantDetails`
+    public func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
+        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+            return nil
+        }
+        
+        return paywallInfo.extractExperimentInfo(trigger: trigger)
     }
     
     /// Initializes the Helium paywall system with configuration options.

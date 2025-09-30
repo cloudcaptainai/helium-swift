@@ -38,6 +38,95 @@ public struct HeliumPaywallInfo: Codable {
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?
     var additionalPaywallFields: JSON?
+    
+    /// Extract experiment info from additionalPaywallFields
+    /// - Parameter trigger: The trigger name for this paywall
+    /// - Returns: ExperimentInfo if experiment data is available
+    func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
+        guard let additionalFields = additionalPaywallFields else {
+            return nil
+        }
+        
+        // Try new structured experimentFields first
+        if let experimentFieldsJSON = additionalFields["experimentFields"],
+           let experimentFieldsData = try? JSONEncoder().encode(experimentFieldsJSON),
+           let experimentFields = try? JSONDecoder().decode(ExperimentFieldsResponse.self, from: experimentFieldsData) {
+            
+            // Parse targeting details if present
+            var targetingDetails: TargetingDetails? = nil
+            if let audienceId = experimentFields.audienceId {
+                targetingDetails = TargetingDetails(
+                    audienceId: audienceId,
+                    audienceData: experimentFields.audienceData
+                )
+            }
+            
+            // Use structured fields from server
+            let experimentDetails = ExperimentDetails(
+                name: experimentFields.experimentName,
+                id: experimentFields.experimentId,
+                targetingDetails: targetingDetails,
+                type: experimentFields.experimentType
+            )
+            
+            let variantDetails = VariantDetails(
+                allocationName: paywallTemplateName,
+                allocationId: paywallUUID,
+                allocationIndex: experimentFields.chosenAllocation + 1,
+                allocationTime: Date()
+            )
+            
+            let userHashDetails = UserHashDetails(
+                hashedUserIdBucket1To100: experimentFields.userPercentage,
+                hashedUserId: nil,
+                hashType: nil
+            )
+            
+            return ExperimentInfo(
+                trigger: trigger,
+                experimentDetails: experimentDetails,
+                chosenVariantDetails: variantDetails,
+                userHashDetails: userHashDetails
+            )
+        }
+        
+        // Fall back to legacy flat field parsing
+        guard let experimentID = experimentID, !experimentID.isEmpty else {
+            return nil
+        }
+        
+        let experimentName = additionalFields["experimentName"].string
+        
+        let experimentDetails = ExperimentDetails(
+            name: experimentName,
+            id: experimentID,
+            targetingDetails: nil,
+            type: nil
+        )
+        
+        let userPercentage = additionalFields["userPercentage"].int
+        let chosenAllocation = additionalFields["chosen_allocation"].int
+        
+        let variantDetails = VariantDetails(
+            allocationName: paywallTemplateName,
+            allocationId: paywallUUID,
+            allocationIndex: (chosenAllocation ?? 0) + 1,
+            allocationTime: Date()
+        )
+        
+        let userHashDetails = UserHashDetails(
+            hashedUserIdBucket1To100: userPercentage,
+            hashedUserId: nil,
+            hashType: nil
+        )
+        
+        return ExperimentInfo(
+            trigger: trigger,
+            experimentDetails: experimentDetails,
+            chosenVariantDetails: variantDetails,
+            userHashDetails: userHashDetails
+        )
+    }
 }
 
 //User-facing details about a paywall
