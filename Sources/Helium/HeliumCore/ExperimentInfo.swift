@@ -9,9 +9,9 @@ import Foundation
 
 // MARK: - Server Response Structure
 
-/// Structured experiment fields from server response
-/// - Note: Matches experimentFields structure from bandit server
-struct ExperimentFieldsResponse: Codable {
+/// Structured experiment info from server response
+/// - Note: Matches top-level experimentInfo structure from bandit server
+struct ExperimentInfoResponse: Codable {
     let experimentId: String?
     let experimentName: String?
     let experimentType: String?
@@ -19,86 +19,33 @@ struct ExperimentFieldsResponse: Codable {
     let allocations: [Int]
     let chosenAllocation: Int
     let audienceId: String?
-    let audienceData: AnyCodable?
+    let audienceData: String?  // Stringified JSON
+    let allocationMetadata: AnyCodable?
+    let hashMethod: String?
 }
 
-// MARK: - Targeting Details
 
-/// Details about audience targeting for an experiment
-public struct TargetingDetails: Codable {
-    /// Unique identifier for the audience being targeted
-    /// - Note: Used for lookup in Helium dashboard
-    public let audienceId: String?
-    
-    /// Raw audience data containing targeting criteria
-    /// - Note: JSON mapping with audience configuration details
-    public let audienceData: AnyCodable?
-    
-    public init(audienceId: String?, audienceData: AnyCodable?) {
-        self.audienceId = audienceId
-        self.audienceData = audienceData
-    }
-}
-
-// MARK: - Experiment Details
-
-/// Details about the experiment configuration
-public struct ExperimentDetails: Codable {
-    /// Name of the experiment
-    public let name: String?
-    
-    /// Unique identifier for the experiment
-    public let id: String?
-    
-    /// Start date of the experiment
-    // public let startDate: Date?
-    
-    /// End date of the experiment
-    // public let endDate: Date?
-    
-    /// Targeting details for this experiment
-    public let targetingDetails: TargetingDetails?
-    
-    /// Type of experiment (e.g., "AB_TEST", "MAB", "CMAB")
-    public let type: String?
-    
-    // Additional experiment configuration
-    // public let rolloutPercentage: Double?
-    
-    public init(
-        name: String?,
-        id: String?,
-        targetingDetails: TargetingDetails?,
-        type: String?
-    ) {
-        self.name = name
-        self.id = id
-        self.targetingDetails = targetingDetails
-        self.type = type
-    }
-}
-
-// MARK: - User Hash Details
+// MARK: - Hash Details
 
 /// Details about user hash bucketing for allocation
-public struct UserHashDetails: Codable {
+public struct HashDetails: Codable {
     /// User hash bucket (1-100) - used for consistent allocation
     public let hashedUserIdBucket1To100: Int?
     
     /// User ID that was hashed for allocation
     public let hashedUserId: String?
     
-    /// Type of hash used (e.g., "HASH_USER_ID", "HASH_HELIUM_PERSISTENT_ID")
-    public let hashType: String?
+    /// Hash method used (e.g., "HASH_USER_ID", "HASH_HELIUM_PERSISTENT_ID")
+    public let hashMethod: String?
     
     public init(
         hashedUserIdBucket1To100: Int?,
         hashedUserId: String?,
-        hashType: String?
+        hashMethod: String?
     ) {
         self.hashedUserIdBucket1To100 = hashedUserIdBucket1To100
         self.hashedUserId = hashedUserId
-        self.hashType = hashType
+        self.hashMethod = hashMethod
     }
 }
 
@@ -138,83 +85,64 @@ public struct ExperimentInfo: Codable {
     /// Trigger name at which user was enrolled
     public let trigger: String
     
-    /// Details about the experiment configuration
-    public let experimentDetails: ExperimentDetails?
+    /// Experiment name
+    public let experimentName: String?
+    
+    /// Experiment ID
+    public let experimentId: String?
+    
+    /// Experiment type (e.g., "A/B/n test")
+    public let experimentType: String?
+    
+    /// Audience ID that user matched
+    public let audienceId: String?
+    
+    /// Stringified JSON of audience data (internal storage)
+    let audienceData: String?
+    
+    /// Public accessor for audience data as dictionary
+    public var audienceDataDictionary: [String: Any]? {
+        guard let audienceData = audienceData,
+              let data = audienceData.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return dict
+    }
+    
+    /// Additional allocation metadata (internal storage)
+    let allocationMetadata: AnyCodable?
+    
+    /// Public accessor for allocation metadata as dictionary
+    public var allocationMetadataDictionary: [String: Any]? {
+        return allocationMetadata?.value as? [String: Any]
+    }
     
     /// Details about the chosen variant
     public let chosenVariantDetails: VariantDetails?
     
-    /// User hash bucketing details
-    public let userHashDetails: UserHashDetails?
+    /// Hash bucketing details
+    public let hashDetails: HashDetails?
     
-    public init(
+    init(
         trigger: String,
-        experimentDetails: ExperimentDetails?,
+        experimentName: String?,
+        experimentId: String?,
+        experimentType: String?,
+        audienceId: String?,
+        audienceData: String?,
+        allocationMetadata: AnyCodable?,
         chosenVariantDetails: VariantDetails?,
-        userHashDetails: UserHashDetails?
+        hashDetails: HashDetails?
     ) {
         self.trigger = trigger
-        self.experimentDetails = experimentDetails
+        self.experimentName = experimentName
+        self.experimentId = experimentId
+        self.experimentType = experimentType
+        self.audienceId = audienceId
+        self.audienceData = audienceData
+        self.allocationMetadata = allocationMetadata
         self.chosenVariantDetails = chosenVariantDetails
-        self.userHashDetails = userHashDetails
-    }
-    
-    /// Convert to dictionary with experiment_info_* prefixed keys for consistent logging
-    func toDictionaryWithPrefix() -> [String: Any] {
-        var dict: [String: Any] = [
-            "experiment_info_trigger": trigger
-        ]
-        
-        // Experiment details
-        if let experimentDetails = experimentDetails {
-            if let name = experimentDetails.name {
-                dict["experiment_info_experiment_name"] = name
-            }
-            if let id = experimentDetails.id {
-                dict["experiment_info_experiment_id"] = id
-            }
-            if let type = experimentDetails.type {
-                dict["experiment_info_experiment_type"] = type
-            }
-            
-            // Targeting details
-            if let targeting = experimentDetails.targetingDetails {
-                if let audienceId = targeting.audienceId {
-                    dict["experiment_info_audience_id"] = audienceId
-                }
-                if let audienceData = targeting.audienceData {
-                    dict["experiment_info_audience_data"] = audienceData.value
-                }
-            }
-        }
-        
-        // Variant details
-        if let variantDetails = chosenVariantDetails {
-            if let allocationName = variantDetails.allocationName {
-                dict["experiment_info_allocation_name"] = allocationName
-            }
-            if let allocationId = variantDetails.allocationId {
-                dict["experiment_info_allocation_id"] = allocationId
-            }
-            if let allocationIndex = variantDetails.allocationIndex {
-                dict["experiment_info_allocation_index"] = allocationIndex
-            }
-            dict["experiment_info_allocation_time"] = variantDetails.allocationTime.timeIntervalSince1970
-        }
-        
-        // User hash details
-        if let hashDetails = userHashDetails {
-            if let hashedUserIdBucket = hashDetails.hashedUserIdBucket1To100 {
-                dict["experiment_info_hashed_user_id_bucket"] = hashedUserIdBucket
-            }
-            if let hashedUserId = hashDetails.hashedUserId {
-                dict["experiment_info_hashed_user_id"] = hashedUserId
-            }
-            if let hashType = hashDetails.hashType {
-                dict["experiment_info_hash_type"] = hashType
-            }
-        }
-        
-        return dict
+        self.hashDetails = hashDetails
     }
 }

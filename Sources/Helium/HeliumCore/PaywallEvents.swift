@@ -902,18 +902,11 @@ public struct UserAllocatedEvent: HeliumEvent {
     public var eventName: String { "userAllocated" }
     
     public func toDictionary() -> [String: Any] {
-        var dict: [String: Any] = [
+        return [
             "type": eventName,
-            "timestamp": timestamp.timeIntervalSince1970
+            "timestamp": timestamp.timeIntervalSince1970,
+            "experimentInfo": experimentInfo
         ]
-        
-        // Merge in all experiment info fields with prefixed keys
-        let experimentDict = experimentInfo.toDictionaryWithPrefix()
-        for (key, value) in experimentDict {
-            dict[key] = value
-        }
-        
-        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {

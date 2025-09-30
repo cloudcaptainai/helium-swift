@@ -37,94 +37,43 @@ public struct HeliumPaywallInfo: Codable {
     var secondChance: Bool?
     var secondChancePaywall: AnyCodable?
     var resolvedConfigJSON: JSON?
+    var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
     
-    /// Extract experiment info from additionalPaywallFields
+    /// Extract experiment info from top-level experimentInfo field
     /// - Parameter trigger: The trigger name for this paywall
     /// - Returns: ExperimentInfo if experiment data is available
     func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
-        guard let additionalFields = additionalPaywallFields else {
+        // Check top-level experimentInfo field
+        guard let expInfo = experimentInfo, expInfo.exists(),
+              let experimentInfoData = try? JSONEncoder().encode(expInfo),
+              let response = try? JSONDecoder().decode(ExperimentInfoResponse.self, from: experimentInfoData) else {
             return nil
         }
-        
-        // Try new structured experimentFields first
-        if let experimentFieldsJSON = additionalFields["experimentFields"],
-           let experimentFieldsData = try? JSONEncoder().encode(experimentFieldsJSON),
-           let experimentFields = try? JSONDecoder().decode(ExperimentFieldsResponse.self, from: experimentFieldsData) {
-            
-            // Parse targeting details if present
-            var targetingDetails: TargetingDetails? = nil
-            if let audienceId = experimentFields.audienceId {
-                targetingDetails = TargetingDetails(
-                    audienceId: audienceId,
-                    audienceData: experimentFields.audienceData
-                )
-            }
-            
-            // Use structured fields from server
-            let experimentDetails = ExperimentDetails(
-                name: experimentFields.experimentName,
-                id: experimentFields.experimentId,
-                targetingDetails: targetingDetails,
-                type: experimentFields.experimentType
-            )
-            
-            let variantDetails = VariantDetails(
-                allocationName: paywallTemplateName,
-                allocationId: paywallUUID,
-                allocationIndex: experimentFields.chosenAllocation + 1,
-                allocationTime: Date()
-            )
-            
-            let userHashDetails = UserHashDetails(
-                hashedUserIdBucket1To100: experimentFields.userPercentage,
-                hashedUserId: nil,
-                hashType: nil
-            )
-            
-            return ExperimentInfo(
-                trigger: trigger,
-                experimentDetails: experimentDetails,
-                chosenVariantDetails: variantDetails,
-                userHashDetails: userHashDetails
-            )
-        }
-        
-        // Fall back to legacy flat field parsing
-        guard let experimentID = experimentID, !experimentID.isEmpty else {
-            return nil
-        }
-        
-        let experimentName = additionalFields["experimentName"].string
-        
-        let experimentDetails = ExperimentDetails(
-            name: experimentName,
-            id: experimentID,
-            targetingDetails: nil,
-            type: nil
-        )
-        
-        let userPercentage = additionalFields["userPercentage"].int
-        let chosenAllocation = additionalFields["chosen_allocation"].int
         
         let variantDetails = VariantDetails(
             allocationName: paywallTemplateName,
             allocationId: paywallUUID,
-            allocationIndex: (chosenAllocation ?? 0) + 1,
+            allocationIndex: response.chosenAllocation + 1,
             allocationTime: Date()
         )
         
-        let userHashDetails = UserHashDetails(
-            hashedUserIdBucket1To100: userPercentage,
+        let hashDetails = HashDetails(
+            hashedUserIdBucket1To100: response.userPercentage,
             hashedUserId: nil,
-            hashType: nil
+            hashMethod: response.hashMethod
         )
         
         return ExperimentInfo(
             trigger: trigger,
-            experimentDetails: experimentDetails,
+            experimentName: response.experimentName,
+            experimentId: response.experimentId,
+            experimentType: response.experimentType,
+            audienceId: response.audienceId,
+            audienceData: response.audienceData,
+            allocationMetadata: response.allocationMetadata,
             chosenVariantDetails: variantDetails,
-            userHashDetails: userHashDetails
+            hashDetails: hashDetails
         )
     }
 }
@@ -559,6 +508,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var downloadStatus: HeliumFetchedConfigStatus?
     var additionalFields: JSON?
     var additionalPaywallFields: JSON?
+    var experimentInfo: ExperimentInfo?  // New: experiment allocation data
 }
 
 

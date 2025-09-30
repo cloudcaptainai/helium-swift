@@ -67,9 +67,24 @@ public class Helium {
     public func hideAllUpsells() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
-
-    public func getHeliumExperimentInfo() -> HeliumExperimentInfo? {
-        return HeliumFetchedConfigManager.shared.getExperimentInfo();
+    
+    /// Returns all experiment info for all configured triggers
+    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if config not loaded
+    public func getHeliumExperimentInfo() -> [String: ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var experimentInfoMap: [String: ExperimentInfo] = [:]
+        
+        for trigger in triggers {
+            if let experimentInfo = getExperimentInfo(for: trigger) {
+                experimentInfoMap[trigger] = experimentInfo
+            }
+        }
+        
+        return experimentInfoMap.isEmpty ? nil : experimentInfoMap
     }
     
     /// Clears all cached Helium state and allows safe re-initialization.
@@ -236,9 +251,9 @@ public class Helium {
     /// ## Example Usage
     /// ```swift
     /// if let experimentInfo = Helium.shared.getExperimentInfo(for: "onboarding") {
-    ///     print("Experiment: \(experimentInfo.experimentDetails?.name ?? "unknown")")
+    ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
     ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
-    ///     print("Hash bucket: \(experimentInfo.userHashDetails?.hashedUserIdBucket1To100 ?? 0)")
+    ///     print("Hash bucket: \(experimentInfo.hashDetails?.hashedUserIdBucket1To100 ?? 0)")
     /// } else {
     ///     print("No experiment running for this trigger")
     /// }
@@ -248,7 +263,7 @@ public class Helium {
     /// The returned `ExperimentInfo` object contains:
     /// - **Experiment Details**: Name, ID, type, and targeting criteria (audience ID/rules)
     /// - **Variant Details**: Allocation index, paywall UUID, allocation timestamp
-    /// - **User Hash Details**: Hash bucket (1-100), hashed user ID, hash type
+    /// - **Hash Details**: Hash bucket (1-100), hashed user ID, hash method
     ///
     /// - Parameter trigger: The trigger name to get experiment info for (e.g., "onboarding", "premium_upgrade")
     /// - Returns: An `ExperimentInfo` object containing complete experiment allocation details, or `nil` if:
@@ -259,7 +274,7 @@ public class Helium {
     /// - Note: This method returns the experiment info regardless of whether the paywall has been shown.
     ///   The `UserAllocatedEvent` analytics event is only fired once when the paywall is first displayed.
     ///
-    /// - SeeAlso: `ExperimentInfo`, `ExperimentDetails`, `VariantDetails`
+    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
     public func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
             return nil

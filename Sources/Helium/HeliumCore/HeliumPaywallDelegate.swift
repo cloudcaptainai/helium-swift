@@ -269,11 +269,13 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = nil;
+                var experimentInfo: ExperimentInfo? = nil;
                 var isFallback = false;
                 if let triggerName = event.getTriggerIfExists() {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
                     paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
+                    experimentInfo = paywallInfo?.extractExperimentInfo(trigger: triggerName);
                     if paywallInfo == nil {
                         isFallback = true;
                     } else {
@@ -301,7 +303,8 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     isFallback: isFallback,
                     downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
                     additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
-                    additionalPaywallFields: paywallInfo?.additionalPaywallFields
+                    additionalPaywallFields: paywallInfo?.additionalPaywallFields,
+                    experimentInfo: experimentInfo
                 );
                 
                 analyticsForEvent?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
