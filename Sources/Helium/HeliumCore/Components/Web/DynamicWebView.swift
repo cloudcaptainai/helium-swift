@@ -296,12 +296,14 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
         let insets = window.safeAreaInsets
         
         let js = """
-            window.heliumUpdateSafeAreaInsets({
-                top: \(insets.top),
-                bottom: \(insets.bottom),
-                left: \(insets.left),
-                right: \(insets.right)
-            });
+            if (window.heliumUpdateSafeAreaInsets) {
+                window.heliumUpdateSafeAreaInsets({
+                    top: \(insets.top),
+                    bottom: \(insets.bottom),
+                    left: \(insets.left),
+                    right: \(insets.right)
+                });
+            }
         """
         webView.evaluateJavaScript(js)
     }
