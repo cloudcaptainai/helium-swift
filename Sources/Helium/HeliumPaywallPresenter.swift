@@ -24,8 +24,23 @@ class HeliumPaywallPresenter {
         }
     }
     
+    private func paywallEntitlementsCheck(trigger: String) async -> Bool {
+        if HeliumPaywallDelegateWrapper.shared.dontShowIfAlreadyEntitled {
+            let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+            if skipIt == true {
+                print("[Helium] Did not show paywall, user already has entitlement.")
+                return true
+            }
+        }
+        return false
+    }
+    
     func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil) {
         Task { @MainActor in
+            if await paywallEntitlementsCheck(trigger: trigger) {
+                return
+            }
+            
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
             guard let contentView = upsellViewResult.view else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -86,11 +101,8 @@ class HeliumPaywallPresenter {
             // Schedule timeout with trigger-specific budget
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
-                await MainActor.run {
-                    // Update to real paywall or fallback if still not ready
-                    self.updateLoadingPaywall(trigger: trigger)
-                    NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
-                }
+                await updateLoadingPaywall(trigger: trigger)
+                NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
             }
             
             // Also listen for download completion
@@ -104,13 +116,17 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func updateLoadingPaywall(trigger: String) {
+    private func updateLoadingPaywall(trigger: String) async {
         guard let loadingPaywall = paywallsDisplayed.first(where: { $0.trigger == trigger && $0.isLoading }) else {
             return
         }
         
         if Helium.shared.skipPaywallIfNeeded(trigger: trigger) {
             hideUpsell()
+            return
+        }
+        
+        if await paywallEntitlementsCheck(trigger: trigger) {
             return
         }
         
@@ -137,7 +153,7 @@ class HeliumPaywallPresenter {
         Task { @MainActor in
             // Update any loading paywalls
             for paywall in paywallsDisplayed where paywall.isLoading {
-                updateLoadingPaywall(trigger: paywall.trigger)
+                await updateLoadingPaywall(trigger: paywall.trigger)
             }
         }
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
