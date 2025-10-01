@@ -910,8 +910,6 @@ public struct UserAllocatedEvent: HeliumEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        // No legacy event equivalent - this is a new event type
-        // Return a generic event that won't cause issues
-        return .initializeStart
+        return .userAllocated(triggerName: experimentInfo.trigger, experimentInfo: experimentInfo)
     }
 }

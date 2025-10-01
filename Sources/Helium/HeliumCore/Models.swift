@@ -114,6 +114,7 @@ public enum HeliumPaywallEvent: Codable {
     case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, numAttempts: Int? = nil)
     case paywallsDownloadError(error: String, numAttempts: Int? = nil)
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
+    case userAllocated(triggerName: String, experimentInfo: ExperimentInfo)
 
     private enum CodingKeys: String, CodingKey {
         case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS
@@ -159,6 +160,8 @@ public enum HeliumPaywallEvent: Codable {
             return nil;
         case .paywallsDownloadError(let error):
             return nil;
+        case .userAllocated(let triggerName, let experimentInfo):
+            return triggerName;
         }
     }
     
@@ -270,6 +273,9 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
             try container.encodeIfPresent(numAttempts, forKey: .numAttempts)
+        case .userAllocated(let triggerName, let experimentInfo):
+            try container.encode("userAllocated", forKey: .type)
+            try container.encode(triggerName, forKey: .triggerName)
         }
     }
 
@@ -356,6 +362,12 @@ public enum HeliumPaywallEvent: Codable {
         case "paywallsDownloadError":
             let error = try container.decode(String.self, forKey: .errorDescription)
             self = .paywallsDownloadError(error: error)
+        case "userAllocated":
+            let triggerName = try container.decode(String.self, forKey: .triggerName)
+            // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
+            // Using empty ExperimentInfo as placeholder for legacy enum compatibility
+            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, audienceId: nil, audienceData: nil, allocationMetadata: nil, chosenVariantDetails: nil, hashDetails: nil)
+            self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type value")
         }
@@ -399,6 +411,8 @@ public enum HeliumPaywallEvent: Codable {
             return "paywallsDownloadSuccess"
         case .paywallsDownloadError:
             return "paywallsDownloadError"
+        case .userAllocated:
+            return "userAllocated"
         }
     }
     
@@ -477,6 +491,9 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallsDownloadError(let error, let numAttempts):
             dict["errorDescription"] = error
             dict["numAttempts"] = numAttempts
+        
+        case .userAllocated(let triggerName, let experimentInfo):
+            dict["triggerName"] = triggerName
             
         }
         
