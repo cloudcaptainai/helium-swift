@@ -70,8 +70,31 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
-    /// Returns all experiment info for all configured triggers
-    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if config not loaded
+    /// Returns experiment allocation info for all configured triggers
+    /// 
+    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if:
+    ///   - Helium hasn't been initialized
+    ///   - Config hasn't been fetched
+    ///   - No triggers have experiments
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// // Get all experiment info
+    /// if let allExperiments = Helium.shared.getHeliumExperimentInfo() {
+    ///     for (trigger, info) in allExperiments {
+    ///         print("Trigger: \(trigger)")
+    ///         print("Experiment: \(info.experimentName ?? "unknown")")
+    ///         print("Variant: \(info.chosenVariantDetails?.allocationIndex ?? 0)")
+    ///     }
+    /// }
+    ///
+    /// // Get specific trigger's experiment info
+    /// if let onboardingInfo = Helium.shared.getHeliumExperimentInfo()?["onboarding"] {
+    ///     print("Onboarding variant: \(onboardingInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
     public func getHeliumExperimentInfo() -> [String: ExperimentInfo]? {
         guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
             return nil
@@ -242,42 +265,8 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
     
-    /// Returns experiment allocation information for a specific trigger.
-    ///
-    /// Use this method to retrieve detailed information about the experiment variant that the current user
-    /// has been allocated to for a given trigger. This is useful for:
-    /// - Logging experiment exposure in your own analytics
-    /// - Debugging experiment assignments
-    /// - Conditional logic based on experiment variants
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// if let experimentInfo = Helium.shared.getExperimentInfo(for: "onboarding") {
-    ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
-    ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
-    ///     print("Hash bucket: \(experimentInfo.hashDetails?.hashedUserIdBucket1To100 ?? 0)")
-    /// } else {
-    ///     print("No experiment running for this trigger")
-    /// }
-    /// ```
-    ///
-    /// ## Experiment Info Contents
-    /// The returned `ExperimentInfo` object contains:
-    /// - **Experiment Details**: Name, ID, type, and targeting criteria (audience ID/rules)
-    /// - **Variant Details**: Allocation index, paywall UUID, allocation timestamp
-    /// - **Hash Details**: Hash bucket (1-100), hashed user ID, hash method
-    ///
-    /// - Parameter trigger: The trigger name to get experiment info for (e.g., "onboarding", "premium_upgrade")
-    /// - Returns: An `ExperimentInfo` object containing complete experiment allocation details, or `nil` if:
-    ///   - No paywall configuration exists for the trigger
-    ///   - The trigger is not part of an active experiment
-    ///   - Paywall configuration hasn't been downloaded yet
-    ///
-    /// - Note: This method returns the experiment info regardless of whether the paywall has been shown.
-    ///   The `UserAllocatedEvent` analytics event is only fired once when the paywall is first displayed.
-    ///
-    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
-    public func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
+    /// Internal helper to get experiment info for a specific trigger
+    func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
             return nil
         }
