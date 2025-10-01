@@ -880,3 +880,36 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         )
     }
 }
+
+// MARK: - Experiment Events
+
+/// Event fired when a user is allocated to an experiment variant
+/// - Note: Fired once per trigger when a user is first assigned to an experiment variant. Contains complete experiment allocation details including variant information, targeting criteria, and hash bucketing.
+public struct UserAllocatedEvent: HeliumEvent {
+    /// Complete experiment allocation information
+    /// - Note: Includes experiment details, variant selection, targeting, and allocation metadata
+    public let experimentInfo: ExperimentInfo
+    
+    /// When this event occurred
+    /// - Note: Captured using Date() at event creation time
+    public let timestamp: Date
+    
+    public init(experimentInfo: ExperimentInfo, timestamp: Date = Date()) {
+        self.experimentInfo = experimentInfo
+        self.timestamp = timestamp
+    }
+    
+    public var eventName: String { "userAllocated" }
+    
+    public func toDictionary() -> [String: Any] {
+        return [
+            "type": eventName,
+            "timestamp": timestamp.timeIntervalSince1970,
+            "experimentInfo": experimentInfo
+        ]
+    }
+    
+    public func toLegacyEvent() -> HeliumPaywallEvent {
+        return .userAllocated(triggerName: experimentInfo.trigger, experimentInfo: experimentInfo)
+    }
+}

@@ -232,6 +232,15 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             viewType: viewType
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        
+        // Track experiment allocation for embedded/triggered views
+        // Determine if this is a fallback by checking if it's in the fetched config
+        let isFallback = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) == nil
+        
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: isFallback
+        )
     }
     
     public func logClosure() {

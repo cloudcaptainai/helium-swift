@@ -40,6 +40,12 @@ public class Helium {
     func skipPaywallIfNeeded(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
+            // Fire allocation event even when paywall is skipped
+            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+                trigger: trigger,
+                isFallback: false
+            )
+            
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallSkippedEvent(triggerName: trigger)
             )
@@ -62,6 +68,48 @@ public class Helium {
     
     public func hideAllUpsells() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
+    }
+    
+    /// Returns experiment allocation info for all configured triggers
+    /// 
+    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if:
+    ///   - Helium hasn't been initialized
+    ///   - Config hasn't been fetched
+    ///   - No triggers have experiments
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// // Get all experiment info
+    /// if let allExperiments = Helium.shared.getHeliumExperimentInfo() {
+    ///     for (trigger, info) in allExperiments {
+    ///         print("Trigger: \(trigger)")
+    ///         print("Experiment: \(info.experimentName ?? "unknown")")
+    ///         print("Variant: \(info.chosenVariantDetails?.allocationIndex ?? 0)")
+    ///     }
+    /// }
+    ///
+    /// // Get specific trigger's experiment info
+    /// if let onboardingInfo = Helium.shared.getHeliumExperimentInfo()?["onboarding"] {
+    ///     print("Onboarding variant: \(onboardingInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
+    public func getHeliumExperimentInfo() -> [String: ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var experimentInfoMap: [String: ExperimentInfo] = [:]
+        
+        for trigger in triggers {
+            if let experimentInfo = getExperimentInfo(for: trigger) {
+                experimentInfoMap[trigger] = experimentInfo
+            }
+        }
+        
+        return experimentInfoMap.isEmpty ? nil : experimentInfoMap
     }
     
     /// Clears all cached Helium state and allows safe re-initialization.
@@ -109,6 +157,9 @@ public class Helium {
         
         // Completely reset all fallback configurations
         HeliumFallbackViewManager.shared.resetAllFallbacks()
+        
+        // Reset experiment allocation tracking
+        ExperimentAllocationTracker.shared.reset()
         
         // Reset initialization state to allow re-initialization
         initialized = false
@@ -212,6 +263,15 @@ public class Helium {
             return nil
         }
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
+    }
+    
+    /// Internal helper to get experiment info for a specific trigger
+    func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
+        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+            return nil
+        }
+        
+        return paywallInfo.extractExperimentInfo(trigger: trigger)
     }
     
     /// Initializes the Helium paywall system with configuration options.
