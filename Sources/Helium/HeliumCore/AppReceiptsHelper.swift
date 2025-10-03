@@ -51,8 +51,9 @@ class AppReceiptsHelper {
                     default:
                         break
                     }
-                    
+#if compiler(>=6.2)
                     HeliumIdentityManager.shared.appTransactionID = appTransaction.appTransactionID
+#endif
                 case .unverified(let appTransaction, let verificationError):
                     // The app transaction didn't pass StoreKit's verification.
                     // Handle unverified app transaction information according

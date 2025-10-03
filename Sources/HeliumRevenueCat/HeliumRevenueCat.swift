@@ -20,6 +20,8 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     
     private var latestSuccessfulPurchaseResult: PurchaseResultData? = nil
     
+    private let allowHeliumUserAttribute: Bool
+    
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
     }
@@ -37,6 +39,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         allowHeliumUserAttribute: Bool = true
     ) {
         self.entitlementId = entitlementId
+        self.allowHeliumUserAttribute = allowHeliumUserAttribute
         
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
@@ -74,6 +77,13 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         // Keep this value as up-to-date as possible
         Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        if allowHeliumUserAttribute {
+            if let appTransactionID = HeliumIdentityManager.shared.getAppTransactionID() {
+                Purchases.shared.attribution.setAttributes([
+                    "helium_atid" : appTransactionID,
+                ])
+            }
+        }
         
         do {
             var result: PurchaseResultData? = nil
