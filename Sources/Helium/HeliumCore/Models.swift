@@ -366,7 +366,7 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
             // Using empty ExperimentInfo as placeholder for legacy enum compatibility
-            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, audienceId: nil, audienceData: nil, allocationMetadata: nil, chosenVariantDetails: nil, hashDetails: nil)
+            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, audienceId: nil, audienceData: nil as AnyCodable?, allocationMetadata: nil, chosenVariantDetails: nil, hashDetails: nil)
             self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type value")

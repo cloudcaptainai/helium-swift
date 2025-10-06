@@ -19,7 +19,7 @@ struct ExperimentInfoResponse: Codable {
     let allocations: [Int]
     let chosenAllocation: Int
     let audienceId: String?
-    let audienceData: String?  // Stringified JSON
+    let audienceData: AnyCodable?
     let allocationMetadata: AnyCodable?
     let hashMethod: String?
 }
@@ -97,17 +97,12 @@ public struct ExperimentInfo: Codable {
     /// Audience ID that user matched
     public let audienceId: String?
     
-    /// Stringified JSON of audience data (internal storage)
-    let audienceData: String?
+    /// Audience data as structured object (internal storage)
+    let audienceData: AnyCodable?
     
     /// Public accessor for audience data as dictionary
     public var audienceDataDictionary: [String: Any]? {
-        guard let audienceData = audienceData,
-              let data = audienceData.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        return dict
+        return audienceData?.value as? [String: Any]
     }
     
     /// Additional allocation metadata (internal storage)
@@ -130,7 +125,7 @@ public struct ExperimentInfo: Codable {
         experimentId: String?,
         experimentType: String?,
         audienceId: String?,
-        audienceData: String?,
+        audienceData: AnyCodable?,
         allocationMetadata: AnyCodable?,
         chosenVariantDetails: VariantDetails?,
         hashDetails: HashDetails?
@@ -144,5 +139,62 @@ public struct ExperimentInfo: Codable {
         self.allocationMetadata = allocationMetadata
         self.chosenVariantDetails = chosenVariantDetails
         self.hashDetails = hashDetails
+    }
+    
+    // MARK: - Codable
+    
+    enum CodingKeys: String, CodingKey {
+        case trigger
+        case experimentName
+        case experimentId
+        case experimentType
+        case audienceId
+        case audienceData
+        case allocationMetadata
+        case chosenVariantDetails
+        case hashDetails
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(trigger, forKey: .trigger)
+        try container.encodeIfPresent(experimentName, forKey: .experimentName)
+        try container.encodeIfPresent(experimentId, forKey: .experimentId)
+        try container.encodeIfPresent(experimentType, forKey: .experimentType)
+        try container.encodeIfPresent(audienceId, forKey: .audienceId)
+        
+        // Stringify audienceData at the last mile for logging
+        if let audienceData = audienceData {
+            if let jsonData = try? JSONEncoder().encode(audienceData),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                try container.encode(jsonString, forKey: .audienceData)
+            }
+        }
+        
+        try container.encodeIfPresent(allocationMetadata, forKey: .allocationMetadata)
+        try container.encodeIfPresent(chosenVariantDetails, forKey: .chosenVariantDetails)
+        try container.encodeIfPresent(hashDetails, forKey: .hashDetails)
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        trigger = try container.decode(String.self, forKey: .trigger)
+        experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
+        experimentId = try container.decodeIfPresent(String.self, forKey: .experimentId)
+        experimentType = try container.decodeIfPresent(String.self, forKey: .experimentType)
+        audienceId = try container.decodeIfPresent(String.self, forKey: .audienceId)
+        
+        // Handle audienceData - could be string or object
+        if let stringData = try? container.decodeIfPresent(String.self, forKey: .audienceData),
+           let data = stringData.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(AnyCodable.self, from: data) {
+            audienceData = decoded
+        } else {
+            audienceData = try container.decodeIfPresent(AnyCodable.self, forKey: .audienceData)
+        }
+        
+        allocationMetadata = try container.decodeIfPresent(AnyCodable.self, forKey: .allocationMetadata)
+        chosenVariantDetails = try container.decodeIfPresent(VariantDetails.self, forKey: .chosenVariantDetails)
+        hashDetails = try container.decodeIfPresent(HashDetails.self, forKey: .hashDetails)
     }
 }
