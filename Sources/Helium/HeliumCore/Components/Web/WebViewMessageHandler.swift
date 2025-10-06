@@ -48,7 +48,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         Task { @MainActor in
             switch type {
             case "select-product":
-                if let productId = data["product"] as? String {
+                if let productId = data["productId"] as? String {
                     self.delegateWrapper?.selectProduct(productId: productId)
                     respond(["status": "success", "selectedProduct": productId]);
                 }

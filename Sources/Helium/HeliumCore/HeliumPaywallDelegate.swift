@@ -192,29 +192,24 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName))
         } else {
             self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName))
-            await MainActor.run {
-               let alert = UIAlertController(
-                   title: "Restore Failed",
-                   message: "We couldn't find any previous purchases to restore.",
-                   preferredStyle: .alert
-               )
-               
-               // Add a single OK button
-               alert.addAction(UIAlertAction(
-                   title: "OK",
-                   style: .default
-               ))
-               
-               // Get the top view controller to present the alert
-               if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let topVC = windowScene.windows.first?.rootViewController {
-                   var presentedVC = topVC
-                   while let presented = presentedVC.presentedViewController {
-                       presentedVC = presented
-                   }
-                   presentedVC.present(alert, animated: true)
-               }
-           }
+            if Helium.restorePurchaseConfig.showHeliumDialog {
+                Task { @MainActor in
+                    let alert = UIAlertController(
+                        title: Helium.restorePurchaseConfig.restoreFailedTitle,
+                        message: Helium.restorePurchaseConfig.restoreFailedMessage,
+                        preferredStyle: .alert
+                    )
+                    
+                    // Add a single OK button
+                    alert.addAction(UIAlertAction(
+                        title: Helium.restorePurchaseConfig.restoreFailedCloseButtonText,
+                        style: .default
+                    ))
+                    
+                    let topMostVC = UIWindowHelper.findTopMostViewController()
+                    topMostVC?.present(alert, animated: true)
+                }
+            }
         }
         return result;
     }

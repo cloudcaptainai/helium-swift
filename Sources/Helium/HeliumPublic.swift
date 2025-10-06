@@ -15,6 +15,7 @@ public class Helium {
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
     public static let shared = Helium()
+    public static let restorePurchaseConfig = RestorePurchaseConfig()
     
     public func presentUpsell(
         trigger: String,
@@ -495,7 +496,7 @@ public class Helium {
     /// - Parameter trigger: Trigger that would be used to show the paywall.
     /// - Parameter considerAssociatedSubscriptions: If true, look at subscription groups associated with products in the paywall, otherwise just look at exact products in the paywall.
     /// - Returns: `true` if the user has bought one of the products on the paywall or is actively subscribed to a subscription group that includes one of the products. `false` if not. Returns `nil` if not known (i.e. the paywall is not downloaded yet).
-    func hasEntitlementForPaywall(
+    public func hasEntitlementForPaywall(
         trigger: String,
         considerAssociatedSubscriptions: Bool = false
     ) async -> Bool? {
