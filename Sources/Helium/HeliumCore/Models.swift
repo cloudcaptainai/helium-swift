@@ -160,7 +160,7 @@ public enum HeliumPaywallEvent: Codable {
             return nil;
         case .paywallsDownloadError(let error):
             return nil;
-        case .userAllocated(let triggerName, let experimentInfo):
+        case .userAllocated(let triggerName, _):
             return triggerName;
         }
     }
