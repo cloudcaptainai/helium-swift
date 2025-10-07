@@ -49,6 +49,7 @@ class ExperimentAllocationTracker {
     /// Persists allocations to UserDefaults
     private func saveStoredAllocations() {
         guard let encoded = try? JSONEncoder().encode(storedAllocations) else {
+            print("[Helium] Failed to persist experiment allocations")
             return
         }
         UserDefaults.standard.set(encoded, forKey: storageKey)
