@@ -905,7 +905,7 @@ public struct UserAllocatedEvent: HeliumEvent {
         return [
             "type": eventName,
             "timestamp": timestamp.timeIntervalSince1970,
-            "experimentInfo": experimentInfo
+            "experimentInfo": experimentInfo.toDictionary()
         ]
     }
     

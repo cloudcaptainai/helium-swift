@@ -30,6 +30,10 @@ public struct PaywallEventHandlers {
     /// - Note: Fired when StoreKit confirms successful purchase. Paywall typically auto-closes after this, triggering onClose.
     public var onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)?
     
+    /// Called when a paywall fails to open
+    /// - Note: Fired when paywall cannot be displayed (e.g., no view available, already presenting, WebView load failure)
+    public var onOpenFailed: ((PaywallOpenFailedEvent) -> Void)?
+    
     // MARK: - Initializer
     
     public init() {}
@@ -50,6 +54,9 @@ public struct PaywallEventHandlers {
             
         case let e as PurchaseSucceededEvent:
             onPurchaseSucceeded?(e)
+            
+        case let e as PaywallOpenFailedEvent:
+            onOpenFailed?(e)
             
         default:
             // Ignore events we don't have handlers for
@@ -93,6 +100,14 @@ extension PaywallEventHandlers {
         service.onPurchaseSucceeded = handler
         return service
     }
+    
+    /// Set handler for when a paywall fails to open
+    /// - Note: Track paywall presentation failures. Useful for debugging and monitoring.
+    public func onOpenFailed(_ handler: @escaping (PaywallOpenFailedEvent) -> Void) -> PaywallEventHandlers {
+        var service = self
+        service.onOpenFailed = handler
+        return service
+    }
 }
 
 // MARK: - Convenience Extensions
@@ -105,7 +120,8 @@ extension PaywallEventHandlers {
         onOpen: ((PaywallOpenEvent) -> Void)? = nil,
         onClose: ((PaywallCloseEvent) -> Void)? = nil,
         onDismissed: ((PaywallDismissedEvent) -> Void)? = nil,
-        onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil
+        onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil,
+        onOpenFailed: ((PaywallOpenFailedEvent) -> Void)? = nil
     ) -> PaywallEventHandlers {
         var service = PaywallEventHandlers()
         if let onOpen = onOpen {
@@ -119,6 +135,9 @@ extension PaywallEventHandlers {
         }
         if let onPurchaseSucceeded = onPurchaseSucceeded {
             service = service.onPurchaseSucceeded(onPurchaseSucceeded)
+        }
+        if let onOpenFailed = onOpenFailed {
+            service = service.onOpenFailed(onOpenFailed)
         }
         return service
     }

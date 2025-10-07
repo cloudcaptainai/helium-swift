@@ -21,6 +21,15 @@ extension Encodable {
         let json = try JSON(data: data)
         return json
     }
+    
+    /// Convert Codable object to dictionary
+    func toDictionary() -> [String: Any] {
+        guard let data = try? JSONEncoder().encode(self),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return dict
+    }
 }
 
 extension JSON {
