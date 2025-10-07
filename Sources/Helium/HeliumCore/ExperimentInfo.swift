@@ -15,16 +15,13 @@ struct ExperimentInfoResponse: Codable {
     let experimentId: String?
     let experimentName: String?
     let experimentType: String?
+    let experimentMetadata: AnyCodable?
     let startDate: String?
     let endDate: String?
-    let userPercentage: Int
-    let hashedUserId: String?
-    let allocations: [Int]
-    let chosenAllocation: Int
     let audienceId: String?
     let audienceData: AnyCodable?
-    let allocationMetadata: AnyCodable?
-    let hashMethod: String?
+    let chosenVariantDetails: VariantDetails?
+    let hashDetails: HashDetails?
 }
 
 
@@ -41,7 +38,7 @@ public struct HashDetails: Codable {
     /// Hash method used (e.g., "HASH_USER_ID", "HASH_HELIUM_PERSISTENT_ID")
     public let hashMethod: String?
     
-    public init(
+    internal init(
         hashedUserIdBucket1To100: Int?,
         hashedUserId: String?,
         hashMethod: String?
@@ -65,14 +62,24 @@ public struct VariantDetails: Codable {
     /// Index of chosen variant (1 to len(variants))
     public let allocationIndex: Int?
     
-    public init(
+    /// Additional allocation metadata (internal storage)
+    let allocationMetadata: AnyCodable?
+    
+    /// Public accessor for allocation metadata as dictionary
+    public var allocationMetadataDictionary: [String: Any]? {
+        return allocationMetadata?.value as? [String: Any]
+    }
+    
+    internal init(
         allocationName: String?,
         allocationId: String?,
-        allocationIndex: Int?
+        allocationIndex: Int?,
+        allocationMetadata: AnyCodable?
     ) {
         self.allocationName = allocationName
         self.allocationId = allocationId
         self.allocationIndex = allocationIndex
+        self.allocationMetadata = allocationMetadata
     }
 }
 
@@ -92,6 +99,14 @@ public struct ExperimentInfo: Codable {
     /// Experiment type (e.g., "A/B/n test")
     public let experimentType: String?
     
+    /// Additional experiment metadata (internal storage)
+    let experimentMetadata: AnyCodable?
+    
+    /// Public accessor for experiment metadata as dictionary
+    public var experimentMetadataDictionary: [String: Any]? {
+        return experimentMetadata?.value as? [String: Any]
+    }
+    
     /// When the experiment started (ISO8601 string)
     public let startDate: String?
     
@@ -109,30 +124,22 @@ public struct ExperimentInfo: Codable {
         return audienceData?.value as? [String: Any]
     }
     
-    /// Additional allocation metadata (internal storage)
-    let allocationMetadata: AnyCodable?
-    
-    /// Public accessor for allocation metadata as dictionary
-    public var allocationMetadataDictionary: [String: Any]? {
-        return allocationMetadata?.value as? [String: Any]
-    }
-    
     /// Details about the chosen variant
     public let chosenVariantDetails: VariantDetails?
     
     /// Hash bucketing details
     public let hashDetails: HashDetails?
     
-    init(
+    internal init(
         trigger: String,
         experimentName: String?,
         experimentId: String?,
         experimentType: String?,
+        experimentMetadata: AnyCodable?,
         startDate: String?,
         endDate: String?,
         audienceId: String?,
         audienceData: AnyCodable?,
-        allocationMetadata: AnyCodable?,
         chosenVariantDetails: VariantDetails?,
         hashDetails: HashDetails?
     ) {
@@ -140,11 +147,11 @@ public struct ExperimentInfo: Codable {
         self.experimentName = experimentName
         self.experimentId = experimentId
         self.experimentType = experimentType
+        self.experimentMetadata = experimentMetadata
         self.startDate = startDate
         self.endDate = endDate
         self.audienceId = audienceId
         self.audienceData = audienceData
-        self.allocationMetadata = allocationMetadata
         self.chosenVariantDetails = chosenVariantDetails
         self.hashDetails = hashDetails
     }
@@ -156,11 +163,11 @@ public struct ExperimentInfo: Codable {
         case experimentName
         case experimentId
         case experimentType
+        case experimentMetadata
         case startDate
         case endDate
         case audienceId
         case audienceData
-        case allocationMetadata
         case chosenVariantDetails
         case hashDetails
     }
@@ -171,6 +178,7 @@ public struct ExperimentInfo: Codable {
         try container.encodeIfPresent(experimentName, forKey: .experimentName)
         try container.encodeIfPresent(experimentId, forKey: .experimentId)
         try container.encodeIfPresent(experimentType, forKey: .experimentType)
+        try container.encodeIfPresent(experimentMetadata, forKey: .experimentMetadata)
         try container.encodeIfPresent(startDate, forKey: .startDate)
         try container.encodeIfPresent(endDate, forKey: .endDate)
         try container.encodeIfPresent(audienceId, forKey: .audienceId)
@@ -185,7 +193,6 @@ public struct ExperimentInfo: Codable {
             }
         }
         
-        try container.encodeIfPresent(allocationMetadata, forKey: .allocationMetadata)
         try container.encodeIfPresent(chosenVariantDetails, forKey: .chosenVariantDetails)
         try container.encodeIfPresent(hashDetails, forKey: .hashDetails)
     }
@@ -196,6 +203,7 @@ public struct ExperimentInfo: Codable {
         experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
         experimentId = try container.decodeIfPresent(String.self, forKey: .experimentId)
         experimentType = try container.decodeIfPresent(String.self, forKey: .experimentType)
+        experimentMetadata = try container.decodeIfPresent(AnyCodable.self, forKey: .experimentMetadata)
         startDate = try container.decodeIfPresent(String.self, forKey: .startDate)
         endDate = try container.decodeIfPresent(String.self, forKey: .endDate)
         audienceId = try container.decodeIfPresent(String.self, forKey: .audienceId)
@@ -209,7 +217,6 @@ public struct ExperimentInfo: Codable {
             audienceData = try container.decodeIfPresent(AnyCodable.self, forKey: .audienceData)
         }
         
-        allocationMetadata = try container.decodeIfPresent(AnyCodable.self, forKey: .allocationMetadata)
         chosenVariantDetails = try container.decodeIfPresent(VariantDetails.self, forKey: .chosenVariantDetails)
         hashDetails = try container.decodeIfPresent(HashDetails.self, forKey: .hashDetails)
     }

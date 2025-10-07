@@ -23,7 +23,7 @@ extension Encodable {
     }
     
     /// Convert Codable object to dictionary
-    func toDictionary() -> [String: Any] {
+    public func toDictionary() -> [String: Any] {
         guard let data = try? JSONEncoder().encode(self),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             print("[Helium] Failed to encode \(type(of: self)) to dictionary")
