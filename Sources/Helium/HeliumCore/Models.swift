@@ -54,13 +54,12 @@ public struct HeliumPaywallInfo: Codable {
         let variantDetails = VariantDetails(
             allocationName: paywallTemplateName,
             allocationId: paywallUUID,
-            allocationIndex: response.chosenAllocation + 1,
-            allocationTime: Date()
+            allocationIndex: response.chosenAllocation + 1
         )
         
         let hashDetails = HashDetails(
             hashedUserIdBucket1To100: response.userPercentage,
-            hashedUserId: nil,
+            hashedUserId: response.hashedUserId,
             hashMethod: response.hashMethod
         )
         
@@ -69,6 +68,8 @@ public struct HeliumPaywallInfo: Codable {
             experimentName: response.experimentName,
             experimentId: response.experimentId,
             experimentType: response.experimentType,
+            startDate: response.startDate,
+            endDate: response.endDate,
             audienceId: response.audienceId,
             audienceData: response.audienceData,
             allocationMetadata: response.allocationMetadata,
@@ -366,7 +367,7 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
             // Using empty ExperimentInfo as placeholder for legacy enum compatibility
-            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, audienceId: nil, audienceData: nil as AnyCodable?, allocationMetadata: nil, chosenVariantDetails: nil, hashDetails: nil)
+            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, allocationMetadata: nil, chosenVariantDetails: nil, hashDetails: nil)
             self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type value")

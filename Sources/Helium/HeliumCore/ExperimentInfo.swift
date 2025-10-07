@@ -15,7 +15,10 @@ struct ExperimentInfoResponse: Codable {
     let experimentId: String?
     let experimentName: String?
     let experimentType: String?
+    let startDate: String?
+    let endDate: String?
     let userPercentage: Int
+    let hashedUserId: String?
     let allocations: [Int]
     let chosenAllocation: Int
     let audienceId: String?
@@ -62,19 +65,14 @@ public struct VariantDetails: Codable {
     /// Index of chosen variant (1 to len(variants))
     public let allocationIndex: Int?
     
-    /// Timestamp when allocation occurred
-    public let allocationTime: Date
-    
     public init(
         allocationName: String?,
         allocationId: String?,
-        allocationIndex: Int?,
-        allocationTime: Date = Date()
+        allocationIndex: Int?
     ) {
         self.allocationName = allocationName
         self.allocationId = allocationId
         self.allocationIndex = allocationIndex
-        self.allocationTime = allocationTime
     }
 }
 
@@ -93,6 +91,12 @@ public struct ExperimentInfo: Codable {
     
     /// Experiment type (e.g., "A/B/n test")
     public let experimentType: String?
+    
+    /// When the experiment started (ISO8601 string)
+    public let startDate: String?
+    
+    /// When the experiment ends (ISO8601 string)
+    public let endDate: String?
     
     /// Audience ID that user matched
     public let audienceId: String?
@@ -124,6 +128,8 @@ public struct ExperimentInfo: Codable {
         experimentName: String?,
         experimentId: String?,
         experimentType: String?,
+        startDate: String?,
+        endDate: String?,
         audienceId: String?,
         audienceData: AnyCodable?,
         allocationMetadata: AnyCodable?,
@@ -134,6 +140,8 @@ public struct ExperimentInfo: Codable {
         self.experimentName = experimentName
         self.experimentId = experimentId
         self.experimentType = experimentType
+        self.startDate = startDate
+        self.endDate = endDate
         self.audienceId = audienceId
         self.audienceData = audienceData
         self.allocationMetadata = allocationMetadata
@@ -148,6 +156,8 @@ public struct ExperimentInfo: Codable {
         case experimentName
         case experimentId
         case experimentType
+        case startDate
+        case endDate
         case audienceId
         case audienceData
         case allocationMetadata
@@ -161,6 +171,8 @@ public struct ExperimentInfo: Codable {
         try container.encodeIfPresent(experimentName, forKey: .experimentName)
         try container.encodeIfPresent(experimentId, forKey: .experimentId)
         try container.encodeIfPresent(experimentType, forKey: .experimentType)
+        try container.encodeIfPresent(startDate, forKey: .startDate)
+        try container.encodeIfPresent(endDate, forKey: .endDate)
         try container.encodeIfPresent(audienceId, forKey: .audienceId)
         
         // Stringify audienceData at the last mile for logging
@@ -182,6 +194,8 @@ public struct ExperimentInfo: Codable {
         experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
         experimentId = try container.decodeIfPresent(String.self, forKey: .experimentId)
         experimentType = try container.decodeIfPresent(String.self, forKey: .experimentType)
+        startDate = try container.decodeIfPresent(String.self, forKey: .startDate)
+        endDate = try container.decodeIfPresent(String.self, forKey: .endDate)
         audienceId = try container.decodeIfPresent(String.self, forKey: .audienceId)
         
         // Handle audienceData - could be string or object
