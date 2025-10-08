@@ -20,6 +20,7 @@ public protocol BaseActionsDelegate {
     func logClosure();
     func getIsLoading() -> Bool;
     func logRenderTime(timeTakenMS: UInt64);
+    func onCustomAction(actionName: String, params: [String: Any]);
 }
 
 public class ActionsDelegateWrapper: ObservableObject {
@@ -77,6 +78,10 @@ public class ActionsDelegateWrapper: ObservableObject {
     
     public func getIsLoading() -> Bool{
         return delegate.getIsLoading();
+    }
+    
+    public func onCustomAction(actionName: String, params: [String: Any]) {
+        delegate.onCustomAction(actionName: actionName, params: params)
     }
 }
 
@@ -251,6 +256,18 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
+    
+    public func onCustomAction(actionName: String, params: [String: Any]) {
+        if (!isLoading) {
+            let event = CustomPaywallActionEvent(
+                actionName: actionName,
+                params: params,
+                triggerName: trigger,
+                paywallName: paywallInfo.paywallTemplateName
+            )
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        }
+    }
 }
 
 
@@ -306,5 +323,9 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
     
     public func getIsLoading() -> Bool {
         return false;
+    }
+    
+    public func onCustomAction(actionName: String, params: [String: Any]) {
+        print("custom action: \(actionName) with params: \(params)");
     }
 }
