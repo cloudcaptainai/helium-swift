@@ -143,15 +143,18 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     }
     
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-          webView.evaluateJavaScript("document.readyState") { (result, error) in
-              if let readyState = result as? String, readyState == "complete" {
-                  NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
-              }
-          }
-      }
+        NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
+    }
+    
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        print("[Helium] WebView failed to load \(error)")
+        NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
+    }
+    
 }
 
 // Add notification name
 extension Notification.Name {
    static let webViewContentLoaded = Notification.Name("webViewContentLoaded")
+   static let webViewContentLoadFail = Notification.Name("webViewContentLoadFail")
 }

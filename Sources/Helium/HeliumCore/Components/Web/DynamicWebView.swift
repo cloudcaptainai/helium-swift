@@ -94,7 +94,7 @@ public struct DynamicWebView: View {
            webView?.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { res in
-          if res.object as? WKNavigationDelegate === webView?.navigationDelegate {
+          if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               isContentLoaded = true
               if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
@@ -104,6 +104,11 @@ public struct DynamicWebView: View {
                   }
               }
               lowPowerModeAutoPlayVideoWorkaround()
+          }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoadFail)) { res in
+          if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
+              webViewLoadFail(reason: "Failed to render paywall.")
           }
       }
     }
