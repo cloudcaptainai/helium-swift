@@ -67,23 +67,22 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if let webView {
-              WebViewRepresentable(webView: webView)
-                  .padding(.horizontal, -1)
-                  .ignoresSafeArea()
-                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-          } else if showShimmer {
-              VStack {}
-              .padding()
-              .padding(.top, UIScreen.main.bounds.height * 0.2)
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .shimmer(config: shimmerConfig)
-              
-          } else if showProgressView {
-              ProgressView()
-                  .ignoresSafeArea()
-                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-          }
+           } else if let webView {
+               WebViewRepresentable(webView: webView)
+                   .padding(.horizontal, -1)
+                   .ignoresSafeArea()
+                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+           } else if showShimmer {
+               VStack {}
+                   .padding()
+                   .padding(.top, UIScreen.main.bounds.height * 0.2)
+                   .frame(maxWidth: .infinity, maxHeight: .infinity)
+                   .shimmer(config: shimmerConfig)
+           } else if showProgressView {
+               ProgressView()
+                   .ignoresSafeArea()
+                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+           }
        }
        .edgesIgnoringSafeArea(.all)
        .onAppear {
