@@ -34,6 +34,10 @@ public struct PaywallEventHandlers {
     /// - Note: Fired when paywall cannot be displayed (e.g., no view available, already presenting, WebView load failure)
     public var onOpenFailed: ((PaywallOpenFailedEvent) -> Void)?
     
+    /// Called when a custom action is triggered from the paywall
+    /// - Note: Handle arbitrary actions sent from the paywall with custom data
+    public var onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)?
+    
     // MARK: - Initializer
     
     public init() {}
@@ -57,6 +61,9 @@ public struct PaywallEventHandlers {
             
         case let e as PaywallOpenFailedEvent:
             onOpenFailed?(e)
+            
+        case let e as CustomPaywallActionEvent:
+            onCustomPaywallAction?(e)
             
         default:
             // Ignore events we don't have handlers for
@@ -108,6 +115,14 @@ extension PaywallEventHandlers {
         service.onOpenFailed = handler
         return service
     }
+    
+    /// Set handler for custom paywall actions
+    /// - Note: Handle arbitrary actions sent from the paywall with custom data
+    public func onCustomPaywallAction(_ handler: @escaping (CustomPaywallActionEvent) -> Void) -> PaywallEventHandlers {
+        var service = self
+        service.onCustomPaywallAction = handler
+        return service
+    }
 }
 
 // MARK: - Convenience Extensions
@@ -121,7 +136,8 @@ extension PaywallEventHandlers {
         onClose: ((PaywallCloseEvent) -> Void)? = nil,
         onDismissed: ((PaywallDismissedEvent) -> Void)? = nil,
         onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil,
-        onOpenFailed: ((PaywallOpenFailedEvent) -> Void)? = nil
+        onOpenFailed: ((PaywallOpenFailedEvent) -> Void)? = nil,
+        onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)? = nil
     ) -> PaywallEventHandlers {
         var service = PaywallEventHandlers()
         if let onOpen = onOpen {
@@ -138,6 +154,9 @@ extension PaywallEventHandlers {
         }
         if let onOpenFailed = onOpenFailed {
             service = service.onOpenFailed(onOpenFailed)
+        }
+        if let onCustomPaywallAction = onCustomPaywallAction {
+            service = service.onCustomPaywallAction(onCustomPaywallAction)
         }
         return service
     }

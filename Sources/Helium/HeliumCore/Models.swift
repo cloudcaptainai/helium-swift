@@ -105,9 +105,10 @@ public enum HeliumPaywallEvent: Codable {
     case paywallsDownloadError(error: String, numAttempts: Int? = nil)
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
     case userAllocated(triggerName: String, experimentInfo: ExperimentInfo)
+    case customPaywallAction(actionName: String, params: [String: Any], triggerName: String, paywallTemplateName: String)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS, actionName, params
     }
     
     public func getTriggerIfExists() -> String?{
@@ -152,6 +153,8 @@ public enum HeliumPaywallEvent: Codable {
             return nil;
         case .userAllocated(let triggerName, _):
             return triggerName;
+        case .customPaywallAction(let actionName, let params, let triggerName, let paywallTemplateName):
+            return triggerName;
         }
     }
     
@@ -179,6 +182,8 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallDismissed(let triggerName, let paywallTemplateName, let dismissAll):
             return paywallTemplateName;
         case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
+            return paywallTemplateName;
+        case .customPaywallAction(let actionName, let params, let triggerName, let paywallTemplateName):
             return paywallTemplateName;
         default:
             return nil;
@@ -266,6 +271,15 @@ public enum HeliumPaywallEvent: Codable {
         case .userAllocated(let triggerName, let experimentInfo):
             try container.encode("userAllocated", forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
+        case .customPaywallAction(let actionName, let params, let triggerName, let paywallTemplateName):
+            try container.encode("customPaywallAction", forKey: .type)
+            try container.encode(actionName, forKey: .actionName)
+            try container.encode(triggerName, forKey: .triggerName)
+            try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
+            if let jsonData = try? JSONSerialization.data(withJSONObject: params),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                try container.encode(jsonString, forKey: .params)
+            }
         }
     }
 
@@ -358,6 +372,17 @@ public enum HeliumPaywallEvent: Codable {
             // Using empty ExperimentInfo as placeholder for legacy enum compatibility
             let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, experimentMetadata: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, chosenVariantDetails: nil, hashDetails: nil)
             self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
+        case "customPaywallAction":
+            let actionName = try container.decode(String.self, forKey: .actionName)
+            let triggerName = try container.decode(String.self, forKey: .triggerName)
+            let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
+            var params: [String: Any] = [:]
+            if let jsonString = try? container.decode(String.self, forKey: .params),
+               let jsonData = jsonString.data(using: .utf8),
+               let decodedParams = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                params = decodedParams
+            }
+            self = .customPaywallAction(actionName: actionName, params: params, triggerName: triggerName, paywallTemplateName: paywallTemplateName)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid type value")
         }
@@ -403,6 +428,8 @@ public enum HeliumPaywallEvent: Codable {
             return "paywallsDownloadError"
         case .userAllocated:
             return "userAllocated"
+        case .customPaywallAction:
+            return "customPaywallAction"
         }
     }
     
@@ -485,6 +512,14 @@ public enum HeliumPaywallEvent: Codable {
         case .userAllocated(let triggerName, let experimentInfo):
             dict["triggerName"] = triggerName
             
+        case .customPaywallAction(let actionName, let params, let triggerName, let paywallTemplateName):
+            dict["actionName"] = actionName
+            dict["triggerName"] = triggerName
+            dict["paywallTemplateName"] = paywallTemplateName
+            // Merge params into the dictionary
+            for (key, value) in params {
+                dict[key] = value
+            }
         }
         
         return dict
