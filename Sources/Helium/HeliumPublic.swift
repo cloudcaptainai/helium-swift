@@ -266,8 +266,21 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
     
-    /// Internal helper to get experiment info for a specific trigger
-    func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
+    /// Get experiment allocation info for a specific trigger
+    /// 
+    /// - Parameter trigger: The trigger name to get experiment info for
+    /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let experimentInfo = Helium.shared.getExperimentInfo(for: "onboarding") {
+    ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
+    ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
+    public func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
             return nil
         }
