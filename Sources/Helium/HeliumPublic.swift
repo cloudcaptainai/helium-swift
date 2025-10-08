@@ -105,7 +105,7 @@ public class Helium {
         var experimentInfoMap: [String: ExperimentInfo] = [:]
         
         for trigger in triggers {
-            if let experimentInfo = getExperimentInfo(for: trigger) {
+            if let experimentInfo = getExperimentInfoForTrigger(trigger) {
                 experimentInfoMap[trigger] = experimentInfo
             }
         }
@@ -273,14 +273,14 @@ public class Helium {
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let experimentInfo = Helium.shared.getExperimentInfo(for: "onboarding") {
+    /// if let experimentInfo = Helium.shared.getExperimentInfoForTrigger("onboarding") {
     ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
     ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
     /// }
     /// ```
     ///
     /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
-    public func getExperimentInfo(for trigger: String) -> ExperimentInfo? {
+    public func getExperimentInfoForTrigger(_ trigger: String) -> ExperimentInfo? {
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
             return nil
         }
