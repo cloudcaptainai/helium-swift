@@ -212,6 +212,7 @@ public struct DynamicWebView: View {
     }
     
     private func webViewLoadFail(reason: String) {
+        // todo try and load fallback bundle if available before PaywallOpenFail (HEL-2489)
         if fallbackPaywall != nil {
             shouldShowFallback = true
         } else {
