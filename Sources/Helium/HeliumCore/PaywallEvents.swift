@@ -34,6 +34,25 @@ extension PaywallContextEvent {
     public var isSecondTry: Bool {
         HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName)
     }
+    
+    /// Get experiment allocation info for this event's trigger
+    /// 
+    /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// func onPaywallEvent(_ event: HeliumEvent) {
+    ///     if let openEvent = event as? PaywallOpenEvent,
+    ///        let experimentInfo = openEvent.getExperimentInfo() {
+    ///         print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `Helium.getExperimentInfoForTrigger(_:)`, `ExperimentInfo`
+    public func getEventExperimentInfo() -> ExperimentInfo? {
+        return Helium.shared.getExperimentInfoForTrigger(triggerName)
+    }
 }
 
 /// Events related to products/subscriptions
