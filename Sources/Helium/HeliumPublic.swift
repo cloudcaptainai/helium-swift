@@ -202,7 +202,8 @@ public class Helium {
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
-                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger),
+                    backupResolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
                 return UpsellViewResult(view: paywallView, isFallback: false, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {

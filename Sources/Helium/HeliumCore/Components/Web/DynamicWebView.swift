@@ -3,6 +3,7 @@ import WebKit
 
 public struct DynamicWebView: View {
     let filePath: String
+    let backupFilePath: String?
     let triggerName: String?
     let actionConfig: JSON
     let templateConfig: JSON
@@ -24,8 +25,13 @@ public struct DynamicWebView: View {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
-    init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+    init(json: JSON, backupJson: JSON?, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
+        if let backupJson {
+            backupFilePath = HeliumAssetManager.shared.localPathForURL(bundleURL: backupJson["bundleURL"].stringValue)
+        } else {
+            backupFilePath = nil
+        }
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
@@ -112,8 +118,14 @@ public struct DynamicWebView: View {
       }
     }
 
-    private func loadWebView() {
+    private func loadWebView(useBackup: Bool = false) {
         if webView != nil {
+            return
+        }
+        
+        let tryBackupPathIfFailure = !useBackup
+        guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
+            webViewLoadFail(reason: "NoBackupFilePath", tryBackup: tryBackupPathIfFailure)
             return
         }
         
@@ -177,14 +189,14 @@ public struct DynamicWebView: View {
                 // WebView creation timing
                 _ = Date()
                 let preparedWebView = await WebViewManager.shared.prepareForShowing(
-                    filePath: filePath,
+                    filePath: filePathToLoad,
                     shouldEnableScroll: shouldEnableScroll,
                     delegateWrapper: actionsDelegate,
                     heliumViewController: presentationState.heliumViewController
                 )
                 guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
-                    shouldShowFallback = true
+                    webViewLoadFail(reason: "NoPreparedWebView", tryBackup: tryBackupPathIfFailure) // logically this should never be possible
                     return
                 }
                 
@@ -195,10 +207,10 @@ public struct DynamicWebView: View {
                 _ = Date()
                 
                 do {
-                    try WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
+                    try WebViewManager.shared.loadFilePath(filePathToLoad, toWebView: preparedWebView)
                     webView = preparedWebView
                 } catch {
-                    webViewLoadFail(reason: "WebViewLoadFail")
+                    webViewLoadFail(reason: "WebViewLoadFail", tryBackup: tryBackupPathIfFailure)
                 }
             }
             Task {
@@ -207,12 +219,16 @@ public struct DynamicWebView: View {
                 lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
             }
         } catch {
-            webViewLoadFail(reason: "WebViewContextError")
+            webViewLoadFail(reason: "WebViewContextError", tryBackup: tryBackupPathIfFailure)
         }
     }
     
-    private func webViewLoadFail(reason: String) {
-        // todo try and load fallback bundle if available before PaywallOpenFail (HEL-2489)
+    private func webViewLoadFail(reason: String, tryBackup: Bool) {
+        if tryBackup && backupFilePath != nil {
+            webView = nil
+            loadWebView(useBackup: true)
+            return
+        }
         if fallbackPaywall != nil {
             shouldShowFallback = true
         } else {
