@@ -55,6 +55,10 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
                 return .failed(StoreKitDelegateError.unknownPurchaseResult)
             }
         } catch {
+            if let storeKitError = error as? StoreKitError,
+               case .userCancelled = storeKitError {
+                return .cancelled
+            }
             print("[Helium] StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
             return .failed(error)
         }
