@@ -1,9 +1,17 @@
 import SwiftUI
 import WebKit
 
+enum FileLoadAttempt {
+    case initialLoad
+    case secondLoad
+    case backupLoad
+}
+
 public struct DynamicWebView: View {
     let filePath: String
     let backupFilePath: String?
+    @State private var fileLoadAttempt: FileLoadAttempt = .initialLoad
+    
     let triggerName: String?
     let actionConfig: JSON
     let templateConfig: JSON
@@ -122,10 +130,10 @@ public struct DynamicWebView: View {
         if webView != nil {
             return
         }
+        print("[Helium] WebView loading html - \(fileLoadAttempt)")
         
-        let tryBackupPathIfFailure = !useBackup
         guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
-            webViewLoadFail(reason: "NoBackupFilePath", tryBackup: tryBackupPathIfFailure)
+            webViewLoadFail(reason: "NoBackupFilePath")
             return
         }
         
@@ -196,7 +204,7 @@ public struct DynamicWebView: View {
                 )
                 guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
-                    webViewLoadFail(reason: "NoPreparedWebView", tryBackup: tryBackupPathIfFailure) // logically this should never be possible
+                    webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
                     return
                 }
                 
@@ -210,7 +218,7 @@ public struct DynamicWebView: View {
                     try WebViewManager.shared.loadFilePath(filePathToLoad, toWebView: preparedWebView)
                     webView = preparedWebView
                 } catch {
-                    webViewLoadFail(reason: "WebViewLoadFail", tryBackup: tryBackupPathIfFailure)
+                    webViewLoadFail(reason: "WebViewLoadFail")
                 }
             }
             Task {
@@ -219,15 +227,23 @@ public struct DynamicWebView: View {
                 lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
             }
         } catch {
-            webViewLoadFail(reason: "WebViewContextError", tryBackup: tryBackupPathIfFailure)
+            webViewLoadFail(reason: "WebViewContextError")
         }
     }
     
-    private func webViewLoadFail(reason: String, tryBackup: Bool) {
-        if tryBackup && backupFilePath != nil {
-            webView = nil
-            loadWebView(useBackup: true)
+    private func webViewLoadFail(reason: String) {
+        print("[Helium] WebView failed to load - \(reason)")
+        switch fileLoadAttempt {
+        case .initialLoad:
+            advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
             return
+        case .secondLoad:
+            if backupFilePath != nil {
+                advanceFileLoadAttempt(to: .backupLoad, useBackup: true)
+                return
+            }
+        default:
+            break
         }
         if fallbackPaywall != nil {
             shouldShowFallback = true
@@ -244,6 +260,16 @@ public struct DynamicWebView: View {
             } else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
             }
+        }
+    }
+    
+    private func advanceFileLoadAttempt(to attempt: FileLoadAttempt, useBackup: Bool) {
+        Task { @MainActor in
+            fileLoadAttempt = attempt
+            webView = nil
+            // give time for SwiftUI to update otherwise any existing webview display might remain
+            await Task.yield()
+            loadWebView(useBackup: useBackup)
         }
     }
     
