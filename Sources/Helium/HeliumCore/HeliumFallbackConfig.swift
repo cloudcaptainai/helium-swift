@@ -87,6 +87,8 @@ public struct TriggerLoadingConfig {
 /// )
 /// ```
 public struct HeliumFallbackConfig {
+    public static let defaultLoadingBudget: TimeInterval = 7.0
+
     // Loading settings
     /// Whether to show a loading state while fetching paywall configuration.
     /// When true, shows a loading view for up to `loadingBudget` seconds before falling back.
@@ -95,8 +97,7 @@ public struct HeliumFallbackConfig {
     
     /// Maximum time (in seconds) to show the loading state before displaying fallback.
     /// After this timeout, the fallback view will be shown even if the paywall is still downloading.
-    /// Default: 2.0 seconds
-    public var loadingBudget: TimeInterval = 2.0
+    public var loadingBudget: TimeInterval = defaultLoadingBudget
     
     /// Custom loading view to display while fetching paywall configuration.
     /// If nil, a default shimmer animation will be shown.
@@ -156,7 +157,7 @@ public struct HeliumFallbackConfig {
     public static func withFallbackView(
         _ view: any View,
         useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = 2.0,
+        loadingBudget: TimeInterval = defaultLoadingBudget,
         loadingView: AnyView? = nil,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig {
@@ -179,14 +180,14 @@ public struct HeliumFallbackConfig {
     /// - Parameters:
     ///   - fallbacks: Dictionary mapping trigger names to their fallback views
     ///   - useLoadingState: Whether to show loading state before fallback (default: true)
-    ///   - loadingBudget: Maximum seconds to show loading state (default: 2.0)
+    ///   - loadingBudget: Maximum seconds to show loading state
     ///   - loadingView: Custom loading view, or nil for default shimmer
     ///   - perTriggerLoadingConfig: Optional per-trigger loading overrides
     /// - Returns: A configured HeliumFallbackConfig instance
     public static func withPerTriggerFallbacks(
         _ fallbacks: [String: any View],
         useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = 2.0,
+        loadingBudget: TimeInterval = defaultLoadingBudget,
         loadingView: AnyView? = nil,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig {
@@ -229,7 +230,7 @@ public struct HeliumFallbackConfig {
     public static func withFallbackBundle(
         _ url: URL,
         useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = 2.0,
+        loadingBudget: TimeInterval = defaultLoadingBudget,
         loadingView: AnyView? = nil,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig {
@@ -258,7 +259,7 @@ public struct HeliumFallbackConfig {
     ///   - fallbackPerTrigger: Optional per-trigger fallback views
     ///   - fallbackBundle: Optional fallback bundle URL
     ///   - useLoadingState: Whether to show loading state (default: true)
-    ///   - loadingBudget: Maximum seconds to show loading (default: 2.0)
+    ///   - loadingBudget: Maximum seconds to show loading
     ///   - loadingView: Custom loading view or nil for default
     ///   - perTriggerLoadingConfig: Optional per-trigger loading overrides
     /// - Returns: Optional HeliumFallbackConfig, nil if no fallback mechanism provided
@@ -267,7 +268,7 @@ public struct HeliumFallbackConfig {
         fallbackPerTrigger: [String: any View]? = nil,
         fallbackBundle: URL? = nil,
         useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = 2.0,
+        loadingBudget: TimeInterval = defaultLoadingBudget,
         loadingView: AnyView? = nil,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig? {
@@ -304,7 +305,7 @@ public struct HeliumFallbackConfig {
     ///
     /// - Parameters:
     ///   - bundleURL: URL to the fallback bundle JSON file
-    ///   - globalLoadingBudget: Default loading timeout for all triggers (default: 2.0)
+    ///   - globalLoadingBudget: Default loading timeout for all triggers
     ///   - triggerSettings: Per-trigger loading customizations as tuples:
     ///     - useLoading: Override whether to show loading (nil = use global)
     ///     - budget: Override loading timeout (nil = use global)
@@ -328,7 +329,7 @@ public struct HeliumFallbackConfig {
     /// ```
     public static func withFallbackBundleAndTriggerSettings(
         bundleURL: URL,
-        globalLoadingBudget: TimeInterval = 2.0,
+        globalLoadingBudget: TimeInterval = defaultLoadingBudget,
         triggerSettings: [String: (useLoading: Bool?, budget: TimeInterval?, view: (any View)?)] = [:]
     ) -> HeliumFallbackConfig {
         // Convert the convenience tuple format to TriggerLoadingConfig
