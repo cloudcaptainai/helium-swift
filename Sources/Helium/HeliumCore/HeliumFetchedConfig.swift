@@ -176,9 +176,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                let bundleHTMLMap = await retrieveBundles(config: newConfig)
-                // You can now plug bundleHTMLMap into your existing caching system
-                // bundleHTMLMap is [String: String] mapping trigger names to their HTML content
+                fetchedConfig?.bundles = await retrieveBundles(config: newConfig)
                 await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
             }
         } catch {
@@ -209,7 +207,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func retrieveBundles(config: HeliumFetchedConfig) async -> [String : String] {
-        var bundleUrls: [(trigger: String, url: String)] = []
+        var bundleUrls: [String] = []
+
         for (trigger, paywallInfo) in config.triggerToPaywalls {
             var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
             if bundleUrl == nil || bundleUrl == "" {
@@ -222,34 +221,37 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 }
             }
             if let bundleUrl, !bundleUrl.isEmpty {
-                bundleUrls.append((trigger: trigger, url: bundleUrl))
+                if !bundleUrls.contains(bundleUrl) {
+                    bundleUrls.append(bundleUrl)
+                }
             }
         }
 
         let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.httpMaximumConnectionsPerHost = 12
+        sessionConfig.httpMaximumConnectionsPerHost = 15
         let session = URLSession(configuration: sessionConfig)
 
         // Fetch all URLs concurrently and collect results
         var results: [String: String] = [:]
 
         await withTaskGroup(of: (String, String?).self) { group in
-            for (trigger, url) in bundleUrls {
+            for url in bundleUrls {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
-                        return (trigger, html)
+                        return (url, html)
                     } catch {
-                        print("[Helium] Failed to fetch bundle for \(trigger) from \(url): \(error)")
-                        return (trigger, nil)
+                        print("[Helium] Failed to fetch bundle from \(url): \(error)")
+                        return (url, nil)
                     }
                 }
             }
 
-            // Collect results
-            for await (trigger, html) in group {
+            // Collect results using bundleId as key
+            for await (url, html) in group {
                 if let html {
-                    results[trigger] = html
+                    let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url)
+                    results[bundleId] = html
                 }
             }
         }
