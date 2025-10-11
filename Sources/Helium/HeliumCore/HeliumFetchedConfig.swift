@@ -49,6 +49,7 @@ func fetchEndpoint(
     config.httpMaximumConnectionsPerHost = 5
     let session = URLSession(configuration: config)
     
+    // todo pass in new header or param to indicate self-fetch for bundles
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -249,8 +250,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
 
             // Collect results using bundleId as key
             for await (url, html) in group {
-                if let html {
-                    let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url)
+                if let html,
+                   let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url) {
                     results[bundleId] = html
                 }
             }
@@ -265,7 +266,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 15
+        request.timeoutInterval = 4
 
         let (data, response) = try await session.data(for: request)
 
