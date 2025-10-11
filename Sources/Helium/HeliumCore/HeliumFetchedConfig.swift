@@ -54,11 +54,7 @@ func fetchEndpoint(
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
     
-    if NetworkReachability.shared.isOnWiFi {
-        request.timeoutInterval = 30
-    } else {
-        request.timeoutInterval = 15
-    }
+    request.timeoutInterval = 15
     
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
@@ -180,6 +176,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
+                let bundleHTMLMap = await retrieveBundles(config: newConfig)
+                // You can now plug bundleHTMLMap into your existing caching system
+                // bundleHTMLMap is [String: String] mapping trigger names to their HTML content
                 await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
             }
         } catch {
@@ -207,6 +206,77 @@ public class HeliumFetchedConfigManager: ObservableObject {
     private func calculateBackoffDelay(attempt: Int) -> Double {
         // Simple exponential backoff: 2^attempt seconds
         return pow(2.0, Double(attempt))
+    }
+    
+    private func retrieveBundles(config: HeliumFetchedConfig) async -> [String : String] {
+        var bundleUrls: [(trigger: String, url: String)] = []
+        for (trigger, paywallInfo) in config.triggerToPaywalls {
+            var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
+            if bundleUrl == nil || bundleUrl == "" {
+                let resolvedConfig = getResolvedConfigJSONForTrigger(trigger)
+                if let resolvedConfig {
+                    if resolvedConfig["baseStack"].exists(),
+                       resolvedConfig["baseStack"]["componentProps"].exists() {
+                        bundleUrl = resolvedConfig["baseStack"]["componentProps"]["bundleURL"].stringValue
+                    }
+                }
+            }
+            if let bundleUrl, !bundleUrl.isEmpty {
+                bundleUrls.append((trigger: trigger, url: bundleUrl))
+            }
+        }
+
+        let sessionConfig = URLSessionConfiguration.default
+        sessionConfig.httpMaximumConnectionsPerHost = 12
+        let session = URLSession(configuration: sessionConfig)
+
+        // Fetch all URLs concurrently and collect results
+        var results: [String: String] = [:]
+
+        await withTaskGroup(of: (String, String?).self) { group in
+            for (trigger, url) in bundleUrls {
+                group.addTask {
+                    do {
+                        let html = try await self.fetchBundleHTML(from: url, using: session)
+                        return (trigger, html)
+                    } catch {
+                        print("[Helium] Failed to fetch bundle for \(trigger) from \(url): \(error)")
+                        return (trigger, nil)
+                    }
+                }
+            }
+
+            // Collect results
+            for await (trigger, html) in group {
+                if let html {
+                    results[trigger] = html
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func fetchBundleHTML(from urlString: String, using session: URLSession) async throws -> String {
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+
+        return html
     }
     
     private func handleConfigFetchSuccess(
