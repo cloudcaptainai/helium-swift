@@ -19,7 +19,7 @@ public protocol BaseActionsDelegate {
     func logImpression(viewType: PaywallOpenViewType);
     func logClosure();
     func getIsLoading() -> Bool;
-    func logRenderTime(timeTakenMS: UInt64);
+    func logRenderTime(timeTakenMS: UInt64, fileLoadAttemptType: Int);
 }
 
 public class ActionsDelegateWrapper: ObservableObject {
@@ -53,8 +53,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         delegate.selectProduct(productId: productId)
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
-        delegate.logRenderTime(timeTakenMS: timeTakenMS);
+    public func logRenderTime(timeTakenMS: UInt64, fileLoadAttemptType: Int) {
+        delegate.logRenderTime(timeTakenMS: timeTakenMS, fileLoadAttemptType: fileLoadAttemptType)
     }
     
     @MainActor
@@ -95,15 +95,16 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         self.trigger = trigger
         self.selectedProductId = "";
         if (!paywallInfo.productsOffered.isEmpty) {
-            self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
+            self.selectedProductId = paywallInfo.productsOffered[0]
         }
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, fileLoadAttemptType: Int) {
         let event = PaywallWebViewRenderedEvent(
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            webviewRenderTimeTakenMS: timeTakenMS
+            webviewRenderTimeTakenMS: timeTakenMS,
+            webviewLoadAttemptType: fileLoadAttemptType
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
@@ -292,7 +293,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         return false;
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, fileLoadAttemptType: Int) {
         print("log render time");
     }
     

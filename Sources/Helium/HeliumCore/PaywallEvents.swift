@@ -864,14 +864,23 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
     /// - Note: Measured from WebView load start to didFinish navigation with document.readyState='complete'
     public let webviewRenderTimeTakenMS: UInt64?
     
+    let webviewLoadAttemptType: Int
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, timestamp: Date = Date()) {
+    public init(
+        triggerName: String,
+        paywallName: String,
+        webviewRenderTimeTakenMS: UInt64? = nil,
+        webviewLoadAttemptType: Int,
+        timestamp: Date = Date()
+    ) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.webviewRenderTimeTakenMS = webviewRenderTimeTakenMS
+        self.webviewLoadAttemptType = webviewLoadAttemptType
         self.timestamp = timestamp
     }
     

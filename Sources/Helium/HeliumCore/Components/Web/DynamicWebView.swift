@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-enum FileLoadAttempt {
+enum FileLoadAttempt : Int {
     case initialLoad
     case secondLoad
     case backupLoad
@@ -113,7 +113,7 @@ public struct DynamicWebView: View {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
                   Task {
-                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds, fileLoadAttemptType: fileLoadAttempt.rawValue)
                   }
               }
               lowPowerModeAutoPlayVideoWorkaround()

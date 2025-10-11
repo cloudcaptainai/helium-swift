@@ -103,18 +103,18 @@ public enum HeliumPaywallEvent: Codable {
     case paywallSkipped(triggerName: String)
     case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, numAttempts: Int? = nil)
     case paywallsDownloadError(error: String, numAttempts: Int? = nil)
-    case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil)
+    case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil, webviewLoadAttemptType: Int? = nil)
     case userAllocated(triggerName: String, experimentInfo: ExperimentInfo)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS, webviewLoadAttemptType
     }
     
     public func getTriggerIfExists() -> String?{
         switch self {
         case .initializeStart:
             return nil
-        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS, _):
             return triggerName;
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             return triggerName;
@@ -178,7 +178,7 @@ public enum HeliumPaywallEvent: Codable {
             return paywallTemplateName
         case .paywallDismissed(let triggerName, let paywallTemplateName, let dismissAll):
             return paywallTemplateName;
-        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS):
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let timeTakenMS, _):
             return paywallTemplateName;
         default:
             return nil;
@@ -247,10 +247,11 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallSkipped(let triggerName):
             try container.encode("paywallSkipped", forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
-        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS):
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS, let webviewLoadAttemptType):
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encode(webviewRenderTimeTakenMS, forKey: .webviewRenderTimeTakenMS)
+            try container.encode(webviewLoadAttemptType, forKey: .webviewLoadAttemptType)
         case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS, let numAttempts):
             try container.encode("paywallsDownloadSuccess", forKey: .type)
             try container.encode(configId, forKey: .configId)
@@ -437,10 +438,11 @@ public enum HeliumPaywallEvent: Codable {
             dict["paywallTemplateName"] = paywallTemplateName
             dict["errorDescription"] = error
             
-        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS):
+        case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS, let webviewLoadAttemptType):
             dict["triggerName"] = triggerName
             dict["paywallTemplateName"] = paywallTemplateName
             dict["webviewRenderTimeTakenMS"] = webviewRenderTimeTakenMS
+            dict["webviewLoadAttemptType"] = webviewLoadAttemptType
             
         case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS, let numAttempts):
             dict["configId"] = configId
