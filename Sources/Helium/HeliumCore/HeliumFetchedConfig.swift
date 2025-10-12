@@ -15,6 +15,11 @@ struct HeliumFetchResult {
     var numRequests: Int = 1
 }
 
+private struct BundlesFetchResult {
+    let successMapBundleIdToHtml: [String : String]
+    let triggersWithNoBundle: [String]
+}
+
 class NetworkReachability {
     static let shared = NetworkReachability()
     private let monitor = NWPathMonitor()
@@ -79,7 +84,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     public var downloadTimeTakenMS: UInt64?
     public var numRetries: Int = 0
     
-    static let MAX_NUM_RETRIES: Int = 6 // approximately 94 seconds
+    static let MAX_NUM_CONFIG_RETRIES: Int = 5
+    static let MAX_NUM_BUNDLE_RETRIES: Int = 2
     
     private init() {
         downloadStatus = .notDownloadedYet
@@ -100,7 +106,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             await fetchConfigWithRetry(
                 endpoint: endpoint,
                 params: params,
-                maxRetries: HeliumFetchedConfigManager.MAX_NUM_RETRIES,
+                maxRetries: HeliumFetchedConfigManager.MAX_NUM_CONFIG_RETRIES,
                 retryCount: 0,
                 completion: completion
             )
@@ -177,7 +183,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                fetchedConfig?.bundles = await retrieveBundles(config: newConfig)
+                let bundlesFetchResult = await retrieveBundles(config: newConfig)
+                fetchedConfig?.bundles = bundlesFetchResult.successMapBundleIdToHtml
+                // todo if empty or failures too high... consider overall failure
                 await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
             }
         } catch {
@@ -207,8 +215,19 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(attempt))
     }
     
-    private func retrieveBundles(config: HeliumFetchedConfig) async -> [String : String] {
-        var bundleUrls: [String] = []
+    private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesFetchResult {
+        // todo
+        
+//        print("[Helium] Failed to fetch bundle from \(url): \(error)")
+    }
+    
+    private func retrieveBundlesWithRetry(
+        config: HeliumFetchedConfig,
+        maxRetries: Int,
+        retryCount: Int,
+    ) async -> BundlesFetchResult {
+        var bundleUrlToTriggersMap: [String : [String]] = [:]
+        var triggersWithNoBundle: [String] = []
 
         for (trigger, paywallInfo) in config.triggerToPaywalls {
             var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
@@ -222,9 +241,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 }
             }
             if let bundleUrl, !bundleUrl.isEmpty {
-                if !bundleUrls.contains(bundleUrl) {
-                    bundleUrls.append(bundleUrl)
+                if bundleUrlToTriggersMap[bundleUrl] == nil {
+                    bundleUrlToTriggersMap[bundleUrl] = []
                 }
+                bundleUrlToTriggersMap[bundleUrl]?.append(trigger)
+            } else {
+                triggersWithNoBundle.append(trigger)
             }
         }
 
@@ -236,13 +258,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
         var results: [String: String] = [:]
 
         await withTaskGroup(of: (String, String?).self) { group in
-            for url in bundleUrls {
+            for (url, triggers) in bundleUrlToTriggersMap {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
                         return (url, html)
                     } catch {
-                        print("[Helium] Failed to fetch bundle from \(url): \(error)")
+                        triggersWithNoBundle.append(contentsOf: triggers)
                         return (url, nil)
                     }
                 }
@@ -257,7 +279,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             }
         }
 
-        return results
+        return BundlesFetchResult(successMapBundleIdToHtml: results, triggersWithNoBundle: triggersWithNoBundle)
     }
 
     private func fetchBundleHTML(from urlString: String, using session: URLSession) async throws -> String {
