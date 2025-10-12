@@ -15,9 +15,14 @@ struct HeliumFetchResult {
     var numRequests: Int = 1
 }
 
-private struct BundlesFetchResult {
+private struct BundlesRetrieveResult {
     let successMapBundleIdToHtml: [String : String]
     let triggersWithNoBundle: [String]
+}
+
+private struct BundlesFetchResult {
+    let successMapBundleIdToHtml: [String : String]
+    let bundleUrlsNotFetched: [String]
 }
 
 class NetworkReachability {
@@ -183,10 +188,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return
                 }
             } else {
-                let bundlesFetchResult = await retrieveBundles(config: newConfig)
-                fetchedConfig?.bundles = bundlesFetchResult.successMapBundleIdToHtml
-                // todo if empty or failures too high... consider overall failure
-                await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
+                let bundlesResult = await retrieveBundles(config: newConfig)
+                fetchedConfig?.bundles = bundlesResult.successMapBundleIdToHtml
+                if !bundlesResult.triggersWithNoBundle.isEmpty {
+                    await self.updateDownloadState(.downloadFailure)
+                    completion(.failure(FetchError.couldNotFetchForAllTriggers))
+                } else {
+                    await handleConfigFetchSuccess(newConfig: newConfig, retryCount: retryCount, completion: completion)
+                }
             }
         } catch {
             // Retry on network/fetch failure
@@ -215,17 +224,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(attempt))
     }
     
-    private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesFetchResult {
-        // todo
-        
-//        print("[Helium] Failed to fetch bundle from \(url): \(error)")
-    }
-    
-    private func retrieveBundlesWithRetry(
-        config: HeliumFetchedConfig,
-        maxRetries: Int,
-        retryCount: Int,
-    ) async -> BundlesFetchResult {
+    private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesRetrieveResult {
         var bundleUrlToTriggersMap: [String : [String]] = [:]
         var triggersWithNoBundle: [String] = []
 
@@ -249,6 +248,66 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 triggersWithNoBundle.append(trigger)
             }
         }
+        
+        let fetchResult = await retrieveBundlesWithRetry(
+            bundleUrlToTriggersMap: bundleUrlToTriggersMap,
+            maxRetries: HeliumFetchedConfigManager.MAX_NUM_BUNDLE_RETRIES,
+            retryCount: 0
+        )
+        let additionalTriggersNotFetchedFor = fetchResult.bundleUrlsNotFetched.flatMap {
+            bundleUrlToTriggersMap[$0] ?? []
+        }
+        return BundlesRetrieveResult(
+            successMapBundleIdToHtml: fetchResult.successMapBundleIdToHtml,
+            triggersWithNoBundle: triggersWithNoBundle + additionalTriggersNotFetchedFor
+        )
+    }
+    
+    private func retrieveBundlesWithRetry(
+        bundleUrlToTriggersMap: [String : [String]],
+        maxRetries: Int,
+        retryCount: Int,
+    ) async -> BundlesFetchResult {
+        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, maxRetries: maxRetries, retryCount: retryCount)
+        
+        if !result.bundleUrlsNotFetched.isEmpty {
+            let missingTriggers = result.bundleUrlsNotFetched.flatMap {
+                bundleUrlToTriggersMap[$0]
+            }
+            print("[Helium] Failed to fetch bundles for triggers \(missingTriggers)")
+            if retryCount < maxRetries {
+                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
+                print("[Helium] Bundles fetch incomplete on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
+                
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                
+                let remainingMap = bundleUrlToTriggersMap.filter { result.bundleUrlsNotFetched.contains($0.key) }
+                let remainingResult = await retrieveBundlesWithRetry(
+                    bundleUrlToTriggersMap: remainingMap,
+                    maxRetries: maxRetries,
+                    retryCount: retryCount + 1
+                )
+                var fullSuccessMap = result.successMapBundleIdToHtml
+                fullSuccessMap.merge(remainingResult.successMapBundleIdToHtml, uniquingKeysWith: { lhs, rhs in lhs })
+                return BundlesFetchResult(
+                    successMapBundleIdToHtml: fullSuccessMap,
+                    bundleUrlsNotFetched: result.bundleUrlsNotFetched
+                )
+            } else {
+                return result
+            }
+            return await retrieveBundlesWithRetry(bundleUrlToTriggersMap: bundleUrlToTriggersMap, maxRetries: maxRetries, retryCount: retryCount + 1)
+        } else {
+            return result
+        }
+    }
+    
+    private func fetchBundles(
+        bundleUrlToTriggersMap: [String : [String]],
+        maxRetries: Int,
+        retryCount: Int,
+    ) async -> BundlesFetchResult {
+        var bundleUrlsNotFetched: [String] = []
 
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.httpMaximumConnectionsPerHost = 15
@@ -264,7 +323,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
                         return (url, html)
                     } catch {
-                        triggersWithNoBundle.append(contentsOf: triggers)
                         return (url, nil)
                     }
                 }
@@ -272,14 +330,17 @@ public class HeliumFetchedConfigManager: ObservableObject {
 
             // Collect results using bundleId as key
             for await (url, html) in group {
-                if let html,
-                   let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url) {
-                    results[bundleId] = html
+                if let html {
+                    if let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url) {
+                        results[bundleId] = html
+                    } // bundleId should NOT be nil
+                } else {
+                    bundleUrlsNotFetched.append(url)
                 }
             }
         }
 
-        return BundlesFetchResult(successMapBundleIdToHtml: results, triggersWithNoBundle: triggersWithNoBundle)
+        return BundlesFetchResult(successMapBundleIdToHtml: results, bundleUrlsNotFetched: bundleUrlsNotFetched)
     }
 
     private func fetchBundleHTML(from urlString: String, using session: URLSession) async throws -> String {
@@ -445,5 +506,16 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getClientName() -> String? {
         return fetchedConfig?.orgName
+    }
+}
+
+enum FetchError: LocalizedError {
+    case couldNotFetchForAllTriggers
+    
+    public var errorDescription: String? {
+        switch self {
+        case .couldNotFetchForAllTriggers:
+            return "Failed to fetch bundles for all triggers."
+        }
     }
 }
