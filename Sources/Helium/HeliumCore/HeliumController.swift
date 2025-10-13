@@ -141,7 +141,7 @@ public class HeliumController {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
                         error: error.localizedDescription,
-                        numAttempts: HeliumFetchedConfigManager.MAX_NUM_RETRIES + 1
+                        numAttempts: HeliumFetchedConfigManager.MAX_NUM_CONFIG_RETRIES + 1
                     )
                 )
             }

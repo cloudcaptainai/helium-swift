@@ -746,9 +746,17 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
     public let bundleDownloadTimeMS: UInt64?
     
-    /// Number of retry attempts before success
+    /// Time taken to retrieve localized prices
+    /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
+    public let localizedPriceTimeMS: UInt64?
+    
+    /// Number of config download attempts
     /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
     public let numAttempts: Int?
+    
+    /// Number of bundle download attempts
+    /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
+    public let numBundleAttempts: Int?
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
@@ -760,6 +768,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         fontsDownloadTimeTakenMS: UInt64? = nil,
         bundleDownloadTimeMS: UInt64? = nil,
         numAttempts: Int? = nil,
+        numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
     ) {
         self.downloadTimeTakenMS = downloadTimeTakenMS
@@ -767,6 +776,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.fontsDownloadTimeTakenMS = fontsDownloadTimeTakenMS
         self.bundleDownloadTimeMS = bundleDownloadTimeMS
         self.numAttempts = numAttempts
+        self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
     }
     
@@ -816,17 +826,37 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
     /// - Note: Network error, parsing error, or timeout message
     public let error: String
     
-    /// Number of retry attempts made before giving up
-    /// - Note: Includes initial attempt plus any retries before failure
+    public let configDownloaded: Bool
+    
+    public let numBundles: Int
+    
+    public let numBundleDownloadFailures: Int
+    
+    /// Number of config download attempts
     public let numAttempts: Int?
+    
+    /// Number of bundle download attempts
+    public let numBundleAttempts: Int?
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(error: String, numAttempts: Int? = nil, timestamp: Date = Date()) {
+    public init(
+        error: String,
+        configDownloaded: Bool,
+        numBundles: Int,
+        numBundleDownloadFailures: Int,
+        numAttempts: Int? = nil,
+        numBundleAttempts: Int? = nil,
+        timestamp: Date = Date()
+    ) {
         self.error = error
+        self.configDownloaded = configDownloaded
+        self.numBundles = numBundles
+        self.numBundleDownloadFailures = numBundleDownloadFailures
         self.numAttempts = numAttempts
+        self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
     }
     
