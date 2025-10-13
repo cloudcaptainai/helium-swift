@@ -101,8 +101,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     
-    static let MAX_NUM_CONFIG_RETRIES: Int = 5
-    static let MAX_NUM_BUNDLE_RETRIES: Int = 2
+    static let MAX_NUM_CONFIG_ATTEMPTS: Int = 5
+    static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4
     
     private init() {
         downloadStatus = .notDownloadedYet
@@ -128,8 +128,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
             await fetchConfigWithRetry(
                 endpoint: endpoint,
                 params: params,
-                maxRetries: HeliumFetchedConfigManager.MAX_NUM_CONFIG_RETRIES,
-                retryCount: 0,
+                maxAttempts: HeliumFetchedConfigManager.MAX_NUM_CONFIG_ATTEMPTS,
+                attemptCounter: 1,
                 configStartTime: configStartTime,
                 completion: completion
             )
@@ -139,8 +139,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     private func fetchConfigWithRetry(
         endpoint: String,
         params: [String: Any],
-        maxRetries: Int,
-        retryCount: Int,
+        maxAttempts: Int,
+        attemptCounter: Int,
         configStartTime: DispatchTime,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
@@ -150,15 +150,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
             
             // Ensure we have data
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
-                if retryCount < maxRetries {
-                    let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                    print("[Helium] Fetch failed on attempt \(retryCount + 1) (no data), retrying in \(delaySeconds) seconds...")
+                if attemptCounter < maxAttempts {
+                    let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
+                    print("[Helium] Fetch failed on attempt \(attemptCounter) (no data), retrying in \(delaySeconds) seconds...")
                     try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                     await fetchConfigWithRetry(
                         endpoint: endpoint,
                         params: params,
-                        maxRetries: maxRetries,
-                        retryCount: retryCount + 1,
+                        maxAttempts: maxAttempts,
+                        attemptCounter: attemptCounter + 1,
                         configStartTime: configStartTime,
                         completion: completion
                     )
@@ -168,7 +168,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     completion(.failure(
                         errorMessage: "Reached max retries for config.",
                         HeliumFetchMetrics(
-                            numConfigAttempts: retryCount + 1,
+                            numConfigAttempts: attemptCounter,
                             numBundleAttempts: 0,
                             configSuccess: false,
                             configDownloadTimeMS: configDownloadTimeMS
@@ -189,11 +189,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 do {
                     let bundles = (self.fetchedConfig?.bundles)!
                     
-                    try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+                    saveBundleAssets(bundles: bundles)
                     
                     await handleConfigFetchSuccess(
                         newConfig: newConfig,
-                        retryCount: retryCount,
+                        numConfigAttempts: attemptCounter,
                         configDownloadTimeMS: configDownloadTimeMS,
                         bundleDownloadTimeMS: nil,
                         numBundles: fetchedConfig?.bundles?.count ?? 0,
@@ -201,36 +201,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numBundleAttempts: 0,
                         completion: completion
                     )
-                } catch {
-                    // Retry on asset processing failure
-                    if retryCount < maxRetries {
-                        let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                        print("[Helium] Asset processing failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
-                        
-                        try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
-                        
-                        await fetchConfigWithRetry(
-                            endpoint: endpoint,
-                            params: params,
-                            maxRetries: maxRetries,
-                            retryCount: retryCount + 1,
-                            configStartTime: configStartTime,
-                            completion: completion
-                        )
-                    } else {
-                        await self.updateDownloadState(.downloadFailure)
-                        let configTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
-                        completion(.failure(
-                            errorMessage: error.localizedDescription,
-                            HeliumFetchMetrics(
-                                numConfigAttempts: retryCount + 1,
-                                numBundleAttempts: 0,
-                                configSuccess: true,
-                                configDownloadTimeMS: configTimeMS
-                            )
-                        ))
-                    }
-                    return
                 }
             } else {
                 let bundleStartTime = DispatchTime.now()
@@ -246,7 +216,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     completion(.failure(
                         errorMessage: "Failed to fetch bundles for \(bundlesResult.triggersWithNoBundle.count) trigger(s)",
                         HeliumFetchMetrics(
-                            numConfigAttempts: retryCount + 1,
+                            numConfigAttempts: attemptCounter,
                             numBundleAttempts: bundlesResult.numBundleAttempts,
                             configSuccess: true,
                             numBundles: bundlesResult.numBundles,
@@ -258,7 +228,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 } else {
                     await handleConfigFetchSuccess(
                         newConfig: newConfig,
-                        retryCount: retryCount,
+                        numConfigAttempts: attemptCounter,
                         configDownloadTimeMS: configDownloadTimeMS,
                         bundleDownloadTimeMS: bundleDownloadTimeMS,
                         numBundles: bundlesResult.numBundles,
@@ -270,17 +240,17 @@ public class HeliumFetchedConfigManager: ObservableObject {
             }
         } catch {
             // Retry on network/fetch failure
-            if retryCount < maxRetries {
-                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                print("[Helium] Fetch failed on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
+            if attemptCounter < maxAttempts {
+                let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
+                print("[Helium] Fetch failed on attempt \(attemptCounter), retrying in \(delaySeconds) seconds...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                 
                 await fetchConfigWithRetry(
                     endpoint: endpoint,
                     params: params,
-                    maxRetries: maxRetries,
-                    retryCount: retryCount + 1,
+                    maxAttempts: maxAttempts,
+                    attemptCounter: attemptCounter + 1,
                     configStartTime: configStartTime,
                     completion: completion
                 )
@@ -290,7 +260,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 completion(.failure(
                     errorMessage: error.localizedDescription,
                     HeliumFetchMetrics(
-                        numConfigAttempts: retryCount + 1,
+                        numConfigAttempts: attemptCounter,
                         numBundleAttempts: 0,
                         configSuccess: false,
                         configDownloadTimeMS: configTimeMS
@@ -301,8 +271,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func calculateBackoffDelay(attempt: Int) -> Double {
-        // Simple exponential backoff: 2^attempt seconds
-        return pow(2.0, Double(attempt))
+        // Simple exponential backoff
+        let retryNumber = attempt - 1
+        guard retryNumber >= 0 else {
+            return 5.0
+        }
+        return pow(2.0, Double(retryNumber))
     }
     
     private func saveBundleAssets(bundles: [String: String]) {
@@ -348,8 +322,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
         
         let fetchResult = await retrieveBundlesWithRetry(
             bundleUrlToTriggersMap: bundleUrlToTriggersMap,
-            maxRetries: HeliumFetchedConfigManager.MAX_NUM_BUNDLE_RETRIES,
-            retryCount: 0
+            maxAttempts: HeliumFetchedConfigManager.MAX_NUM_BUNDLE_ATTEMPTS,
+            attemptCounter: 1
         )
         let additionalTriggersNotFetchedFor = fetchResult.bundleUrlsNotFetched.flatMap {
             bundleUrlToTriggersMap[$0] ?? []
@@ -364,27 +338,27 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private func retrieveBundlesWithRetry(
         bundleUrlToTriggersMap: [String : [String]],
-        maxRetries: Int,
-        retryCount: Int
+        maxAttempts: Int,
+        attemptCounter: Int
     ) async -> BundlesFetchResult {
-        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, maxRetries: maxRetries, retryCount: retryCount)
+        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap)
         
         if !result.bundleUrlsNotFetched.isEmpty {
             let missingTriggers = result.bundleUrlsNotFetched.flatMap {
                 bundleUrlToTriggersMap[$0] ?? []
             }
             print("[Helium] Failed to fetch bundles for triggers \(missingTriggers)")
-            if retryCount < maxRetries {
-                let delaySeconds = calculateBackoffDelay(attempt: retryCount)
-                print("[Helium] Bundles fetch incomplete on attempt \(retryCount + 1), retrying in \(delaySeconds) seconds...")
+            if attemptCounter < maxAttempts {
+                let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
+                print("[Helium] Bundles fetch incomplete on attempt \(attemptCounter), retrying in \(delaySeconds) seconds...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                 
                 let retryMap = bundleUrlToTriggersMap.filter { result.bundleUrlsNotFetched.contains($0.key) }
                 let retryResult = await retrieveBundlesWithRetry(
                     bundleUrlToTriggersMap: retryMap,
-                    maxRetries: maxRetries,
-                    retryCount: retryCount + 1
+                    maxAttempts: maxAttempts,
+                    attemptCounter: attemptCounter + 1
                 )
                 var fullSuccessMap = result.successMapBundleIdToHtml
                 fullSuccessMap.merge(retryResult.successMapBundleIdToHtml, uniquingKeysWith: { lhs, rhs in lhs })
@@ -397,22 +371,20 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 return BundlesFetchResult(
                     successMapBundleIdToHtml: result.successMapBundleIdToHtml,
                     bundleUrlsNotFetched: result.bundleUrlsNotFetched,
-                    numBundleAttempts: retryCount + 1
+                    numBundleAttempts: attemptCounter
                 )
             }
         } else {
             return BundlesFetchResult(
                 successMapBundleIdToHtml: result.successMapBundleIdToHtml,
                 bundleUrlsNotFetched: result.bundleUrlsNotFetched,
-                numBundleAttempts: retryCount + 1
+                numBundleAttempts: attemptCounter
             )
         }
     }
     
     private func fetchBundles(
-        bundleUrlToTriggersMap: [String : [String]],
-        maxRetries: Int,
-        retryCount: Int,
+        bundleUrlToTriggersMap: [String : [String]]
     ) async -> BundlesFetchResult {
         var bundleUrlsNotFetched: [String] = []
 
@@ -479,7 +451,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private func handleConfigFetchSuccess(
         newConfig: HeliumFetchedConfig,
-        retryCount: Int,
+        numConfigAttempts: Int,
         configDownloadTimeMS: UInt64?,
         bundleDownloadTimeMS: UInt64?,
         numBundles: Int,
@@ -487,8 +459,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
         numBundleAttempts: Int,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
-        let numRequestsTaken = retryCount + 1
-        
         // Prefetch products and build localized price map
         let localizedPricesStartTime = DispatchTime.now()
         let allProductIds = getAllProductIds()
@@ -500,7 +470,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         
         await updateDownloadState(.downloadSuccess)
         completion(.success(newConfig, HeliumFetchMetrics(
-            numConfigAttempts: numRequestsTaken,
+            numConfigAttempts: numConfigAttempts,
             numBundleAttempts: numBundleAttempts,
             numBundles: numBundles,
             bundleFailCount: bundleFailCount,
