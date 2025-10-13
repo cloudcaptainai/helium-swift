@@ -74,9 +74,7 @@ public class HeliumController {
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, params: payload) { result in
             switch result {
-            case .success(let fetchResult):
-                let fetchedConfig = fetchResult.fetchedConfig
-                let numFetchRequests = fetchResult.numRequests
+            case .success(let fetchedConfig, let metrics):
                 let configuration = SegmentConfiguration(writeKey: fetchedConfig.segmentBrowserWriteKey)
                     .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
                     .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)
@@ -104,8 +102,11 @@ public class HeliumController {
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadSuccessEvent(
-                        downloadTimeTakenMS: HeliumFetchedConfigManager.shared.downloadTimeTakenMS,
-                        numAttempts: numFetchRequests
+                        downloadTimeTakenMS: metrics.configDownloadTimeMS,
+                        bundleDownloadTimeMS: metrics.bundleDownloadTimeMS,
+                        localizedPriceTimeMS: metrics.localizedPriceTimeMS,
+                        numAttempts: metrics.numConfigAttempts,
+                        numBundleAttempts: metrics.numBundleAttempts
                     )
                 )
                 
@@ -115,8 +116,7 @@ public class HeliumController {
                         object: nil
                     )
                 }
-            case .failure(let error):
-            
+            case .failure(let errorMessage, let metrics):
                 let configuration = SegmentConfiguration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
                     .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
                     .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
@@ -140,8 +140,12 @@ public class HeliumController {
 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
-                        error: error.localizedDescription,
-                        numAttempts: HeliumFetchedConfigManager.MAX_NUM_CONFIG_RETRIES + 1
+                        error: errorMessage,
+                        configDownloaded: metrics.configSuccess,
+                        numBundles: metrics.numBundles,
+                        numBundlesNotDownloaded: metrics.bundleFailCount,
+                        numAttempts: metrics.numConfigAttempts,
+                        numBundleAttempts: metrics.numBundleAttempts
                     )
                 )
             }

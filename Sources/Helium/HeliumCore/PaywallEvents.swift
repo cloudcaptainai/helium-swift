@@ -767,6 +767,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         imagesDownloadTimeTakenMS: UInt64? = nil,
         fontsDownloadTimeTakenMS: UInt64? = nil,
         bundleDownloadTimeMS: UInt64? = nil,
+        localizedPriceTimeMS: UInt64? = nil,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
@@ -775,6 +776,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.imagesDownloadTimeTakenMS = imagesDownloadTimeTakenMS
         self.fontsDownloadTimeTakenMS = fontsDownloadTimeTakenMS
         self.bundleDownloadTimeMS = bundleDownloadTimeMS
+        self.localizedPriceTimeMS = localizedPriceTimeMS
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
@@ -830,7 +832,7 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
     
     public let numBundles: Int
     
-    public let numBundleDownloadFailures: Int
+    public let numBundlesNotDownloaded: Int
     
     /// Number of config download attempts
     public let numAttempts: Int?
@@ -846,7 +848,7 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         error: String,
         configDownloaded: Bool,
         numBundles: Int,
-        numBundleDownloadFailures: Int,
+        numBundlesNotDownloaded: Int,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
@@ -854,7 +856,7 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         self.error = error
         self.configDownloaded = configDownloaded
         self.numBundles = numBundles
-        self.numBundleDownloadFailures = numBundleDownloadFailures
+        self.numBundlesNotDownloaded = numBundlesNotDownloaded
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
