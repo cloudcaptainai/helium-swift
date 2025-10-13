@@ -117,6 +117,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         completion: @escaping (HeliumFetchResult) -> Void
     ) {
+        if downloadStatus == .inProgress {
+            print("[Helium] Config download already in progress. Skipping new request.")
+            return
+        }
         Task {
             await updateDownloadState(.inProgress)
             
@@ -237,9 +241,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let bundlesResult = await retrieveBundles(config: newConfig)
                 let bundleDownloadTimeMS = dispatchTimeDifferenceInMS(from: bundleStartTime)
                 
-                // todo write assets!!!!
+                let bundles = bundlesResult.successMapBundleIdToHtml
+                fetchedConfig?.bundles = bundles
+                saveBundleAssets(bundles: bundles)
                 
-                fetchedConfig?.bundles = bundlesResult.successMapBundleIdToHtml
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
                     completion(.failure(
@@ -306,10 +311,20 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(attempt))
     }
     
+    private func saveBundleAssets(bundles: [String: String]) {
+        do {
+            try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+        } catch {
+            // try one more time in case writing bundle assets unexpectedly fails
+            try? HeliumAssetManager.shared.writeBundles(bundles: bundles)
+        }
+    }
+    
     private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesRetrieveResult {
         var bundleUrlToTriggersMap: [String : [String]] = [:]
         var triggersWithNoBundle: [String] = []
 
+        let cachedBundleIDs = HeliumAssetManager.shared.getExistingBundleIDs()
         for (trigger, paywallInfo) in config.triggerToPaywalls {
             var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
             if bundleUrl == nil || bundleUrl == "" {
@@ -322,6 +337,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 }
             }
             if let bundleUrl, !bundleUrl.isEmpty {
+                if cachedBundleIDs.contains(HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? "") {
+                    // No need to fetch if already cached. Note that every time paywall is saved it will get new
+                    // bundle url/id, so won't miss out on new change by having this check.
+                    continue
+                }
+
                 if bundleUrlToTriggersMap[bundleUrl] == nil {
                     bundleUrlToTriggersMap[bundleUrl] = []
                 }
