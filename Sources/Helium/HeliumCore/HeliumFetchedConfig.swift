@@ -19,8 +19,8 @@ struct HeliumFetchMetrics {
     var numConfigAttempts: Int = 1
     var numBundleAttempts: Int = 0
     var configSuccess: Bool = true
-    var numBundles: Int = 0
-    var bundleFailCount: Int = 0
+    var numBundles: Int? = nil
+    var bundleFailCount: Int? = nil
     var configDownloadTimeMS: UInt64?
     var bundleDownloadTimeMS: UInt64?
     var localizedPriceTimeMS: UInt64?
@@ -171,8 +171,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             numConfigAttempts: retryCount + 1,
                             numBundleAttempts: 0,
                             configSuccess: false,
-                            numBundles: 0,
-                            bundleFailCount: 0,
                             configDownloadTimeMS: configDownloadTimeMS
                         )
                     ))
@@ -228,8 +226,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
                                 numConfigAttempts: retryCount + 1,
                                 numBundleAttempts: 0,
                                 configSuccess: true,
-                                numBundles: 0,
-                                bundleFailCount: 0,
                                 configDownloadTimeMS: configTimeMS
                             )
                         ))
@@ -294,12 +290,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 completion(.failure(
                     errorMessage: error.localizedDescription,
                     HeliumFetchMetrics(
-                    numConfigAttempts: retryCount + 1,
-                    numBundleAttempts: 0,
-                    configSuccess: false,
-                    numBundles: 0,
-                    bundleFailCount: 0,
-                    configDownloadTimeMS: configTimeMS
+                        numConfigAttempts: retryCount + 1,
+                        numBundleAttempts: 0,
+                        configSuccess: false,
+                        configDownloadTimeMS: configTimeMS
                     )
                 ))
             }
@@ -430,14 +424,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
         var results: [String: String] = [:]
 
         await withTaskGroup(of: (String, String?).self) { group in
-            for (url, _) in bundleUrlToTriggersMap {
+            for (url, triggers) in bundleUrlToTriggersMap {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
                         return (url, html)
                     } catch {
                         if let urlError = error as? URLError, urlError.code == .badURL {
-                            // don't retry if bad url
+                            print("[Helium] Invalid URL for triggers: \(triggers)")
                         } else {
                             bundleUrlsNotFetched.append(url)
                         }
@@ -569,10 +563,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getConfig() -> HeliumFetchedConfig? {
         return fetchedConfig
-    }
-    
-    func hasBundles() -> Bool {
-        return fetchedConfig?.bundles?.count ?? 0 > 0
     }
     
     /// Clears all fetched configuration and resets to initial state.

@@ -117,9 +117,11 @@ public class HeliumAssetManager: ObservableObject {
             let unescapedContent = content
           
             if let data = unescapedContent.data(using: .utf8) {
-                print("Writing to \(localURL)");
+                print("[Helium] Writing to \(localURL)");
                 try data.write(to: localURL)
                 updatedIds.insert(bundleId)
+            } else {
+                print("[Helium] Failed to write paywall bundle with id \(bundleId)")
             }
             
             Task {
