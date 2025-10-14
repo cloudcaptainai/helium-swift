@@ -101,8 +101,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     
-    static let MAX_NUM_CONFIG_ATTEMPTS: Int = 5
-    static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4
+    static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
+    static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 5 // roughly 19 seconds of delays in between attempts
     
     private init() {
         downloadStatus = .notDownloadedYet
