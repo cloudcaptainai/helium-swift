@@ -114,14 +114,17 @@ public class HeliumAssetManager: ObservableObject {
             let fileName = "\(bundleId).html"
             let localURL = bundleDir.appendingPathComponent(fileName)
             
-            let unescapedContent = content
-          
-            if let data = unescapedContent.data(using: .utf8) {
-                print("[Helium] Writing to \(localURL)");
-                try data.write(to: localURL)
-                updatedIds.insert(bundleId)
-            } else {
-                print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+            let alreadySaved = updatedIds.contains(bundleId)
+            if !alreadySaved {
+                let unescapedContent = content
+                
+                if let data = unescapedContent.data(using: .utf8) {
+                    print("[Helium] Writing to \(localURL)");
+                    try data.write(to: localURL)
+                    updatedIds.insert(bundleId)
+                } else {
+                    print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+                }
             }
             
             Task {

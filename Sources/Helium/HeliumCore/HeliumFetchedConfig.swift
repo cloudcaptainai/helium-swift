@@ -293,6 +293,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
         var triggersWithNoBundle: [String] = []
 
         let cachedBundleIDs = HeliumAssetManager.shared.getExistingBundleIDs()
+        var cachedBundleIdToHtmlMap: [String : String] = [:]
+        
         for (trigger, paywallInfo) in config.triggerToPaywalls {
             var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
             if bundleUrl == nil || bundleUrl == "" {
@@ -305,10 +307,16 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 }
             }
             if let bundleUrl, !bundleUrl.isEmpty {
-                if cachedBundleIDs.contains(HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? "") {
+                let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? ""
+                if cachedBundleIDs.contains(bundleId) {
                     // No need to fetch if already cached. Note that every time paywall is saved it will get new
-                    // bundle url/id, so won't miss out on new change by having this check.
-                    continue
+                    // bundle url/id, so won't miss out on new changes by having this check.
+                    // But read the html just to keep config.bundles value in sync
+                    if let cachedUrl = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl),
+                       let cachedHtml = try? String(contentsOf: URL(fileURLWithPath: cachedUrl), encoding: .utf8) {
+                        cachedBundleIdToHtmlMap[bundleId] = cachedHtml
+                        continue
+                    }
                 }
 
                 if bundleUrlToTriggersMap[bundleUrl] == nil {
@@ -328,10 +336,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
         let additionalTriggersNotFetchedFor = fetchResult.bundleUrlsNotFetched.flatMap {
             bundleUrlToTriggersMap[$0] ?? []
         }
+        
+        let finalResult = fetchResult.successMapBundleIdToHtml.merging(cachedBundleIdToHtmlMap) { lhs, rhs in lhs }
         return BundlesRetrieveResult(
-            successMapBundleIdToHtml: fetchResult.successMapBundleIdToHtml,
+            successMapBundleIdToHtml: finalResult,
             triggersWithNoBundle: triggersWithNoBundle + additionalTriggersNotFetchedFor,
-            numBundles: bundleUrlToTriggersMap.count,
+            numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
             numBundleAttempts: fetchResult.numBundleAttempts ?? 0
         )
     }
@@ -360,8 +370,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     maxAttempts: maxAttempts,
                     attemptCounter: attemptCounter + 1
                 )
-                var fullSuccessMap = result.successMapBundleIdToHtml
-                fullSuccessMap.merge(retryResult.successMapBundleIdToHtml, uniquingKeysWith: { lhs, rhs in lhs })
+                let fullSuccessMap = result.successMapBundleIdToHtml.merging(retryResult.successMapBundleIdToHtml, uniquingKeysWith: { lhs, rhs in lhs })
                 return BundlesFetchResult(
                     successMapBundleIdToHtml: fullSuccessMap,
                     bundleUrlsNotFetched: retryResult.bundleUrlsNotFetched,
