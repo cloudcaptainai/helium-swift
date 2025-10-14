@@ -750,7 +750,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
     public let localizedPriceTimeMS: UInt64?
     
-    /// How many bundles were fetched
+    /// How many bundles were fetched (or retrieved from cache)
     public let numBundles: Int?
     
     /// Number of config download attempts
@@ -830,7 +830,10 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             imagesDownloadTimeTakenMS: imagesDownloadTimeTakenMS,
             fontsDownloadTimeTakenMS: fontsDownloadTimeTakenMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
-            numAttempts: numAttempts
+            localizedPriceTimeMS: localizedPriceTimeMS,
+            numBundles: numBundles,
+            numAttempts: numAttempts,
+            numBundleAttempts: numBundleAttempts
         )
     }
 }
@@ -904,7 +907,14 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallsDownloadError(error: error, numAttempts: numAttempts)
+        return .paywallsDownloadError(
+            error: error,
+            configDownloaded: configDownloaded,
+            numBundles: numBundles,
+            numBundlesNotDownloaded: numBundlesNotDownloaded,
+            numAttempts: numAttempts,
+            numBundleAttempts: numBundleAttempts
+        )
     }
 }
 
