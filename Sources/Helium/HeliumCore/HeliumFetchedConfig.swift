@@ -316,6 +316,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                        let cachedHtml = try? String(contentsOf: URL(fileURLWithPath: cachedUrl), encoding: .utf8) {
                         cachedBundleIdToHtmlMap[bundleId] = cachedHtml
                         continue
+                    } else {
+                        // Something is wrong with the cached file, clear it so can get overwritten
+                        HeliumAssetManager.shared.removeBundleIdFromCache(bundleId)
                     }
                 }
 
@@ -442,7 +445,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 4
+        request.timeoutInterval = 5
 
         let (data, response) = try await session.data(for: request)
 

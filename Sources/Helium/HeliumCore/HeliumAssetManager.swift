@@ -41,6 +41,10 @@ public class HeliumAssetManager: ObservableObject {
         bundleIds = []
     }
     
+    func removeBundleIdFromCache(_ id: String) {
+        bundleIds.remove(id)
+    }
+    
     func getBundleIdFromURL(_ url: String) -> String? {
         guard let filename = url.split(separator: "/").last?.split(separator: ".").first else {
             return nil
