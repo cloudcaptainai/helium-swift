@@ -547,6 +547,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return fetchedConfig
     }
     
+    func hasBundles() -> Bool {
+        return fetchedConfig?.bundles?.count ?? 0 > 0
+    }
+    
     /// Clears all fetched configuration and resets to initial state.
     /// 
     /// **Warning:** This is intended for debugging and testing scenarios only.

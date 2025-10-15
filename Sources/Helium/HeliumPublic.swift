@@ -189,7 +189,7 @@ public class Helium {
         
         
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        if paywallsLoaded() {
+        if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
             
             guard let templatePaywallInfo = paywallInfo else {
                 return fallbackViewFor(trigger: trigger, templateName: nil)
