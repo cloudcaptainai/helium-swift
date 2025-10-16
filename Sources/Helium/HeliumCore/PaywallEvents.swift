@@ -746,9 +746,20 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
     public let bundleDownloadTimeMS: UInt64?
     
-    /// Number of retry attempts before success
+    /// Time taken to retrieve localized prices
+    /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
+    public let localizedPriceTimeMS: UInt64?
+    
+    /// How many bundles were fetched (or retrieved from cache)
+    public let numBundles: Int?
+    
+    /// Number of config download attempts
     /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
     public let numAttempts: Int?
+    
+    /// Number of bundle download attempts
+    /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
+    public let numBundleAttempts: Int?
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
@@ -759,14 +770,20 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         imagesDownloadTimeTakenMS: UInt64? = nil,
         fontsDownloadTimeTakenMS: UInt64? = nil,
         bundleDownloadTimeMS: UInt64? = nil,
+        localizedPriceTimeMS: UInt64? = nil,
+        numBundles: Int? = nil,
         numAttempts: Int? = nil,
+        numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
     ) {
         self.downloadTimeTakenMS = downloadTimeTakenMS
         self.imagesDownloadTimeTakenMS = imagesDownloadTimeTakenMS
         self.fontsDownloadTimeTakenMS = fontsDownloadTimeTakenMS
         self.bundleDownloadTimeMS = bundleDownloadTimeMS
+        self.localizedPriceTimeMS = localizedPriceTimeMS
+        self.numBundles = numBundles
         self.numAttempts = numAttempts
+        self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
     }
     
@@ -789,8 +806,17 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         if let bundleTime = bundleDownloadTimeMS {
             dict["bundleDownloadTimeMS"] = bundleTime
         }
+        if let localizedPriceTimeMS {
+            dict["localizedPriceTimeMS"] = localizedPriceTimeMS
+        }
+        if let numBundles {
+            dict["numBundles"] = numBundles
+        }
         if let attempts = numAttempts {
             dict["numAttempts"] = attempts
+        }
+        if let numBundleAttempts {
+            dict["numBundleAttempts"] = numBundleAttempts
         }
         return dict
     }
@@ -804,7 +830,10 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             imagesDownloadTimeTakenMS: imagesDownloadTimeTakenMS,
             fontsDownloadTimeTakenMS: fontsDownloadTimeTakenMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
-            numAttempts: numAttempts
+            localizedPriceTimeMS: localizedPriceTimeMS,
+            numBundles: numBundles,
+            numAttempts: numAttempts,
+            numBundleAttempts: numBundleAttempts
         )
     }
 }
@@ -816,17 +845,40 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
     /// - Note: Network error, parsing error, or timeout message
     public let error: String
     
-    /// Number of retry attempts made before giving up
-    /// - Note: Includes initial attempt plus any retries before failure
+    /// Whether paywalls config was successfully downloaded.
+    public let configDownloaded: Bool
+    
+    /// How many bundles needed to be fetched
+    public let numBundles: Int?
+    
+    /// How many bundles were not successfully downloaded
+    public let numBundlesNotDownloaded: Int?
+    
+    /// Number of config download attempt
     public let numAttempts: Int?
+    
+    /// Number of bundle download attempts
+    public let numBundleAttempts: Int?
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(error: String, numAttempts: Int? = nil, timestamp: Date = Date()) {
+    public init(
+        error: String,
+        configDownloaded: Bool,
+        numBundles: Int? = nil,
+        numBundlesNotDownloaded: Int? = nil,
+        numAttempts: Int? = nil,
+        numBundleAttempts: Int? = nil,
+        timestamp: Date = Date()
+    ) {
         self.error = error
+        self.configDownloaded = configDownloaded
+        self.numBundles = numBundles
+        self.numBundlesNotDownloaded = numBundlesNotDownloaded
         self.numAttempts = numAttempts
+        self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
     }
     
@@ -836,16 +888,33 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         var dict: [String: Any] = [
             "type": eventName,
             "error": error,
+            "configDownloaded": configDownloaded,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let numBundles {
+            dict["numBundles"] = numBundles
+        }
+        if let numBundlesNotDownloaded {
+            dict["numBundlesNotDownloaded"] = numBundlesNotDownloaded
+        }
         if let attempts = numAttempts {
             dict["numAttempts"] = attempts
+        }
+        if let numBundleAttempts {
+            dict["numBundleAttempts"] = numBundleAttempts
         }
         return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallsDownloadError(error: error, numAttempts: numAttempts)
+        return .paywallsDownloadError(
+            error: error,
+            configDownloaded: configDownloaded,
+            numBundles: numBundles,
+            numBundlesNotDownloaded: numBundlesNotDownloaded,
+            numAttempts: numAttempts,
+            numBundleAttempts: numBundleAttempts
+        )
     }
 }
 
