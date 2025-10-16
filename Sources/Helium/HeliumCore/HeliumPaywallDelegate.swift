@@ -79,9 +79,14 @@ public extension HeliumPaywallDelegate {
 
 public class HeliumPaywallDelegateWrapper {
     
-    public private(set) static var shared = HeliumPaywallDelegateWrapper()
+    public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
-        shared = HeliumPaywallDelegateWrapper()
+        shared.delegate = nil
+        shared.analytics = nil
+        shared.isAnalyticsEnabled = true
+        shared.eventService = nil
+        shared.customPaywallTraits = [:]
+        shared.dontShowIfAlreadyEntitled = false
     }
     
     private var delegate: HeliumPaywallDelegate?
