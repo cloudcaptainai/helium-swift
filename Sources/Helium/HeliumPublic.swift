@@ -14,8 +14,8 @@ public class Helium {
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
-    public static let shared = Helium()
-    public static let restorePurchaseConfig = RestorePurchaseConfig()
+    public private(set) static var shared = Helium()
+    public private(set) static var restorePurchaseConfig = RestorePurchaseConfig()
     
     public func presentUpsell(
         trigger: String,
@@ -154,10 +154,10 @@ public class Helium {
         HeliumAssetManager.shared.clearCache()
         
         // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.shared.clearAllFetchedState()
+        HeliumFetchedConfigManager.reset()
         
         // Completely reset all fallback configurations
-        HeliumFallbackViewManager.shared.resetAllFallbacks()
+        HeliumFallbackViewManager.reset()
         
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
@@ -414,6 +414,8 @@ public class Helium {
             """
         )
         
+        HeliumIdentityManager.shared.updateInitializeId()
+        
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
@@ -638,6 +640,28 @@ public class Helium {
     /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
+    }
+    
+    static func resetHelium() {
+        HeliumPaywallPresenter.shared.hideAllUpsells()
+        
+//        HeliumAssetManager.shared.clearCache()
+        
+        HeliumPaywallDelegateWrapper.reset()
+        
+        // Clear fetched configuration from memory
+        HeliumFetchedConfigManager.reset()
+        
+        // Completely reset all fallback configurations
+        HeliumFallbackViewManager.reset()
+        
+        // Reset experiment allocation tracking
+        ExperimentAllocationTracker.shared.reset()
+        
+        restorePurchaseConfig = RestorePurchaseConfig()
+        shared = Helium()
+        
+        // NOTE - not clearing entitlements nor products cache nor transactions caches
     }
     
 }

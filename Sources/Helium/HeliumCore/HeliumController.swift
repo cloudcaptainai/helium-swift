@@ -39,7 +39,8 @@ public class HeliumController {
         initialAnalytics.track(name: "helium_initializeCalled", properties: [
             "timestamp": formatAsTimestamp(date: Date()),
             "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
-            "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId()
+            "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId(),
+            "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
         ]);
     }
     

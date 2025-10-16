@@ -79,7 +79,10 @@ public extension HeliumPaywallDelegate {
 
 public class HeliumPaywallDelegateWrapper: ObservableObject {
     
-    public static let shared = HeliumPaywallDelegateWrapper()
+    public private(set) static var shared = HeliumPaywallDelegateWrapper()
+    static func reset() {
+        shared = HeliumPaywallDelegateWrapper()
+    }
     
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
@@ -305,6 +308,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
+                    heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
                     heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
                     appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                     appTransactionId: HeliumIdentityManager.shared.appTransactionID,
