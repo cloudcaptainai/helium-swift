@@ -77,7 +77,7 @@ public extension HeliumPaywallDelegate {
 }
 
 
-public class HeliumPaywallDelegateWrapper: ObservableObject {
+public class HeliumPaywallDelegateWrapper {
     
     public private(set) static var shared = HeliumPaywallDelegateWrapper()
     static func reset() {

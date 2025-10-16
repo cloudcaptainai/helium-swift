@@ -14,8 +14,15 @@ public class Helium {
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
-    public private(set) static var shared = Helium()
-    public private(set) static var restorePurchaseConfig = RestorePurchaseConfig()
+    private func reset() {
+        initialized = false
+        controller = nil
+        fallbackConfig = nil
+        baseTemplateViewType = nil
+    }
+    
+    public static let shared = Helium()
+    public static let restorePurchaseConfig = RestorePurchaseConfig()
     
     public func presentUpsell(
         trigger: String,
@@ -163,10 +170,7 @@ public class Helium {
         ExperimentAllocationTracker.shared.reset()
         
         // Reset initialization state to allow re-initialization
-        initialized = false
-        controller = nil
-        fallbackConfig = nil
-        baseTemplateViewType = nil
+        reset()
                 
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
@@ -642,7 +646,7 @@ public class Helium {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
     
-    static func resetHelium() {
+    public static func resetHelium() {
         HeliumPaywallPresenter.shared.hideAllUpsells()
         
 //        HeliumAssetManager.shared.clearCache()
@@ -658,8 +662,9 @@ public class Helium {
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
-        restorePurchaseConfig = RestorePurchaseConfig()
-        shared = Helium()
+        restorePurchaseConfig.reset()
+        
+        Helium.shared.reset()
         
         // NOTE - not clearing entitlements nor products cache nor transactions caches
     }
