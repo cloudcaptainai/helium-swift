@@ -6,7 +6,7 @@ enum TemplateError: Error {
 }
 
 protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) throws
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?, backupResolvedConfig: JSON?) throws
 }
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
@@ -16,9 +16,10 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
     var componentPropsJSON: JSON
+    var backupComponentPropsJSON: JSON?
     var triggerName: String?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) throws {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?, backupResolvedConfig: JSON? = nil) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
@@ -33,12 +34,19 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         
         self.componentPropsJSON = templateValues["baseStack"]["componentProps"]
         self.triggerName = trigger;
+        if let backupResolvedConfig {
+            if backupResolvedConfig["baseStack"].exists(),
+               backupResolvedConfig["baseStack"]["componentProps"].exists() {
+                backupComponentPropsJSON = backupResolvedConfig["baseStack"]["componentProps"]
+            }
+        }
     }
     
     public var body: some View {
         // Use validated componentProps
         DynamicWebView(
             json: componentPropsJSON,
+            backupJson: backupComponentPropsJSON,
             actionsDelegate: actionsDelegateWrapper,
             triggerName: triggerName
         )
