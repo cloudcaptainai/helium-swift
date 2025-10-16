@@ -77,10 +77,18 @@ func fetchEndpoint(
 }
 
 public class HeliumFetchedConfigManager: ObservableObject {
-    public private(set) static var shared = HeliumFetchedConfigManager()
+    public static let shared = HeliumFetchedConfigManager()
     static func reset() {
-        shared = HeliumFetchedConfigManager()
+        shared.fetchTask?.cancel()
+        shared.downloadStatus = .notDownloadedYet
+        shared.downloadTimeTakenMS = nil
+        shared.numRetries = 0
+        shared.fetchedConfig = nil
+        shared.fetchedConfigJSON = nil
+        shared.localizedPriceMap = [:]
     }
+    
+    private var fetchTask: Task<Void, Never>?
     
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     public var downloadTimeTakenMS: UInt64?
@@ -101,7 +109,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) {
-        Task {
+        fetchTask = Task {
             await updateDownloadState(.inProgress)
             
             await fetchConfigWithRetry(

@@ -14,9 +14,9 @@ public class RestorePurchaseConfig {
 
     private(set) var showHeliumDialog: Bool = defaultShowHeliumDialog
 
-    private var restoreFailedTitle: String = defaultRestoreFailedTitle
-    private var restoreFailedMessage: String = defaultRestoreFailedMessage
-    private var restoreFailedCloseButtonText: String = defaultRestoreFailedCloseButtonText
+    var restoreFailedTitle: String = defaultRestoreFailedTitle
+    var restoreFailedMessage: String = defaultRestoreFailedMessage
+    var restoreFailedCloseButtonText: String = defaultRestoreFailedCloseButtonText
     
     /// Disable the default dialog that Helium will display if a "Restore Purchases" action is not successful.
     /// You can handle this yourself if desired by listening for the PurchaseRestoreFailedEvent.
