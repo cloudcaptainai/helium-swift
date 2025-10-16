@@ -29,7 +29,7 @@ public class HeliumController {
             .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
             .trackApplicationLifecycleEvents(false)
             .flushInterval(10)
-        let initialAnalytics = Analytics(configuration: configuration)
+        let initialAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
 
         initialAnalytics.identify(
             userId: HeliumIdentityManager.shared.getUserId(),
@@ -91,16 +91,12 @@ public class HeliumController {
                         traits: HeliumIdentityManager.shared.getUserContext()
                     );
                 } else {
-                    do {
-                        let analytics = Analytics(configuration: configuration)
-                        analytics.identify(
-                            userId: HeliumIdentityManager.shared.getUserId(),
-                            traits: HeliumIdentityManager.shared.getUserContext()
-                        );
-                        HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics, writeKey: fetchedConfig.segmentBrowserWriteKey);
-                    } catch {
-                        // no op
-                    }
+                    let analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
+                    analytics.identify(
+                        userId: HeliumIdentityManager.shared.getUserId(),
+                        traits: HeliumIdentityManager.shared.getUserContext()
+                    );
+                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics, writeKey: fetchedConfig.segmentBrowserWriteKey);
                 }
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -131,7 +127,7 @@ public class HeliumController {
                         traits: HeliumIdentityManager.shared.getUserContext()
                     );
                 } else {
-                    let analytics = Analytics(configuration: configuration)
+                    let analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
                     analytics.identify(
                         userId: HeliumIdentityManager.shared.getUserId(),
                         traits: HeliumIdentityManager.shared.getUserContext()

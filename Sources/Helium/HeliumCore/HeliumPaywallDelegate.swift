@@ -257,7 +257,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
                     .trackApplicationLifecycleEvents(false)
                     .flushInterval(10)
-                analyticsForEvent = Analytics(configuration: configuration)
+                analyticsForEvent = Analytics.getOrCreateAnalytics(configuration: configuration)
                 analyticsForEvent?.identify(
                     userId: HeliumIdentityManager.shared.getUserId(),
                     traits: HeliumIdentityManager.shared.getUserContext()
