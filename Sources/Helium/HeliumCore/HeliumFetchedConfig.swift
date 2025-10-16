@@ -78,6 +78,7 @@ func fetchEndpoint(
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+    request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles")
     
     request.timeoutInterval = 15
     
