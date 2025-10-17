@@ -266,7 +266,7 @@ class HeliumPaywallPresenter {
         case .slideLeft:
             modalVC.modalPresentationStyle = .custom
             modalVC.transitioningDelegate = slideInTransitioningDelegate
-        case .crossDisolve:
+        case .crossDissolve:
             modalVC.modalTransitionStyle = .crossDissolve
         case .flipHorizontal:
             modalVC.modalTransitionStyle = .flipHorizontal

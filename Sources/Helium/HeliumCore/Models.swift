@@ -12,7 +12,7 @@ import SwiftUI
 enum PaywallPresentationStyle: String, Codable {
     case slideUp
     case slideLeft
-    case crossDisolve
+    case crossDissolve
     case flipHorizontal
     case unknown
 
