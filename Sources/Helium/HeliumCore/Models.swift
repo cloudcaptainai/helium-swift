@@ -516,10 +516,7 @@ public enum HeliumPaywallEvent: Codable {
             dict["actionName"] = actionName
             dict["triggerName"] = triggerName
             dict["paywallTemplateName"] = paywallTemplateName
-            // Merge params into the dictionary
-            for (key, value) in params {
-                dict[key] = value
-            }
+            dict["params"] = params
         }
         
         return dict

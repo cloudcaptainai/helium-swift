@@ -361,19 +361,15 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
     public var eventName: String { "customPaywallAction" }
     
     public func toDictionary() -> [String: Any] {
-        var dict: [String: Any] = [
+        return [
             "type": eventName,
             "actionName": actionName,
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
-            "timestamp": timestamp.timeIntervalSince1970
+            "timestamp": timestamp.timeIntervalSince1970,
+            "params": params
         ]
-        // Merge params into the dictionary
-        for (key, value) in params {
-            dict[key] = value
-        }
-        return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
