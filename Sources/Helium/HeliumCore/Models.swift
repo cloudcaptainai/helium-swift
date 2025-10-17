@@ -14,7 +14,6 @@ enum PaywallPresentationStyle: String, Codable {
     case slideLeft
     case crossDisolve
     case flipHorizontal
-    case curl
 }
 
 public struct HeliumPaywallInfo: Codable {
