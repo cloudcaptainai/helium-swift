@@ -14,6 +14,13 @@ public class Helium {
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
+    private func reset() {
+        initialized = false
+        controller = nil
+        fallbackConfig = nil
+        baseTemplateViewType = nil
+    }
+    
     public static let shared = Helium()
     public static let restorePurchaseConfig = RestorePurchaseConfig()
     
@@ -154,19 +161,16 @@ public class Helium {
         HeliumAssetManager.shared.clearCache()
         
         // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.shared.clearAllFetchedState()
+        HeliumFetchedConfigManager.reset()
         
         // Completely reset all fallback configurations
-        HeliumFallbackViewManager.shared.resetAllFallbacks()
+        HeliumFallbackViewManager.reset()
         
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
         // Reset initialization state to allow re-initialization
-        initialized = false
-        controller = nil
-        fallbackConfig = nil
-        baseTemplateViewType = nil
+        reset()
                 
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
@@ -414,6 +418,8 @@ public class Helium {
             """
         )
         
+        HeliumIdentityManager.shared.newInitializeId()
+        
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
@@ -638,6 +644,28 @@ public class Helium {
     /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
+    }
+    
+    /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
+    public static func resetHelium() {
+        HeliumPaywallPresenter.shared.hideAllUpsells()
+        
+        HeliumPaywallDelegateWrapper.reset()
+        
+        // Clear fetched configuration from memory
+        HeliumFetchedConfigManager.reset()
+        
+        // Completely reset all fallback configurations
+        HeliumFallbackViewManager.reset()
+        
+        // Reset experiment allocation tracking
+        ExperimentAllocationTracker.shared.reset()
+        
+        restorePurchaseConfig.reset()
+        
+        Helium.shared.reset()
+        
+        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
     }
     
 }

@@ -79,6 +79,7 @@ public struct CodableUserContext: Codable {
     var applicationInfo: CodableApplicationInfo
     var additionalParams: HeliumUserTraits
     var heliumSessionId: String?
+    var heliumInitializeId: String?
     var heliumPersistentId: String?
     var organizationID: String?
     var appTransactionId: String?
@@ -86,6 +87,7 @@ public struct CodableUserContext: Codable {
     public func asParams() -> [String: Any] {
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
+            "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",

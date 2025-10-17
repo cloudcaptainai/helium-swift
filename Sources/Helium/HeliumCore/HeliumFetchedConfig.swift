@@ -78,6 +78,21 @@ func fetchEndpoint(
 
 public class HeliumFetchedConfigManager: ObservableObject {
     public static let shared = HeliumFetchedConfigManager()
+    static func reset() {
+        shared.fetchTask?.cancel()
+        shared.fetchTask = nil
+        Task { @MainActor in
+            shared.downloadStatus = .notDownloadedYet
+        }
+        shared.downloadTimeTakenMS = nil
+        shared.numRetries = 0
+        shared.fetchedConfig = nil
+        shared.fetchedConfigJSON = nil
+        shared.localizedPriceMap = [:]
+    }
+    
+    private var fetchTask: Task<Void, Never>?
+    
     @Published public var downloadStatus: HeliumFetchedConfigStatus
     public var downloadTimeTakenMS: UInt64?
     public var numRetries: Int = 0
@@ -97,7 +112,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         completion: @escaping (Result<HeliumFetchResult, Error>) -> Void
     ) {
-        Task {
+        fetchTask = Task {
             await updateDownloadState(.inProgress)
             
             await fetchConfigWithRetry(
@@ -284,27 +299,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     func hasBundles() -> Bool {
         return fetchedConfig?.bundles?.count ?? 0 > 0
-    }
-    
-    /// Clears all fetched configuration and resets to initial state.
-    /// 
-    /// **Warning:** This is intended for debugging and testing scenarios only.
-    /// In production, configurations should be managed through normal fetch cycles.
-    /// 
-    /// This method will:
-    /// - Clear all fetched paywall configurations
-    /// - Reset download status to `.notDownloadedYet`
-    /// - Clear any cached pricing information
-    /// - Reset retry counters
-    ///
-    /// After calling this, paywalls will show fallback views until a new fetch completes.
-    public func clearAllFetchedState() {
-        fetchedConfig = nil
-        fetchedConfigJSON = nil
-        localizedPriceMap = [:]
-        downloadStatus = .notDownloadedYet
-        downloadTimeTakenMS = nil
-        numRetries = 0
     }
     
     public func getConfigId() -> UUID? {

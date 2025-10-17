@@ -31,6 +31,16 @@ SOFTWARE.
 
 import Foundation
 
+// MARK: - Helper Types
+
+/// A box that holds a weak reference to avoid retain cycles in the cache
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) {
+        self.value = value
+    }
+}
+
 // MARK: - Base Setup
 
 class Analytics {
@@ -52,6 +62,9 @@ class Analytics {
     static internal let deadInstance = "DEADINSTANCE"
     static internal weak var firstInstance: Analytics? = nil
     @Atomic static internal var activeWriteKeys = [String]()
+
+    // Weak-reference cache for Analytics instances by write key
+    @Atomic static private var instanceCache = [String: WeakBox<Analytics>]()
     
     /**
      This method isn't a traditional singleton implementation.  It's provided here
@@ -77,11 +90,53 @@ class Analytics {
         
         return Analytics(configuration: SegmentConfiguration(writeKey: deadInstance))
     }
-    
+
+    /// Get an existing Analytics instance for the given write key, or create a new one if none exists.
+    /// This method prevents crashes from attempting to create multiple instances with the same write key.
+    /// - Parameters:
+    ///   - configuration: The configuration to use for creating a new instance
+    /// - Returns: An Analytics instance for the given write key
+    static func getOrCreateAnalytics(configuration: SegmentConfiguration) -> Analytics {
+        let writeKey = configuration.values.writeKey
+
+        // Clean up any deallocated instances
+        instanceCache = instanceCache.compactMapValues { box in
+            return box.value == nil ? nil : box
+        }
+
+        // Check if we have a live instance for this write key
+        if let existingBox = instanceCache[writeKey],
+           let existingInstance = existingBox.value {
+            return existingInstance
+        }
+
+        // Temporarily remove from active write keys to allow creation (this shouldn't happen)
+        let wasActive = isActiveWriteKey(writeKey)
+        if wasActive {
+            removeActiveWriteKey(writeKey)
+        }
+
+        // Create a new instance
+        let newInstance = Analytics(configuration: configuration)
+
+        // Store weak reference in cache
+        instanceCache[writeKey] = WeakBox(newInstance)
+
+        return newInstance
+    }
+
+    /// Explicitly release an Analytics instance from the cache.
+    /// This doesn't deallocate the instance immediately, but allows it to be deallocated when no longer in use.
+    /// - Parameters:
+    ///   - writeKey: The write key of the instance to release
+    static func releaseAnalytics(writeKey: String) {
+        instanceCache.removeValue(forKey: writeKey)
+    }
+
     /// Initialize this instance of Analytics with a given configuration setup.
     /// - Parameters:
     ///    - configuration: The configuration to use
-    init(configuration: SegmentConfiguration) {
+    internal init(configuration: SegmentConfiguration) {
         if Self.isActiveWriteKey(configuration.values.writeKey) {
             // If you're hitting this in testing, it could be a memory leak, or something async is still running
             // and holding a reference.  You can use XCTest.waitUntilFinished(...) to wait for things to complete.
@@ -112,7 +167,10 @@ class Analytics {
     }
     
     deinit {
-        Self.removeActiveWriteKey(configuration.values.writeKey)
+        let writeKey = configuration.values.writeKey
+        Self.removeActiveWriteKey(writeKey)
+        // Clean up from instance cache as well
+        Self.instanceCache.removeValue(forKey: writeKey)
     }
     
     internal func process<E: RawEvent>(incomingEvent: E) {
