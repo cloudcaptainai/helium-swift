@@ -14,6 +14,20 @@ enum PaywallPresentationStyle: String, Codable {
     case slideLeft
     case crossDisolve
     case flipHorizontal
+    case unknown
+
+    // Custom decoder to handle unknown values gracefully
+    init(from decoder: Decoder) throws {
+        guard let container = try? decoder.singleValueContainer() else {
+            self = .unknown
+            return
+        }
+        if let value = try? container.decode(String.self) {
+            self = PaywallPresentationStyle(rawValue: value) ?? .unknown
+        } else {
+            self = .unknown
+        }
+    }
 }
 
 public struct HeliumPaywallInfo: Codable {

@@ -260,7 +260,7 @@ class HeliumPaywallPresenter {
         }
         
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        switch paywallInfo?.presentationStyle ?? .slideLeft {
+        switch paywallInfo?.presentationStyle {
         case .slideUp:
             break
         case .slideLeft:
@@ -270,7 +270,7 @@ class HeliumPaywallPresenter {
             modalVC.modalTransitionStyle = .crossDissolve
         case .flipHorizontal:
             modalVC.modalTransitionStyle = .flipHorizontal
-        case nil:
+        default:
             break
         }
         presenter.present(modalVC, animated: true)
