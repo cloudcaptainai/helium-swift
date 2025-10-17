@@ -418,7 +418,7 @@ public class Helium {
             """
         )
         
-        HeliumIdentityManager.shared.updateInitializeId()
+        HeliumIdentityManager.shared.newInitializeId()
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);

@@ -81,7 +81,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
     static func reset() {
         shared.fetchTask?.cancel()
         shared.fetchTask = nil
-        shared.downloadStatus = .notDownloadedYet
+        Task { @MainActor in
+            shared.downloadStatus = .notDownloadedYet
+        }
         shared.downloadTimeTakenMS = nil
         shared.numRetries = 0
         shared.fetchedConfig = nil

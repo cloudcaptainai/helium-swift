@@ -29,7 +29,7 @@ public class HeliumIdentityManager {
     
     // MARK: - Public Methods
     
-    func updateInitializeId() {
+    func newInitializeId() {
         heliumInitializeId = UUID().uuidString
     }
     

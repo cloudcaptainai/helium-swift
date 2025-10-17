@@ -9,9 +9,13 @@ import Foundation
 
 public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
-    public private(set) static var shared = HeliumFallbackViewManager()
+    public static let shared = HeliumFallbackViewManager()
     static func reset() {
-        shared = HeliumFallbackViewManager()
+        shared.fallbackBundleURL = nil
+        shared.loadedConfig = nil
+        shared.loadedConfigJSON = nil
+        shared.triggerToFallbackView = [:]
+        shared.defaultFallback = nil
     }
     
     private init() {
