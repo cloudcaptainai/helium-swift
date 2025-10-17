@@ -187,6 +187,13 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     
     public func selectProduct(productId: String) {
         selectedProductId = productId
+        
+        let event = ProductSelectedEvent(
+            productId: productId,
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
     
     public func makePurchase() async -> HeliumPaywallTransactionStatus {
