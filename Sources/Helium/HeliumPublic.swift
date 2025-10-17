@@ -646,10 +646,9 @@ public class Helium {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
     
+    /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
     public static func resetHelium() {
         HeliumPaywallPresenter.shared.hideAllUpsells()
-        
-//        HeliumAssetManager.shared.clearCache()
         
         HeliumPaywallDelegateWrapper.reset()
         
@@ -666,7 +665,7 @@ public class Helium {
         
         Helium.shared.reset()
         
-        // NOTE - not clearing entitlements nor products cache nor transactions caches
+        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
     }
     
 }
