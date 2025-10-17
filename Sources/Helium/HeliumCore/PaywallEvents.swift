@@ -321,6 +321,62 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
     }
 }
 
+/// Event fired when a custom action is triggered from the paywall
+/// - Note: Enables paywalls to send arbitrary actions with custom data to the app. Fired when 'custom-action' message is received from WebView with actionName and params.
+public struct CustomPaywallActionEvent: PaywallContextEvent {
+    /// The identifier/name of the custom action
+    /// - Note: Defined by the paywall creator (e.g., "toggle_feature", "log_interaction", "open_settings")
+    public let actionName: String
+    
+    /// Arbitrary parameters sent with the custom action
+    /// - Note: JSON-serializable dictionary from the paywall, can contain any data structure
+    public let params: [String: Any]
+    
+    /// The trigger identifier for the paywall that sent this action
+    /// - Note: Corresponds to trigger key in Helium dashboard
+    public let triggerName: String
+    
+    /// The name/identifier of the paywall template that sent this action
+    /// - Note: Template name from Helium configuration
+    public let paywallName: String
+    
+    /// When this event occurred
+    /// - Note: Captured using Date() at event creation time
+    public let timestamp: Date
+    
+    public init(
+        actionName: String,
+        params: [String: Any],
+        triggerName: String,
+        paywallName: String,
+        timestamp: Date = Date()
+    ) {
+        self.actionName = actionName
+        self.params = params
+        self.triggerName = triggerName
+        self.paywallName = paywallName
+        self.timestamp = timestamp
+    }
+    
+    public var eventName: String { "customPaywallAction" }
+    
+    public func toDictionary() -> [String: Any] {
+        return [
+            "type": eventName,
+            "actionName": actionName,
+            "triggerName": triggerName,
+            "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
+            "timestamp": timestamp.timeIntervalSince1970,
+            "params": params
+        ]
+    }
+    
+    public func toLegacyEvent() -> HeliumPaywallEvent {
+        return .customPaywallAction(actionName: actionName, params: params, triggerName: triggerName, paywallTemplateName: paywallName)
+    }
+}
+
 // MARK: - Purchase Events
 
 /// Event fired when user selects a product

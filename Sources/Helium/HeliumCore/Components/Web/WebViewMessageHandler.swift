@@ -110,6 +110,15 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 self.delegateWrapper?.dismissAll()
                 respond(["status": "success"])
                 
+            case "custom-action":
+                if let actionName = data["actionName"] as? String,
+                   let params = data["params"] as? [String: Any] {
+                    self.delegateWrapper?.onCustomAction(actionName: actionName, params: params)
+                    respond(["status": "success"])
+                } else {
+                    respond(["status": "error", "message": "Missing actionName or params"])
+                }
+                
             default:
                 respond(["message": "Unknown message type"])
             }
