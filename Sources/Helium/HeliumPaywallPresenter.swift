@@ -257,6 +257,22 @@ class HeliumPaywallPresenter {
             )
             return
         }
+        
+        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        switch paywallInfo?.presentationStyle {
+        case .slideUp:
+            break
+        case .slideLeft:
+            prepareViewControllerForSlideIn(viewController: modalVC)
+        case .crossDisolve:
+            modalVC.modalTransitionStyle = .crossDissolve
+        case .flipHorizontal:
+            modalVC.modalTransitionStyle = .flipHorizontal
+        case .curl:
+            modalVC.modalTransitionStyle = .partialCurl
+        case nil:
+            break
+        }
         presenter.present(modalVC, animated: true)
         
         paywallsDisplayed.append(modalVC)
@@ -362,6 +378,10 @@ class HeliumPaywallPresenter {
         // attempt to dispatch paywallClose analytics event even if user rage quits
         dispatchCloseForAll(paywallVCs: paywallsDisplayed)
         paywallsDisplayed.removeAll()
+    }
+    
+    private func prepareViewControllerForSlideIn(viewController: UIViewController) {
+        // todo
     }
     
 }

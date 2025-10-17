@@ -9,8 +9,16 @@ import Foundation
 import UIKit
 import SwiftUI
 
+enum PaywallPresentationStyle: String, Codable {
+    case slideUp
+    case slideLeft
+    case crossDisolve
+    case flipHorizontal
+    case curl
+}
+
 public struct HeliumPaywallInfo: Codable {
-    init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil) {
+    init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
         self.paywallID = paywallID
         self.paywallUUID = paywallUUID;
         self.paywallTemplateName = paywallTemplateName;
@@ -22,6 +30,7 @@ public struct HeliumPaywallInfo: Codable {
         self.modelID = modelID;
         self.resolvedConfigJSON = resolvedConfigJSON;
         self.forceShowFallback = forceShowFallback;
+        self.presentationStyle = presentationStyle
     }
     
     var paywallID: Int
@@ -39,6 +48,7 @@ public struct HeliumPaywallInfo: Codable {
     var resolvedConfigJSON: JSON?
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
+    var presentationStyle: PaywallPresentationStyle?
     
     /// Extract experiment info from top-level experimentInfo field
     /// - Parameter trigger: The trigger name for this paywall
