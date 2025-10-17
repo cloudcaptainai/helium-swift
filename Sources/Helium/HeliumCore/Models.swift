@@ -9,8 +9,29 @@ import Foundation
 import UIKit
 import SwiftUI
 
+enum PaywallPresentationStyle: String, Codable {
+    case slideUp
+    case slideLeft
+    case crossDissolve
+    case flipHorizontal
+    case unknown
+
+    // Custom decoder to handle unknown values gracefully
+    init(from decoder: Decoder) throws {
+        guard let container = try? decoder.singleValueContainer() else {
+            self = .unknown
+            return
+        }
+        if let value = try? container.decode(String.self) {
+            self = PaywallPresentationStyle(rawValue: value) ?? .unknown
+        } else {
+            self = .unknown
+        }
+    }
+}
+
 public struct HeliumPaywallInfo: Codable {
-    init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil) {
+    init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
         self.paywallID = paywallID
         self.paywallUUID = paywallUUID;
         self.paywallTemplateName = paywallTemplateName;
@@ -22,6 +43,7 @@ public struct HeliumPaywallInfo: Codable {
         self.modelID = modelID;
         self.resolvedConfigJSON = resolvedConfigJSON;
         self.forceShowFallback = forceShowFallback;
+        self.presentationStyle = presentationStyle
     }
     
     var paywallID: Int
@@ -39,6 +61,7 @@ public struct HeliumPaywallInfo: Codable {
     var resolvedConfigJSON: JSON?
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
+    var presentationStyle: PaywallPresentationStyle?
     
     /// Extract experiment info from top-level experimentInfo field
     /// - Parameter trigger: The trigger name for this paywall
