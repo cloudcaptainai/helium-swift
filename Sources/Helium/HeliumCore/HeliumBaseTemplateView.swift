@@ -6,7 +6,7 @@ enum TemplateError: Error {
 }
 
 protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: String?, resolvedConfig: JSON?, backupResolvedConfig: JSON?) throws
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, resolvedConfig: JSON?, backupResolvedConfig: JSON?) throws
 }
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
@@ -18,9 +18,9 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     var componentPropsJSON: JSON
     var backupComponentPropsJSON: JSON?
     var triggerName: String?
-    let fallbackReason: String?
+    let fallbackReason: PaywallUnavailableReason?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: String?, resolvedConfig: JSON?, backupResolvedConfig: JSON? = nil) throws {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, resolvedConfig: JSON?, backupResolvedConfig: JSON? = nil) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));

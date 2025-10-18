@@ -596,3 +596,16 @@ public enum PaywallOpenViewType : String {
     case triggered = "triggered" // SwiftUI view modifier
     case embedded = "embedded"
 }
+
+public enum PaywallUnavailableReason: String, Codable {
+    case notInitialized
+    case triggerHasNoPaywall
+    case forceShowFallback
+    case invalidConfig
+    case paywallsNotDownloaded
+    case paywallBundlesMissing
+    case paywallsDownloadFail
+    case secondTryNoMatch
+    case alreadyPresented
+    case noRootController
+}

@@ -68,7 +68,7 @@ public class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: String?) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
         delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason)
     }
     
@@ -168,7 +168,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                     triggerName: secondTryTrigger,
                     paywallName: "unknown",
                     error: "Second try - no paywall found for trigger.",
-                    paywallUnavailableReason: "secondTryNoMatch",
+                    paywallUnavailableReason: .secondTryNoMatch
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
@@ -230,7 +230,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return status;
     }
     
-    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: String?) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
         // Use new typed event
         let event = PaywallOpenEvent(
             triggerName: trigger,
@@ -315,7 +315,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         print("log render time");
     }
     
-    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: String?) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
         print("log impression")
     }
     

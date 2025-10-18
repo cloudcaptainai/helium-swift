@@ -17,11 +17,11 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     
     let content: Content
     let trigger: String?
-    let fallbackReason: String
+    let fallbackReason: PaywallUnavailableReason
     
     public init(
         trigger: String? = nil,
-        fallbackReason: String,
+        fallbackReason: PaywallUnavailableReason,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()

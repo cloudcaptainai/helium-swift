@@ -77,7 +77,7 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    private(set) var fallbackReason: String? = nil
+    private(set) var fallbackReason: PaywallUnavailableReason? = nil
     var isFallback: Bool {
         fallbackReason != nil
     }
@@ -90,7 +90,7 @@ class HeliumViewController: UIViewController {
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     
-    init(trigger: String, fallbackReason: String?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
+    init(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
         self.fallbackReason = fallbackReason
         self.isSecondTry = isSecondTry
@@ -106,7 +106,7 @@ class HeliumViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    func updateContent(_ newContent: AnyView, fallbackReason: String?, isLoading: Bool) {
+    func updateContent(_ newContent: AnyView, fallbackReason: PaywallUnavailableReason?, isLoading: Bool) {
         self.contentView = AnyView(newContent
             .environment(\.paywallPresentationState, presentationState))
         

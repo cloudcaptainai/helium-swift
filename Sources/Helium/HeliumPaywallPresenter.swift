@@ -67,7 +67,7 @@ class HeliumPaywallPresenter {
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "A paywall is already being presented.",
-                    paywallUnavailableReason: "alreadyPresented"
+                    paywallUnavailableReason: .alreadyPresented
                 )
             )
             return
@@ -246,7 +246,7 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, fallbackReason: String?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
         let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
@@ -257,7 +257,7 @@ class HeliumPaywallPresenter {
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "No root view controller found",
-                    paywallUnavailableReason: "noRootController"
+                    paywallUnavailableReason: .noRootController
                 )
             )
             return
