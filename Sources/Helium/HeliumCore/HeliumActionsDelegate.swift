@@ -109,7 +109,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
             webviewRenderTimeTakenMS: timeTakenMS,
-            paywallUnavailableReason: .webviewRenderFail
+            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
