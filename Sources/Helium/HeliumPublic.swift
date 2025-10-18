@@ -217,14 +217,13 @@ public class Helium {
                 return UpsellViewResult(view: paywallView, fallbackReason: nil, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
                 print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
-                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .invalidConfig)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .invalidResolvedConfig)
             }
             
         } else {
             let fallbackReason: PaywallUnavailableReason
             switch HeliumFetchedConfigManager.shared.downloadStatus {
-            case .notDownloadedYet:
-            case .inProgress:
+            case .notDownloadedYet, .inProgress:
                 fallbackReason = .paywallsNotDownloaded
             case .downloadSuccess:
                 fallbackReason = .paywallBundlesMissing

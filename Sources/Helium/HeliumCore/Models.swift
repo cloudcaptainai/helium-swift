@@ -601,11 +601,12 @@ public enum PaywallUnavailableReason: String, Codable {
     case notInitialized
     case triggerHasNoPaywall
     case forceShowFallback
-    case invalidConfig
+    case invalidResolvedConfig
     case paywallsNotDownloaded
     case paywallBundlesMissing
     case paywallsDownloadFail
     case secondTryNoMatch
     case alreadyPresented
     case noRootController
+    case webviewRenderFail
 }

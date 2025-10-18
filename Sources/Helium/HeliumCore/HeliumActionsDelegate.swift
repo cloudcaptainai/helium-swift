@@ -16,7 +16,7 @@ public protocol BaseActionsDelegate {
     func selectProduct(productId: String);
     func makePurchase() async -> HeliumPaywallTransactionStatus;
     func restorePurchases() async -> Bool;
-    func logImpression(viewType: PaywallOpenViewType, fallbackReason: String?);
+    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?);
     func logClosure();
     func getIsLoading() -> Bool;
     func logRenderTime(timeTakenMS: UInt64);

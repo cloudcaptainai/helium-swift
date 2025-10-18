@@ -252,7 +252,7 @@ public struct DynamicWebView: View {
                 triggerName: triggerName ?? "",
                 paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
                 error: "WebView failed to load - \(reason)",
-                paywallUnavailableReason: "webviewRenderFail"
+                paywallUnavailableReason: .webviewRenderFail
             )
             if presentationState.viewType == .presented {
                 HeliumPaywallPresenter.shared.hideUpsell {
