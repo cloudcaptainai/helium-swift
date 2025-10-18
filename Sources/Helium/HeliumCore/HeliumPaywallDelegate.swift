@@ -320,13 +320,14 @@ public class HeliumPaywallDelegateWrapper {
         }
     }
     
-    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?) {
+    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: String?) {
         if isOpen {
             let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
             fireEvent(PaywallOpenEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
-                viewType: viewTypeEnum
+                viewType: viewTypeEnum,
+                paywallUnavailableReason: fallbackReason
             ))
         } else {
             fireEvent(PaywallCloseEvent(

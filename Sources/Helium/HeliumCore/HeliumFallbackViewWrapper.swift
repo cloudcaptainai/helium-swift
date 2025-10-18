@@ -17,13 +17,16 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     
     let content: Content
     let trigger: String?
+    let fallbackReason: String
     
     public init(
         trigger: String? = nil,
+        fallbackReason: String,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
         self.trigger = trigger
+        self.fallbackReason = fallbackReason
     }
     
     public var body: some View {
@@ -40,7 +43,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType == .presented {
                     return
                 }
-                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue)
+                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
             }
     }
 }

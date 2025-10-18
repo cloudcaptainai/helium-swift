@@ -4,8 +4,12 @@ import StoreKit
 
 struct UpsellViewResult {
     let view: AnyView?
-    let isFallback: Bool
+    let fallbackReason: String?
     let templateName: String?
+    
+    var isFallback: Bool {
+        fallbackReason != nil
+    }
 }
 
 public class Helium {
@@ -188,7 +192,7 @@ public class Helium {
     func upsellViewResultFor(trigger: String) -> UpsellViewResult {
         if !initialized {
             print("[Helium] Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!")
-            return UpsellViewResult(view: nil, isFallback: true, templateName: nil)
+            return UpsellViewResult(view: nil, fallbackReason: "notInitialized", templateName: nil)
         }
         
         
@@ -196,36 +200,47 @@ public class Helium {
         if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
             
             guard let templatePaywallInfo = paywallInfo else {
-                return fallbackViewFor(trigger: trigger, templateName: nil)
+                return fallbackViewFor(trigger: trigger, templateName: nil, fallbackReason: "triggerHasNoPaywall")
             }
             if templatePaywallInfo.forceShowFallback == true {
-                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: "forceShowFallback")
             }
             
             do {
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
+                    fallbackReason: nil,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger),
                     backupResolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
-                return UpsellViewResult(view: paywallView, isFallback: false, templateName: templatePaywallInfo.paywallTemplateName)
+                return UpsellViewResult(view: paywallView, fallbackReason: nil, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
                 print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
-                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: "invalidConfig")
             }
             
         } else {
-            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName)
+            let fallbackReason: String
+            switch HeliumFetchedConfigManager.shared.downloadStatus {
+            case .notDownloadedYet:
+            case .inProgress:
+                fallbackReason = "paywallsNotDownloaded"
+            case .downloadSuccess:
+                fallbackReason = "paywallBundlesMissing"
+            case .downloadFailure:
+                fallbackReason = "paywallsDownloadFail"
+            }
+            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName, fallbackReason: fallbackReason)
         }
     }
     
-    private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
+    private func fallbackViewFor(trigger: String, templateName: String?, fallbackReason: String) -> UpsellViewResult {
         var result: AnyView?
         
         let getFallbackViewForTrigger: () -> AnyView? = {
             if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger, fallbackReason: fallbackReason) {
                     fallbackView
                 })
             } else {
@@ -240,6 +255,7 @@ public class Helium {
                     DynamicBaseTemplateView(
                         paywallInfo: fallbackPaywallInfo,
                         trigger: trigger,
+                        fallbackReason: fallbackReason,
                         resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                     )
                 )
@@ -249,7 +265,7 @@ public class Helium {
         } else {
             result = getFallbackViewForTrigger()
         }
-        return UpsellViewResult(view: result, isFallback: true, templateName: templateName)
+        return UpsellViewResult(view: result, fallbackReason: fallbackReason, templateName: templateName)
     }
     
     public func getHeliumUserId() -> String? {

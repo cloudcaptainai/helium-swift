@@ -48,12 +48,13 @@ class HeliumPaywallPresenter {
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
-                        error: "No paywall for trigger and no fallback available when present called."
+                        error: "No paywall for trigger and no fallback available when present called.",
+                        paywallUnavailableReason: upsellViewResult.fallbackReason
                     )
                 )
                 return
             }
-            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -65,7 +66,8 @@ class HeliumPaywallPresenter {
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "A paywall is already being presented."
+                    error: "A paywall is already being presented.",
+                    paywallUnavailableReason: "alreadyPresented"
                 )
             )
             return
@@ -97,7 +99,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, isFallback: false, contentView: loadingView, from: viewController, isLoading: true)
+            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -138,13 +140,14 @@ class HeliumPaywallPresenter {
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
-                        error: "No paywall for trigger and no fallback available after load complete."
+                        error: "No paywall for trigger and no fallback available after load complete.",
+                        paywallUnavailableReason: upsellViewResult.fallbackReason
                     )
                 )
             }
             return
         }
-        loadingPaywall.updateContent(upsellView, isFallback: upsellViewResult.isFallback, isLoading: false)
+        loadingPaywall.updateContent(upsellView, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
         
         // Dispatch the official open event
         dispatchOpenEvent(paywallVC: loadingPaywall)
@@ -243,8 +246,8 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, isFallback: Bool, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, fallbackReason: String?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
@@ -253,13 +256,14 @@ class HeliumPaywallPresenter {
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "No root view controller found"
+                    error: "No root view controller found",
+                    paywallUnavailableReason: "noRootController"
                 )
             )
             return
         }
         
-        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        let paywallInfo = fallbackReason == nil ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         switch paywallInfo?.presentationStyle {
         case .slideUp:
             break
@@ -303,7 +307,7 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        var paywallsRemoved = paywallsDisplayed
+        let paywallsRemoved = paywallsDisplayed
         Task { @MainActor in
             // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
             // since they must have ultimately be presented by the topmost paywall if you go all the way up.
@@ -357,7 +361,8 @@ class HeliumPaywallPresenter {
                 paywallName: templateName,
                 viewType: .presented,
                 loadTimeTakenMS: loadTimeTakenMS,
-                loadingBudgetMS: loadingBudgetMS
+                loadingBudgetMS: loadingBudgetMS,
+                paywallUnavailableReason: paywallVC.fallbackReason
             )
         } else {
             event = PaywallCloseEvent(
