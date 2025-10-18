@@ -935,14 +935,18 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
     /// - Note: Measured from WebView load start to didFinish navigation with document.readyState='complete'
     public let webviewRenderTimeTakenMS: UInt64?
     
+    /// Reason why the paywall was unavailable
+    public let paywallUnavailableReason: PaywallUnavailableReason?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.webviewRenderTimeTakenMS = webviewRenderTimeTakenMS
+        self.paywallUnavailableReason = paywallUnavailableReason
         self.timestamp = timestamp
     }
     
@@ -959,6 +963,9 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         if let renderTime = webviewRenderTimeTakenMS {
             dict["webviewRenderTimeTakenMS"] = renderTime
         }
+        if let paywallUnavailableReason {
+            dict["paywallUnavailableReason"] = paywallUnavailableReason.rawValue
+        }
         return dict
     }
     
@@ -966,7 +973,8 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         return .paywallWebViewRendered(
             triggerName: triggerName,
             paywallTemplateName: paywallName,
-            webviewRenderTimeTakenMS: webviewRenderTimeTakenMS
+            webviewRenderTimeTakenMS: webviewRenderTimeTakenMS,
+            paywallUnavailableReason: paywallUnavailableReason?.rawValue
         )
     }
 }

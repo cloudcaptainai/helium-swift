@@ -19,7 +19,7 @@ public protocol BaseActionsDelegate {
     func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?);
     func logClosure();
     func getIsLoading() -> Bool;
-    func logRenderTime(timeTakenMS: UInt64);
+    func logRenderTime(timeTakenMS: UInt64, isFallback: Bool);
     func onCustomAction(actionName: String, params: [String: Any]);
 }
 
@@ -54,8 +54,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         delegate.selectProduct(productId: productId)
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
-        delegate.logRenderTime(timeTakenMS: timeTakenMS);
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
+        delegate.logRenderTime(timeTakenMS: timeTakenMS, isFallback: isFallback);
     }
     
     @MainActor
@@ -104,11 +104,12 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         let event = PaywallWebViewRenderedEvent(
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            webviewRenderTimeTakenMS: timeTakenMS
+            webviewRenderTimeTakenMS: timeTakenMS,
+            paywallUnavailableReason: .webviewRenderFail
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
@@ -311,7 +312,7 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         return false;
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         print("log render time");
     }
     
