@@ -55,6 +55,10 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
                 return .failed(StoreKitDelegateError.unknownPurchaseResult)
             }
         } catch {
+            if let storeKitError = error as? StoreKitError,
+               case .userCancelled = storeKitError {
+                return .cancelled
+            }
             print("[Helium] StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
             return .failed(error)
         }
@@ -74,6 +78,12 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
     
     /// Returns the most recent successful purchase transaction processed by this delegated, if there is one.
     public func getLatestCompletedTransaction() -> Transaction? {
+        return latestCompletedTransaction
+    }
+    
+    /// Only call this if you are implementing custom makePurchase logic. It allows Helium to immediately retrieve the transaction
+    /// after purchase instead of requesting it from StoreKit.
+    public func setLatestCompletedTransaction() -> Transaction? {
         return latestCompletedTransaction
     }
     
