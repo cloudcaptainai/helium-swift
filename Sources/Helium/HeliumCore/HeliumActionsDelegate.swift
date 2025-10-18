@@ -16,10 +16,10 @@ public protocol BaseActionsDelegate {
     func selectProduct(productId: String);
     func makePurchase() async -> HeliumPaywallTransactionStatus;
     func restorePurchases() async -> Bool;
-    func logImpression(viewType: PaywallOpenViewType);
+    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?);
     func logClosure();
     func getIsLoading() -> Bool;
-    func logRenderTime(timeTakenMS: UInt64);
+    func logRenderTime(timeTakenMS: UInt64, isFallback: Bool);
     func onCustomAction(actionName: String, params: [String: Any]);
 }
 
@@ -54,8 +54,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         delegate.selectProduct(productId: productId)
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
-        delegate.logRenderTime(timeTakenMS: timeTakenMS);
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
+        delegate.logRenderTime(timeTakenMS: timeTakenMS, isFallback: isFallback);
     }
     
     @MainActor
@@ -68,8 +68,8 @@ public class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    public func logImpression(viewType: PaywallOpenViewType) {
-        delegate.logImpression(viewType: viewType)
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
+        delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason)
     }
     
     public func logClosure() {
@@ -104,11 +104,12 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         }
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         let event = PaywallWebViewRenderedEvent(
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            webviewRenderTimeTakenMS: timeTakenMS
+            webviewRenderTimeTakenMS: timeTakenMS,
+            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
@@ -167,7 +168,8 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
                     paywallName: "unknown",
-                    error: "Second try - no paywall found for trigger."
+                    error: "Second try - no paywall found for trigger.",
+                    paywallUnavailableReason: .secondTryNoMatch
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event)
             }
@@ -229,18 +231,19 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return status;
     }
     
-    public func logImpression(viewType: PaywallOpenViewType) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
         // Use new typed event
         let event = PaywallOpenEvent(
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            viewType: viewType
+            viewType: viewType,
+            paywallUnavailableReason: fallbackReason
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)
         
         // Track experiment allocation for embedded/triggered views
         // Determine if this is a fallback by checking if it's in the fetched config
-        let isFallback = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) == nil
+        let isFallback = fallbackReason != nil
         
         ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
             trigger: trigger,
@@ -309,11 +312,11 @@ public class PrinterActionsDelegate: BaseActionsDelegate {
         return false;
     }
     
-    public func logRenderTime(timeTakenMS: UInt64) {
+    public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         print("log render time");
     }
     
-    public func logImpression(viewType: PaywallOpenViewType) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
         print("log impression")
     }
     

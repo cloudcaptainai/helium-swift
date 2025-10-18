@@ -112,8 +112,12 @@ public struct DynamicWebView: View {
               if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
+                  let isFallback = fileLoadAttempt == .backupLoad
                   Task {
-                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+                      self.actionsDelegate.logRenderTime(
+                        timeTakenMS: milliseconds,
+                        isFallback: isFallback
+                      )
                   }
               }
               lowPowerModeAutoPlayVideoWorkaround()
@@ -251,7 +255,8 @@ public struct DynamicWebView: View {
             let openFailEvent = PaywallOpenFailedEvent(
                 triggerName: triggerName ?? "",
                 paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
-                error: "WebView failed to load - \(reason)"
+                error: "WebView failed to load - \(reason)",
+                paywallUnavailableReason: .webviewRenderFail
             )
             if presentationState.viewType == .presented {
                 HeliumPaywallPresenter.shared.hideUpsell {
