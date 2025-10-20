@@ -935,7 +935,7 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
     /// - Note: Measured from WebView load start to didFinish navigation with document.readyState='complete'
     public let webviewRenderTimeTakenMS: UInt64?
     
-    /// Reason why the paywall was unavailable
+    /// Reason why the paywall was unavailable (will only be set if a fallback display was used upon render)
     public let paywallUnavailableReason: PaywallUnavailableReason?
     
     /// When this event occurred

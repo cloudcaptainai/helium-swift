@@ -249,12 +249,21 @@ public struct DynamicWebView: View {
         default:
             break
         }
+        let trigger = triggerName ?? ""
+        let paywallName = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallTemplateName ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.paywallTemplateName ?? "unknown"
         if fallbackPaywall != nil {
             shouldShowFallback = true
+            // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
+            let event = PaywallWebViewRenderedEvent(
+                triggerName: trigger,
+                paywallName: paywallName,
+                paywallUnavailableReason: .webviewRenderFail
+            )
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
         } else {
             let openFailEvent = PaywallOpenFailedEvent(
-                triggerName: triggerName ?? "",
-                paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
+                triggerName: trigger,
+                paywallName: paywallName,
                 error: "WebView failed to load - \(reason)",
                 paywallUnavailableReason: .webviewRenderFail
             )
