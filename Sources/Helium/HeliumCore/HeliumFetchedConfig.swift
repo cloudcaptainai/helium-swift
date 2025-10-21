@@ -39,6 +39,12 @@ private struct BundlesFetchResult {
     var numBundleAttempts: Int? = nil
 }
 
+private struct SingleBundleFetchResult {
+    let url: String
+    let html: String?
+    let isBadURL: Bool
+}
+
 class NetworkReachability {
     static let shared = NetworkReachability()
     private let monitor = NWPathMonitor()
@@ -73,7 +79,6 @@ func fetchEndpoint(
     config.httpMaximumConnectionsPerHost = 5
     let session = URLSession(configuration: config)
     
-    // todo pass in new header or param to indicate self-fetch for bundles
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -106,8 +111,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
         Task { @MainActor in
             shared.downloadStatus = .notDownloadedYet
         }
-        shared.downloadTimeTakenMS = nil
-        shared.numRetries = 0
         shared.fetchedConfig = nil
         shared.fetchedConfigJSON = nil
         shared.localizedPriceMap = [:]
@@ -423,28 +426,29 @@ public class HeliumFetchedConfigManager: ObservableObject {
         // Fetch all URLs concurrently and collect results
         var results: [String: String] = [:]
 
-        await withTaskGroup(of: (String, String?).self) { group in
+        await withTaskGroup(of: SingleBundleFetchResult.self) { group in
             for (url, triggers) in bundleUrlToTriggersMap {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
-                        return (url, html)
+                        return SingleBundleFetchResult(url: url, html: html, isBadURL: false)
                     } catch {
                         if let urlError = error as? URLError, urlError.code == .badURL {
                             print("[Helium] Invalid URL for triggers: \(triggers)")
+                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: true)
                         } else {
-                            bundleUrlsNotFetched.append(url)
+                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: false)
                         }
-                        return (url, nil)
                     }
                 }
             }
 
-            // Collect results using bundleId as key
-            for await (url, html) in group {
-                if let html,
-                   let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(url) { // bundleId should NOT be nil
+            for await result in group {
+                if let html = result.html,
+                   let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(result.url) { // bundleId should NOT be nil
                     results[bundleId] = html
+                } else if !result.isBadURL {
+                    bundleUrlsNotFetched.append(result.url)
                 }
             }
         }
