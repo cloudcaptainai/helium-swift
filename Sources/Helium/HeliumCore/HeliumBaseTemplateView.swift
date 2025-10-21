@@ -71,7 +71,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             }
             if newIsOpen {
                 actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason)
-            } else {
+            } else if presentationState.firstOnAppearHandled {
                 actionsDelegateWrapper.logClosure()
             }
         }

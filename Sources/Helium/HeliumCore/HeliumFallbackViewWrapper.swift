@@ -43,6 +43,9 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType == .presented {
                     return
                 }
+                if !newIsOpen && !presentationState.firstOnAppearHandled {
+                    return // ignore; this is the first value of isOpen which is false
+                }
                 HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
             }
     }

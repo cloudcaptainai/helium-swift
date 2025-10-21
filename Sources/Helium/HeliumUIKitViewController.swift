@@ -30,7 +30,8 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     // Use this to try and prevent unnecessary extra open events.
     // (Extra close events are harder to prevent, since we can't be sure if the paywall is
-    // completely closed since onDisappear can potentially be called multiple times.)
+    // completely closed since onDisappear can potentially be called multiple times. For example
+    // if the paywall is hidden by another modal or tab and then displayed again.)
     private(set) var firstOnAppearHandled: Bool = false
     
     func handleOnAppear() {
