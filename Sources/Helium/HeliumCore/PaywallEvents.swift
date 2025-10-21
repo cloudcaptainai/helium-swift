@@ -82,12 +82,16 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     /// Loading budget for this trigger in milliseconds. Will be nil if no loading state shown.
     public let loadingBudgetMS: UInt64?
     
+    /// Reason why the paywall was unavailable (will only be set if a fallback paywall was used)
+    public let paywallUnavailableReason: PaywallUnavailableReason?
+    
     /// When this event occurred
     public let timestamp: Date
     
     public init(
         triggerName: String, paywallName: String, viewType: PaywallOpenViewType,
         loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil,
+        paywallUnavailableReason: PaywallUnavailableReason? = nil,
         timestamp: Date = Date()
     ) {
         self.triggerName = triggerName
@@ -95,6 +99,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         self.viewType = viewType
         self.loadTimeTakenMS = loadTimeTakenMS
         self.loadingBudgetMS = loadingBudgetMS
+        self.paywallUnavailableReason = paywallUnavailableReason
         self.timestamp = timestamp
     }
     
@@ -115,11 +120,14 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         if let loadingBudgetMS {
             dict["loadingBudgetMS"] = loadingBudgetMS
         }
+        if let paywallUnavailableReason {
+            dict["paywallUnavailableReason"] = paywallUnavailableReason.rawValue
+        }
         return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS)
+        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS, paywallUnavailableReason: paywallUnavailableReason?.rawValue)
     }
 }
 
@@ -218,14 +226,18 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// - Note: Provides context for debugging (e.g., "WebView failed to load", "Template not found")
     public let error: String
     
+    /// Reason why the paywall was unavailable
+    public let paywallUnavailableReason: PaywallUnavailableReason?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, error: String, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, error: String, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
+        self.paywallUnavailableReason = paywallUnavailableReason
         self.timestamp = timestamp
     }
     
@@ -240,11 +252,14 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
             "error": error,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let paywallUnavailableReason {
+            dict["paywallUnavailableReason"] = paywallUnavailableReason.rawValue
+        }
         return dict
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error)
+        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error, paywallUnavailableReason: paywallUnavailableReason?.rawValue)
     }
 }
 
@@ -920,14 +935,18 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
     /// - Note: Measured from WebView load start to didFinish navigation with document.readyState='complete'
     public let webviewRenderTimeTakenMS: UInt64?
     
+    /// Reason why the paywall was unavailable (will only be set if a fallback display was used upon render)
+    public let paywallUnavailableReason: PaywallUnavailableReason?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.webviewRenderTimeTakenMS = webviewRenderTimeTakenMS
+        self.paywallUnavailableReason = paywallUnavailableReason
         self.timestamp = timestamp
     }
     
@@ -944,6 +963,9 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         if let renderTime = webviewRenderTimeTakenMS {
             dict["webviewRenderTimeTakenMS"] = renderTime
         }
+        if let paywallUnavailableReason {
+            dict["paywallUnavailableReason"] = paywallUnavailableReason.rawValue
+        }
         return dict
     }
     
@@ -951,7 +973,8 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         return .paywallWebViewRendered(
             triggerName: triggerName,
             paywallTemplateName: paywallName,
-            webviewRenderTimeTakenMS: webviewRenderTimeTakenMS
+            webviewRenderTimeTakenMS: webviewRenderTimeTakenMS,
+            paywallUnavailableReason: paywallUnavailableReason?.rawValue
         )
     }
 }
