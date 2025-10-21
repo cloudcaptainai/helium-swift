@@ -199,6 +199,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
             
             // Update the fetched config
+            guard !Task.isCancelled else { return }
             self.fetchedConfig = newConfig
             self.fetchedConfigJSON = newConfigJSON
             
@@ -227,6 +228,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let bundleDownloadTimeMS = dispatchTimeDifferenceInMS(from: bundleStartTime)
                 
                 let bundles = bundlesResult.successMapBundleIdToHtml
+                guard !Task.isCancelled else { return }
                 fetchedConfig?.bundles = bundles
                 saveBundleAssets(bundles: bundles)
                 
@@ -560,6 +562,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     @MainActor private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
+        guard !Task.isCancelled else { return }
         self.downloadStatus = status
     }
     
