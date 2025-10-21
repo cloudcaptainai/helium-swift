@@ -6,12 +6,17 @@
 //
 
 public class RestorePurchaseConfig {
-    
-    private(set) var showHeliumDialog: Bool = true
-    
-    var restoreFailedTitle: String = "Restore Failed"
-    var restoreFailedMessage: String = "We couldn't find any previous purchases to restore."
-    var restoreFailedCloseButtonText: String = "OK"
+    // Default values
+    private static let defaultShowHeliumDialog = true
+    private static let defaultRestoreFailedTitle = "Restore Failed"
+    private static let defaultRestoreFailedMessage = "We couldn't find any previous purchases to restore."
+    private static let defaultRestoreFailedCloseButtonText = "OK"
+
+    private(set) var showHeliumDialog: Bool = defaultShowHeliumDialog
+
+    var restoreFailedTitle: String = defaultRestoreFailedTitle
+    var restoreFailedMessage: String = defaultRestoreFailedMessage
+    var restoreFailedCloseButtonText: String = defaultRestoreFailedCloseButtonText
     
     /// Disable the default dialog that Helium will display if a "Restore Purchases" action is not successful.
     /// You can handle this yourself if desired by listening for the PurchaseRestoreFailedEvent.
@@ -36,5 +41,13 @@ public class RestorePurchaseConfig {
             restoreFailedCloseButtonText = customCloseButtonText
         }
     }
-    
+
+    /// Resets all configuration values to their defaults.
+    public func reset() {
+        showHeliumDialog = Self.defaultShowHeliumDialog
+        restoreFailedTitle = Self.defaultRestoreFailedTitle
+        restoreFailedMessage = Self.defaultRestoreFailedMessage
+        restoreFailedCloseButtonText = Self.defaultRestoreFailedCloseButtonText
+    }
+
 }

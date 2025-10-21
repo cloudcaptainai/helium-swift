@@ -77,13 +77,20 @@ public extension HeliumPaywallDelegate {
 }
 
 
-public class HeliumPaywallDelegateWrapper: ObservableObject {
+public class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
+    static func reset() {
+        shared.delegate = nil
+        shared.analytics = nil
+        shared.isAnalyticsEnabled = true
+        shared.eventService = nil
+        shared.customPaywallTraits = [:]
+        shared.dontShowIfAlreadyEntitled = false
+    }
     
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
-    private var currentWriteKey: String?
     private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
@@ -113,19 +120,14 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         self.dontShowIfAlreadyEntitled = false
     }
     
-    func setAnalytics(_ analytics: Analytics, writeKey: String? = nil) {
+    func setAnalytics(_ analytics: Analytics) {
         self.analytics = analytics
-        self.currentWriteKey = writeKey ?? analytics.writeKey
     }
     
     func getAnalytics() -> Analytics? {
         return analytics;
     }
-    
-    func hasAnalyticsForWriteKey(_ writeKey: String) -> Bool {
-        return currentWriteKey == writeKey && analytics != nil
-    }
-    
+
     public func setIsAnalyticsEnabled(shouldEnable: Bool) {
         isAnalyticsEnabled = shouldEnable;
     }
@@ -242,26 +244,20 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         
         if analytics == nil, let fallbackBundleConfig {
             let neededWriteKey = fallbackBundleConfig.segmentBrowserWriteKey
-            
-            // Check if we already have Analytics with this write key
-            if HeliumPaywallDelegateWrapper.shared.hasAnalyticsForWriteKey(neededWriteKey) {
-                // Reuse existing Analytics instance
-                analyticsForEvent = HeliumPaywallDelegateWrapper.shared.getAnalytics()
-            } else {
-                // Create new Analytics instance (should only happen if no config was downloaded yet)
-                let configuration = SegmentConfiguration(writeKey: neededWriteKey)
-                    .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                    .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                    .trackApplicationLifecycleEvents(false)
-                    .flushInterval(10)
-                analyticsForEvent = Analytics(configuration: configuration)
-                analyticsForEvent?.identify(
-                    userId: HeliumIdentityManager.shared.getUserId(),
-                    traits: HeliumIdentityManager.shared.getUserContext()
-                );
-                // Store this Analytics instance for future use
-                HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!, writeKey: neededWriteKey)
-            }
+
+            // Get or create Analytics instance for the fallback configuration
+            let configuration = SegmentConfiguration(writeKey: neededWriteKey)
+                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
+                .trackApplicationLifecycleEvents(false)
+                .flushInterval(10)
+            analyticsForEvent = Analytics.getOrCreateAnalytics(configuration: configuration)
+            analyticsForEvent?.identify(
+                userId: HeliumIdentityManager.shared.getUserId(),
+                traits: HeliumIdentityManager.shared.getUserContext()
+            );
+            // Store this Analytics instance for future use
+            HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!)
         }
         
         if case .paywallOpen = event {
@@ -305,6 +301,7 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
                     organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
+                    heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
                     heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
                     appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                     appTransactionId: HeliumIdentityManager.shared.appTransactionID,
@@ -323,13 +320,14 @@ public class HeliumPaywallDelegateWrapper: ObservableObject {
         }
     }
     
-    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?) {
+    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?) {
         if isOpen {
             let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
             fireEvent(PaywallOpenEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
-                viewType: viewTypeEnum
+                viewType: viewTypeEnum,
+                paywallUnavailableReason: fallbackReason
             ))
         } else {
             fireEvent(PaywallCloseEvent(

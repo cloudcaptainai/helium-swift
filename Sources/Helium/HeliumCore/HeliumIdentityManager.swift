@@ -5,11 +5,13 @@ public class HeliumIdentityManager {
     public static let shared = HeliumIdentityManager()
     private init() {
         self.heliumSessionId = UUID().uuidString
+        self.heliumInitializeId = UUID().uuidString
         self.heliumUserTraits = HeliumUserTraits([:]);
     }
     
     // MARK: - Properties
     private let heliumSessionId: String
+    private(set) var heliumInitializeId: String
     private var heliumUserTraits: HeliumUserTraits?
     private var heliumPaywallSessionId: String?
     
@@ -26,6 +28,10 @@ public class HeliumIdentityManager {
     private let heliumPersistentIdKey = "heliumPersistentUserId"
     
     // MARK: - Public Methods
+    
+    func newInitializeId() {
+        heliumInitializeId = UUID().uuidString
+    }
     
     /// Gets the current user ID, creating one if it doesn't exist
     /// - Returns: The current user ID

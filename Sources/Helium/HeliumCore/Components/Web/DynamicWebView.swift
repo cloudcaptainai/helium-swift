@@ -112,8 +112,12 @@ public struct DynamicWebView: View {
               if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
+                  let isFallback = fileLoadAttempt == .backupLoad
                   Task {
-                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+                      self.actionsDelegate.logRenderTime(
+                        timeTakenMS: milliseconds,
+                        isFallback: isFallback
+                      )
                   }
               }
               lowPowerModeAutoPlayVideoWorkaround()
@@ -245,13 +249,23 @@ public struct DynamicWebView: View {
         default:
             break
         }
+        let trigger = triggerName ?? ""
+        let paywallName = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallTemplateName ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.paywallTemplateName ?? "unknown"
         if fallbackPaywall != nil {
             shouldShowFallback = true
+            // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
+            let event = PaywallWebViewRenderedEvent(
+                triggerName: trigger,
+                paywallName: paywallName,
+                paywallUnavailableReason: .webviewRenderFail
+            )
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
         } else {
             let openFailEvent = PaywallOpenFailedEvent(
-                triggerName: triggerName ?? "",
-                paywallName: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName ?? "")?.paywallTemplateName ?? "unknown",
-                error: "WebView failed to load - \(reason)"
+                triggerName: trigger,
+                paywallName: paywallName,
+                error: "WebView failed to load - \(reason)",
+                paywallUnavailableReason: .webviewRenderFail
             )
             if presentationState.viewType == .presented {
                 HeliumPaywallPresenter.shared.hideUpsell {

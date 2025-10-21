@@ -6,6 +6,7 @@ class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     
     private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
+    private let slideInTransitioningDelegate = SlideInTransitioningDelegate()
     
     private init() {
         NotificationCenter.default.addObserver(
@@ -47,12 +48,13 @@ class HeliumPaywallPresenter {
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
-                        error: "No paywall for trigger and no fallback available when present called."
+                        error: "No paywall for trigger and no fallback available when present called.",
+                        paywallUnavailableReason: upsellViewResult.fallbackReason
                     )
                 )
                 return
             }
-            presentPaywall(trigger: trigger, isFallback: upsellViewResult.isFallback, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -64,7 +66,8 @@ class HeliumPaywallPresenter {
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "A paywall is already being presented."
+                    error: "A paywall is already being presented.",
+                    paywallUnavailableReason: .alreadyPresented
                 )
             )
             return
@@ -96,7 +99,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, isFallback: false, contentView: loadingView, from: viewController, isLoading: true)
+            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -137,13 +140,14 @@ class HeliumPaywallPresenter {
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
-                        error: "No paywall for trigger and no fallback available after load complete."
+                        error: "No paywall for trigger and no fallback available after load complete.",
+                        paywallUnavailableReason: upsellViewResult.fallbackReason
                     )
                 )
             }
             return
         }
-        loadingPaywall.updateContent(upsellView, isFallback: upsellViewResult.isFallback, isLoading: false)
+        loadingPaywall.updateContent(upsellView, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
         
         // Dispatch the official open event
         dispatchOpenEvent(paywallVC: loadingPaywall)
@@ -242,8 +246,8 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, isFallback: Bool, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, isFallback: isFallback, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
@@ -252,10 +256,26 @@ class HeliumPaywallPresenter {
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "No root view controller found"
+                    error: "No root view controller found",
+                    paywallUnavailableReason: .noRootController
                 )
             )
             return
+        }
+        
+        let paywallInfo = fallbackReason == nil ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        switch paywallInfo?.presentationStyle {
+        case .slideUp:
+            break
+        case .slideLeft:
+            modalVC.modalPresentationStyle = .custom
+            modalVC.transitioningDelegate = slideInTransitioningDelegate
+        case .crossDissolve:
+            modalVC.modalTransitionStyle = .crossDissolve
+        case .flipHorizontal:
+            modalVC.modalTransitionStyle = .flipHorizontal
+        default:
+            break
         }
         presenter.present(modalVC, animated: true)
         
@@ -287,7 +307,7 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        var paywallsRemoved = paywallsDisplayed
+        let paywallsRemoved = paywallsDisplayed
         Task { @MainActor in
             // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
             // since they must have ultimately be presented by the topmost paywall if you go all the way up.
@@ -341,7 +361,8 @@ class HeliumPaywallPresenter {
                 paywallName: templateName,
                 viewType: .presented,
                 loadTimeTakenMS: loadTimeTakenMS,
-                loadingBudgetMS: loadingBudgetMS
+                loadingBudgetMS: loadingBudgetMS,
+                paywallUnavailableReason: paywallVC.fallbackReason
             )
         } else {
             event = PaywallCloseEvent(
@@ -363,5 +384,99 @@ class HeliumPaywallPresenter {
         dispatchCloseForAll(paywallVCs: paywallsDisplayed)
         paywallsDisplayed.removeAll()
     }
-    
+
+}
+
+// MARK: - Slide-in Animation Classes
+
+/// Transitioning delegate that manages the slide-in animation from right
+class SlideInTransitioningDelegate: NSObject, UIViewControllerTransitioningDelegate {
+
+    func animationController(forPresented presented: UIViewController,
+                              presenting: UIViewController,
+                              source: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        return SlideInPresentationAnimator()
+    }
+
+    func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        return SlideInDismissalAnimator()
+    }
+}
+
+/// Animator for presenting the view controller with a slide-in from right animation
+class SlideInPresentationAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+    private let animationDuration: TimeInterval = 0.24
+
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        return animationDuration
+    }
+
+    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        guard let toViewController = transitionContext.viewController(forKey: .to),
+              let toView = toViewController.view else {
+            transitionContext.completeTransition(false)
+            return
+        }
+
+        let containerView = transitionContext.containerView
+        let finalFrame = transitionContext.finalFrame(for: toViewController)
+
+        // Position the view off-screen to the right
+        toView.frame = finalFrame
+        toView.frame.origin.x = containerView.frame.width
+
+        // Add shadow for depth effect
+        toView.layer.shadowColor = UIColor.black.cgColor
+        toView.layer.shadowOpacity = 0.2
+        toView.layer.shadowOffset = CGSize(width: -5, height: 0)
+        toView.layer.shadowRadius = 10
+
+        containerView.addSubview(toView)
+
+        // Animate sliding in from the right
+        UIView.animate(
+            withDuration: animationDuration,
+            delay: 0,
+            options: [.curveEaseOut],
+            animations: {
+                toView.frame = finalFrame
+            },
+            completion: { finished in
+                transitionContext.completeTransition(finished)
+            }
+        )
+    }
+}
+
+/// Animator for dismissing the view controller with a slide-out to right animation
+class SlideInDismissalAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+    private let animationDuration: TimeInterval = 0.20
+
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        return animationDuration
+    }
+
+    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        guard let fromViewController = transitionContext.viewController(forKey: .from),
+              let fromView = fromViewController.view else {
+            transitionContext.completeTransition(false)
+            return
+        }
+
+        let containerView = transitionContext.containerView
+
+        // Animate sliding out to the right
+        UIView.animate(
+            withDuration: animationDuration,
+            delay: 0,
+            options: [.curveEaseOut],
+            animations: {
+                fromView.frame.origin.x = containerView.frame.width
+            },
+            completion: { finished in
+                fromView.removeFromSuperview()
+                transitionContext.completeTransition(finished)
+            }
+        )
+    }
 }

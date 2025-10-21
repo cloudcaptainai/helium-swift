@@ -4,8 +4,12 @@ import StoreKit
 
 struct UpsellViewResult {
     let view: AnyView?
-    let isFallback: Bool
+    let fallbackReason: PaywallUnavailableReason?
     let templateName: String?
+    
+    var isFallback: Bool {
+        fallbackReason != nil
+    }
 }
 
 public class Helium {
@@ -13,6 +17,13 @@ public class Helium {
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
+    
+    private func reset() {
+        initialized = false
+        controller = nil
+        fallbackConfig = nil
+        baseTemplateViewType = nil
+    }
     
     public static let shared = Helium()
     public static let restorePurchaseConfig = RestorePurchaseConfig()
@@ -154,19 +165,16 @@ public class Helium {
         HeliumAssetManager.shared.clearCache()
         
         // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.shared.clearAllFetchedState()
+        HeliumFetchedConfigManager.reset()
         
         // Completely reset all fallback configurations
-        HeliumFallbackViewManager.shared.resetAllFallbacks()
+        HeliumFallbackViewManager.reset()
         
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
         // Reset initialization state to allow re-initialization
-        initialized = false
-        controller = nil
-        fallbackConfig = nil
-        baseTemplateViewType = nil
+        reset()
                 
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
@@ -184,7 +192,7 @@ public class Helium {
     func upsellViewResultFor(trigger: String) -> UpsellViewResult {
         if !initialized {
             print("[Helium] Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!")
-            return UpsellViewResult(view: nil, isFallback: true, templateName: nil)
+            return UpsellViewResult(view: nil, fallbackReason: .notInitialized, templateName: nil)
         }
         
         
@@ -192,36 +200,46 @@ public class Helium {
         if paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
             
             guard let templatePaywallInfo = paywallInfo else {
-                return fallbackViewFor(trigger: trigger, templateName: nil)
+                return fallbackViewFor(trigger: trigger, templateName: nil, fallbackReason: .triggerHasNoPaywall)
             }
             if templatePaywallInfo.forceShowFallback == true {
-                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .forceShowFallback)
             }
             
             do {
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
+                    fallbackReason: nil,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger),
                     backupResolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
-                return UpsellViewResult(view: paywallView, isFallback: false, templateName: templatePaywallInfo.paywallTemplateName)
+                return UpsellViewResult(view: paywallView, fallbackReason: nil, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
                 print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
-                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName)
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .invalidResolvedConfig)
             }
             
         } else {
-            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName)
+            let fallbackReason: PaywallUnavailableReason
+            switch HeliumFetchedConfigManager.shared.downloadStatus {
+            case .notDownloadedYet, .inProgress:
+                fallbackReason = .paywallsNotDownloaded
+            case .downloadSuccess:
+                fallbackReason = .paywallBundlesMissing
+            case .downloadFailure:
+                fallbackReason = .paywallsDownloadFail
+            }
+            return fallbackViewFor(trigger: trigger, templateName: paywallInfo?.paywallTemplateName, fallbackReason: fallbackReason)
         }
     }
     
-    private func fallbackViewFor(trigger: String, templateName: String?) -> UpsellViewResult {
+    private func fallbackViewFor(trigger: String, templateName: String?, fallbackReason: PaywallUnavailableReason) -> UpsellViewResult {
         var result: AnyView?
         
         let getFallbackViewForTrigger: () -> AnyView? = {
             if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger) {
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger, fallbackReason: fallbackReason) {
                     fallbackView
                 })
             } else {
@@ -236,6 +254,7 @@ public class Helium {
                     DynamicBaseTemplateView(
                         paywallInfo: fallbackPaywallInfo,
                         trigger: trigger,
+                        fallbackReason: fallbackReason,
                         resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                     )
                 )
@@ -245,7 +264,7 @@ public class Helium {
         } else {
             result = getFallbackViewForTrigger()
         }
-        return UpsellViewResult(view: result, isFallback: true, templateName: templateName)
+        return UpsellViewResult(view: result, fallbackReason: fallbackReason, templateName: templateName)
     }
     
     public func getHeliumUserId() -> String? {
@@ -265,6 +284,16 @@ public class Helium {
             return nil
         }
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
+    }
+    
+    public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
+        let upsellResult = upsellViewResultFor(trigger: trigger)
+        let canShow = upsellResult.view != nil
+        return CanShowPaywallResult(
+            canShow: canShow,
+            isFallback: canShow ? upsellResult.isFallback : nil,
+            paywallUnavailableReason: upsellResult.fallbackReason
+        )
     }
     
     /// Get experiment allocation info for a specific trigger
@@ -413,6 +442,8 @@ public class Helium {
             - fallbackPaywallPerTrigger (deprecated): Trigger-specific fallback views
             """
         )
+        
+        HeliumIdentityManager.shared.newInitializeId()
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -638,6 +669,28 @@ public class Helium {
     /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
+    }
+    
+    /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
+    public static func resetHelium() {
+        HeliumPaywallPresenter.shared.hideAllUpsells()
+        
+        HeliumPaywallDelegateWrapper.reset()
+        
+        // Clear fetched configuration from memory
+        HeliumFetchedConfigManager.reset()
+        
+        // Completely reset all fallback configurations
+        HeliumFallbackViewManager.reset()
+        
+        // Reset experiment allocation tracking
+        ExperimentAllocationTracker.shared.reset()
+        
+        restorePurchaseConfig.reset()
+        
+        Helium.shared.reset()
+        
+        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
     }
     
 }

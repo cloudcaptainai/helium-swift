@@ -30,7 +30,8 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     // Use this to try and prevent unnecessary extra open events.
     // (Extra close events are harder to prevent, since we can't be sure if the paywall is
-    // completely closed since onDisappear can potentially be called multiple times.)
+    // completely closed since onDisappear can potentially be called multiple times. For example
+    // if the paywall is hidden by another modal or tab and then displayed again.)
     private(set) var firstOnAppearHandled: Bool = false
     
     func handleOnAppear() {
@@ -77,7 +78,10 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    private(set) var isFallback: Bool
+    private(set) var fallbackReason: PaywallUnavailableReason? = nil
+    var isFallback: Bool {
+        fallbackReason != nil
+    }
     private(set) var isLoading: Bool
     let isSecondTry: Bool
     private var contentView: AnyView
@@ -87,9 +91,9 @@ class HeliumViewController: UIViewController {
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     
-    init(trigger: String, isFallback: Bool, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
+    init(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
-        self.isFallback = isFallback
+        self.fallbackReason = fallbackReason
         self.isSecondTry = isSecondTry
         self.isLoading = isLoading
         self.contentView = AnyView(contentView
@@ -103,7 +107,7 @@ class HeliumViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    func updateContent(_ newContent: AnyView, isFallback: Bool, isLoading: Bool) {
+    func updateContent(_ newContent: AnyView, fallbackReason: PaywallUnavailableReason?, isLoading: Bool) {
         self.contentView = AnyView(newContent
             .environment(\.paywallPresentationState, presentationState))
         
@@ -111,7 +115,7 @@ class HeliumViewController: UIViewController {
         hostingController?.rootView = self.contentView
         
         let completedLoading = !isLoading && self.isLoading
-        self.isFallback = isFallback
+        self.fallbackReason = fallbackReason
         self.isLoading = isLoading
         if completedLoading {
             displayTime = DispatchTime.now()
