@@ -58,21 +58,21 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
             actionsDelegate.setDismissAction {
                 dismiss()
             }
-            if !presentationState.firstOnAppearHandled {
-                presentationState.handleOnAppear()
-            }
+            presentationState.handleOnAppear()
         }
         .onDisappear {
             presentationState.handleOnDisappear()
         }
-        .onReceive(presentationState.$isOpen) { newIsOpen in
+        .onReceive(presentationState.$isOpen) { newIsOpenValue in
             if presentationState.viewType == .presented {
                 return
             }
-            if newIsOpen {
-                actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason)
-            } else if presentationState.firstOnAppearHandled {
-                actionsDelegateWrapper.logClosure()
+            if let newIsOpenValue {
+                if newIsOpenValue {
+                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason)
+                } else {
+                    actionsDelegateWrapper.logClosure()
+                }
             }
         }
     }

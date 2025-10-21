@@ -32,21 +32,18 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     public var body: some View {
         content
             .onAppear {
-                if !presentationState.firstOnAppearHandled {
-                    presentationState.handleOnAppear()
-                }
+                presentationState.handleOnAppear()
             }
             .onDisappear {
                 presentationState.handleOnDisappear()
             }
-            .onReceive(presentationState.$isOpen) { newIsOpen in
+            .onReceive(presentationState.$isOpen) { newIsOpenValue in
                 if presentationState.viewType == .presented {
                     return
                 }
-                if !newIsOpen && !presentationState.firstOnAppearHandled {
-                    return // ignore; this is the first value of isOpen which is false
+                if let newIsOpenValue {
+                    HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpenValue, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
                 }
-                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
             }
     }
 }

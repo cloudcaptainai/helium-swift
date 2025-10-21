@@ -13,7 +13,7 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
-    @Published var isOpen: Bool = false
+    @Published var isOpen: Bool? = nil
     
     private let useAppearanceToSetIsOpen: Bool
     init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
@@ -28,18 +28,13 @@ public class HeliumPaywallPresentationState: ObservableObject {
         )
     }
     
-    // Use this to try and prevent unnecessary extra open events.
-    // (Extra close events are harder to prevent, since we can't be sure if the paywall is
-    // completely closed since onDisappear can potentially be called multiple times. For example
-    // if the paywall is hidden by another modal or tab and then displayed again.)
-    private(set) var firstOnAppearHandled: Bool = false
-    
+    // Note that if paywall is hidden by another modal or bottom tab changes, isOpen will be set to false
+    // and it will not change again. ???
     func handleOnAppear() {
-        firstOnAppearHandled = true
         if !useAppearanceToSetIsOpen {
             return
         }
-        if !isOpen {
+        if isOpen == nil {
             isOpen = true
         }
     }
@@ -47,14 +42,14 @@ public class HeliumPaywallPresentationState: ObservableObject {
         if !useAppearanceToSetIsOpen {
             return
         }
-        if isOpen {
+        if isOpen == true {
             isOpen = false
         }
     }
     
     @objc private func appWillTerminate() {
         // attempt to dispatch paywallClose analytics event even if user rage quits
-        if isOpen {
+        if isOpen == true {
             isOpen = false
         }
     }
