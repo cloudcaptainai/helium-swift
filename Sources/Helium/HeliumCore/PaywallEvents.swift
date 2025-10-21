@@ -343,8 +343,8 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
     /// - Note: Defined by the paywall creator (e.g., "toggle_feature", "log_interaction", "open_settings")
     public let actionName: String
     
-    /// Arbitrary parameters sent with the custom action
-    /// - Note: JSON-serializable dictionary from the paywall, can contain any data structure
+    /// Arbitrary parameters sent with the custom action. A JSON-serializable dictionary from the paywall that can contain any data structure.
+    /// - Note: Any numerical values will have Decimal type
     public let params: [String: Any]
     
     /// The trigger identifier for the paywall that sent this action
