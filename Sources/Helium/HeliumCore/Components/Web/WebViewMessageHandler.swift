@@ -113,7 +113,9 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             case "custom-action":
                 if let actionName = data["actionName"] as? String,
                    let params = data["params"] as? [String: Any] {
-                    self.delegateWrapper?.onCustomAction(actionName: actionName, params: params)
+                    // Convert Objective-C types to Swift types
+                    let swiftParams = convertToSwiftTypes(params) as? [String: Any] ?? params
+                    self.delegateWrapper?.onCustomAction(actionName: actionName, params: swiftParams)
                     respond(["status": "success"])
                 } else {
                     respond(["status": "error", "message": "Missing actionName or params"])
@@ -124,6 +126,46 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             }
         }
     }
+    
+    /// Converts Objective-C types from JavaScript bridge to native Swift types
+    private func convertToSwiftTypes(_ value: Any) -> Any {
+        // Handle NSArray -> Swift Array
+        if let nsArray = value as? NSArray {
+            return nsArray.map { convertToSwiftTypes($0) }
+        }
+
+        // Handle NSDictionary -> Swift Dictionary
+        if let nsDict = value as? NSDictionary {
+            var swiftDict = [String: Any]()
+            for (key, val) in nsDict {
+                if let keyStr = key as? String {
+                    swiftDict[keyStr] = convertToSwiftTypes(val)
+                }
+            }
+            return swiftDict
+        }
+
+        // Handle NSNumber (booleans come as 0/1 NSNumbers from JS)
+        if let nsNumber = value as? NSNumber {
+            // Check if it's a boolean by looking at the objCType
+            let objCType = String(cString: nsNumber.objCType)
+            if objCType == "c" || objCType == "B" {
+                // It's a boolean
+                return nsNumber.boolValue
+            }
+            // Return the number as-is for other numeric types
+            return nsNumber
+        }
+
+        // Handle NSString -> Swift String
+        if let nsString = value as? NSString {
+            return nsString as String
+        }
+
+        // Return other types as-is (nil, etc.)
+        return value
+    }
+    
 }
 
 
