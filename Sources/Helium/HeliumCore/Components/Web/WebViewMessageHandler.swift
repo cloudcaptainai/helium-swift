@@ -153,8 +153,10 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 // It's a boolean
                 return nsNumber.boolValue
             }
-            // Return the number as-is for other numeric types
-            return nsNumber
+
+            // For all non-boolean numbers, return as Double
+            // This matches JavaScript's single number type (64-bit float)
+            return nsNumber.doubleValue
         }
 
         // Handle NSString -> Swift String
