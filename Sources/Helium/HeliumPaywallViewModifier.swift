@@ -17,11 +17,16 @@ struct DynamicPaywallModifier: ViewModifier {
     
     @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .fullScreenCover(isPresented: $isPresented) {
-                Helium.shared.upsellViewForTrigger(trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits)
-                    .environment(\.paywallPresentationState, presentationState)
-            }
+        let upsellView = Helium.shared.upsellViewForTrigger(trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits)
+        if let upsellView {
+            content
+                .fullScreenCover(isPresented: $isPresented) {
+                    upsellView
+                        .environment(\.paywallPresentationState, presentationState)
+                }
+        } else {
+            content
+        }
     }
 }
 
