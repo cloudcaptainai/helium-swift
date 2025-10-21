@@ -358,7 +358,8 @@ public enum HeliumPaywallEvent: Codable {
             self = .paywallsDownloadSuccess(configId: configId)
         case "paywallsDownloadError":
             let error = try container.decode(String.self, forKey: .errorDescription)
-            self = .paywallsDownloadError(error: error, configDownloaded: true)
+            let configDownloaded = try container.decodeIfPresent(Bool.self, forKey: .configDownloaded) ?? true
+            self = .paywallsDownloadError(error: error, configDownloaded: configDownloaded)
         case "userAllocated":
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
