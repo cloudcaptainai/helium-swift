@@ -367,7 +367,8 @@ class HeliumPaywallPresenter {
         } else {
             event = PaywallCloseEvent(
                 triggerName: trigger,
-                paywallName: templateName
+                paywallName: templateName,
+                secondTry: paywallVC.isSecondTry
             )
         }
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)

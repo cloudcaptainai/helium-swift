@@ -146,9 +146,16 @@ public struct PaywallCloseEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    /// Second try paywalls are always presented via HeliumPaywallPresenter, which sets this value.
+    private var _secondTry: Bool? = nil
+    public var isSecondTry: Bool {
+        _secondTry ?? false
+    }
+    
+    public init(triggerName: String, paywallName: String, secondTry: Bool = false, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self._secondTry = secondTry
         self.timestamp = timestamp
     }
     

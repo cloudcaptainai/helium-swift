@@ -110,15 +110,12 @@ class HeliumViewController: UIViewController {
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
-        
-        presentationState.isOpen = true
     }
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed || isMovingFromParent {
             HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
-            presentationState.isOpen = false
         }
     }
     
