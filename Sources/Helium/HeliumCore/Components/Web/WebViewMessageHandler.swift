@@ -164,17 +164,12 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             return nsString as String
         }
 
-        // Handle NSNull -> nil
-        if value is NSNull {
-            return Optional<Any>.none as Any
-        }
-
         // Handle NSDate -> Date
         if let nsDate = value as? NSDate {
             return nsDate as Date
         }
 
-        // Return other types as-is
+        // Return other types as-is (including NSNull)
         return value
     }
     
