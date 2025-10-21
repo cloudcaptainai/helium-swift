@@ -97,6 +97,12 @@ public struct PaywallInfo {
     public let shouldShow: Bool
 }
 
+public struct CanShowPaywallResult {
+    public let canShow: Bool
+    public let isFallback: Bool?
+    public let paywallUnavailableReason: PaywallUnavailableReason?
+}
+
 public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
     var segmentBrowserWriteKey: String

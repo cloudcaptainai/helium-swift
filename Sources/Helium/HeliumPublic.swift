@@ -286,6 +286,16 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
     
+    public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
+        let upsellResult = upsellViewResultFor(trigger: trigger)
+        let canShow = upsellResult.view != nil
+        return CanShowPaywallResult(
+            canShow: canShow,
+            isFallback: canShow ? upsellResult.isFallback : nil,
+            paywallUnavailableReason: upsellResult.fallbackReason
+        )
+    }
+    
     /// Get experiment allocation info for a specific trigger
     /// 
     /// - Parameter trigger: The trigger name to get experiment info for
