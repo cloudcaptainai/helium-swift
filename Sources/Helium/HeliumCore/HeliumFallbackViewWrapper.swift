@@ -32,17 +32,19 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     public var body: some View {
         content
             .onAppear {
-                presentationState.handleOnAppear()
+                if presentationState.viewType != .presented {
+                    if !presentationState.isOpen {
+                        presentationState.isOpen = true
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: true, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                    }
+                }
             }
             .onDisappear {
-                presentationState.handleOnDisappear()
-            }
-            .onReceive(presentationState.$isOpen) { newIsOpenValue in
-                if presentationState.viewType == .presented {
-                    return
-                }
-                if let newIsOpenValue {
-                    HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpenValue, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                if presentationState.viewType != .presented {
+                    if presentationState.isOpen {
+                        presentationState.isOpen = false
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: false, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                    }
                 }
             }
     }

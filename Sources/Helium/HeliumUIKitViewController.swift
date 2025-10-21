@@ -13,45 +13,12 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
-    @Published var isOpen: Bool? = nil
+    var isOpen: Bool = false // only used by .embedded and .triggered
     
     private let useAppearanceToSetIsOpen: Bool
     init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
         self.viewType = viewType
         self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appWillTerminate),
-            name: UIApplication.willTerminateNotification,
-            object: nil
-        )
-    }
-    
-    // Note that if paywall is hidden by another modal or bottom tab changes, isOpen will be set to false
-    // and it will not change again. ???
-    func handleOnAppear() {
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if isOpen == nil {
-            isOpen = true
-        }
-    }
-    func handleOnDisappear() {
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if isOpen == true {
-            isOpen = false
-        }
-    }
-    
-    @objc private func appWillTerminate() {
-        // attempt to dispatch paywallClose analytics event even if user rage quits
-        if isOpen == true {
-            isOpen = false
-        }
     }
     
 }

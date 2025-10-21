@@ -22,9 +22,6 @@ struct DynamicPaywallModifier: ViewModifier {
                 Helium.shared.upsellViewForTrigger(trigger: trigger, eventHandlers: eventHandlers, customPaywallTraits: customPaywallTraits)
                     .environment(\.paywallPresentationState, presentationState)
             }
-            .onChange(of: isPresented) { newValue in
-                presentationState.isOpen = isPresented
-            }
     }
 }
 
