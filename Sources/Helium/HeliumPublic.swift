@@ -443,8 +443,6 @@ public class Helium {
             """
         )
         
-        HeliumIdentityManager.shared.newInitializeId()
-        
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
         }
@@ -672,7 +670,7 @@ public class Helium {
     }
     
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
-    public static func resetHelium() {
+    public static func resetHelium(clearUserTraits: Bool = true) {
         HeliumPaywallPresenter.shared.hideAllUpsells()
         
         HeliumPaywallDelegateWrapper.reset()
@@ -687,6 +685,8 @@ public class Helium {
         ExperimentAllocationTracker.shared.reset()
         
         restorePurchaseConfig.reset()
+        
+        HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
         
         Helium.shared.reset()
         
