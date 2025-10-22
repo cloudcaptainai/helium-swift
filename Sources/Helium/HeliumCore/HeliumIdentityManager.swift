@@ -3,6 +3,13 @@ import Foundation
 public class HeliumIdentityManager {
     // MARK: - Singleton
     public static let shared = HeliumIdentityManager()
+    static func reset(clearUserTraits: Bool) {
+        if clearUserTraits {
+            shared.heliumUserTraits = HeliumUserTraits([:])
+        }
+        shared.heliumInitializeId = UUID().uuidString
+        shared.clearPaywallSessionId()
+    }
     private init() {
         self.heliumSessionId = UUID().uuidString
         self.heliumInitializeId = UUID().uuidString
@@ -12,13 +19,11 @@ public class HeliumIdentityManager {
     // MARK: - Properties
     private let heliumSessionId: String
     private(set) var heliumInitializeId: String
-    private var heliumUserTraits: HeliumUserTraits?
+    private var heliumUserTraits: HeliumUserTraits
     private var heliumPaywallSessionId: String?
     
     private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
     private(set) var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
-    
-    private var cachedUserContext: CodableUserContext? = nil
     
     var appTransactionID: String? = nil
     
@@ -28,10 +33,6 @@ public class HeliumIdentityManager {
     private let heliumPersistentIdKey = "heliumPersistentUserId"
     
     // MARK: - Public Methods
-    
-    func newInitializeId() {
-        heliumInitializeId = UUID().uuidString
-    }
     
     /// Gets the current user ID, creating one if it doesn't exist
     /// - Returns: The current user ID
@@ -105,14 +106,9 @@ public class HeliumIdentityManager {
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
     public func getUserContext(
-        skipDeviceCapacity: Bool = false,
-        useCachedIfAvailable: Bool = false
+        skipDeviceCapacity: Bool = false
     ) -> CodableUserContext {
-        if useCachedIfAvailable, let cachedUserContext {
-            return cachedUserContext
-        }
         let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
-        cachedUserContext = userContext
         return userContext
     }
 }
