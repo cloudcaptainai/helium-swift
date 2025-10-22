@@ -13,50 +13,12 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
-    @Published var isOpen: Bool = false
+    var isOpen: Bool = false // only used by .embedded and .triggered
     
     private let useAppearanceToSetIsOpen: Bool
     init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
         self.viewType = viewType
         self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appWillTerminate),
-            name: UIApplication.willTerminateNotification,
-            object: nil
-        )
-    }
-    
-    // Use this to try and prevent unnecessary extra open events.
-    // (Extra close events are harder to prevent, since we can't be sure if the paywall is
-    // completely closed since onDisappear can potentially be called multiple times. For example
-    // if the paywall is hidden by another modal or tab and then displayed again.)
-    private(set) var firstOnAppearHandled: Bool = false
-    
-    func handleOnAppear() {
-        firstOnAppearHandled = true
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if !isOpen {
-            isOpen = true
-        }
-    }
-    func handleOnDisappear() {
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if isOpen {
-            isOpen = false
-        }
-    }
-    
-    @objc private func appWillTerminate() {
-        // attempt to dispatch paywallClose analytics event even if user rage quits
-        if isOpen {
-            isOpen = false
-        }
     }
     
 }
@@ -148,15 +110,12 @@ class HeliumViewController: UIViewController {
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
-        
-        presentationState.isOpen = true
     }
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed || isMovingFromParent {
             HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
-            presentationState.isOpen = false
         }
     }
     

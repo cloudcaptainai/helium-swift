@@ -21,7 +21,7 @@ class HeliumPaywallPresenter {
     
     func isSecondTryPaywall(trigger: String) -> Bool {
         return paywallsDisplayed.contains {
-            $0.isSecondTry
+            $0.trigger == trigger && $0.isSecondTry
         }
     }
     
@@ -367,7 +367,8 @@ class HeliumPaywallPresenter {
         } else {
             event = PaywallCloseEvent(
                 triggerName: trigger,
-                paywallName: templateName
+                paywallName: templateName,
+                secondTry: paywallVC.isSecondTry
             )
         }
         HeliumPaywallDelegateWrapper.shared.fireEvent(event)

@@ -620,4 +620,5 @@ public enum PaywallUnavailableReason: String, Codable {
     case alreadyPresented
     case noRootController
     case webviewRenderFail
+    case bridgingError
 }

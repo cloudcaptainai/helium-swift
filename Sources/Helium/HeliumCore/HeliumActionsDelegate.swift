@@ -92,6 +92,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     @Published var isShowingModal: Bool = false
     @Published var showingModalScreen: String? = nil
     private var isLoading: Bool = false
+    private var lastShownSecondTryTrigger: String? = nil
     
     var dismissAction: (() -> Void)?
         
@@ -160,9 +161,11 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             let secondTryTrigger = "\(trigger)_second_try"
             // use explicit second try trigger if possible
             if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
+                lastShownSecondTryTrigger = secondTryTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true)
             } // otherwise look for a paywall that matches the uuid
             else if let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+                lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true)
             } else {
                 let event = PaywallOpenFailedEvent(
@@ -231,7 +234,17 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         return status;
     }
     
+    private var hiddenBehindSecondTry: Bool {
+        if let lastShownSecondTryTrigger {
+            return HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: lastShownSecondTryTrigger)
+        }
+        return false
+    }
+    
     public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
+        if hiddenBehindSecondTry {
+            return
+        }
         // Use new typed event
         let event = PaywallOpenEvent(
             triggerName: trigger,
@@ -252,6 +265,9 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     }
     
     public func logClosure() {
+        if hiddenBehindSecondTry {
+            return
+        }
         // Use new typed event
         let event = PaywallCloseEvent(
             triggerName: trigger,
