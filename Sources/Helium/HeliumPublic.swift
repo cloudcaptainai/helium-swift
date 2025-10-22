@@ -180,13 +180,17 @@ public class Helium {
     }
     
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
-        // Configure presentation context (always set both to ensure proper reset)
-        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits
-        )
+        let upsellView = upsellViewResultFor(trigger: trigger).view
         
-        return upsellViewResultFor(trigger: trigger).view
+        if upsellView != nil {
+            // Configure presentation context (always set both to ensure proper reset)
+            HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+                eventService: eventHandlers,
+                customPaywallTraits: customPaywallTraits
+            )
+        }
+        
+        return upsellView
     }
     
     func upsellViewResultFor(trigger: String) -> UpsellViewResult {
