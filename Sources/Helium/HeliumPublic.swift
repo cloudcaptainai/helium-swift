@@ -173,6 +173,8 @@ public class Helium {
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
+        HeliumEventListeners.shared.removeAllListeners()
+        
         // Reset initialization state to allow re-initialization
         reset()
                 
@@ -706,6 +708,8 @@ public class Helium {
         restorePurchaseConfig.reset()
         
         HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+        
+        HeliumEventListeners.shared.removeAllListeners()
         
         Helium.shared.reset()
         

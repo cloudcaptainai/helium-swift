@@ -22,6 +22,13 @@ class HeliumEventListeners {
     func addListener(_ listener: HeliumEventListener) {
         // Remove any nil references before adding
         cleanupListeners()
+        
+        // Check if listener already exists
+        guard !listeners.contains(where: { $0.value === listener }) else {
+            print("[Helium] Attempted to add the same event listener multiple times. Ignoring.")
+            return
+        }
+        
         listeners.append(WeakListener(value: listener))
     }
     
