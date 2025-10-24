@@ -5,6 +5,8 @@
 //  Created by Kyle Gorlick on 10/23/25.
 //
 
+import Foundation
+
 public protocol HeliumEventListener : AnyObject {
     func onHeliumEvent(event: HeliumEvent)
 }
@@ -18,34 +20,49 @@ class HeliumEventListeners {
     }
     
     private var listeners: [WeakListener] = []
+    private let queue = DispatchQueue(label: "com.helium.eventListeners")
     
     func addListener(_ listener: HeliumEventListener) {
-        // Remove any nil references before adding
-        cleanupListeners()
-        
-        // Check if listener already exists
-        guard !listeners.contains(where: { $0.value === listener }) else {
-            print("[Helium] Attempted to add the same event listener multiple times. Ignoring.")
-            return
+        queue.async { [weak self] in
+            guard let self else { return }
+            
+            cleanupListeners()
+            
+            // Check if listener already exists
+            guard !listeners.contains(where: { $0.value === listener }) else {
+                print("[Helium] Attempted to add the same event listener multiple times. Ignoring.")
+                return
+            }
+            
+            listeners.append(WeakListener(value: listener))
         }
-        
-        listeners.append(WeakListener(value: listener))
     }
     
     func removeListener(_ listener: HeliumEventListener) {
-        listeners.removeAll { $0.value === listener || $0.value == nil }
-    }
-    
-    func onHeliumEvent(event: HeliumEvent) {
-        // Clean up nil references and notify active listeners
-        cleanupListeners()
-        listeners.forEach {
-            $0.value?.onHeliumEvent(event: event)
+        queue.async { [weak self] in
+            guard let self else { return }
+            listeners.removeAll { $0.value === listener || $0.value == nil }
         }
     }
     
+    func onHeliumEvent(event: HeliumEvent) {
+        // Capture active listeners inside the queue synchronously
+        let activeListeners: [HeliumEventListener] = queue.sync { [weak self] in
+            guard let self else { return [] }
+            
+            cleanupListeners()
+            return listeners.compactMap { $0.value }
+        }
+        
+        // Notify listeners outside the queue to avoid blocking it
+        activeListeners.forEach { $0.onHeliumEvent(event: event) }
+    }
+    
     func removeAllListeners() {
-        listeners.removeAll()
+        queue.async { [weak self] in
+            guard let self else { return }
+            listeners.removeAll()
+        }
     }
     
     // Helper to remove deallocated listeners
