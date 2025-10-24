@@ -310,6 +310,16 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesRetrieveResult {
+        if config.triggerToPaywalls.isEmpty {
+            // this will be treated as a success... assumes no workflows are set up
+            return BundlesRetrieveResult(
+                successMapBundleIdToHtml: [:],
+                triggersWithNoBundle: [],
+                numBundles: 0,
+                numBundleAttempts: 0
+            )
+        }
+        
         var bundleUrlToTriggersMap: [String : [String]] = [:]
         var triggersWithNoBundle: [String] = []
 

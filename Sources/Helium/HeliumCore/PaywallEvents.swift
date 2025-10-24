@@ -824,6 +824,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// How many bundles were fetched (or retrieved from cache)
     public let numBundles: Int?
     
+    /// How many bundles were already cached
+    public let numBundlesFromCache: Int?
+    
     /// Number of config download attempts
     /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
     public let numAttempts: Int?
@@ -843,6 +846,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         bundleDownloadTimeMS: UInt64? = nil,
         localizedPriceTimeMS: UInt64? = nil,
         numBundles: Int? = nil,
+        numBundlesFromCache: Int? = nil,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
@@ -853,6 +857,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.bundleDownloadTimeMS = bundleDownloadTimeMS
         self.localizedPriceTimeMS = localizedPriceTimeMS
         self.numBundles = numBundles
+        self.numBundlesFromCache = numBundlesFromCache
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
@@ -883,6 +888,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         if let numBundles {
             dict["numBundles"] = numBundles
         }
+        if let numBundlesFromCache {
+            dict["numBundlesFromCache"] = numBundlesFromCache
+        }
         if let attempts = numAttempts {
             dict["numAttempts"] = attempts
         }
@@ -903,6 +911,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             bundleDownloadTimeMS: bundleDownloadTimeMS,
             localizedPriceTimeMS: localizedPriceTimeMS,
             numBundles: numBundles,
+            numBundlesFromCache: numBundlesFromCache,
             numAttempts: numAttempts,
             numBundleAttempts: numBundleAttempts
         )
