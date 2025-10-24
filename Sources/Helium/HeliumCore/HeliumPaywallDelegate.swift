@@ -175,7 +175,7 @@ public class HeliumPaywallDelegateWrapper {
             }
             #endif
             
-            let skPostPurchaseTxnTimeMS = UInt64(Double(DispatchTime.now().uptimeNanoseconds - transactionRetrievalStartTime.uptimeNanoseconds) / 1_000_000.0)
+            let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
             self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS))
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
