@@ -103,6 +103,7 @@ public class HeliumController {
                         bundleDownloadTimeMS: metrics.bundleDownloadTimeMS,
                         localizedPriceTimeMS: metrics.localizedPriceTimeMS,
                         numBundles: metrics.numBundles,
+                        numBundlesFromCache: metrics.numBundlesFromCache,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts
                     )

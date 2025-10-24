@@ -20,6 +20,7 @@ struct HeliumFetchMetrics {
     var numBundleAttempts: Int = 0
     var configSuccess: Bool = true
     var numBundles: Int? = nil
+    var numBundlesFromCache: Int? = nil
     var bundleFailCount: Int? = nil
     var configDownloadTimeMS: UInt64?
     var bundleDownloadTimeMS: UInt64?
@@ -30,6 +31,7 @@ private struct BundlesRetrieveResult {
     let successMapBundleIdToHtml: [String : String]
     let triggersWithNoBundle: [String]
     let numBundles: Int
+    let numBundlesFromCache: Int
     let numBundleAttempts: Int
 }
 
@@ -217,6 +219,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         configDownloadTimeMS: configDownloadTimeMS,
                         bundleDownloadTimeMS: nil,
                         numBundles: fetchedConfig?.bundles?.count ?? 0,
+                        numBundlesFromCache: 0,
                         bundleFailCount: 0,
                         numBundleAttempts: 0,
                         completion: completion
@@ -253,6 +256,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         configDownloadTimeMS: configDownloadTimeMS,
                         bundleDownloadTimeMS: bundleDownloadTimeMS,
                         numBundles: bundlesResult.numBundles,
+                        numBundlesFromCache: bundlesResult.numBundlesFromCache,
                         bundleFailCount: 0,
                         numBundleAttempts: bundlesResult.numBundleAttempts,
                         completion: completion
@@ -316,6 +320,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 successMapBundleIdToHtml: [:],
                 triggersWithNoBundle: [],
                 numBundles: 0,
+                numBundlesFromCache: 0,
                 numBundleAttempts: 0
             )
         }
@@ -376,6 +381,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             successMapBundleIdToHtml: finalResult,
             triggersWithNoBundle: triggersWithNoBundle + additionalTriggersNotFetchedFor,
             numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
+            numBundlesFromCache: cachedBundleIdToHtmlMap.count,
             numBundleAttempts: fetchResult.numBundleAttempts ?? 0
         )
     }
@@ -499,6 +505,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         configDownloadTimeMS: UInt64?,
         bundleDownloadTimeMS: UInt64?,
         numBundles: Int,
+        numBundlesFromCache: Int,
         bundleFailCount: Int,
         numBundleAttempts: Int,
         completion: @escaping (HeliumFetchResult) -> Void
@@ -517,6 +524,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             numConfigAttempts: numConfigAttempts,
             numBundleAttempts: numBundleAttempts,
             numBundles: numBundles,
+            numBundlesFromCache: numBundlesFromCache,
             bundleFailCount: bundleFailCount,
             configDownloadTimeMS: configDownloadTimeMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
