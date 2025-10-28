@@ -5,8 +5,6 @@ import UIKit
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     
-    private static var presentingWindowKey: UInt8 = 0
-    
     private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
     private let slideInTransitioningDelegate = SlideInTransitioningDelegate()
     
