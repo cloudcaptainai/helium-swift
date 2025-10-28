@@ -81,12 +81,6 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         return latestCompletedTransaction
     }
     
-    /// Only call this if you are implementing custom makePurchase logic. It allows Helium to immediately retrieve the transaction
-    /// after purchase instead of requesting it from StoreKit.
-    public func setLatestCompletedTransaction() -> Transaction? {
-        return latestCompletedTransaction
-    }
-    
 }
 public enum StoreKitDelegateError: LocalizedError {
     case cannotFindProduct
