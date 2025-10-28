@@ -50,6 +50,8 @@ class HeliumViewController: UIViewController {
     private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
+    var customWindow: UIWindow?
+    
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     

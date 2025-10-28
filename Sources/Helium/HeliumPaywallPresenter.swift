@@ -261,17 +261,11 @@ class HeliumPaywallPresenter {
             newWindow.makeKeyAndVisible()
             presenter = containerVC
             
-            // Auto-cleanup: Window will be released when modalVC is deallocated
-            objc_setAssociatedObject(
-                modalVC,
-                &Self.presentingWindowKey,
-                newWindow,
-                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
-            )
+            modalVC.customWindow = newWindow
         }
         
         guard let presenter else {
-            // Failed to find a view controller to present on - dispatch open failed event
+            // Failed to find a view controller to present on - this should never happen
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
@@ -342,6 +336,10 @@ class HeliumPaywallPresenter {
     func cleanUpPaywall(heliumViewController: HeliumViewController) {
         dispatchCloseForAll(paywallVCs: paywallsDisplayed.filter { $0 === heliumViewController })
         paywallsDisplayed.removeAll { $0 === heliumViewController }
+        
+        // Probably not necessary but explicitly clear to be safe
+        heliumViewController.customWindow?.windowScene = nil
+        heliumViewController.customWindow = nil
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
