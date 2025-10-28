@@ -5,6 +5,8 @@ import UIKit
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     
+    private static var presentingWindowKey: UInt8 = 0
+    
     private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
     private let slideInTransitioningDelegate = SlideInTransitioningDelegate()
     
@@ -250,7 +252,25 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
+        var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
+        if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
+            let newWindow = UIWindow(windowScene: windowScene)
+            let containerVC = UIViewController()
+            newWindow.rootViewController = containerVC
+            newWindow.windowLevel = .alert + 1
+            newWindow.makeKeyAndVisible()
+            presenter = containerVC
+            
+            // Auto-cleanup: Window will be released when modalVC is deallocated
+            objc_setAssociatedObject(
+                modalVC,
+                &Self.presentingWindowKey,
+                newWindow,
+                .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            )
+        }
+        
+        guard let presenter else {
             // Failed to find a view controller to present on - dispatch open failed event
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
