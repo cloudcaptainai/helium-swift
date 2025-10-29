@@ -133,6 +133,10 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                 return .cancelled
             }
             
+            if result.transaction == nil {
+                return .failed(RevenueCatDelegateError.couldNotVerifyTransaction)
+            }
+            
             latestSuccessfulPurchaseResult = result
             latestSuccessfulPurchaseOffering = offeringWithProduct
             
@@ -184,11 +188,14 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 
 public enum RevenueCatDelegateError: LocalizedError {
     case cannotFindProduct
+    case couldNotVerifyTransaction
 
     public var errorDescription: String? {
         switch self {
         case .cannotFindProduct:
             return "Could not find product. Please ensure products are properly configured."
+        case .couldNotVerifyTransaction:
+            return "Purchase transaction could not be verified."
         }
     }
 }
