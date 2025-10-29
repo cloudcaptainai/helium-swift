@@ -180,6 +180,9 @@ public class PriceFetcher {
         maxAttempts: Int = 3
     ) async -> [Product] {
         for attempt in 1...maxAttempts {
+            if attempt > 1 {
+                print("[Helium] Retrying product localization lookup... (attempt \(attempt) of \(maxAttempts))")
+            }
             do {
                 // Only apply timeout if not on the last attempt
                 if attempt < maxAttempts {
