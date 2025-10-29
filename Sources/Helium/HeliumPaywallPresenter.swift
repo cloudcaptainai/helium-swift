@@ -149,7 +149,8 @@ class HeliumPaywallPresenter {
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadtimeTakenMS: loadTimeTakenMS,
-                        loadingBudgetMS: loadingBudgetMS
+                        loadingBudgetMS: loadingBudgetMS,
+                        newWindowCreated: loadingPaywall.customWindow != nil
                     )
                 )
             }
@@ -266,8 +267,20 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        guard let presenter = viewController ?? UIWindowHelper.findTopMostViewController() else {
-            // Failed to find a view controller to present on - dispatch open failed event
+        var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
+        if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
+            let newWindow = UIWindow(windowScene: windowScene)
+            let containerVC = UIViewController()
+            newWindow.rootViewController = containerVC
+            newWindow.windowLevel = .alert + 1
+            newWindow.makeKeyAndVisible()
+            presenter = containerVC
+            
+            modalVC.customWindow = newWindow
+        }
+        
+        guard let presenter else {
+            // Failed to find a view controller to present on - this should never happen
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
@@ -339,6 +352,10 @@ class HeliumPaywallPresenter {
     func cleanUpPaywall(heliumViewController: HeliumViewController) {
         dispatchCloseForAll(paywallVCs: paywallsDisplayed.filter { $0 === heliumViewController })
         paywallsDisplayed.removeAll { $0 === heliumViewController }
+        
+        // Probably not necessary but explicitly clear to be safe
+        heliumViewController.customWindow?.windowScene = nil
+        heliumViewController.customWindow = nil
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
@@ -376,7 +393,8 @@ class HeliumPaywallPresenter {
                 viewType: .presented,
                 loadTimeTakenMS: loadTimeTakenMS,
                 loadingBudgetMS: loadingBudgetMS,
-                paywallUnavailableReason: paywallVC.fallbackReason
+                paywallUnavailableReason: paywallVC.fallbackReason,
+                newWindowCreated: paywallVC.customWindow != nil
             )
         } else {
             event = PaywallCloseEvent(
