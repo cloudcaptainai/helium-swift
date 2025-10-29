@@ -516,6 +516,9 @@ public class Helium {
         }
     }
     
+    func isInitialized() -> Bool {
+        return initialized
+    }
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {

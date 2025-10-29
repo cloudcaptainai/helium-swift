@@ -85,8 +85,9 @@ class HeliumViewController: UIViewController {
     }
     
     var loadTimeTakenMS: UInt64? {
-        if let loadStartTime, let displayTime {
-            return UInt64(Double(displayTime.uptimeNanoseconds - loadStartTime.uptimeNanoseconds) / 1_000_000.0)
+        let compareTime = displayTime ?? DispatchTime.now()
+        if let loadStartTime {
+            return dispatchTimeDifferenceInMS(from: loadStartTime, to: compareTime)
         }
         return nil
     }
