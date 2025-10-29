@@ -631,6 +631,9 @@ public enum PaywallUnavailableReason: String, Codable {
     case forceShowFallback
     case invalidResolvedConfig
     case paywallsNotDownloaded
+    case configFetchInProgress
+    case bundlesFetchInProgress
+    case productsFetchInProgress
     case paywallBundlesMissing
     case paywallsDownloadFail
     case secondTryNoMatch

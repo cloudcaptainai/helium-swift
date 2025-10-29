@@ -10,6 +10,12 @@ public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case downloadFailure
 }
 
+enum PaywallsDownloadStep {
+    case config
+    case bundles
+    case products
+}
+
 enum HeliumFetchResult {
     case success(HeliumFetchedConfig, HeliumFetchMetrics)
     case failure(errorMessage: String, HeliumFetchMetrics)
@@ -112,6 +118,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         shared.fetchTask = nil
         Task { @MainActor in
             shared.downloadStatus = .notDownloadedYet
+            shared.downloadStep = .config
         }
         shared.fetchedConfig = nil
         shared.fetchedConfigJSON = nil
@@ -121,6 +128,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     private var fetchTask: Task<Void, Never>?
     
     @Published public var downloadStatus: HeliumFetchedConfigStatus
+    private(set) var downloadStep: PaywallsDownloadStep = .config
     
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 5 // roughly 19 seconds of delays in between attempts
@@ -144,6 +152,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
         fetchTask = Task {
             await updateDownloadState(.inProgress)
+            downloadStep = .config
             
             let configStartTime = DispatchTime.now()
             await fetchConfigWithRetry(
@@ -226,6 +235,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     )
                 }
             } else {
+                downloadStep = .bundles
                 let bundleStartTime = DispatchTime.now()
                 let bundlesResult = await retrieveBundles(config: newConfig)
                 let bundleDownloadTimeMS = dispatchTimeDifferenceInMS(from: bundleStartTime)
@@ -511,11 +521,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         // Prefetch products and build localized price map
+        downloadStep = .products
         let localizedPricesStartTime = DispatchTime.now()
         let allProductIds = getAllProductIds()
-        if #available(iOS 15.0, *) {
-            await ProductsCache.shared.prefetchProducts(Array(allProductIds))
-        }
         await buildLocalizedPriceMap(allProductIds)
         let localizedPriceTimeMS = dispatchTimeDifferenceInMS(from: localizedPricesStartTime)
         
@@ -540,7 +548,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 allProductIds.append(contentsOf: paywall.productsOffered)
             }
         }
-        return allProductIds
+        return Array(Set(allProductIds))
     }
     
     
