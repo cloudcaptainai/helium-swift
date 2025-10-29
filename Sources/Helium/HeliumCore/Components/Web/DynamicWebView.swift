@@ -8,6 +8,7 @@ enum FileLoadAttempt {
 }
 
 public struct DynamicWebView: View {
+    let bundleId: String?
     let filePath: String
     let backupFilePath: String?
     @State private var fileLoadAttempt: FileLoadAttempt = .initialLoad
@@ -34,7 +35,9 @@ public struct DynamicWebView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     init(json: JSON, backupJson: JSON?, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
-        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
+        let bundleURL = json["bundleURL"].stringValue
+        self.bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleURL)
+        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleURL)!
         if let backupJson {
             backupFilePath = HeliumAssetManager.shared.localPathForURL(bundleURL: backupJson["bundleURL"].stringValue)
         } else {
@@ -219,7 +222,7 @@ public struct DynamicWebView: View {
                 _ = Date()
                 
                 do {
-                    try WebViewManager.shared.loadFilePath(filePathToLoad, toWebView: preparedWebView)
+                    try WebViewManager.shared.loadFilePath(filePathToLoad, toWebView: preparedWebView, bundleIdToTry: !useBackup ? bundleId : nil)
                     webView = preparedWebView
                 } catch {
                     webViewLoadFail(reason: "WebViewLoadFail")
@@ -483,7 +486,7 @@ class WebViewManager {
         try? loadFilePath(filePath, toWebView: webView)
     }
     
-    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) throws {
+    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView, bundleIdToTry: String? = nil) throws {
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
         
@@ -491,6 +494,11 @@ class WebViewManager {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         } else {
+            // See if can grab the bundle html string
+            if let bundleIdToTry,
+               let bundleHtml = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleIdToTry] {
+                toWebView.loadHTMLString(bundleHtml, baseURL: nil)
+            }
             throw WebViewError.bundleNotFound
         }
     }
