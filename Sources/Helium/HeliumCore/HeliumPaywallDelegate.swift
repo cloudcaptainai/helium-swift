@@ -160,7 +160,10 @@ public class HeliumPaywallDelegateWrapper {
             var transactionIds: TransactionIdPair? = nil
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                let transaction = transactionDelegate.getLatestCompletedTransaction() {
-                transactionIds = TransactionIdPair(transaction: transaction)
+                // Double-check to make sure correct transaction retrieved
+                if transaction.productID == productKey {
+                    transactionIds = TransactionIdPair(transaction: transaction)
+                }
             }
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)

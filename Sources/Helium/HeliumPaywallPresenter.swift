@@ -49,7 +49,8 @@ class HeliumPaywallPresenter {
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
                         error: "No paywall for trigger and no fallback available when present called.",
-                        paywallUnavailableReason: upsellViewResult.fallbackReason
+                        paywallUnavailableReason: upsellViewResult.fallbackReason,
+                        loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
                     )
                 )
                 return
@@ -67,7 +68,8 @@ class HeliumPaywallPresenter {
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "A paywall is already being presented.",
-                    paywallUnavailableReason: .alreadyPresented
+                    paywallUnavailableReason: .alreadyPresented,
+                    loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
                 )
             )
             return
@@ -84,12 +86,14 @@ class HeliumPaywallPresenter {
             let fallbackConfig = Helium.shared.fallbackConfig
             
             // Get trigger-specific loading configuration
-            let useLoading = fallbackConfig?.useLoadingState(for: trigger) ?? false
-            let loadingBudget = fallbackConfig?.loadingBudget(for: trigger) ?? 0
+            let useLoading = fallbackConfig?.useLoadingState(for: trigger) ?? true
+            let loadingBudget = fallbackConfig?.loadingBudget(for: trigger) ?? HeliumFallbackConfig.defaultLoadingBudget
             let triggerLoadingView = fallbackConfig?.loadingView(for: trigger)
             
+            let downloadStatus = Helium.shared.getDownloadStatus()
+            let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
             // If loading state disabled for this trigger, show fallback immediately
-            if !useLoading || Helium.shared.getDownloadStatus() != .inProgress {
+            if !useLoading || !heliumDownloadsIncoming {
                 presentUpsell(trigger: trigger, from: viewController)
                 return
             }
@@ -135,6 +139,8 @@ class HeliumPaywallPresenter {
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
         guard let upsellView = upsellViewResult.view else {
+            let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
+            let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
@@ -142,6 +148,8 @@ class HeliumPaywallPresenter {
                         paywallName: upsellViewResult.templateName ?? "unknown",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
+                        loadtimeTakenMS: loadTimeTakenMS,
+                        loadingBudgetMS: loadingBudgetMS,
                         newWindowCreated: loadingPaywall.customWindow != nil
                     )
                 )
@@ -162,6 +170,14 @@ class HeliumPaywallPresenter {
             }
         }
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
+    }
+    
+    private func loadingBudgetUInt64(trigger: String) -> UInt64? {
+        let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger)
+        if let loadingBudget {
+            return UInt64(loadingBudget * 1000)
+        }
+        return nil
     }
     
     private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
@@ -270,7 +286,8 @@ class HeliumPaywallPresenter {
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "No root view controller found",
-                    paywallUnavailableReason: .noRootController
+                    paywallUnavailableReason: .noRootController,
+                    loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
                 )
             )
             return
@@ -368,11 +385,8 @@ class HeliumPaywallPresenter {
         let event: HeliumEvent
         if openEvent {
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
-            let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger)
-            var loadingBudgetMS: UInt64? = nil
-            if loadTimeTakenMS != nil, let loadingBudget {
-                loadingBudgetMS = UInt64(loadingBudget * 1000)
-            }
+            let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
+            
             event = PaywallOpenEvent(
                 triggerName: trigger,
                 paywallName: templateName,
