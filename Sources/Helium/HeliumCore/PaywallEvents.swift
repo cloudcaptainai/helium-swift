@@ -954,6 +954,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             fontsDownloadTimeTakenMS: fontsDownloadTimeTakenMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
             localizedPriceTimeMS: localizedPriceTimeMS,
+            localizedPriceSuccess: localizedPriceSuccess,
             numBundles: numBundles,
             numBundlesFromCache: numBundlesFromCache,
             numAttempts: numAttempts,
