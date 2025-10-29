@@ -141,7 +141,8 @@ class HeliumPaywallPresenter {
                         triggerName: trigger,
                         paywallName: upsellViewResult.templateName ?? "unknown",
                         error: "No paywall for trigger and no fallback available after load complete.",
-                        paywallUnavailableReason: upsellViewResult.fallbackReason
+                        paywallUnavailableReason: upsellViewResult.fallbackReason,
+                        newWindowCreated: loadingPaywall.customWindow != nil
                     )
                 )
             }
@@ -378,7 +379,8 @@ class HeliumPaywallPresenter {
                 viewType: .presented,
                 loadTimeTakenMS: loadTimeTakenMS,
                 loadingBudgetMS: loadingBudgetMS,
-                paywallUnavailableReason: paywallVC.fallbackReason
+                paywallUnavailableReason: paywallVC.fallbackReason,
+                newWindowCreated: paywallVC.customWindow != nil
             )
         } else {
             event = PaywallCloseEvent(

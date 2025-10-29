@@ -85,6 +85,8 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     /// Reason why the paywall was unavailable (will only be set if a fallback paywall was used)
     public let paywallUnavailableReason: PaywallUnavailableReason?
     
+    let newWindowCreated: Bool?
+    
     /// When this event occurred
     public let timestamp: Date
     
@@ -92,6 +94,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         triggerName: String, paywallName: String, viewType: PaywallOpenViewType,
         loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil,
         paywallUnavailableReason: PaywallUnavailableReason? = nil,
+        newWindowCreated: Bool? = nil,
         timestamp: Date = Date()
     ) {
         self.triggerName = triggerName
@@ -100,6 +103,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         self.loadTimeTakenMS = loadTimeTakenMS
         self.loadingBudgetMS = loadingBudgetMS
         self.paywallUnavailableReason = paywallUnavailableReason
+        self.newWindowCreated = newWindowCreated
         self.timestamp = timestamp
     }
     
@@ -127,7 +131,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS, paywallUnavailableReason: paywallUnavailableReason?.rawValue)
+        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS, paywallUnavailableReason: paywallUnavailableReason?.rawValue, newWindowCreated: newWindowCreated)
     }
 }
 
@@ -236,15 +240,18 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// Reason why the paywall was unavailable
     public let paywallUnavailableReason: PaywallUnavailableReason?
     
+    let newWindowCreated: Bool?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, error: String, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, error: String, paywallUnavailableReason: PaywallUnavailableReason? = nil, newWindowCreated: Bool? = nil, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
         self.paywallUnavailableReason = paywallUnavailableReason
+        self.newWindowCreated = newWindowCreated
         self.timestamp = timestamp
     }
     
@@ -266,7 +273,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error, paywallUnavailableReason: paywallUnavailableReason?.rawValue)
+        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error, paywallUnavailableReason: paywallUnavailableReason?.rawValue, newWindowCreated: newWindowCreated)
     }
 }
 
