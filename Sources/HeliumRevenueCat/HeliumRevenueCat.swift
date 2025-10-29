@@ -136,11 +136,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
             latestSuccessfulPurchaseResult = result
             latestSuccessfulPurchaseOffering = offeringWithProduct
             
-            if isProductActive(customerInfo: result.customerInfo, productId: productId) {
-                return .purchased
-            } else {
-                return .failed(RevenueCatDelegateError.purchaseNotVerified)
-            }
+            return .purchased
         } catch {
             if let error = error as? RevenueCat.ErrorCode {
                 if error == .paymentPendingError {
@@ -174,23 +170,6 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         // Override in a subclass if desired
     }
     
-    private func isProductActive(customerInfo: CustomerInfo, productId: String) -> Bool {
-        if let entitlementId, customerInfo.entitlements[entitlementId]?.isActive == true {
-            return true
-        }
-        if customerInfo.entitlements.activeInCurrentEnvironment.contains(where: { entitlementInfoEntry in
-            entitlementInfoEntry.value.productIdentifier == productId
-        }) {
-            return true
-        }
-        if customerInfo.activeSubscriptions.contains(where: { productIdentifier in
-            productIdentifier == productId
-        }) {
-            return true
-        }
-        return false
-    }
-    
     public func getOfferingWithLatestPurchasedProduct() -> Offering? {
         return latestSuccessfulPurchaseOffering
     }
@@ -205,14 +184,11 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 
 public enum RevenueCatDelegateError: LocalizedError {
     case cannotFindProduct
-    case purchaseNotVerified
 
     public var errorDescription: String? {
         switch self {
         case .cannotFindProduct:
             return "Could not find product. Please ensure products are properly configured."
-        case .purchaseNotVerified:
-            return "Entitlement could not be verified as active."
         }
     }
 }
