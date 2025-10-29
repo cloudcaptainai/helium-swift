@@ -111,8 +111,9 @@ public class PriceFetcher {
     @available(iOS 15.0, *) // StoreKit 2 is iOS 15+
     public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
-        do {
-            let products = try await ProductsCache.shared.fetchProducts(for: skus)
+        
+            let products = await fetchProductsWithRetry(for: skus)
+            
             for product in products {
                 let formatter = NumberFormatter()
                 formatter.numberStyle = .currency
@@ -170,22 +171,52 @@ public class PriceFetcher {
                 
                 priceMap[product.id] = price
             }
-        } catch {
-            // Error handling without logging
-        }
-        
-        // Fall back to StoreKit 1 for any SKUs that failed
-        let failedSkus = Set(skus).subtracting(priceMap.keys)
-        if !failedSkus.isEmpty {
-            let fallbackPrices = await withCheckedContinuation { continuation in
-                fallbackToStoreKit1(for: Array(failedSkus)) { prices in
-                    continuation.resume(returning: prices)
-                }
-            }
-            priceMap.merge(fallbackPrices) { current, _ in current }
-        }
         
         return priceMap
+    }
+
+    private static func fetchProductsWithRetry(
+        for skus: [String],
+        maxAttempts: Int = 3
+    ) async -> [Product] {
+        for attempt in 1...maxAttempts {
+            do {
+                // Only apply timeout if not on the last attempt
+                if attempt < maxAttempts {
+                    return try await withThrowingTaskGroup(of: [Product].self) { group in
+                        group.addTask {
+                            try await ProductsCache.shared.fetchProducts(for: skus)
+                        }
+                        
+                        group.addTask {
+                            // 5 second timeout
+                            try await Task.sleep(nanoseconds: 5_000_000_000)
+                            throw PriceFetcherProductsError.timeout
+                        }
+                        
+                        // Return whichever completes first
+                        if let result = try await group.next() {
+                            group.cancelAll()
+                            return result
+                        }
+                        return []
+                    }
+                } else {
+                    // Last attempt - no timeout
+                    return try await ProductsCache.shared.fetchProducts(for: skus)
+                }
+            } catch {
+                // Don't delay after the last attempt
+                if attempt < maxAttempts {
+                    // Random delay between 2-5 seconds for jitter
+                    let delay = Double.random(in: 2.0...5.0)
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        // If all attempts failed, return empty array (price localization will not work)
+        return []
     }
     
     /// Fetches the localized price for multiple SKUs using completion handler
@@ -314,4 +345,15 @@ private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
             self.completion([:])
         }
     }
-} 
+}
+
+enum PriceFetcherProductsError: Error {
+    case timeout
+    
+    var localizedDescription: String {
+        switch self {
+        case .timeout:
+            return "StoreKit request timed out during price fetching."
+        }
+    }
+}
