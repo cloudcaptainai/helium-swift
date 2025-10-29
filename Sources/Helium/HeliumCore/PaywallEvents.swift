@@ -858,6 +858,8 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// - Note: Time to download JavaScript/CSS bundles for web-based paywalls
     public let localizedPriceTimeMS: UInt64?
     
+    public let localizedPriceSuccess: Bool?
+    
     /// How many bundles were fetched (or retrieved from cache)
     public let numBundles: Int?
     
@@ -882,6 +884,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         fontsDownloadTimeTakenMS: UInt64? = nil,
         bundleDownloadTimeMS: UInt64? = nil,
         localizedPriceTimeMS: UInt64? = nil,
+        localizedPriceSuccess: Bool? = nil,
         numBundles: Int? = nil,
         numBundlesFromCache: Int? = nil,
         numAttempts: Int? = nil,
@@ -893,6 +896,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.fontsDownloadTimeTakenMS = fontsDownloadTimeTakenMS
         self.bundleDownloadTimeMS = bundleDownloadTimeMS
         self.localizedPriceTimeMS = localizedPriceTimeMS
+        self.localizedPriceSuccess = localizedPriceSuccess
         self.numBundles = numBundles
         self.numBundlesFromCache = numBundlesFromCache
         self.numAttempts = numAttempts
@@ -921,6 +925,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         }
         if let localizedPriceTimeMS {
             dict["localizedPriceTimeMS"] = localizedPriceTimeMS
+        }
+        if let localizedPriceSuccess {
+            dict["localizedPriceSuccess"] = localizedPriceSuccess
         }
         if let numBundles {
             dict["numBundles"] = numBundles

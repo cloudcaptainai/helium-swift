@@ -31,6 +31,7 @@ struct HeliumFetchMetrics {
     var configDownloadTimeMS: UInt64?
     var bundleDownloadTimeMS: UInt64?
     var localizedPriceTimeMS: UInt64?
+    var localizedPriceSuccess: Bool? = nil
 }
 
 private struct BundlesRetrieveResult {
@@ -536,7 +537,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
             bundleFailCount: bundleFailCount,
             configDownloadTimeMS: configDownloadTimeMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
-            localizedPriceTimeMS: localizedPriceTimeMS
+            localizedPriceTimeMS: localizedPriceTimeMS,
+            localizedPriceSuccess: !localizedPriceMap.isEmpty
         )))
     }
     
