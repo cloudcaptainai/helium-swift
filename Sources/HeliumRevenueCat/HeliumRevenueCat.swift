@@ -19,6 +19,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private(set) var productMappings: [String: StoreProduct] = [:]
     
     private var latestSuccessfulPurchaseResult: PurchaseResultData? = nil
+    private var latestSuccessfulPurchaseOffering: Offering? = nil
     
     private let allowHeliumUserAttribute: Bool
     
@@ -87,6 +88,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         
         do {
             var result: PurchaseResultData? = nil
+            var offeringWithProduct: Offering? = nil
             
             if let offerings {
                 var packageToPurchase: Package? = nil
@@ -95,6 +97,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                     for package in offering.availablePackages {
                         if package.storeProduct.productIdentifier == productId {
                             packageToPurchase = package
+                            offeringWithProduct = offering
                             break
                         }
                     }
@@ -131,6 +134,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
             }
             
             latestSuccessfulPurchaseResult = result
+            latestSuccessfulPurchaseOffering = offeringWithProduct
             
             if isProductActive(customerInfo: result.customerInfo, productId: productId) {
                 return .purchased
@@ -138,6 +142,13 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                 return .failed(RevenueCatDelegateError.purchaseNotVerified)
             }
         } catch {
+            if let error = error as? RevenueCat.ErrorCode {
+                if error == .paymentPendingError {
+                    return .pending
+                } else if error == .purchaseCancelledError {
+                    return .cancelled
+                }
+            }
             return .failed(error)
         }
     }
@@ -180,6 +191,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         return false
     }
     
+    public func getOfferingWithLatestPurchasedProduct() -> Offering? {
+        return latestSuccessfulPurchaseOffering
+    }
     public func getLatestCompletedPurchaseResult() -> PurchaseResultData? {
         return latestSuccessfulPurchaseResult
     }
