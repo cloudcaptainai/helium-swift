@@ -292,6 +292,7 @@ public class HeliumPaywallDelegateWrapper {
                 }
                 
                 let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
+                let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
                 let eventForLogging = HeliumPaywallLoggedEvent(
                     heliumEvent: event,
                     fetchedConfigId: fetchedConfigId,
@@ -301,7 +302,7 @@ public class HeliumPaywallDelegateWrapper {
                     modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
                     paywallUUID: paywallInfo?.paywallUUID,
-                    organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
+                    organizationID: organizationID,
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
