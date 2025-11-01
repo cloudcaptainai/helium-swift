@@ -226,15 +226,17 @@ public struct DynamicWebView: View {
                 _ = Date()
                 
                 do {
-                    let htmlStringIfNeeded: String?
-                    if useBackup, let backupBundleId {
-                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
-                    } else if let bundleId {
+                    var htmlStringIfNeeded: String? = nil
+                    if !useBackup, let bundleId {
                         htmlStringIfNeeded = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleId]
-                    } else {
-                        htmlStringIfNeeded = nil
+                        if htmlStringIfNeeded == nil && backupFilePath == nil {
+                            // This can happen if bundleId is actually for a fallback bundle
+                            htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[bundleId]
+                        }
+                    } else if useBackup, let backupBundleId {
+                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
                     }
-
+                    
                     try WebViewManager.shared.loadFilePath(
                         filePathToLoad,
                         toWebView: preparedWebView,
