@@ -103,10 +103,10 @@ public class HeliumAssetManager: ObservableObject {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
-    public func writeBundles(bundles: [String: String]) throws {
+    public func writeBundles(bundles: [String: String]) {
         let bundleDir = HeliumAssetManager.bundleDir
         
-        try FileManager.default.createDirectory(
+        try? FileManager.default.createDirectory(
             at: bundleDir,
             withIntermediateDirectories: true
         )
@@ -122,9 +122,13 @@ public class HeliumAssetManager: ObservableObject {
                 let unescapedContent = content
                 
                 if let data = unescapedContent.data(using: .utf8) {
-                    print("[Helium] Writing to \(localURL)");
-                    try data.write(to: localURL)
-                    updatedIds.insert(bundleId)
+                    print("[Helium] Writing to \(localURL)")
+                    do {
+                        try data.write(to: localURL)
+                        updatedIds.insert(bundleId)
+                    } catch {
+                        print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+                    }
                 } else {
                     print("[Helium] Failed to write paywall bundle with id \(bundleId)")
                 }
