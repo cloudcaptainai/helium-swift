@@ -227,8 +227,17 @@ public class Helium {
         } else {
             let fallbackReason: PaywallUnavailableReason
             switch HeliumFetchedConfigManager.shared.downloadStatus {
-            case .notDownloadedYet, .inProgress:
+            case .notDownloadedYet:
                 fallbackReason = .paywallsNotDownloaded
+            case .inProgress:
+                switch HeliumFetchedConfigManager.shared.downloadStep {
+                case .config:
+                    fallbackReason = .configFetchInProgress
+                case .bundles:
+                    fallbackReason = .bundlesFetchInProgress
+                case .products:
+                    fallbackReason = .productsFetchInProgress
+                }
             case .downloadSuccess:
                 fallbackReason = .paywallBundlesMissing
             case .downloadFailure:
@@ -516,6 +525,9 @@ public class Helium {
         }
     }
     
+    func isInitialized() -> Bool {
+        return initialized
+    }
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
