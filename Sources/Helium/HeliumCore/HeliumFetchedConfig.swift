@@ -51,7 +51,7 @@ private struct BundlesFetchResult {
 private struct SingleBundleFetchResult {
     let url: String
     let html: String?
-    let isBadURL: Bool
+    let isPermanentFailure: Bool
 }
 
 class NetworkReachability {
@@ -368,6 +368,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         HeliumAssetManager.shared.removeBundleIdFromCache(bundleId)
                     }
                 }
+                
+                // Validate URL before processing - skip silently if invalid (don't fail entire download)
+                guard isValidURL(bundleUrl) else {
+                    print("[Helium] Invalid URL format for trigger \(trigger): \(bundleUrl)")
+                    continue
+                }
 
                 if bundleUrlToTriggersMap[bundleUrl] == nil {
                     bundleUrlToTriggersMap[bundleUrl] = []
@@ -460,13 +466,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session)
-                        return SingleBundleFetchResult(url: url, html: html, isBadURL: false)
+                        return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false)
                     } catch {
                         if let urlError = error as? URLError, urlError.code == .badURL {
                             print("[Helium] Invalid URL for triggers: \(triggers)")
-                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: true)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true)
                         } else {
-                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: false)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false)
                         }
                     }
                 }
@@ -476,7 +482,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 if let html = result.html,
                    let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(result.url) { // bundleId should NOT be nil
                     results[bundleId] = html
-                } else if !result.isBadURL {
+                } else if !result.isPermanentFailure {
                     bundleUrlsNotFetched.append(result.url)
                 }
             }
@@ -498,8 +504,21 @@ public class HeliumFetchedConfigManager: ObservableObject {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        let statusCode = httpResponse.statusCode
+
+        // Check if response is successful
+        guard (200...299).contains(statusCode) else {
+            // Treat specific client errors as permanent failures (non-retryable)
+            // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
+            if statusCode == 403 || statusCode == 404 || statusCode == 410 {
+                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                throw URLError(.badURL)
+            }
+            // All other errors (5xx server errors, etc.) are retryable
             throw URLError(.badServerResponse)
         }
 
@@ -645,6 +664,16 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getClientName() -> String? {
         return fetchedConfig?.orgName
+    }
+    
+    public func isValidURL(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            return false
+        }
+        return true
     }
 }
 
