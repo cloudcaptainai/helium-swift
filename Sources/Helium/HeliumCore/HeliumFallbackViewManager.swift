@@ -51,7 +51,7 @@ public class HeliumFallbackViewManager {
                 }
                 
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
-                    try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+                    HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     print("[Helium] Successfully loaded paywalls from fallback bundle file.")
                 } else {
                     print("[Helium] No bundles found in fallback bundle file.")
