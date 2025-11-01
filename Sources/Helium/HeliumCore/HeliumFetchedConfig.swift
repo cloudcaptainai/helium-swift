@@ -405,9 +405,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
         attemptCounter: Int
     ) async -> BundlesFetchResult {
         // Increase timeout if on last attempt
-        var timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 60 : nil
-        let response = try await fetchEndpoint(endpoint: endpoint, params: params, timeoutInterval: timeoutInterval)
-        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap)
+        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 20 : nil
+        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, timeoutInterval: timeoutInterval)
         
         if !result.bundleUrlsNotFetched.isEmpty {
             let missingTriggers = result.bundleUrlsNotFetched.flatMap {
