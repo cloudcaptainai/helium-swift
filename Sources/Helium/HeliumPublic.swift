@@ -580,25 +580,19 @@ public class Helium {
             return false
         }
         
-        // Do not show fallbacks... check to see if the needed bundle is available
-        if !paywallsLoaded() {
-            print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
+        if !initialized {
+            print("[Helium] handleDeepLink - must call initialize first.")
             return false
         }
         
         if let paywallUUID, triggerValue == nil {
             triggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
             if triggerValue == nil {
-                print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID).")
+                print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID). Paywalls might still be downloading.")
             }
         }
         
         guard let trigger = triggerValue else {
-            return false
-        }
-        
-        if getPaywallInfo(trigger: trigger) == nil {
-            print("[Helium] handleDeepLink - Bundle is not available for this trigger.")
             return false
         }
         
