@@ -211,8 +211,8 @@ public class PriceFetcher {
             } catch {
                 // Don't delay after the last attempt
                 if attempt < maxAttempts {
-                    // Random delay between 2-5 seconds for jitter
-                    let delay = Double.random(in: 2.0...5.0)
+                    // Random delay between for jitter
+                    let delay = Double.random(in: 1.5...3.5)
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 }
             }
