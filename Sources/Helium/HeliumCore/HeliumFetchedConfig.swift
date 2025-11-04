@@ -77,7 +77,8 @@ class NetworkReachability {
 
 func fetchEndpoint(
     endpoint: String,
-    params: [String: Any]
+    params: [String: Any],
+    timeoutInterval: TimeInterval? = nil
 ) async throws -> (HeliumFetchedConfig?, JSON?) {
     let urlString = endpoint
     guard let url = URL(string: urlString) else {
@@ -94,7 +95,7 @@ func fetchEndpoint(
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
 //    request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles") // keep off for now
     
-    request.timeoutInterval = 15
+    request.timeoutInterval = timeoutInterval ?? 15
     
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
@@ -176,8 +177,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         do {
-            // Make the request asynchronously
-            let response = try await fetchEndpoint(endpoint: endpoint, params: params)
+            // Increase timeout if on last attempt
+            var timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 60 : nil
+            let response = try await fetchEndpoint(endpoint: endpoint, params: params, timeoutInterval: timeoutInterval)
             
             // Ensure we have data
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
@@ -408,7 +410,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         maxAttempts: Int,
         attemptCounter: Int
     ) async -> BundlesFetchResult {
-        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap)
+        // Increase timeout if on last attempt
+        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 20 : nil
+        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, timeoutInterval: timeoutInterval)
         
         if !result.bundleUrlsNotFetched.isEmpty {
             let missingTriggers = result.bundleUrlsNotFetched.flatMap {
@@ -450,7 +454,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func fetchBundles(
-        bundleUrlToTriggersMap: [String : [String]]
+        bundleUrlToTriggersMap: [String : [String]],
+        timeoutInterval: TimeInterval? = nil
     ) async -> BundlesFetchResult {
         var bundleUrlsNotFetched: [String] = []
 
@@ -465,7 +470,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             for (url, triggers) in bundleUrlToTriggersMap {
                 group.addTask {
                     do {
-                        let html = try await self.fetchBundleHTML(from: url, using: session)
+                        let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
                         return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false)
                     } catch {
                         if let urlError = error as? URLError, urlError.code == .badURL {
@@ -494,13 +499,17 @@ public class HeliumFetchedConfigManager: ObservableObject {
         )
     }
 
-    private func fetchBundleHTML(from urlString: String, using session: URLSession) async throws -> String {
+    private func fetchBundleHTML(
+        from urlString: String,
+        using session: URLSession,
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> String {
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 5
+        request.timeoutInterval = timeoutInterval ?? 5
 
         let (data, response) = try await session.data(for: request)
 
