@@ -230,7 +230,7 @@ public class HeliumPaywallDelegateWrapper {
             delegate?.onPaywallEvent(event)
             
             // Global event handlers
-            HeliumEventListeners.shared.onHeliumEvent(event: event)
+            HeliumEventListeners.shared.dispatchEvent(event)
         }
         
         // Clear presentation context (event service and custom traits) on close events

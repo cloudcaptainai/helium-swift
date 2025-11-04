@@ -45,7 +45,7 @@ class HeliumEventListeners {
         }
     }
     
-    func onHeliumEvent(event: HeliumEvent) {
+    func dispatchEvent(_ event: HeliumEvent) {
         // Capture active listeners inside the queue synchronously
         let activeListeners: [HeliumEventListener] = queue.sync { [weak self] in
             guard let self else { return [] }
