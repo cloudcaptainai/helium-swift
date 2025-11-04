@@ -176,6 +176,8 @@ public class Helium {
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
+        HeliumEventListeners.shared.removeAllListeners()
+        
         // Reset initialization state to allow re-initialization
         reset()
                 
@@ -557,6 +559,21 @@ public class Helium {
         HeliumIdentityManager.shared.setRevenueCatAppUserId(rcAppUserId)
     }
     
+    /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
+    public func addHeliumEventListener(_ listener: HeliumEventListener) {
+        HeliumEventListeners.shared.addListener(listener)
+    }
+    
+    /// Remove a specific Helium event listener.
+    public func removeHeliumEventListener(_ listener: HeliumEventListener) {
+        HeliumEventListeners.shared.removeListener(listener)
+    }
+    
+    /// Remove all Helium event listeners.
+    public func removeAllHeliumEventListeners() {
+        HeliumEventListeners.shared.removeAllListeners()
+    }
+    
     /// Sets the light/dark mode override for Helium paywalls.
     /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
     /// - Note: .system respects the device's current appearance setting (default)
@@ -713,6 +730,8 @@ public class Helium {
         restorePurchaseConfig.reset()
         
         HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+        
+        HeliumEventListeners.shared.removeAllListeners()
         
         Helium.shared.reset()
         
