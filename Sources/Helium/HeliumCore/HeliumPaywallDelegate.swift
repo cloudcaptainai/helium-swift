@@ -231,11 +231,11 @@ public class HeliumPaywallDelegateWrapper {
             
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
-        }
-        
-        // Clear presentation context (event service and custom traits) on close events
-        if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
-            clearPresentationContext()
+            
+            // Clear presentation context (event service and custom traits) on close events
+            if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
+                clearPresentationContext()
+            }
         }
         
         // Then convert to legacy format and handle internally (analytics, etc)
