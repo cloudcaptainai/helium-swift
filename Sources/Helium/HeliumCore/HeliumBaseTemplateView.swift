@@ -20,6 +20,14 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     var triggerName: String?
     let fallbackReason: PaywallUnavailableReason?
     
+    private var colorSchemeOverride: ColorScheme? {
+        switch Helium.shared.lightDarkModeOverride {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return nil
+        }
+    }
+    
     init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, resolvedConfig: JSON?, backupResolvedConfig: JSON? = nil) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
@@ -54,6 +62,7 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
+        .preferredColorScheme(colorSchemeOverride)
         .onAppear {
             actionsDelegate.setDismissAction {
                 dismiss()
