@@ -108,6 +108,17 @@ class HeliumViewController: UIViewController {
         
         let modalView = UIHostingController(rootView: contentView)
         self.hostingController = modalView
+        
+        // Apply light/dark mode override if not system default
+        switch Helium.shared.lightDarkModeOverride {
+        case .light:
+            modalView.overrideUserInterfaceStyle = .light
+        case .dark:
+            modalView.overrideUserInterfaceStyle = .dark
+        case .system:
+            break // Don't set anything, use system default
+        }
+        
         addChild(modalView)
         view.addSubview(modalView.view)
         modalView.view.frame = view.bounds
