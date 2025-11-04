@@ -160,7 +160,10 @@ public class HeliumPaywallDelegateWrapper {
             var transactionIds: TransactionIdPair? = nil
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                let transaction = transactionDelegate.getLatestCompletedTransaction() {
-                transactionIds = TransactionIdPair(transaction: transaction)
+                // Double-check to make sure correct transaction retrieved
+                if transaction.productID == productKey {
+                    transactionIds = TransactionIdPair(transaction: transaction)
+                }
             }
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
@@ -175,7 +178,7 @@ public class HeliumPaywallDelegateWrapper {
             }
             #endif
             
-            let skPostPurchaseTxnTimeMS = UInt64(Double(DispatchTime.now().uptimeNanoseconds - transactionRetrievalStartTime.uptimeNanoseconds) / 1_000_000.0)
+            let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
             self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS))
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
@@ -291,6 +294,7 @@ public class HeliumPaywallDelegateWrapper {
                 }
                 
                 let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
+                let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
                 let eventForLogging = HeliumPaywallLoggedEvent(
                     heliumEvent: event,
                     fetchedConfigId: fetchedConfigId,
@@ -300,7 +304,7 @@ public class HeliumPaywallDelegateWrapper {
                     modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
                     paywallUUID: paywallInfo?.paywallUUID,
-                    organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
+                    organizationID: organizationID,
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,

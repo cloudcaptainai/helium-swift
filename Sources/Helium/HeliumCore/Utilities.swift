@@ -88,6 +88,10 @@ func formatAsTimestamp(date: Date) -> String {
     return formatter.string(from: date)
 }
 
+func dispatchTimeDifferenceInMS(from: DispatchTime, to: DispatchTime = DispatchTime.now()) -> UInt64 {
+    return UInt64(Double(to.uptimeNanoseconds - from.uptimeNanoseconds) / 1_000_000.0)
+}
+
 
 public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 0, additionalBottomPadding: CGFloat = 0) -> EdgeInsets {
     let topPadding: CGFloat
