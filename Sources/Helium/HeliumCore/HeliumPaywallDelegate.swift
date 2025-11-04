@@ -228,6 +228,8 @@ public class HeliumPaywallDelegateWrapper {
         // Then fire the new typed event to delegate
         delegate?.onPaywallEvent(event)
         
+        HeliumEventListeners.shared.onHeliumEvent(event: event)
+        
         // Clear presentation context (event service and custom traits) on close events
         if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
             clearPresentationContext()
