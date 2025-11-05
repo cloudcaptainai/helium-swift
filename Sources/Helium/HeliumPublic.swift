@@ -369,8 +369,7 @@ public class Helium {
     /// ### Fallback Priority
     /// When paywalls cannot be fetched, fallbacks are shown in this order:
     /// 1. **Fallback bundle** - If trigger exists in bundle JSON
-    /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
-    /// 3. **Global fallback view** - From `fallbackView`
+    /// 2. **Global fallback view** - From `fallbackView`
     ///
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
@@ -431,11 +430,6 @@ public class Helium {
         // Set up fallback view if provided
         if let fallbackView = fallbackConfig?.fallbackView {
             HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: fallbackView);
-        }
-        
-        // Set up trigger-specific fallback views if provided
-        if let triggerFallbacks = fallbackConfig?.fallbackPerTrigger {
-            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerFallbacks)
         }
         
         // Set up fallback bundle if provided
