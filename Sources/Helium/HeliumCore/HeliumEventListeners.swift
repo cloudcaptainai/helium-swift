@@ -45,7 +45,7 @@ class HeliumEventListeners {
         }
     }
     
-    func onHeliumEvent(event: HeliumEvent) {
+    func dispatchEvent(_ event: HeliumEvent) {
         // Capture active listeners inside the queue synchronously
         let activeListeners: [HeliumEventListener] = queue.sync { [weak self] in
             guard let self else { return [] }
@@ -54,8 +54,9 @@ class HeliumEventListeners {
             return listeners.compactMap { $0.value }
         }
         
-        // Notify listeners outside the queue to avoid blocking it
-        activeListeners.forEach { $0.onHeliumEvent(event: event) }
+        Task { @MainActor in
+            activeListeners.forEach { $0.onHeliumEvent(event: event) }
+        }
     }
     
     func removeAllListeners() {

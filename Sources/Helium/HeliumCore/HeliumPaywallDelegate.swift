@@ -222,17 +222,20 @@ public class HeliumPaywallDelegateWrapper {
     
     /// Fire a v2 typed event - main entry point for all SDK events
     public func fireEvent(_ event: HeliumEvent) {
-        // First, call the event service if configured
-        eventService?.handleEvent(event)
-        
-        // Then fire the new typed event to delegate
-        delegate?.onPaywallEvent(event)
-        
-        HeliumEventListeners.shared.onHeliumEvent(event: event)
-        
-        // Clear presentation context (event service and custom traits) on close events
-        if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
-            clearPresentationContext()
+        Task { @MainActor in
+            // First, call the event service if configured
+            eventService?.handleEvent(event)
+            
+            // Then fire the new typed event to delegate
+            delegate?.onPaywallEvent(event)
+            
+            // Global event handlers
+            HeliumEventListeners.shared.dispatchEvent(event)
+            
+            // Clear presentation context (event service and custom traits) on close events
+            if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
+                clearPresentationContext()
+            }
         }
         
         // Then convert to legacy format and handle internally (analytics, etc)
