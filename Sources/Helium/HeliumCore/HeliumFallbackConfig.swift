@@ -63,8 +63,7 @@ public struct TriggerLoadingConfig {
 /// When paywalls are not available (network failure, timeout, or missing configuration), 
 /// fallbacks are resolved in this order:
 /// 1. **Fallback bundle** - If a trigger exists in the bundle JSON, uses that configuration
-/// 2. **Per-trigger fallback views** - Trigger-specific SwiftUI views (from `fallbackPerTrigger`)
-/// 3. **Global fallback view** - Single SwiftUI view for all triggers (from `fallbackView`)
+/// 2. **Global fallback view** - Single SwiftUI view for all triggers (from `fallbackView`)
 ///
 /// Note: At least one fallback mechanism is required during initialization.
 ///
@@ -111,10 +110,6 @@ public struct HeliumFallbackConfig {
     /// Example: Disable loading for "onboarding" trigger while keeping it for others.
     public var perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     
-    /// Per-trigger fallback views for specific triggers.
-    /// Keys are trigger names, values are SwiftUI views to display as fallback.
-    public var fallbackPerTrigger: [String: AnyView]? = nil
-    
     /// URL to a fallback bundle JSON file.
     /// This bundle can be downloaded from the Helium dashboard and bundled with your app.
     /// Provides rich, configurable fallback paywalls without hardcoding views.
@@ -131,7 +126,6 @@ public struct HeliumFallbackConfig {
         loadingView: AnyView?,
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]?,
         fallbackView: AnyView?,
-        fallbackPerTrigger: [String: AnyView]?,
         fallbackBundle: URL?
     ) {
         self.useLoadingState = useLoadingState
@@ -139,7 +133,6 @@ public struct HeliumFallbackConfig {
         self.loadingView = loadingView
         self.perTriggerLoadingConfig = perTriggerLoadingConfig
         self.fallbackView = fallbackView
-        self.fallbackPerTrigger = fallbackPerTrigger
         self.fallbackBundle = fallbackBundle
     }
     
@@ -167,41 +160,6 @@ public struct HeliumFallbackConfig {
             loadingView: loadingView,
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: AnyView(view),
-            fallbackPerTrigger: nil,
-            fallbackBundle: nil
-        )
-    }
-    
-    /// Creates a configuration with different fallback views for each trigger.
-    ///
-    /// Use this when different triggers require different fallback experiences.
-    /// For example, a simpler fallback for onboarding vs. a full-featured one for premium upgrade.
-    ///
-    /// - Parameters:
-    ///   - fallbacks: Dictionary mapping trigger names to their fallback views
-    ///   - useLoadingState: Whether to show loading state before fallback (default: true)
-    ///   - loadingBudget: Maximum seconds to show loading state
-    ///   - loadingView: Custom loading view, or nil for default shimmer
-    ///   - perTriggerLoadingConfig: Optional per-trigger loading overrides
-    /// - Returns: A configured HeliumFallbackConfig instance
-    public static func withPerTriggerFallbacks(
-        _ fallbacks: [String: any View],
-        useLoadingState: Bool = true,
-        loadingBudget: TimeInterval = defaultLoadingBudget,
-        loadingView: AnyView? = nil,
-        perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
-    ) -> HeliumFallbackConfig {
-        var anyViewMap: [String: AnyView] = [:]
-        for (key, view) in fallbacks {
-            anyViewMap[key] = AnyView(view)
-        }
-        return HeliumFallbackConfig(
-            useLoadingState: useLoadingState,
-            loadingBudget: loadingBudget,
-            loadingView: loadingView,
-            perTriggerLoadingConfig: perTriggerLoadingConfig,
-            fallbackView: nil,
-            fallbackPerTrigger: anyViewMap,
             fallbackBundle: nil
         )
     }
@@ -240,7 +198,6 @@ public struct HeliumFallbackConfig {
             loadingView: loadingView,
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: nil,
-            fallbackPerTrigger: nil,
             fallbackBundle: url
         )
     }
@@ -249,14 +206,12 @@ public struct HeliumFallbackConfig {
     ///
     /// This method allows combining different fallback strategies:
     /// - Fallback bundle for rich, configurable fallbacks
-    /// - Per-trigger views for trigger-specific experiences
     /// - Global fallback view as a last resort
     ///
     /// At least one fallback mechanism must be provided.
     ///
     /// - Parameters:
     ///   - fallbackView: Optional global fallback view
-    ///   - fallbackPerTrigger: Optional per-trigger fallback views
     ///   - fallbackBundle: Optional fallback bundle URL
     ///   - useLoadingState: Whether to show loading state (default: true)
     ///   - loadingBudget: Maximum seconds to show loading
@@ -265,7 +220,6 @@ public struct HeliumFallbackConfig {
     /// - Returns: Optional HeliumFallbackConfig, nil if no fallback mechanism provided
     public static func withMultipleFallbacks(
         fallbackView: (any View)? = nil,
-        fallbackPerTrigger: [String: any View]? = nil,
         fallbackBundle: URL? = nil,
         useLoadingState: Bool = true,
         loadingBudget: TimeInterval = defaultLoadingBudget,
@@ -273,17 +227,9 @@ public struct HeliumFallbackConfig {
         perTriggerLoadingConfig: [String: TriggerLoadingConfig]? = nil
     ) -> HeliumFallbackConfig? {
         // Require at least one fallback mechanism
-        guard fallbackView != nil || fallbackPerTrigger != nil || fallbackBundle != nil else {
+        guard fallbackView != nil || fallbackBundle != nil else {
             print("[Helium] Fallback not configured correctly")
             return nil
-        }
-        
-        var anyViewPerTrigger: [String: AnyView]? = nil
-        if let triggers = fallbackPerTrigger {
-            anyViewPerTrigger = [:]
-            for (key, view) in triggers {
-                anyViewPerTrigger![key] = AnyView(view)
-            }
         }
         
         return HeliumFallbackConfig(
@@ -292,7 +238,6 @@ public struct HeliumFallbackConfig {
             loadingView: loadingView,
             perTriggerLoadingConfig: perTriggerLoadingConfig,
             fallbackView: fallbackView.map { AnyView($0) },
-            fallbackPerTrigger: anyViewPerTrigger,
             fallbackBundle: fallbackBundle
         )
     }
@@ -348,7 +293,6 @@ public struct HeliumFallbackConfig {
             loadingView: nil,
             perTriggerLoadingConfig: perTriggerConfig.isEmpty ? nil : perTriggerConfig,
             fallbackView: nil,
-            fallbackPerTrigger: nil,
             fallbackBundle: bundleURL
         )
     }

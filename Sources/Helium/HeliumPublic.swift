@@ -36,7 +36,8 @@ public class Helium {
         from viewController: UIViewController? = nil,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false
+        dontShowIfAlreadyEntitled: Bool = false,
+        onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -184,11 +185,11 @@ public class Helium {
         print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
     }
     
+    @available(*, deprecated, message: "Use HeliumPaywallView directly instead")
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
         let upsellView = upsellViewResultFor(trigger: trigger).view
         
         if upsellView != nil {
-            // Configure presentation context (always set both to ensure proper reset)
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
                 eventService: eventHandlers,
                 customPaywallTraits: customPaywallTraits
@@ -369,13 +370,11 @@ public class Helium {
     /// ### Fallback Priority
     /// When paywalls cannot be fetched, fallbacks are shown in this order:
     /// 1. **Fallback bundle** - If trigger exists in bundle JSON
-    /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
-    /// 3. **Global fallback view** - From `fallbackView`
+    /// 2. **Global fallback view** - From `fallbackView`
     ///
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
     ///   - heliumPaywallDelegate: Delegate for paywall events and purchases. Defaults to StoreKitDelegate if nil
-    ///   - fallbackPaywall: **Deprecated** - Use `fallbackConfig` instead. Global fallback view
     ///   - fallbackConfig: **Recommended** - Comprehensive fallback and loading configuration
     ///   - triggers: Optional array of trigger names to prefetch
     ///   - customUserId: Override the auto-generated user ID
@@ -383,8 +382,6 @@ public class Helium {
     ///   - customUserTraits: User attributes for targeting and personalization
     ///   - appAttributionToken: Custom appAccountToken for StoreKit purchases
     ///   - revenueCatAppUserId: User ID for RevenueCat integration
-    ///   - fallbackBundleURL: **Deprecated** - Use `fallbackConfig` instead
-    ///   - fallbackPaywallPerTrigger: **Deprecated** - Use `fallbackConfig` instead
     ///
     /// - Note: Deprecated parameters disable loading states for backward compatibility
     /// - Warning: Mixing `fallbackConfig` with deprecated parameters causes a fatal error
@@ -393,7 +390,6 @@ public class Helium {
     public func initialize(
         apiKey: String,
         heliumPaywallDelegate: HeliumPaywallDelegate? = nil,
-        fallbackPaywall: (any View)? = nil,
         fallbackConfig: HeliumFallbackConfig? = nil,
         triggers: [String]? = nil,
         customUserId: String? = nil,
@@ -401,65 +397,17 @@ public class Helium {
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
         revenueCatAppUserId: String? = nil,
-        fallbackBundleURL: URL? = nil,
-        fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
         if initialized {
             return
         }
         initialized = true
         
-        // Validate that only one fallback approach is used
-        let hasDeprecatedParams = fallbackPaywall != nil || fallbackBundleURL != nil || fallbackPaywallPerTrigger != nil
-        let hasNewConfig = fallbackConfig != nil
-        
-        precondition(
-            !(hasDeprecatedParams && hasNewConfig),
-            """
-            Helium initialization error: Cannot use both fallbackConfig and deprecated fallback parameters simultaneously.
-            Please use either:
-            - fallbackConfig (recommended) for new implementations
-            - OR fallbackPaywall/fallbackBundleURL/fallbackPaywallPerTrigger (deprecated) for backward compatibility
-            But not both.
-            """
-        )
-        
-        // Determine the fallback configuration to use
-        let finalFallbackConfig: HeliumFallbackConfig?
-        
-        if let providedConfig = fallbackConfig {
-            // Use the new fallbackConfig if provided
-            finalFallbackConfig = providedConfig
-        } else if hasDeprecatedParams {
-            // Create a HeliumFallbackConfig from the deprecated parameters
-            finalFallbackConfig = HeliumFallbackConfig.withMultipleFallbacks(
-                fallbackView: fallbackPaywall,
-                fallbackPerTrigger: fallbackPaywallPerTrigger,
-                fallbackBundle: fallbackBundleURL
-            )
-        } else {
-            // No fallback configuration provided; should not be possible!
-            finalFallbackConfig = nil
+        if fallbackConfig == nil {
+            print("[Helium] ‼️⚠️‼️ No fallback config provided! Fallback bundles are highly recommended. Go to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
         }
         
-        // Store the final fallback configuration
-        self.fallbackConfig = finalFallbackConfig
-        
-        // Validate that at least some fallback is configured
-        precondition(
-            finalFallbackConfig != nil,
-            """
-            Helium initialization error: No fallback configuration provided!
-            
-            We weren't able to get a fallback paywall! Please configure fallbacks by going to https://docs.tryhelium.com/guides/fallback-bundle to get set up.
-            
-            You must provide at least one of the following:
-            - fallbackConfig (recommended): Use HeliumFallbackConfig.withFallbackBundle(), .withFallbackView(), etc.
-            - fallbackPaywall (deprecated): A default SwiftUI view
-            - fallbackBundleURL (deprecated): URL to a fallback bundle JSON
-            - fallbackPaywallPerTrigger (deprecated): Trigger-specific fallback views
-            """
-        )
+        self.fallbackConfig = fallbackConfig
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -481,31 +429,13 @@ public class Helium {
         AppReceiptsHelper.shared.setUp()
         
         // Set up fallback view if provided
-        if let fallbackView = finalFallbackConfig?.fallbackView {
+        if let fallbackView = fallbackConfig?.fallbackView {
             HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: fallbackView);
-        } else if fallbackPaywall != nil {
-            // Handle deprecated fallbackPaywall parameter directly
-            HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: AnyView(fallbackPaywall!));
-        }
-        
-        // Set up trigger-specific fallback views if provided
-        if let triggerFallbacks = finalFallbackConfig?.fallbackPerTrigger {
-            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerFallbacks)
-        } else if let triggerFallbacks = fallbackPaywallPerTrigger {
-            // Handle deprecated fallbackPaywallPerTrigger parameter directly
-            var triggerToViewMap: [String: AnyView] = [:]
-            for (trigger, view) in triggerFallbacks {
-                triggerToViewMap[trigger] = AnyView(view)
-            }
-            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerToViewMap)
         }
         
         // Set up fallback bundle if provided
-        if let fallbackBundleURL = finalFallbackConfig?.fallbackBundle {
+        if let fallbackBundleURL = fallbackConfig?.fallbackBundle {
             HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
-        } else if let bundleURL = fallbackBundleURL {
-            // Handle deprecated fallbackBundleURL parameter directly
-            HeliumFallbackViewManager.shared.setFallbackBundleURL(bundleURL)
         }
         
         self.controller = HeliumController(
@@ -632,7 +562,7 @@ public class Helium {
         // hide any existing upsells
         hideAllUpsells()
         
-        presentUpsell(trigger: trigger)
+        presentUpsell(trigger: trigger, onPaywallUnavailable: {_ in})
         return true
     }
     
