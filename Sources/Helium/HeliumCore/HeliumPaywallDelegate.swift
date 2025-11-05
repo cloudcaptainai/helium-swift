@@ -94,6 +94,7 @@ public class HeliumPaywallDelegateWrapper {
     private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
+    private var onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)? = nil
     private var customPaywallTraits: [String: Any] = [:]
     private(set) var dontShowIfAlreadyEntitled: Bool = false
     
@@ -104,11 +105,13 @@ public class HeliumPaywallDelegateWrapper {
     /// Consolidated method to set both event service and custom traits for a paywall presentation
     public func configurePresentationContext(
         eventService: PaywallEventHandlers?,
+        onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)? = nil,
         customPaywallTraits: [String: Any]?,
         dontShowIfAlreadyEntitled: Bool = false
     ) {
-        // Always set both, even if nil, to ensure proper reset
+        // Always set even if nil to ensure proper reset
         self.eventService = eventService
+        self.onPaywallUnavailable = onPaywallUnavailable
         self.customPaywallTraits = customPaywallTraits ?? [:]
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
     }
@@ -116,6 +119,7 @@ public class HeliumPaywallDelegateWrapper {
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
         self.eventService = nil
+        self.onPaywallUnavailable = nil
         self.customPaywallTraits = [:]
         self.dontShowIfAlreadyEntitled = false
     }
@@ -224,6 +228,9 @@ public class HeliumPaywallDelegateWrapper {
     public func fireEvent(_ event: HeliumEvent) {
         // First, call the event service if configured
         eventService?.handleEvent(event)
+        if let openFail = event as? PaywallOpenFailedEvent {
+            onPaywallUnavailable?(openFail.paywallUnavailableReason ?? .unknown)
+        }
         
         // Then fire the new typed event to delegate
         delegate?.onPaywallEvent(event)

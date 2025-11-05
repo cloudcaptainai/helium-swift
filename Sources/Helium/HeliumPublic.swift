@@ -36,7 +36,8 @@ public class Helium {
         from viewController: UIViewController? = nil,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false
+        dontShowIfAlreadyEntitled: Bool = false,
+        onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -188,7 +189,6 @@ public class Helium {
         let upsellView = upsellViewResultFor(trigger: trigger).view
         
         if upsellView != nil {
-            // Configure presentation context (always set both to ensure proper reset)
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
                 eventService: eventHandlers,
                 customPaywallTraits: customPaywallTraits
@@ -403,7 +403,7 @@ public class Helium {
         initialized = true
         
         if fallbackConfig == nil {
-            print("[Helium] ‼️‼️ No fallback config provided! Fallbacks are highly recommended. Please configure fallbacks by going to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
+            print("[Helium] ‼️⚠️‼️ No fallback config provided! Fallback bundles are highly recommended. Go to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
         }
         
         self.fallbackConfig = fallbackConfig
@@ -561,7 +561,7 @@ public class Helium {
         // hide any existing upsells
         hideAllUpsells()
         
-        presentUpsell(trigger: trigger)
+        presentUpsell(trigger: trigger, onPaywallUnavailable: {_ in})
         return true
     }
     

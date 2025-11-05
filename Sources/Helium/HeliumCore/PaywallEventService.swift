@@ -32,6 +32,7 @@ public struct PaywallEventHandlers {
     
     /// Called when a paywall fails to open
     /// - Note: Fired when paywall cannot be displayed (e.g., no view available, already presenting, WebView load failure)
+    @available(*, deprecated, message: "Use onPaywallUnavailable instead.")
     public var onOpenFailed: ((PaywallOpenFailedEvent) -> Void)?
     
     /// Called when a custom action is triggered from the paywall
