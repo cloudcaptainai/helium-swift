@@ -35,6 +35,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     
     @State private var state: HeliumPaywallViewState
     @State private var didConfigureContext = false
+    @State private var loadingBudgetExpired = false
     
     /// Creates a new paywall view for the specified trigger with default loading view
     ///
@@ -97,9 +98,21 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             configureContextIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
-            if case .loading = state {
+            if case .loading = state, !loadingBudgetExpired {
                 state = resolvePaywallState(for: trigger)
             }
+        }
+        .task(id: state) {
+            // Only start timeout if currently in loading state
+            guard case .loading = state else { return }
+            
+            let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger) ?? HeliumFallbackConfig.defaultLoadingBudget
+            
+            try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
+            
+            // After timeout, re-resolve state (will transition to ready or unavailable)
+            loadingBudgetExpired = true
+            state = resolvePaywallState(for: trigger)
         }
     }
     
@@ -128,19 +141,36 @@ public struct HeliumPaywallView<FallbackView: View>: View {
 }
 
 /// Represents the current state of a paywall view
-enum HeliumPaywallViewState {
+enum HeliumPaywallViewState: Equatable {
     /// Paywall is currently loading (config/bundles/products fetching)
     case loading
     /// Paywall is ready to display
     case ready(AnyView)
     /// Paywall is unavailable for the given reason
     case unavailable(PaywallUnavailableReason)
+    
+    static func == (lhs: HeliumPaywallViewState, rhs: HeliumPaywallViewState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            return true
+        case (.ready, .ready):
+            return true
+        case (.unavailable(let lReason), .unavailable(let rReason)):
+            return lReason == rReason
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Helper Functions
 
 /// Returns the current state of a paywall for the trigger
 fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewState {
+    if shouldShowLoadingState(for: trigger) {
+        return .loading
+    }
+    
     let result = Helium.shared.upsellViewResultFor(trigger: trigger)
     
     if let view = result.view {
@@ -148,10 +178,6 @@ fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewSt
     }
     
     if let reason = result.fallbackReason {
-        // Check if we should show loading state based on download status
-        if shouldShowLoadingState(for: trigger) {
-            return .loading
-        }
         return .unavailable(reason)
     }
     
