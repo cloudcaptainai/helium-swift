@@ -29,10 +29,10 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
     let fallbackView: (PaywallUnavailableReason) -> FallbackView
     let eventHandlers: PaywallEventHandlers?
     let customPaywallTraits: [String: Any]?
-
+    
     @State private var state: HeliumPaywallViewState
     @State private var didConfigureContext = false
-
+    
     /// Creates a new paywall view for the specified trigger
     ///
     /// - Parameters:
@@ -53,11 +53,11 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
         self.fallbackView = fallbackView
         self.eventHandlers = eventHandlers
         self.customPaywallTraits = customPaywallTraits
-
+        
         // Initialize state using file-private helper function
         self._state = State(initialValue: resolvePaywallState(for: trigger))
     }
-
+    
     public var body: some View {
         Group {
             switch state {
@@ -78,15 +78,15 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
             }
         }
     }
-
+    
     private func configureContextIfNeeded() {
         guard !didConfigureContext else { return }
-
+        
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
             customPaywallTraits: customPaywallTraits
         )
-
+        
         didConfigureContext = true
     }
 }
@@ -106,11 +106,11 @@ enum HeliumPaywallViewState {
 /// Returns the current state of a paywall for the trigger
 fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewState {
     let result = Helium.shared.upsellViewResultFor(trigger: trigger)
-
+    
     if let view = result.view {
         return .ready(view)
     }
-
+    
     if let reason = result.fallbackReason {
         // Check if we should show loading state
         if shouldShowLoadingState(for: trigger, reason: reason) {
@@ -118,7 +118,7 @@ fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewSt
         }
         return .unavailable(reason)
     }
-
+    
     return .unavailable(.unknown)
 }
 
@@ -128,7 +128,7 @@ fileprivate func shouldShowLoadingState(for trigger: String, reason: PaywallUnav
     if !useLoadingState {
         return false
     }
-
+    
     // Show loading only for active fetch states
     switch reason {
     case .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
