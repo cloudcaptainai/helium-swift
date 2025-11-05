@@ -12,20 +12,23 @@ import SwiftUI
 ///
 /// ## Example Usage
 /// ```swift
+/// // Minimal - uses default loading view
+/// HeliumPaywallView(trigger: "onboarding") { reason in
+///     Text("Paywall unavailable: \(reason.rawValue)")
+/// }
+///
+/// // With custom loading view
 /// HeliumPaywallView(
 ///     trigger: "onboarding",
-///     loadingView: {
-///         ProgressView()
-///     },
-///     fallbackView: { reason in
-///         Text("Paywall unavailable: \(reason.rawValue)")
-///     }
-/// )
+///     loadingView: { ProgressView() }
+/// ) { reason in
+///     Text("Paywall unavailable: \(reason.rawValue)")
+/// }
 /// ```
 @available(iOS 15.0, *)
-public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
+public struct HeliumPaywallView<FallbackView: View>: View {
     let trigger: String
-    let loadingView: () -> LoadingView
+    let loadingView: (() -> AnyView)?
     let fallbackView: (PaywallUnavailableReason) -> FallbackView
     let eventHandlers: PaywallEventHandlers?
     let customPaywallTraits: [String: Any]?
@@ -33,15 +36,37 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
     @State private var state: HeliumPaywallViewState
     @State private var didConfigureContext = false
     
-    /// Creates a new paywall view for the specified trigger
+    /// Creates a new paywall view for the specified trigger with default loading view
     ///
     /// - Parameters:
     ///   - trigger: The trigger name to display a paywall for
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
     ///   - customPaywallTraits: Optional custom traits for paywall personalization
-    ///   - loadingView: View to show while paywall is loading
     ///   - fallbackView: View to show when paywall is unavailable
     public init(
+        trigger: String,
+        eventHandlers: PaywallEventHandlers? = nil,
+        customPaywallTraits: [String: Any]? = nil,
+        @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
+    ) {
+        self.trigger = trigger
+        self.loadingView = nil
+        self.fallbackView = fallbackView
+        self.eventHandlers = eventHandlers
+        self.customPaywallTraits = customPaywallTraits
+        
+        self._state = State(initialValue: resolvePaywallState(for: trigger))
+    }
+    
+    /// Creates a new paywall view for the specified trigger with custom loading view
+    ///
+    /// - Parameters:
+    ///   - trigger: The trigger name to display a paywall for
+    ///   - eventHandlers: Optional event handlers for paywall lifecycle events
+    ///   - customPaywallTraits: Optional custom traits for paywall personalization
+    ///   - loadingView: Custom view to show while paywall is loading
+    ///   - fallbackView: View to show when paywall is unavailable
+    public init<LoadingView: View>(
         trigger: String,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
@@ -49,12 +74,11 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
         @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
     ) {
         self.trigger = trigger
-        self.loadingView = loadingView
+        self.loadingView = { AnyView(loadingView()) }
         self.fallbackView = fallbackView
         self.eventHandlers = eventHandlers
         self.customPaywallTraits = customPaywallTraits
         
-        // Initialize state using file-private helper function
         self._state = State(initialValue: resolvePaywallState(for: trigger))
     }
     
@@ -62,7 +86,7 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
         Group {
             switch state {
             case .loading:
-                loadingView()
+                resolvedLoadingView
             case .ready(let paywallView):
                 paywallView
             case .unavailable(let reason):
@@ -76,6 +100,18 @@ public struct HeliumPaywallView<LoadingView: View, FallbackView: View>: View {
             if case .loading = state {
                 state = resolvePaywallState(for: trigger)
             }
+        }
+    }
+    
+    @ViewBuilder
+    private var resolvedLoadingView: some View {
+        if let userLoadingView = loadingView {
+            userLoadingView()
+        } else if let configLoadingView = Helium.shared.fallbackConfig?.loadingView(for: trigger) {
+            configLoadingView
+        } else {
+            let backgroundConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
+            HeliumPaywallPresenter.shared.createDefaultLoadingView(backgroundConfig: backgroundConfig)
         }
     }
     
@@ -112,8 +148,8 @@ fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewSt
     }
     
     if let reason = result.fallbackReason {
-        // Check if we should show loading state
-        if shouldShowLoadingState(for: trigger, reason: reason) {
+        // Check if we should show loading state based on download status
+        if shouldShowLoadingState(for: trigger) {
             return .loading
         }
         return .unavailable(reason)
@@ -122,18 +158,18 @@ fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewSt
     return .unavailable(.unknown)
 }
 
-/// Determines if loading state should be shown for the unavailable reason
-fileprivate func shouldShowLoadingState(for trigger: String, reason: PaywallUnavailableReason) -> Bool {
+/// Determines if loading state should be shown by checking actual download status
+fileprivate func shouldShowLoadingState(for trigger: String) -> Bool {
+    // Only show loading if enabled for this trigger
     let useLoadingState = Helium.shared.fallbackConfig?.useLoadingState(for: trigger) ?? true
     if !useLoadingState {
         return false
     }
     
-    // Show loading only for active fetch states
-    switch reason {
-    case .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
-        return true
-    default:
-        return false
-    }
+    // Check if downloads are in progress or pending
+    let downloadStatus = HeliumFetchedConfigManager.shared.downloadStatus
+    let heliumDownloadsIncoming = Helium.shared.isInitialized() &&
+    (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
+    
+    return heliumDownloadsIncoming
 }
