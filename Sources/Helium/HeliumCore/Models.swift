@@ -664,3 +664,9 @@ public enum PaywallUnavailableReason: String, Codable {
     case webviewRenderFail
     case bridgingError
 }
+
+public enum HeliumLightDarkMode {
+    case light
+    case dark
+    case system
+}

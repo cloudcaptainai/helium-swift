@@ -35,6 +35,14 @@ public struct DynamicWebView: View {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
+    private var effectiveColorScheme: ColorScheme {
+        switch Helium.shared.lightDarkModeOverride {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return colorScheme // fall back to environment
+        }
+    }
+    
     init(json: JSON, backupJson: JSON?, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         let bundleURL = json["bundleURL"].stringValue
         self.bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleURL)
@@ -69,14 +77,14 @@ public struct DynamicWebView: View {
        ZStack {
            // Background view - shows either initial background or post-load background when content is loaded
            if isContentLoaded {
-               if let postLoadBg = colorScheme == .dark && darkModePostLoadBackgroundConfig != nil ? 
+               if let postLoadBg = effectiveColorScheme == .dark && darkModePostLoadBackgroundConfig != nil ?
                    darkModePostLoadBackgroundConfig : postLoadBackgroundConfig {
                    // Show post-load background if content is loaded and postLoadBackgroundConfig exists
                    postLoadBg.makeBackgroundView()
                        .ignoresSafeArea()
                        .transition(.opacity)
                }
-           } else if let bg = colorScheme == .dark && darkModeBackgroundConfig != nil ? 
+           } else if let bg = effectiveColorScheme == .dark && darkModeBackgroundConfig != nil ?
                darkModeBackgroundConfig : backgroundConfig {
                // Show initial background
                bg.makeBackgroundView()
@@ -473,7 +481,15 @@ class WebViewManager {
         webView.isOpaque = false
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
-
+        
+        switch Helium.shared.lightDarkModeOverride {
+        case .light:
+            webView.overrideUserInterfaceStyle = .light
+        case .dark:
+            webView.overrideUserInterfaceStyle = .dark
+        case .system:
+            webView.overrideUserInterfaceStyle = .unspecified
+        }
         
         webView.scrollView.isScrollEnabled = shouldEnableScroll
         webView.scrollView.bounces = shouldEnableScroll
