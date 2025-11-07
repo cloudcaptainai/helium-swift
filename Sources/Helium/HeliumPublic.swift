@@ -49,8 +49,13 @@ public class Helium {
             customPaywallTraits: customPaywallTraits,
             dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
         )
-
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController, presentationStyle: presentationStyle)
+        
+        let presentationParams = PaywallPresentationParams(
+            from: viewController,
+            presentationStyle: presentationStyle,
+            isSecondTry: false
+        )
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationParams: presentationParams)
     }
     
     func skipPaywallIfNeeded(trigger: String) -> Bool {
