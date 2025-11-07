@@ -62,7 +62,7 @@ public class HeliumController {
         UserDefaults.standard.removeObject(forKey: API_STORAGE_KEY)
     }
     
-    public func downloadConfig() {
+    func downloadConfig() {
         var payload: [String: Any]
         payload = [
             "apiKey": self.apiKey,
@@ -102,6 +102,7 @@ public class HeliumController {
                         downloadTimeTakenMS: metrics.configDownloadTimeMS,
                         bundleDownloadTimeMS: metrics.bundleDownloadTimeMS,
                         localizedPriceTimeMS: metrics.localizedPriceTimeMS,
+                        localizedPriceSuccess: metrics.localizedPriceSuccess,
                         numBundles: metrics.numBundles,
                         numBundlesFromCache: metrics.numBundlesFromCache,
                         numAttempts: metrics.numConfigAttempts,
@@ -141,6 +142,8 @@ public class HeliumController {
                     PaywallsDownloadErrorEvent(
                         error: errorMessage,
                         configDownloaded: metrics.configSuccess,
+                        downloadTimeTakenMS: metrics.configDownloadTimeMS,
+                        bundleDownloadTimeMS: metrics.bundleDownloadTimeMS,
                         numBundles: metrics.numBundles,
                         numBundlesNotDownloaded: metrics.bundleFailCount,
                         numAttempts: metrics.numConfigAttempts,

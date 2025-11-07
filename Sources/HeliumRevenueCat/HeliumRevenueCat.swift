@@ -19,6 +19,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private(set) var productMappings: [String: StoreProduct] = [:]
     
     private var latestSuccessfulPurchaseResult: PurchaseResultData? = nil
+    private var latestSuccessfulPurchaseOffering: Offering? = nil
     
     private let allowHeliumUserAttribute: Bool
     
@@ -87,6 +88,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         
         do {
             var result: PurchaseResultData? = nil
+            var offeringWithProduct: Offering? = nil
             
             if let offerings {
                 var packageToPurchase: Package? = nil
@@ -95,6 +97,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                     for package in offering.availablePackages {
                         if package.storeProduct.productIdentifier == productId {
                             packageToPurchase = package
+                            offeringWithProduct = offering
                             break
                         }
                     }
@@ -130,14 +133,22 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                 return .cancelled
             }
             
-            latestSuccessfulPurchaseResult = result
-            
-            if isProductActive(customerInfo: result.customerInfo, productId: productId) {
-                return .purchased
-            } else {
-                return .failed(RevenueCatDelegateError.purchaseNotVerified)
+            if result.transaction == nil {
+                return .failed(RevenueCatDelegateError.couldNotVerifyTransaction)
             }
+            
+            latestSuccessfulPurchaseResult = result
+            latestSuccessfulPurchaseOffering = offeringWithProduct
+            
+            return .purchased
         } catch {
+            if let error = error as? RevenueCat.ErrorCode {
+                if error == .paymentPendingError {
+                    return .pending
+                } else if error == .purchaseCancelledError {
+                    return .cancelled
+                }
+            }
             return .failed(error)
         }
     }
@@ -163,23 +174,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         // Override in a subclass if desired
     }
     
-    private func isProductActive(customerInfo: CustomerInfo, productId: String) -> Bool {
-        if let entitlementId, customerInfo.entitlements[entitlementId]?.isActive == true {
-            return true
-        }
-        if customerInfo.entitlements.activeInCurrentEnvironment.contains(where: { entitlementInfoEntry in
-            entitlementInfoEntry.value.productIdentifier == productId
-        }) {
-            return true
-        }
-        if customerInfo.activeSubscriptions.contains(where: { productIdentifier in
-            productIdentifier == productId
-        }) {
-            return true
-        }
-        return false
+    public func getOfferingWithLatestPurchasedProduct() -> Offering? {
+        return latestSuccessfulPurchaseOffering
     }
-    
     public func getLatestCompletedPurchaseResult() -> PurchaseResultData? {
         return latestSuccessfulPurchaseResult
     }
@@ -191,14 +188,14 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 
 public enum RevenueCatDelegateError: LocalizedError {
     case cannotFindProduct
-    case purchaseNotVerified
+    case couldNotVerifyTransaction
 
     public var errorDescription: String? {
         switch self {
         case .cannotFindProduct:
             return "Could not find product. Please ensure products are properly configured."
-        case .purchaseNotVerified:
-            return "Entitlement could not be verified as active."
+        case .couldNotVerifyTransaction:
+            return "Purchase transaction could not be verified."
         }
     }
 }

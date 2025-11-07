@@ -18,11 +18,14 @@ public class Helium {
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
+    private(set) var lightDarkModeOverride: HeliumLightDarkMode = .system
+    
     private func reset() {
         initialized = false
         controller = nil
         fallbackConfig = nil
         baseTemplateViewType = nil
+        lightDarkModeOverride = .system
     }
     
     public static let shared = Helium()
@@ -173,6 +176,8 @@ public class Helium {
         // Reset experiment allocation tracking
         ExperimentAllocationTracker.shared.reset()
         
+        HeliumEventListeners.shared.removeAllListeners()
+        
         // Reset initialization state to allow re-initialization
         reset()
                 
@@ -227,8 +232,17 @@ public class Helium {
         } else {
             let fallbackReason: PaywallUnavailableReason
             switch HeliumFetchedConfigManager.shared.downloadStatus {
-            case .notDownloadedYet, .inProgress:
+            case .notDownloadedYet:
                 fallbackReason = .paywallsNotDownloaded
+            case .inProgress:
+                switch HeliumFetchedConfigManager.shared.downloadStep {
+                case .config:
+                    fallbackReason = .configFetchInProgress
+                case .bundles:
+                    fallbackReason = .bundlesFetchInProgress
+                case .products:
+                    fallbackReason = .productsFetchInProgress
+                }
             case .downloadSuccess:
                 fallbackReason = .paywallBundlesMissing
             case .downloadFailure:
@@ -516,6 +530,9 @@ public class Helium {
         }
     }
     
+    func isInitialized() -> Bool {
+        return initialized
+    }
     
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
@@ -540,6 +557,28 @@ public class Helium {
     /// Note - You DO NOT have to set this if using Helium's RevenueCatPurchaseDelegate.
     public func setRevenueCatAppUserId(_ rcAppUserId: String) {
         HeliumIdentityManager.shared.setRevenueCatAppUserId(rcAppUserId)
+    }
+    
+    /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
+    public func addHeliumEventListener(_ listener: HeliumEventListener) {
+        HeliumEventListeners.shared.addListener(listener)
+    }
+    
+    /// Remove a specific Helium event listener.
+    public func removeHeliumEventListener(_ listener: HeliumEventListener) {
+        HeliumEventListeners.shared.removeListener(listener)
+    }
+    
+    /// Remove all Helium event listeners.
+    public func removeAllHeliumEventListeners() {
+        HeliumEventListeners.shared.removeAllListeners()
+    }
+    
+    /// Sets the light/dark mode override for Helium paywalls.
+    /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
+    /// - Note: .system respects the device's current appearance setting (default)
+    public func setLightDarkModeOverride(_ mode: HeliumLightDarkMode) {
+        lightDarkModeOverride = mode
     }
     
     /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
@@ -691,6 +730,8 @@ public class Helium {
         restorePurchaseConfig.reset()
         
         HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+        
+        HeliumEventListeners.shared.removeAllListeners()
         
         Helium.shared.reset()
         

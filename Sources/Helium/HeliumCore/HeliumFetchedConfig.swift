@@ -10,6 +10,12 @@ public enum HeliumFetchedConfigStatus: String, Codable, Equatable {
     case downloadFailure
 }
 
+enum PaywallsDownloadStep {
+    case config
+    case bundles
+    case products
+}
+
 enum HeliumFetchResult {
     case success(HeliumFetchedConfig, HeliumFetchMetrics)
     case failure(errorMessage: String, HeliumFetchMetrics)
@@ -25,6 +31,7 @@ struct HeliumFetchMetrics {
     var configDownloadTimeMS: UInt64?
     var bundleDownloadTimeMS: UInt64?
     var localizedPriceTimeMS: UInt64?
+    var localizedPriceSuccess: Bool? = nil
 }
 
 private struct BundlesRetrieveResult {
@@ -44,7 +51,7 @@ private struct BundlesFetchResult {
 private struct SingleBundleFetchResult {
     let url: String
     let html: String?
-    let isBadURL: Bool
+    let isPermanentFailure: Bool
 }
 
 class NetworkReachability {
@@ -70,7 +77,8 @@ class NetworkReachability {
 
 func fetchEndpoint(
     endpoint: String,
-    params: [String: Any]
+    params: [String: Any],
+    timeoutInterval: TimeInterval? = nil
 ) async throws -> (HeliumFetchedConfig?, JSON?) {
     let urlString = endpoint
     guard let url = URL(string: urlString) else {
@@ -87,7 +95,7 @@ func fetchEndpoint(
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
     request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles")
     
-    request.timeoutInterval = 15
+    request.timeoutInterval = timeoutInterval ?? 15
     
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
@@ -112,6 +120,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         shared.fetchTask = nil
         Task { @MainActor in
             shared.downloadStatus = .notDownloadedYet
+            shared.downloadStep = .config
         }
         shared.fetchedConfig = nil
         shared.fetchedConfigJSON = nil
@@ -121,6 +130,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     private var fetchTask: Task<Void, Never>?
     
     @Published public var downloadStatus: HeliumFetchedConfigStatus
+    private(set) var downloadStep: PaywallsDownloadStep = .config
     
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 5 // roughly 19 seconds of delays in between attempts
@@ -144,6 +154,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
         fetchTask = Task {
             await updateDownloadState(.inProgress)
+            downloadStep = .config
             
             let configStartTime = DispatchTime.now()
             await fetchConfigWithRetry(
@@ -166,8 +177,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         do {
-            // Make the request asynchronously
-            let response = try await fetchEndpoint(endpoint: endpoint, params: params)
+            // Increase timeout if on last attempt
+            var timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 60 : nil
+            let response = try await fetchEndpoint(endpoint: endpoint, params: params, timeoutInterval: timeoutInterval)
             
             // Ensure we have data
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
@@ -226,6 +238,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     )
                 }
             } else {
+                downloadStep = .bundles
                 let bundleStartTime = DispatchTime.now()
                 let bundlesResult = await retrieveBundles(config: newConfig)
                 let bundleDownloadTimeMS = dispatchTimeDifferenceInMS(from: bundleStartTime)
@@ -357,6 +370,12 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         HeliumAssetManager.shared.removeBundleIdFromCache(bundleId)
                     }
                 }
+                
+                // Validate URL before processing - skip silently if invalid (don't fail entire download)
+                guard isValidURL(bundleUrl) else {
+                    print("[Helium] Invalid URL format for trigger \(trigger): \(bundleUrl)")
+                    continue
+                }
 
                 if bundleUrlToTriggersMap[bundleUrl] == nil {
                     bundleUrlToTriggersMap[bundleUrl] = []
@@ -391,7 +410,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         maxAttempts: Int,
         attemptCounter: Int
     ) async -> BundlesFetchResult {
-        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap)
+        // Increase timeout if on last attempt
+        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 20 : nil
+        let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, timeoutInterval: timeoutInterval)
         
         if !result.bundleUrlsNotFetched.isEmpty {
             let missingTriggers = result.bundleUrlsNotFetched.flatMap {
@@ -433,7 +454,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func fetchBundles(
-        bundleUrlToTriggersMap: [String : [String]]
+        bundleUrlToTriggersMap: [String : [String]],
+        timeoutInterval: TimeInterval? = nil
     ) async -> BundlesFetchResult {
         var bundleUrlsNotFetched: [String] = []
 
@@ -448,14 +470,14 @@ public class HeliumFetchedConfigManager: ObservableObject {
             for (url, triggers) in bundleUrlToTriggersMap {
                 group.addTask {
                     do {
-                        let html = try await self.fetchBundleHTML(from: url, using: session)
-                        return SingleBundleFetchResult(url: url, html: html, isBadURL: false)
+                        let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
+                        return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false)
                     } catch {
                         if let urlError = error as? URLError, urlError.code == .badURL {
                             print("[Helium] Invalid URL for triggers: \(triggers)")
-                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: true)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true)
                         } else {
-                            return SingleBundleFetchResult(url: url, html: nil, isBadURL: false)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false)
                         }
                     }
                 }
@@ -465,7 +487,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 if let html = result.html,
                    let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(result.url) { // bundleId should NOT be nil
                     results[bundleId] = html
-                } else if !result.isBadURL {
+                } else if !result.isPermanentFailure {
                     bundleUrlsNotFetched.append(result.url)
                 }
             }
@@ -477,18 +499,35 @@ public class HeliumFetchedConfigManager: ObservableObject {
         )
     }
 
-    private func fetchBundleHTML(from urlString: String, using session: URLSession) async throws -> String {
+    private func fetchBundleHTML(
+        from urlString: String,
+        using session: URLSession,
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> String {
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 5
+        request.timeoutInterval = timeoutInterval ?? 5
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        let statusCode = httpResponse.statusCode
+
+        // Check if response is successful
+        guard (200...299).contains(statusCode) else {
+            // Treat specific client errors as permanent failures (non-retryable)
+            // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
+            if statusCode == 403 || statusCode == 404 || statusCode == 410 {
+                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                throw URLError(.badURL)
+            }
+            // All other errors (5xx server errors, etc.) are retryable
             throw URLError(.badServerResponse)
         }
 
@@ -511,11 +550,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         // Prefetch products and build localized price map
+        downloadStep = .products
         let localizedPricesStartTime = DispatchTime.now()
         let allProductIds = getAllProductIds()
-        if #available(iOS 15.0, *) {
-            await ProductsCache.shared.prefetchProducts(Array(allProductIds))
-        }
         await buildLocalizedPriceMap(allProductIds)
         let localizedPriceTimeMS = dispatchTimeDifferenceInMS(from: localizedPricesStartTime)
         
@@ -528,7 +565,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
             bundleFailCount: bundleFailCount,
             configDownloadTimeMS: configDownloadTimeMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
-            localizedPriceTimeMS: localizedPriceTimeMS
+            localizedPriceTimeMS: localizedPriceTimeMS,
+            localizedPriceSuccess: !localizedPriceMap.isEmpty
         )))
     }
     
@@ -540,7 +578,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 allProductIds.append(contentsOf: paywall.productsOffered)
             }
         }
-        return allProductIds
+        return Array(Set(allProductIds))
     }
     
     
@@ -635,6 +673,16 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     public func getClientName() -> String? {
         return fetchedConfig?.orgName
+    }
+    
+    public func isValidURL(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            return false
+        }
+        return true
     }
 }
 

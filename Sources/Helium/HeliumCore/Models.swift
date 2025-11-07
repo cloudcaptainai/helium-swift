@@ -125,19 +125,19 @@ public enum HeliumPaywallEvent: Codable {
     case subscriptionRestored(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionRestoreFailed(triggerName: String, paywallTemplateName: String)
     case subscriptionPending(productKey: String, triggerName: String, paywallTemplateName: String)
-    case paywallOpen(triggerName: String, paywallTemplateName: String, viewType: String, loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil, paywallUnavailableReason: String? = nil)
-    case paywallOpenFailed(triggerName: String, paywallTemplateName: String, error: String, paywallUnavailableReason: String? = nil)
+    case paywallOpen(triggerName: String, paywallTemplateName: String, viewType: String, loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil, paywallUnavailableReason: String? = nil, newWindowCreated: Bool? = nil)
+    case paywallOpenFailed(triggerName: String, paywallTemplateName: String, error: String, paywallUnavailableReason: String? = nil, loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil, newWindowCreated: Bool? = nil)
     case paywallClose(triggerName: String, paywallTemplateName: String)
     case paywallDismissed(triggerName: String, paywallTemplateName: String, dismissAll: Bool = false)
     case paywallSkipped(triggerName: String)
-    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, localizedPriceTimeMS: UInt64? = nil, numBundles: Int? = nil, numBundlesFromCache: Int? = nil, numAttempts: Int? = nil, numBundleAttempts: Int? = nil)
-    case paywallsDownloadError(error: String, configDownloaded: Bool, numBundles: Int? = nil, numBundlesNotDownloaded: Int? = nil, numAttempts: Int? = nil, numBundleAttempts: Int? = nil)
+    case paywallsDownloadSuccess(configId: UUID, downloadTimeTakenMS: UInt64? = nil, imagesDownloadTimeTakenMS: UInt64? = nil, fontsDownloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, localizedPriceTimeMS: UInt64? = nil, localizedPriceSuccess: Bool? = nil, numBundles: Int? = nil, numBundlesFromCache: Int? = nil, numAttempts: Int? = nil, numBundleAttempts: Int? = nil)
+    case paywallsDownloadError(error: String, configDownloaded: Bool, downloadTimeTakenMS: UInt64? = nil, bundleDownloadTimeMS: UInt64? = nil, numBundles: Int? = nil, numBundlesNotDownloaded: Int? = nil, numAttempts: Int? = nil, numBundleAttempts: Int? = nil)
     case paywallWebViewRendered(triggerName: String, paywallTemplateName: String, webviewRenderTimeTakenMS: UInt64? = nil, paywallUnavailableReason: String? = nil)
     case userAllocated(triggerName: String, experimentInfo: ExperimentInfo)
     case customPaywallAction(actionName: String, params: [String: Any], triggerName: String, paywallTemplateName: String)
 
     private enum CodingKeys: String, CodingKey {
-        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, localizedPriceTimeMS, numBundles, numBundlesFromCache, numBundleAttempts, numBundlesNotDownloaded, configDownloaded, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS, actionName, params, paywallUnavailableReason
+        case type, ctaName, productKey, triggerName, paywallTemplateName, viewType, dismissAll, configId, errorDescription, downloadTimeTakenMS, imagesDownloadTimeTakenMS, fontsDownloadTimeTakenMS, bundleDownloadTimeMS, localizedPriceTimeMS, localizedPriceSuccess, numBundles, numBundlesFromCache, numBundleAttempts, numBundlesNotDownloaded, configDownloaded, webviewRenderTimeTakenMS, numAttempts, loadTimeTakenMS, loadingBudgetMS, storeKitTransactionId, storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS, actionName, params, paywallUnavailableReason, newWindowCreated
     }
     
     public func getTriggerIfExists() -> String?{
@@ -162,10 +162,10 @@ public enum HeliumPaywallEvent: Codable {
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             return triggerName;
         
-        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let _, let _, let _):
+        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let _, let _, let _, _):
             return triggerName;
 
-        case .paywallOpenFailed(let triggerName, _, _, _):
+        case .paywallOpenFailed(let triggerName, _, _, _, _, _, _):
             return triggerName
         case .paywallClose(let triggerName, _):
             return triggerName
@@ -202,9 +202,9 @@ public enum HeliumPaywallEvent: Codable {
             return paywallTemplateName;
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             return paywallTemplateName;
-        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let _, let _, let _):
+        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let _, let _, let _, _):
             return paywallTemplateName;
-        case .paywallOpenFailed( _, let paywallTemplateName, _, _):
+        case .paywallOpenFailed( _, let paywallTemplateName, _, _, _, _, _):
             return paywallTemplateName
         case .paywallClose(_, let paywallTemplateName):
             return paywallTemplateName
@@ -257,7 +257,7 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode("subscriptionRestoreFailed", forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let loadTimeTakenMS, let loadingBudgetMS, let paywallUnavailableReason):
+        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let loadTimeTakenMS, let loadingBudgetMS, let paywallUnavailableReason, let newWindowCreated):
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
@@ -265,12 +265,16 @@ public enum HeliumPaywallEvent: Codable {
             try container.encodeIfPresent(loadTimeTakenMS, forKey: .loadTimeTakenMS);
             try container.encodeIfPresent(loadingBudgetMS, forKey: .loadingBudgetMS);
             try container.encodeIfPresent(paywallUnavailableReason, forKey: .paywallUnavailableReason)
-        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error, let paywallUnavailableReason):
+            try container.encodeIfPresent(newWindowCreated, forKey: .newWindowCreated)
+        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error, let paywallUnavailableReason, let loadTimeTakenMS, let loadingBudgetMS, let newWindowCreated):
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encode(error, forKey: .errorDescription)
             try container.encodeIfPresent(paywallUnavailableReason, forKey: .paywallUnavailableReason)
+            try container.encodeIfPresent(loadTimeTakenMS, forKey: .loadTimeTakenMS)
+            try container.encodeIfPresent(loadingBudgetMS, forKey: .loadingBudgetMS)
+            try container.encodeIfPresent(newWindowCreated, forKey: .newWindowCreated)
         case .paywallClose(let triggerName, let paywallTemplateName):
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
@@ -289,7 +293,7 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encodeIfPresent(webviewRenderTimeTakenMS, forKey: .webviewRenderTimeTakenMS)
             try container.encodeIfPresent(paywallUnavailableReason, forKey: .paywallUnavailableReason)
-        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS, let localizedPriceTimeMS, let numBundles, let numBundlesFromCache, let numAttempts, let numBundleAttempts):
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleTimeTakenMS, let localizedPriceTimeMS, let localizedPriceSuccess, let numBundles, let numBundlesFromCache, let numAttempts, let numBundleAttempts):
             try container.encode("paywallsDownloadSuccess", forKey: .type)
             try container.encode(configId, forKey: .configId)
             try container.encodeIfPresent(downloadTimeTakenMS, forKey: .downloadTimeTakenMS);
@@ -297,14 +301,17 @@ public enum HeliumPaywallEvent: Codable {
             try container.encodeIfPresent(fontsDownloadTimeTakenMS, forKey: .fontsDownloadTimeTakenMS);
             try container.encodeIfPresent(bundleTimeTakenMS, forKey: .bundleDownloadTimeMS);
             try container.encodeIfPresent(localizedPriceTimeMS, forKey: .localizedPriceTimeMS);
+            try container.encodeIfPresent(localizedPriceSuccess, forKey: .localizedPriceSuccess)
             try container.encodeIfPresent(numBundles, forKey: .numBundles);
             try container.encodeIfPresent(numBundlesFromCache, forKey: .numBundlesFromCache);
             try container.encodeIfPresent(numAttempts, forKey: .numAttempts)
             try container.encodeIfPresent(numBundleAttempts, forKey: .numBundleAttempts)
-        case .paywallsDownloadError(let error, let configDownloaded, let numBundles, let numBundlesNotDownloaded, let numAttempts, let numBundleAttempts):
+        case .paywallsDownloadError(let error, let configDownloaded, let downloadTimeTakenMS, let bundleDownloadTimeMS, let numBundles, let numBundlesNotDownloaded, let numAttempts, let numBundleAttempts):
             try container.encode("paywallsDownloadError", forKey: .type)
             try container.encode(error, forKey: .errorDescription)
             try container.encode(configDownloaded, forKey: .configDownloaded)
+            try container.encodeIfPresent(downloadTimeTakenMS, forKey: .downloadTimeTakenMS)
+            try container.encodeIfPresent(bundleDownloadTimeMS, forKey: .bundleDownloadTimeMS)
             try container.encodeIfPresent(numBundles, forKey: .numBundles)
             try container.encodeIfPresent(numBundlesNotDownloaded, forKey: .numBundlesNotDownloaded)
             try container.encodeIfPresent(numAttempts, forKey: .numAttempts)
@@ -516,19 +523,20 @@ public enum HeliumPaywallEvent: Codable {
                 dict["paywallUnavailableReason"] = paywallUnavailableReason
             }
             
-        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS, let localizedPriceTimeMS, let numBundles, let numBundlesFromCache, let numAttempts, let numBundleAttempts):
+        case .paywallsDownloadSuccess(let configId, let downloadTimeTakenMS, let imagesDownloadTimeTakenMS, let fontsDownloadTimeTakenMS, let bundleDownloadTimeMS, let localizedPriceTimeMS, let localizedPriceSuccess, let numBundles, let numBundlesFromCache, let numAttempts, let numBundleAttempts):
             dict["configId"] = configId
             dict["downloadTimeTakenMS"] = downloadTimeTakenMS
             dict["imagesDownloadTimeTakenMS"] = imagesDownloadTimeTakenMS
             dict["fontsDownloadTimeTakenMS"] = fontsDownloadTimeTakenMS
             dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
             dict["localizedPriceTimeMS"] = localizedPriceTimeMS
+            dict["localizedPriceSuccess"] = localizedPriceSuccess
             dict["numBundles"] = numBundles
             dict["numBundlesFromCache"] = numBundlesFromCache
             dict["numAttempts"] = numAttempts
             dict["numBundleAttempts"] = numBundleAttempts
 
-        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let loadTimeTakenMS, let loadingBudgetMS, let paywallUnavailableReason):
+        case .paywallOpen(let triggerName, let paywallTemplateName, let viewType, let loadTimeTakenMS, let loadingBudgetMS, let paywallUnavailableReason, let newWindowCreated):
             dict["triggerName"] = triggerName;
             dict["paywallTemplateName"] = paywallTemplateName
             dict["viewType"] = viewType
@@ -541,13 +549,25 @@ public enum HeliumPaywallEvent: Codable {
             if let paywallUnavailableReason {
                 dict["paywallUnavailableReason"] = paywallUnavailableReason
             }
+            if let newWindowCreated {
+                dict["newWindowCreated"] = newWindowCreated
+            }
 
-        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error, let paywallUnavailableReason):
+        case .paywallOpenFailed(let triggerName, let paywallTemplateName, let error, let paywallUnavailableReason, let loadTimeTakenMS, let loadingBudgetMS, let newWindowCreated):
             dict["triggerName"] = triggerName;
             dict["paywallTemplateName"] = paywallTemplateName
             dict["errorDescription"] = error
             if let paywallUnavailableReason {
                 dict["paywallUnavailableReason"] = paywallUnavailableReason
+            }
+            if let loadTimeTakenMS {
+                dict["loadTimeTakenMS"] = loadTimeTakenMS
+            }
+            if let loadingBudgetMS {
+                dict["loadingBudgetMS"] = loadingBudgetMS
+            }
+            if let newWindowCreated {
+                dict["newWindowCreated"] = newWindowCreated
             }
             
         case .paywallClose(let triggerName, let paywallTemplateName):
@@ -562,9 +582,11 @@ public enum HeliumPaywallEvent: Codable {
         case .paywallSkipped(let triggerName):
             dict["triggerName"] = triggerName;
             
-        case .paywallsDownloadError(let error, let configDownloaded, let numBundles, let numBundlesNotDownloaded, let numAttempts, let numBundleAttempts):
+        case .paywallsDownloadError(let error, let configDownloaded, let downloadTimeTakenMS, let bundleDownloadTimeMS, let numBundles, let numBundlesNotDownloaded, let numAttempts, let numBundleAttempts):
             dict["errorDescription"] = error
             dict["configDownloaded"] = configDownloaded
+            dict["downloadTimeTakenMS"] = downloadTimeTakenMS
+            dict["bundleDownloadTimeMS"] = bundleDownloadTimeMS
             dict["numBundles"] = numBundles
             dict["numBundlesNotDownloaded"] = numBundlesNotDownloaded
             dict["numAttempts"] = numAttempts
@@ -631,6 +653,9 @@ public enum PaywallUnavailableReason: String, Codable {
     case forceShowFallback
     case invalidResolvedConfig
     case paywallsNotDownloaded
+    case configFetchInProgress
+    case bundlesFetchInProgress
+    case productsFetchInProgress
     case paywallBundlesMissing
     case paywallsDownloadFail
     case secondTryNoMatch
@@ -638,4 +663,10 @@ public enum PaywallUnavailableReason: String, Codable {
     case noRootController
     case webviewRenderFail
     case bridgingError
+}
+
+public enum HeliumLightDarkMode {
+    case light
+    case dark
+    case system
 }

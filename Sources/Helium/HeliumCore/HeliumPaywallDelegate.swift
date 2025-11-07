@@ -160,7 +160,10 @@ public class HeliumPaywallDelegateWrapper {
             var transactionIds: TransactionIdPair? = nil
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                let transaction = transactionDelegate.getLatestCompletedTransaction() {
-                transactionIds = TransactionIdPair(transaction: transaction)
+                // Double-check to make sure correct transaction retrieved
+                if transaction.productID == productKey {
+                    transactionIds = TransactionIdPair(transaction: transaction)
+                }
             }
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
@@ -219,15 +222,20 @@ public class HeliumPaywallDelegateWrapper {
     
     /// Fire a v2 typed event - main entry point for all SDK events
     public func fireEvent(_ event: HeliumEvent) {
-        // First, call the event service if configured
-        eventService?.handleEvent(event)
-        
-        // Then fire the new typed event to delegate
-        delegate?.onPaywallEvent(event)
-        
-        // Clear presentation context (event service and custom traits) on close events
-        if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
-            clearPresentationContext()
+        Task { @MainActor in
+            // First, call the event service if configured
+            eventService?.handleEvent(event)
+            
+            // Then fire the new typed event to delegate
+            delegate?.onPaywallEvent(event)
+            
+            // Global event handlers
+            HeliumEventListeners.shared.dispatchEvent(event)
+            
+            // Clear presentation context (event service and custom traits) on close events
+            if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
+                clearPresentationContext()
+            }
         }
         
         // Then convert to legacy format and handle internally (analytics, etc)
@@ -289,6 +297,7 @@ public class HeliumPaywallDelegateWrapper {
                 }
                 
                 let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
+                let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
                 let eventForLogging = HeliumPaywallLoggedEvent(
                     heliumEvent: event,
                     fetchedConfigId: fetchedConfigId,
@@ -298,7 +307,7 @@ public class HeliumPaywallDelegateWrapper {
                     modelID: modelID,
                     paywallID: paywallInfo?.paywallID,
                     paywallUUID: paywallInfo?.paywallUUID,
-                    organizationID: HeliumFetchedConfigManager.shared.getOrganizationID(),
+                    organizationID: organizationID,
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
