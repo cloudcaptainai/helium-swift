@@ -36,7 +36,7 @@ class HeliumPaywallPresenter {
         return false
     }
     
-    func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil) {
+    func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
         Task { @MainActor in
             if await paywallEntitlementsCheck(trigger: trigger) {
                 return
@@ -55,11 +55,11 @@ class HeliumPaywallPresenter {
                 )
                 return
             }
-            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController, presentationStyle: presentationStyle)
         }
     }
     
-    func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil) {
+    func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
         if !paywallsDisplayed.isEmpty {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
             print("[Helium] A paywall is already being presented.")
@@ -78,7 +78,7 @@ class HeliumPaywallPresenter {
         Task { @MainActor in
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
-                presentUpsell(trigger: trigger, from: viewController)
+                presentUpsell(trigger: trigger, from: viewController, presentationStyle: presentationStyle)
                 return
             }
             
@@ -94,7 +94,7 @@ class HeliumPaywallPresenter {
             let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
             // If loading state disabled for this trigger, show fallback immediately
             if !useLoading || !heliumDownloadsIncoming {
-                presentUpsell(trigger: trigger, from: viewController)
+                presentUpsell(trigger: trigger, from: viewController, presentationStyle: presentationStyle)
                 return
             }
             
@@ -103,7 +103,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
+            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true, presentationStyle: presentationStyle)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -264,7 +264,7 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false, presentationStyle: PaywallPresentationStyle? = nil) {
         let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
@@ -295,7 +295,7 @@ class HeliumPaywallPresenter {
         }
         
         let paywallInfo = fallbackReason == nil ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        switch paywallInfo?.presentationStyle {
+        switch paywallInfo?.presentationStyle ?? presentationStyle {
         case .slideUp:
             break
         case .slideLeft:
@@ -309,6 +309,12 @@ class HeliumPaywallPresenter {
             break
         }
         presenter.present(modalVC, animated: true)
+        
+        // Reset slideLeft so that it will slide down on dismissal/completion. The slide-right looks odd.
+        Task { @MainActor in
+            modalVC.modalPresentationStyle = .fullScreen
+            modalVC.transitioningDelegate = nil
+        }
         
         paywallsDisplayed.append(modalVC)
 

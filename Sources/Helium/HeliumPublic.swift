@@ -36,7 +36,8 @@ public class Helium {
         from viewController: UIViewController? = nil,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false
+        dontShowIfAlreadyEntitled: Bool = false,
+        presentationStyle: PaywallPresentationStyle? = nil
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -48,8 +49,8 @@ public class Helium {
             customPaywallTraits: customPaywallTraits,
             dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
         )
-        
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController, presentationStyle: presentationStyle)
     }
     
     func skipPaywallIfNeeded(trigger: String) -> Bool {
