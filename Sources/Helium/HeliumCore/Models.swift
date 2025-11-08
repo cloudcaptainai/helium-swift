@@ -17,7 +17,7 @@ public enum PaywallPresentationStyle: String, Codable {
     case unknown
 
     // Custom decoder to handle unknown values gracefully
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         guard let container = try? decoder.singleValueContainer() else {
             self = .unknown
             return

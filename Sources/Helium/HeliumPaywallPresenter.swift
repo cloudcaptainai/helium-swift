@@ -3,9 +3,9 @@ import SwiftUI
 import UIKit
 
 struct PaywallPresentationParams {
-    let from: UIViewController?
-    let presentationStyle: PaywallPresentationStyle?
-    let isSecondTry: Bool
+    var from: UIViewController? = nil
+    var presentationStyle: PaywallPresentationStyle? = nil
+    var isSecondTry: Bool = false
 }
 
 class HeliumPaywallPresenter {
