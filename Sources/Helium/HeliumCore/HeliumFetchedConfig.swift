@@ -594,6 +594,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
     }
     
+    func refreshLocalizedPriceMap() async {
+        let productIds = Array(localizedPriceMap.keys)
+        await buildLocalizedPriceMap(productIds)
+    }
+    
     // NOTE - be careful about removing the public declaration here because this is in use
     // by some sdk integrations.
     public func getLocalizedPriceMap() -> [String: LocalizedPrice] {
