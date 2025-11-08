@@ -38,3 +38,6 @@ class Atomic<T> {
         }
     }
 }
+
+// `@unchecked` because of the mutable `value`, but thread-safety is guaranteed by DispatchQueue
+extension Atomic: @unchecked Sendable {}

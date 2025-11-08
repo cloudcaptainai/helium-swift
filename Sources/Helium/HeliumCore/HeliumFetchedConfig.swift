@@ -141,7 +141,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
-    private(set) var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @Atomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
         endpoint: String,
@@ -589,8 +589,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
         if !productIds.isEmpty {
             let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
 
-            // Merge the new prices into the existing map
-            localizedPriceMap.merge(newProductToPriceMap) { _, new in new }
+            // Merge the new prices into the existing map; atomic read-modify-write using withValue
+            _localizedPriceMap.withValue { map in
+                map.merge(newProductToPriceMap) { _, new in new }
+            }
         }
     }
     
