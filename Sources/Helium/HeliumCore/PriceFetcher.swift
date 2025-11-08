@@ -222,26 +222,6 @@ public class PriceFetcher {
         return []
     }
     
-    /// Fetches the localized price for multiple SKUs using completion handler
-    /// - Parameters:
-    ///   - skus: Array of product identifiers
-    ///   - completion: A closure that returns a dictionary mapping SKUs to their localized price information
-    public static func localizedPricing(for skus: [String], completion: @escaping ([String: LocalizedPrice]) -> Void) {
-        fallbackToStoreKit1(for: Array(Set(skus)), completion: completion)
-    }
-    
-    /// Fallback method using StoreKit 1
-    private static func fallbackToStoreKit1(for skus: [String], completion: @escaping ([String: LocalizedPrice]) -> Void) {
-        let request = SKProductsRequest(productIdentifiers: Set(skus))
-        let delegate = StoreKit1Delegate(completion: completion)
-        request.delegate = delegate
-        
-        // Keep a strong reference to the delegate until the request completes
-        objc_setAssociatedObject(request, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-        
-        request.start()
-    }
-    
     @available(iOS 15.0, *)
     static func checkIntroOfferEligibility(for product: Product) async -> Bool {
         guard let subscription = product.subscription else {
@@ -276,78 +256,6 @@ public class PriceFetcher {
         return unitString
     }
     
-}
-
-/// Helper class for StoreKit 1 requests
-private class StoreKit1Delegate: NSObject, SKProductsRequestDelegate {
-    private let completion: ([String: LocalizedPrice]) -> Void
-    
-    init(completion: @escaping ([String: LocalizedPrice]) -> Void) {
-        self.completion = completion
-        super.init()
-    }
-    
-    func productsRequest(_ request: SKProductsRequest, didReceive response: SKProductsResponse) {
-        var priceMap: [String: LocalizedPrice] = [:]
-        for product in response.products {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .currency
-            formatter.locale = product.priceLocale
-            
-            if let priceString = formatter.string(from: product.price) {
-                let baseInfo = BasePriceInfo(
-                    currency: product.priceLocale.currencyCode ?? "USD",
-                    locale: product.priceLocale.identifier,
-                    value: product.price as Decimal,
-                    formattedPrice: priceString,
-                    currencySymbol: formatter.currencySymbol ?? "$",
-                    decimalSeparator: formatter.currencyDecimalSeparator ?? "."
-                )
-                
-                // Determine product type
-                let productTypeString: String
-                var subscriptionInfo: SubscriptionInfo?
-                var iapInfo: IAPInfo?
-                
-                if #available(iOS 11.2, *), product.subscriptionPeriod != nil {
-                    productTypeString = "autoRenewable"
-                    // Create subscription info if available
-                    subscriptionInfo = SubscriptionInfo(
-                        periodUnit: "unknown",
-                        periodValue: 1,
-                        introOfferEligible: false,
-                        introOffer: nil
-                    )
-                } else {
-                    productTypeString = "iap"
-                    iapInfo = IAPInfo(quantity: 1)
-                }
-                
-                let price = LocalizedPrice(
-                    baseInfo: baseInfo,
-                    productType: productTypeString,
-                    localizedTitle: product.localizedTitle,
-                    localizedDescription: product.localizedDescription,
-                    displayName: nil,
-                    description: nil,
-                    subscriptionInfo: subscriptionInfo,
-                    iapInfo: iapInfo,
-                    familyShareable: product.isFamilyShareable
-                )
-                priceMap[product.productIdentifier] = price
-            }
-        }
-        
-        DispatchQueue.main.async {
-            self.completion(priceMap)
-        }
-    }
-    
-    func request(_ request: SKRequest, didFailWithError error: Error) {
-        DispatchQueue.main.async {
-            self.completion([:])
-        }
-    }
 }
 
 enum PriceFetcherProductsError: Error {
