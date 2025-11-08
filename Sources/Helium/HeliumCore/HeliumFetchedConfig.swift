@@ -587,10 +587,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     func buildLocalizedPriceMap(_ productIds: [String]) async {
         if !productIds.isEmpty {
-            let newPrices = await PriceFetcher.localizedPricing(for: productIds)
+            let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
 
             // Merge the new prices into the existing map
-            localizedPriceMap.merge(newPrices) { _, new in new }
+            localizedPriceMap.merge(newProductToPriceMap) { _, new in new }
         }
     }
     

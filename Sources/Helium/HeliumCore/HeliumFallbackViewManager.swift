@@ -50,13 +50,15 @@ public class HeliumFallbackViewManager {
                     loadedConfigJSON = json
                 }
                 
-                HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
-                
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     try HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     print("[Helium] Successfully loaded paywalls from fallback bundle file.")
                 } else {
                     print("[Helium] No bundles found in fallback bundle file.")
+                }
+                
+                Task {
+                    await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
                 }
             } catch {
                 print("[Helium] Failed to load fallback bundle: \(error)")

@@ -108,7 +108,6 @@ public class PriceFetcher {
     /// Fetches the localized price for multiple SKUs using async/await
     /// - Parameter skus: Array of product identifiers
     /// - Returns: Dictionary mapping SKUs to their localized price information
-    @available(iOS 15.0, *) // StoreKit 2 is iOS 15+
     public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
         
