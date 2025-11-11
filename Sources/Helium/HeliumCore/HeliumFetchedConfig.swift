@@ -141,7 +141,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
-    @Atomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
         endpoint: String,
