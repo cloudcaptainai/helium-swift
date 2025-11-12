@@ -105,6 +105,7 @@ public class HeliumController {
                         localizedPriceSuccess: metrics.localizedPriceSuccess,
                         numBundles: metrics.numBundles,
                         numBundlesFromCache: metrics.numBundlesFromCache,
+                        uncachedBundleSizeKB: metrics.uncachedBundleSizeKB,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts
                     )

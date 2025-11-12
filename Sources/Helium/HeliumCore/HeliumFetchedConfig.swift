@@ -32,6 +32,7 @@ struct HeliumFetchMetrics {
     var bundleDownloadTimeMS: UInt64?
     var localizedPriceTimeMS: UInt64?
     var localizedPriceSuccess: Bool? = nil
+    var uncachedBundleSizeKB: Int? = nil
 }
 
 private struct BundlesRetrieveResult {
@@ -223,7 +224,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 do {
                     let bundles = (self.fetchedConfig?.bundles)!
                     
-                    saveBundleAssets(bundles: bundles)
+                    let bytesWritten = saveBundleAssets(bundles: bundles)
+                    let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                     
                     await handleConfigFetchSuccess(
                         newConfig: newConfig,
@@ -234,6 +236,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numBundlesFromCache: 0,
                         bundleFailCount: 0,
                         numBundleAttempts: 0,
+                        uncachedBundleSizeKB: sizeKB,
                         completion: completion
                     )
                 }
@@ -246,7 +249,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let bundles = bundlesResult.successMapBundleIdToHtml
                 guard !Task.isCancelled else { return }
                 fetchedConfig?.bundles = bundles
-                saveBundleAssets(bundles: bundles)
+                let bytesWritten = saveBundleAssets(bundles: bundles)
+                let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
@@ -272,6 +276,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numBundlesFromCache: bundlesResult.numBundlesFromCache,
                         bundleFailCount: 0,
                         numBundleAttempts: bundlesResult.numBundleAttempts,
+                        uncachedBundleSizeKB: sizeKB,
                         completion: completion
                     )
                 }
@@ -317,12 +322,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(retryNumber))
     }
     
-    private func saveBundleAssets(bundles: [String: String]) {
+    private func saveBundleAssets(bundles: [String: String]) -> Int {
         do {
-            try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+            return try HeliumAssetManager.shared.writeBundles(bundles: bundles)
         } catch {
             // try one more time in case writing bundle assets unexpectedly fails
-            try? HeliumAssetManager.shared.writeBundles(bundles: bundles)
+            if let bytesWritten = try? HeliumAssetManager.shared.writeBundles(bundles: bundles) {
+                return bytesWritten
+            }
+            return 0
         }
     }
     
@@ -537,6 +545,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         numBundlesFromCache: Int,
         bundleFailCount: Int,
         numBundleAttempts: Int,
+        uncachedBundleSizeKB: Int,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         // Prefetch products and build localized price map
@@ -555,7 +564,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
             configDownloadTimeMS: configDownloadTimeMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
             localizedPriceTimeMS: localizedPriceTimeMS,
-            localizedPriceSuccess: !localizedPriceMap.isEmpty
+            localizedPriceSuccess: !localizedPriceMap.isEmpty,
+            uncachedBundleSizeKB: uncachedBundleSizeKB
         )))
     }
     
