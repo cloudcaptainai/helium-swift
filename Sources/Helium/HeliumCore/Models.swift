@@ -81,6 +81,12 @@ public struct HeliumPaywallInfo: Codable {
         return nil
     }
     
+    /// Local file path for the bundle - converts extractedBundleUrl to local path
+    var localBundlePath: String? {
+        guard let bundleUrl = extractedBundleUrl else { return nil }
+        return HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl)
+    }
+    
     /// Extract experiment info from top-level experimentInfo field
     /// - Parameter trigger: The trigger name for this paywall
     /// - Returns: ExperimentInfo if experiment data is available

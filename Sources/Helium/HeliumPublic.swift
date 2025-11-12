@@ -216,17 +216,10 @@ public class Helium {
             }
             
             do {
-                guard let bundleUrl = templatePaywallInfo.extractedBundleUrl,
-                      let filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl) else {
+                guard let filePath = templatePaywallInfo.localBundlePath else {
                     return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .couldNotFindBundleUrl)
                 }
-                
-                let backupFilePath: String? = {
-                    if let backupBundleUrl = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.extractedBundleUrl {
-                        return HeliumAssetManager.shared.localPathForURL(bundleURL: backupBundleUrl)
-                    }
-                    return nil
-                }()
+                let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
                 
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
@@ -279,15 +272,9 @@ public class Helium {
         }
         
         // Check existing fallback mechanisms
-        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+           let filePath = fallbackPaywallInfo.localBundlePath  {
             do {
-                guard let bundleUrl = fallbackPaywallInfo.extractedBundleUrl,
-                      let filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl) else {
-                    print("[Helium] Failed to extract fallback bundle URL or local path for trigger: \(trigger)")
-                    result = getFallbackViewForTrigger()
-                    return UpsellViewResult(view: result, fallbackReason: fallbackReason, templateName: templateName)
-                }
-                
                 result = try AnyView(
                     DynamicBaseTemplateView(
                         paywallInfo: fallbackPaywallInfo,
