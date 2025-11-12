@@ -31,9 +31,10 @@ actor ProductsCache {
         return result
     }
     
+    // Note - not all supplied productIds are guaranteed to have a product in the returned list
     func fetchProducts(for productIds: [String]) async throws -> [Product] {
         let productMap = try await fetchProductsMap(for: productIds)
-        return Array(productMap.values)
+        return productIds.compactMap { productMap[$0] }
     }
     
     func getProduct(id: String) async throws -> Product? {

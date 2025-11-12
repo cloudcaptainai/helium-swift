@@ -141,7 +141,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
-    private(set) var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
         endpoint: String,
@@ -552,8 +552,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         // Prefetch products and build localized price map
         downloadStep = .products
         let localizedPricesStartTime = DispatchTime.now()
-        let allProductIds = getAllProductIds()
-        await buildLocalizedPriceMap(allProductIds)
+        await buildLocalizedPriceMap(config: fetchedConfig)
         let localizedPriceTimeMS = dispatchTimeDifferenceInMS(from: localizedPricesStartTime)
         
         await updateDownloadState(.downloadSuccess)
@@ -570,10 +569,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
         )))
     }
     
-    private func getAllProductIds() -> [String] {
+    private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
         // Get all unique product IDs from all paywalls
         var allProductIds: [String] = []
-        if let config = fetchedConfig {
+        if let config {
             for paywall in config.triggerToPaywalls.values {
                 allProductIds.append(contentsOf: paywall.productsOffered)
             }
@@ -581,22 +580,25 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return Array(Set(allProductIds))
     }
     
+    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async {
+        let productIds = getAllProductIds(config: config)
+        await buildLocalizedPriceMap(productIds)
+    }
     
-    private func buildLocalizedPriceMap(_ productIds: [String]) async {
-        do {
-            if #available(iOS 15.0, *) {
-                // StoreKit 2 available
-                self.localizedPriceMap = await PriceFetcher.localizedPricing(for: productIds)
-            } else {
-                // Fallback for older iOS versions (StoreKit 1)
-                await withCheckedContinuation { continuation in
-                    PriceFetcher.localizedPricing(for: productIds) { prices in
-                        self.localizedPriceMap = prices
-                        continuation.resume()
-                    }
-                }
+    func buildLocalizedPriceMap(_ productIds: [String]) async {
+        if !productIds.isEmpty {
+            let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
+
+            // Merge the new prices into the existing map; atomic read-modify-write using withValue
+            _localizedPriceMap.withValue { map in
+                map.merge(newProductToPriceMap) { _, new in new }
             }
         }
+    }
+    
+    func refreshLocalizedPriceMap() async {
+        let productIds = Array(localizedPriceMap.keys)
+        await buildLocalizedPriceMap(productIds)
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use

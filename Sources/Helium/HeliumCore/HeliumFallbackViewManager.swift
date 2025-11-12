@@ -56,6 +56,10 @@ public class HeliumFallbackViewManager {
                 } else {
                     print("[Helium] No bundles found in fallback bundle file.")
                 }
+                
+                Task {
+                    await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
+                }
             } catch {
                 print("[Helium] Failed to load fallback bundle: \(error)")
             }
