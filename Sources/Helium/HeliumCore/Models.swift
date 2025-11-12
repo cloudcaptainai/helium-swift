@@ -65,11 +65,7 @@ public struct HeliumPaywallInfo: Codable {
     
     /// Extracted bundle URL - single source of truth for bundle URL extraction
     var extractedBundleUrl: String? {
-        // First try additionalPaywallFields
-        if let bundleUrl = additionalPaywallFields?["paywallBundleUrl"].string, !bundleUrl.isEmpty {
-            return bundleUrl
-        }
-        // Fallback to resolvedConfig
+        // First try resolvedConfig
         if let resolvedConfig = resolvedConfigJSON,
            resolvedConfig["baseStack"].exists(),
            resolvedConfig["baseStack"]["componentProps"].exists() {
@@ -77,6 +73,10 @@ public struct HeliumPaywallInfo: Codable {
             if !bundleUrl.isEmpty {
                 return bundleUrl
             }
+        }
+        // Then additionalPaywallFields
+        if let bundleUrl = additionalPaywallFields?["paywallBundleUrl"].string, !bundleUrl.isEmpty {
+            return bundleUrl
         }
         return nil
     }
