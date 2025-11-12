@@ -63,6 +63,24 @@ public struct HeliumPaywallInfo: Codable {
     var additionalPaywallFields: JSON?
     var presentationStyle: PaywallPresentationStyle?
     
+    /// Extracted bundle URL - single source of truth for bundle URL extraction
+    var extractedBundleUrl: String? {
+        // First try additionalPaywallFields
+        if let bundleUrl = additionalPaywallFields?["paywallBundleUrl"].string, !bundleUrl.isEmpty {
+            return bundleUrl
+        }
+        // Fallback to resolvedConfig
+        if let resolvedConfig = resolvedConfigJSON,
+           resolvedConfig["baseStack"].exists(),
+           resolvedConfig["baseStack"]["componentProps"].exists() {
+            let bundleUrl = resolvedConfig["baseStack"]["componentProps"]["bundleURL"].stringValue
+            if !bundleUrl.isEmpty {
+                return bundleUrl
+            }
+        }
+        return nil
+    }
+    
     /// Extract experiment info from top-level experimentInfo field
     /// - Parameter trigger: The trigger name for this paywall
     /// - Returns: ExperimentInfo if experiment data is available
@@ -663,6 +681,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case noRootController
     case webviewRenderFail
     case bridgingError
+    case couldNotFindBundleUrl
 }
 
 public enum HeliumLightDarkMode {

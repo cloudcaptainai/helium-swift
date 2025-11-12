@@ -345,17 +345,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         var cachedBundleIdToHtmlMap: [String : String] = [:]
         
         for (trigger, paywallInfo) in config.triggerToPaywalls {
-            var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
-            if bundleUrl == nil || bundleUrl == "" {
-                let resolvedConfig = getResolvedConfigJSONForTrigger(trigger)
-                if let resolvedConfig {
-                    if resolvedConfig["baseStack"].exists(),
-                       resolvedConfig["baseStack"]["componentProps"].exists() {
-                        bundleUrl = resolvedConfig["baseStack"]["componentProps"]["bundleURL"].stringValue
-                    }
-                }
-            }
-            if let bundleUrl, !bundleUrl.isEmpty {
+            if let bundleUrl = paywallInfo.extractedBundleUrl, !bundleUrl.isEmpty {
                 let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? ""
                 if cachedBundleIDs.contains(bundleId) {
                     // No need to fetch if already cached. Note that every time paywall is saved it will get new

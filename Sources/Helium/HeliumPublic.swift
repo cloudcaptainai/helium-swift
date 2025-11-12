@@ -216,12 +216,25 @@ public class Helium {
             }
             
             do {
+                guard let bundleUrl = templatePaywallInfo.extractedBundleUrl,
+                      let filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl) else {
+                    return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .couldNotFindBundleUrl)
+                }
+                
+                let backupFilePath: String? = {
+                    if let backupBundleUrl = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.extractedBundleUrl {
+                        return HeliumAssetManager.shared.localPathForURL(bundleURL: backupBundleUrl)
+                    }
+                    return nil
+                }()
+                
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
                     fallbackReason: nil,
-                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger),
-                    backupResolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    filePath: filePath,
+                    backupFilePath: backupFilePath,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
                 return UpsellViewResult(view: paywallView, fallbackReason: nil, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
@@ -268,11 +281,20 @@ public class Helium {
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
             do {
+                guard let bundleUrl = fallbackPaywallInfo.extractedBundleUrl,
+                      let filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl) else {
+                    print("[Helium] Failed to extract fallback bundle URL or local path for trigger: \(trigger)")
+                    result = getFallbackViewForTrigger()
+                    return UpsellViewResult(view: result, fallbackReason: fallbackReason, templateName: templateName)
+                }
+                
                 result = try AnyView(
                     DynamicBaseTemplateView(
                         paywallInfo: fallbackPaywallInfo,
                         trigger: trigger,
                         fallbackReason: fallbackReason,
+                        filePath: filePath,
+                        backupFilePath: nil,
                         resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                     )
                 )
