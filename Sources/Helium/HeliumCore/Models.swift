@@ -66,10 +66,10 @@ public struct HeliumPaywallInfo: Codable {
     /// Extracted bundle URL - single source of truth for bundle URL extraction
     var extractedBundleUrl: String? {
         // First try resolvedConfig
-        if let resolvedConfig = resolvedConfigJSON,
-           resolvedConfig["baseStack"].exists(),
-           resolvedConfig["baseStack"]["componentProps"].exists() {
-            let bundleUrl = resolvedConfig["baseStack"]["componentProps"]["bundleURL"].stringValue
+        if let resolvedConfig = resolvedConfig.value as? [String : Any],
+           let baseStack = resolvedConfig["baseStack"] as? [String : Any],
+           let componentProps = baseStack["componentProps"] as? [String : Any] {
+            let bundleUrl = componentProps["bundleURL"] as? String ?? ""
             if !bundleUrl.isEmpty {
                 return bundleUrl
             }
