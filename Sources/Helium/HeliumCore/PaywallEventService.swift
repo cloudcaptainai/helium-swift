@@ -38,6 +38,9 @@ public struct PaywallEventHandlers {
     /// - Note: Handle arbitrary actions sent from the paywall with custom data
     public var onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)?
     
+    /// A handler for all paywall-related events
+    public var onAnyEvent: ((PaywallContextEvent) -> Void)?
+    
     // MARK: - Initializer
     
     public init() {}
@@ -66,8 +69,11 @@ public struct PaywallEventHandlers {
             onCustomPaywallAction?(e)
             
         default:
-            // Ignore events we don't have handlers for
             break
+        }
+        
+        if let paywallEvent = event as? PaywallContextEvent {
+            onAnyEvent?(paywallEvent)
         }
     }
 }
@@ -123,6 +129,14 @@ extension PaywallEventHandlers {
         service.onCustomPaywallAction = handler
         return service
     }
+    
+    /// Set handler for any paywall event
+    /// - Note: Catch-all handler that receives all paywall-related events
+    public func onAnyEvent(_ handler: @escaping (PaywallContextEvent) -> Void) -> PaywallEventHandlers {
+        var service = self
+        service.onAnyEvent = handler
+        return service
+    }
 }
 
 // MARK: - Convenience Extensions
@@ -137,7 +151,8 @@ extension PaywallEventHandlers {
         onDismissed: ((PaywallDismissedEvent) -> Void)? = nil,
         onPurchaseSucceeded: ((PurchaseSucceededEvent) -> Void)? = nil,
         onOpenFailed: ((PaywallOpenFailedEvent) -> Void)? = nil,
-        onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)? = nil
+        onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)? = nil,
+        onAnyEvent: ((PaywallContextEvent) -> Void)? = nil
     ) -> PaywallEventHandlers {
         var service = PaywallEventHandlers()
         if let onOpen = onOpen {
@@ -157,6 +172,9 @@ extension PaywallEventHandlers {
         }
         if let onCustomPaywallAction = onCustomPaywallAction {
             service = service.onCustomPaywallAction(onCustomPaywallAction)
+        }
+        if let onAnyEvent = onAnyEvent {
+            service = service.onAnyEvent(onAnyEvent)
         }
         return service
     }
