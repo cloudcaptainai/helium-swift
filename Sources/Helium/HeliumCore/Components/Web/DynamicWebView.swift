@@ -260,7 +260,7 @@ public struct DynamicWebView: View {
             // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
             let event = PaywallWebViewRenderedEvent(
                 triggerName: trigger,
-                paywallName: paywallName,
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 paywallUnavailableReason: .webviewRenderFail
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event)
