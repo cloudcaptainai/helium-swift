@@ -38,7 +38,7 @@ public struct PaywallEventHandlers {
     /// - Note: Handle arbitrary actions sent from the paywall with custom data
     public var onCustomPaywallAction: ((CustomPaywallActionEvent) -> Void)?
     
-    /// A handler for all paywall-related events
+    /// A handler for all paywall-related events. Note that if you have other handlers (i.e. onOpen) set up, both that handler AND this one will fire during paywall open.
     public var onAnyEvent: ((PaywallContextEvent) -> Void)?
     
     // MARK: - Initializer
@@ -131,7 +131,7 @@ extension PaywallEventHandlers {
     }
     
     /// Set handler for any paywall event
-    /// - Note: Catch-all handler that receives all paywall-related events
+    /// - Note: Catch-all handler that receives all paywall-related events. Note that if you have other handlers (i.e. onOpen) set up, both that handler AND this one will fire during paywall open.
     public func onAnyEvent(_ handler: @escaping (PaywallContextEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onAnyEvent = handler
