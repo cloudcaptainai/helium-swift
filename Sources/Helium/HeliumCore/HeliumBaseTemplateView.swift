@@ -6,7 +6,7 @@ enum TemplateError: Error {
 }
 
 protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, resolvedConfig: JSON?, backupResolvedConfig: JSON?) throws
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws
 }
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
@@ -15,15 +15,19 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
+    let filePath: String
+    let backupFilePath: String?
     var componentPropsJSON: JSON
-    var backupComponentPropsJSON: JSON?
     var triggerName: String?
     let fallbackReason: PaywallUnavailableReason?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, resolvedConfig: JSON?, backupResolvedConfig: JSON? = nil) throws {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
+        
+        self.filePath = filePath
+        self.backupFilePath = backupFilePath
         
         let templateValues = resolvedConfig ?? JSON([:])
         
@@ -36,19 +40,14 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
         self.componentPropsJSON = templateValues["baseStack"]["componentProps"]
         self.triggerName = trigger;
         self.fallbackReason = fallbackReason
-        if let backupResolvedConfig {
-            if backupResolvedConfig["baseStack"].exists(),
-               backupResolvedConfig["baseStack"]["componentProps"].exists() {
-                backupComponentPropsJSON = backupResolvedConfig["baseStack"]["componentProps"]
-            }
-        }
     }
     
     public var body: some View {
         // Use validated componentProps
         DynamicWebView(
+            filePath: filePath,
+            backupFilePath: backupFilePath,
             json: componentPropsJSON,
-            backupJson: backupComponentPropsJSON,
             actionsDelegate: actionsDelegateWrapper,
             triggerName: triggerName
         )

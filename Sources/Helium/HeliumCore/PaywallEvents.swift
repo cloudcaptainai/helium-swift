@@ -866,6 +866,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// How many bundles were already cached
     public let numBundlesFromCache: Int?
     
+    /// Size of bundles fetched from network (not from cache) in kilobytes
+    public let uncachedBundleSizeKB: Int?
+    
     /// Number of config download attempts
     /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
     public let numAttempts: Int?
@@ -887,6 +890,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         localizedPriceSuccess: Bool? = nil,
         numBundles: Int? = nil,
         numBundlesFromCache: Int? = nil,
+        uncachedBundleSizeKB: Int? = nil,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
         timestamp: Date = Date()
@@ -899,6 +903,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.localizedPriceSuccess = localizedPriceSuccess
         self.numBundles = numBundles
         self.numBundlesFromCache = numBundlesFromCache
+        self.uncachedBundleSizeKB = uncachedBundleSizeKB
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
         self.timestamp = timestamp
@@ -935,6 +940,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         if let numBundlesFromCache {
             dict["numBundlesFromCache"] = numBundlesFromCache
         }
+        if let uncachedBundleSizeKB {
+            dict["uncachedBundleSizeKB"] = uncachedBundleSizeKB
+        }
         if let attempts = numAttempts {
             dict["numAttempts"] = attempts
         }
@@ -957,6 +965,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             localizedPriceSuccess: localizedPriceSuccess,
             numBundles: numBundles,
             numBundlesFromCache: numBundlesFromCache,
+            uncachedBundleSizeKB: uncachedBundleSizeKB,
             numAttempts: numAttempts,
             numBundleAttempts: numBundleAttempts
         )
