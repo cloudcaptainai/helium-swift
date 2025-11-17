@@ -98,7 +98,14 @@ public struct HeliumPaywallInfo: Codable {
             return nil
         }
         
-        // Server now sends complete nested structure, just add trigger
+        // Check if user has been enrolled (has a tracked allocation)
+        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+        let enrolledAt = ExperimentAllocationTracker.shared.getEnrollmentDate(
+            persistentId: persistentId,
+            trigger: trigger
+        )
+        
+        // Server now sends complete nested structure, just add trigger and enrolledAt
         return ExperimentInfo(
             trigger: trigger,
             experimentName: response.experimentName,
@@ -110,7 +117,8 @@ public struct HeliumPaywallInfo: Codable {
             audienceId: response.audienceId,
             audienceData: response.audienceData,
             chosenVariantDetails: response.chosenVariantDetails,
-            hashDetails: response.hashDetails
+            hashDetails: response.hashDetails,
+            enrolledAt: enrolledAt
         )
     }
 }

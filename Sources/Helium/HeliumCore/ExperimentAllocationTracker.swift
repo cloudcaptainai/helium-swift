@@ -13,12 +13,14 @@ private struct StoredAllocation: Codable {
     let allocationId: String?
     let allocationIndex: Int?
     let audienceId: String?
+    let enrolledAt: Date
     
     init(from experimentInfo: ExperimentInfo) {
         self.experimentId = experimentInfo.experimentId
         self.allocationId = experimentInfo.chosenVariantDetails?.allocationId
         self.allocationIndex = experimentInfo.chosenVariantDetails?.allocationIndex
         self.audienceId = experimentInfo.audienceId
+        self.enrolledAt = Date()
     }
 }
 
@@ -161,5 +163,15 @@ class ExperimentAllocationTracker {
     func hasTrackedAllocation(persistentId: String, trigger: String) -> Bool {
         let key = storageKey(persistentId: persistentId, trigger: trigger)
         return storedAllocations[key] != nil
+    }
+    
+    /// Get the enrollment timestamp for a specific user and trigger
+    /// - Parameters:
+    ///   - persistentId: The user's Helium persistent ID
+    ///   - trigger: The trigger name to check
+    /// - Returns: Date when user was first enrolled, or nil if not enrolled
+    func getEnrollmentDate(persistentId: String, trigger: String) -> Date? {
+        let key = storageKey(persistentId: persistentId, trigger: trigger)
+        return storedAllocations[key]?.enrolledAt
     }
 }
