@@ -37,7 +37,7 @@ public class Helium {
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
         dontShowIfAlreadyEntitled: Bool = false,
-        onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)
+        onPaywallNotShown: ((PaywallNotShownReason) -> Void)
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -46,6 +46,7 @@ public class Helium {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
+            onPaywallNotShown: onPaywallNotShown,
             customPaywallTraits: customPaywallTraits,
             dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
         )
@@ -562,7 +563,7 @@ public class Helium {
         // hide any existing upsells
         hideAllUpsells()
         
-        presentUpsell(trigger: trigger, onPaywallUnavailable: {_ in})
+        presentUpsell(trigger: trigger, onPaywallNotShown: {_ in})
         return true
     }
     

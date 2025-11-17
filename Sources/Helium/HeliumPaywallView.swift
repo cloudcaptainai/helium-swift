@@ -2,8 +2,6 @@
 //  HeliumPaywallView.swift
 //  Helium
 //
-//  SwiftUI view that exposes paywall states (loading, ready, unavailable)
-//
 
 import Foundation
 import SwiftUI
@@ -14,7 +12,7 @@ import SwiftUI
 /// ```swift
 /// // Minimal - uses default loading view
 /// HeliumPaywallView(trigger: "onboarding") { reason in
-///     Text("Paywall unavailable: \(reason.rawValue)")
+///     Text("Paywall not shown: \(reason.rawValue)")
 /// }
 ///
 /// // With custom loading view
@@ -22,14 +20,14 @@ import SwiftUI
 ///     trigger: "onboarding",
 ///     loadingView: { ProgressView() }
 /// ) { reason in
-///     Text("Paywall unavailable: \(reason.rawValue)")
+///     Text("Paywall not shown: \(reason.rawValue)")
 /// }
 /// ```
 @available(iOS 15.0, *)
 public struct HeliumPaywallView<FallbackView: View>: View {
     let trigger: String
     let loadingView: (() -> AnyView)?
-    let fallbackView: (PaywallUnavailableReason) -> FallbackView
+    let fallbackView: (PaywallNotShownReason) -> FallbackView
     let eventHandlers: PaywallEventHandlers?
     let customPaywallTraits: [String: Any]?
     
@@ -43,12 +41,12 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     ///   - trigger: The trigger name to display a paywall for
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
     ///   - customPaywallTraits: Optional custom traits for paywall personalization
-    ///   - fallbackView: View to show when paywall is unavailable
+    ///   - fallbackView: View to show when paywall is unavailable or skipped due to targeting
     public init(
         trigger: String,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
+        @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) {
         self.trigger = trigger
         self.loadingView = nil
@@ -66,13 +64,13 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
     ///   - customPaywallTraits: Optional custom traits for paywall personalization
     ///   - loadingView: Custom view to show while paywall is loading
-    ///   - fallbackView: View to show when paywall is unavailable
+    ///   - fallbackView: View to show when paywall is unavailable or skipped due to targeting
     public init<LoadingView: View>(
         trigger: String,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
         @ViewBuilder loadingView: @escaping () -> LoadingView,
-        @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
+        @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) {
         self.trigger = trigger
         self.loadingView = { AnyView(loadingView()) }
@@ -90,7 +88,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
                 resolvedLoadingView
             case .ready(let paywallView):
                 paywallView
-            case .unavailable(let reason):
+            case .fallback(let reason):
                 fallbackView(reason)
             }
         }
@@ -146,8 +144,8 @@ enum HeliumPaywallViewState: Equatable {
     case loading
     /// Paywall is ready to display
     case ready(AnyView)
-    /// Paywall is unavailable for the given reason
-    case unavailable(PaywallUnavailableReason)
+    /// Paywall is not shown for the given reason
+    case fallback(PaywallNotShownReason)
     
     static func == (lhs: HeliumPaywallViewState, rhs: HeliumPaywallViewState) -> Bool {
         switch (lhs, rhs) {
@@ -155,7 +153,7 @@ enum HeliumPaywallViewState: Equatable {
             return true
         case (.ready, .ready):
             return true
-        case (.unavailable(let lReason), .unavailable(let rReason)):
+        case (.fallback(let lReason), .fallback(let rReason)):
             return lReason == rReason
         default:
             return false
@@ -178,10 +176,10 @@ fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewSt
     }
     
     if let reason = result.fallbackReason {
-        return .unavailable(reason)
+        return .fallback(.error(unavailableReason: reason))
     }
     
-    return .unavailable(.unknown)
+    return .fallback(.error(unavailableReason: nil))
 }
 
 /// Determines if loading state should be shown by checking actual download status

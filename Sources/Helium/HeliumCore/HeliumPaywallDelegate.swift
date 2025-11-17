@@ -94,7 +94,7 @@ public class HeliumPaywallDelegateWrapper {
     private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
-    private var onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)? = nil
+    private var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     private var customPaywallTraits: [String: Any] = [:]
     private(set) var dontShowIfAlreadyEntitled: Bool = false
     
@@ -105,13 +105,13 @@ public class HeliumPaywallDelegateWrapper {
     /// Consolidated method to set both event service and custom traits for a paywall presentation
     public func configurePresentationContext(
         eventService: PaywallEventHandlers?,
-        onPaywallUnavailable: ((PaywallUnavailableReason) -> Void)? = nil,
+        onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil,
         customPaywallTraits: [String: Any]?,
         dontShowIfAlreadyEntitled: Bool = false
     ) {
         // Always set even if nil to ensure proper reset
         self.eventService = eventService
-        self.onPaywallUnavailable = onPaywallUnavailable
+        self.onPaywallNotShown = onPaywallNotShown
         self.customPaywallTraits = customPaywallTraits ?? [:]
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
     }
@@ -119,7 +119,7 @@ public class HeliumPaywallDelegateWrapper {
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
         self.eventService = nil
-        self.onPaywallUnavailable = nil
+        self.onPaywallNotShown = nil
         self.customPaywallTraits = [:]
         self.dontShowIfAlreadyEntitled = false
     }
@@ -229,7 +229,7 @@ public class HeliumPaywallDelegateWrapper {
         // First, call the event service if configured
         eventService?.handleEvent(event)
         if let openFail = event as? PaywallOpenFailedEvent {
-            onPaywallUnavailable?(openFail.paywallUnavailableReason ?? .unknown)
+            onPaywallNotShown?(.error(unavailableReason: openFail.paywallUnavailableReason))
         }
         
         // Then fire the new typed event to delegate
@@ -238,7 +238,8 @@ public class HeliumPaywallDelegateWrapper {
         HeliumEventListeners.shared.onHeliumEvent(event: event)
         
         // Clear presentation context (event service and custom traits) on close events
-        if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
+        let isCloseOrOpenFail = event is PaywallCloseEvent || event is PaywallOpenFailedEvent
+        if isCloseOrOpenFail && (event as? PaywallContextEvent)?.isSecondTry != true {
             clearPresentationContext()
         }
         

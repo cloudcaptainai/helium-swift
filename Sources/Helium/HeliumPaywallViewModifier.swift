@@ -15,7 +15,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
     let eventHandlers: PaywallEventHandlers?
     let customPaywallTraits: [String: Any]?
     let loadingView: (() -> LoadingView)?
-    let fallbackView: (PaywallUnavailableReason) -> FallbackView
+    let fallbackView: (PaywallNotShownReason) -> FallbackView
     
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -60,7 +60,7 @@ public extension View {
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
         @ViewBuilder loadingView: @escaping () -> LoadingView,
-        @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
+        @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) -> some View {
         self.modifier(DynamicPaywallModifier(
             isPresented: isPresented,
@@ -78,7 +78,7 @@ public extension View {
         trigger: String,
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        @ViewBuilder fallbackView: @escaping (PaywallUnavailableReason) -> FallbackView
+        @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) -> some View {
         self.modifier(DynamicPaywallModifier(
             isPresented: isPresented,

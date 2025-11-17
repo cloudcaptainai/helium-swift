@@ -663,7 +663,12 @@ public enum PaywallUnavailableReason: String, Codable {
     case noRootController
     case webviewRenderFail
     case bridgingError
-    case unknown
+}
+
+public enum PaywallNotShownReason: Equatable {
+    case error(unavailableReason: PaywallUnavailableReason?)
+    case alreadyEntitled
+    case skipped
 }
 
 public enum HeliumLightDarkMode {
