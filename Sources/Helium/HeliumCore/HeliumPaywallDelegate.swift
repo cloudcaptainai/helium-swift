@@ -175,6 +175,9 @@ public class HeliumPaywallDelegateWrapper {
             
             Task {
                 await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+                
+                // update localized products (and offer eligibility) after purchase
+                await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
             }
             #if compiler(>=6.2)
             if let atID = transactionIds?.transaction?.appTransactionID {
@@ -226,21 +229,24 @@ public class HeliumPaywallDelegateWrapper {
     
     /// Fire a v2 typed event - main entry point for all SDK events
     public func fireEvent(_ event: HeliumEvent) {
-        // First, call the event service if configured
-        eventService?.handleEvent(event)
-        if let openFail = event as? PaywallOpenFailedEvent {
-            onPaywallNotShown?(.error(unavailableReason: openFail.paywallUnavailableReason))
-        }
-        
-        // Then fire the new typed event to delegate
-        delegate?.onPaywallEvent(event)
-        
-        HeliumEventListeners.shared.onHeliumEvent(event: event)
-        
-        // Clear presentation context (event service and custom traits) on close events
-        let isCloseOrOpenFail = event is PaywallCloseEvent || event is PaywallOpenFailedEvent
-        if isCloseOrOpenFail && (event as? PaywallContextEvent)?.isSecondTry != true {
-            clearPresentationContext()
+        Task { @MainActor in
+            // First, call the event service if configured
+            eventService?.handleEvent(event)
+            if let openFail = event as? PaywallOpenFailedEvent {
+                onPaywallNotShown?(.error(unavailableReason: openFail.paywallUnavailableReason))
+            }
+            
+            // Then fire the new typed event to delegate
+            delegate?.onPaywallEvent(event)
+            
+            // Global event handlers
+            HeliumEventListeners.shared.dispatchEvent(event)
+            
+            // Clear presentation context (event service and custom traits) on close events
+            let isCloseOrOpenFail = event is PaywallCloseEvent || event is PaywallOpenFailedEvent
+            if isCloseOrOpenFail && (event as? PaywallContextEvent)?.isSecondTry != true {
+                clearPresentationContext()
+            }
         }
         
         // Then convert to legacy format and handle internally (analytics, etc)

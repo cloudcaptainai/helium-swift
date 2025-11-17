@@ -108,7 +108,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         let event = PaywallWebViewRenderedEvent(
             triggerName: trigger,
-            paywallName: paywallInfo.paywallTemplateName,
+            paywallName: isFallback ? "fallback_\(paywallInfo.paywallTemplateName)" : paywallInfo.paywallTemplateName,
             webviewRenderTimeTakenMS: timeTakenMS,
             paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
         )

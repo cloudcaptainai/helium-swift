@@ -134,6 +134,7 @@ class HeliumPaywallPresenter {
         }
         
         if await paywallEntitlementsCheck(trigger: trigger) {
+            hideUpsell()
             return
         }
         

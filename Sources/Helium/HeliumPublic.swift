@@ -218,12 +218,18 @@ public class Helium {
             }
             
             do {
+                guard let filePath = templatePaywallInfo.localBundlePath else {
+                    return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .couldNotFindBundleUrl)
+                }
+                let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
+                
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallInfo: templatePaywallInfo,
                     trigger: trigger,
                     fallbackReason: nil,
-                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger),
-                    backupResolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    filePath: filePath,
+                    backupFilePath: backupFilePath,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
                 return UpsellViewResult(view: paywallView, fallbackReason: nil, templateName: templatePaywallInfo.paywallTemplateName)
             } catch {
@@ -268,13 +274,16 @@ public class Helium {
         }
         
         // Check existing fallback mechanisms
-        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger) {
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+           let filePath = fallbackPaywallInfo.localBundlePath  {
             do {
                 result = try AnyView(
                     DynamicBaseTemplateView(
                         paywallInfo: fallbackPaywallInfo,
                         trigger: trigger,
                         fallbackReason: fallbackReason,
+                        filePath: filePath,
+                        backupFilePath: nil,
                         resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                     )
                 )

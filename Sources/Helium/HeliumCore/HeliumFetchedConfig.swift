@@ -32,6 +32,7 @@ struct HeliumFetchMetrics {
     var bundleDownloadTimeMS: UInt64?
     var localizedPriceTimeMS: UInt64?
     var localizedPriceSuccess: Bool? = nil
+    var uncachedBundleSizeKB: Int? = nil
 }
 
 private struct BundlesRetrieveResult {
@@ -93,7 +94,7 @@ func fetchEndpoint(
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
-//    request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles") // keep off for now
+    request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles")
     
     request.timeoutInterval = timeoutInterval ?? 15
     
@@ -141,7 +142,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
-    private(set) var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
         endpoint: String,
@@ -178,7 +179,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     ) async {
         do {
             // Increase timeout if on last attempt
-            var timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 60 : nil
+            let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 30 : nil
             let response = try await fetchEndpoint(endpoint: endpoint, params: params, timeoutInterval: timeoutInterval)
             
             // Ensure we have data
@@ -223,7 +224,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 do {
                     let bundles = (self.fetchedConfig?.bundles)!
                     
-                    saveBundleAssets(bundles: bundles)
+                    let bytesWritten = saveBundleAssets(bundles: bundles)
+                    let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                     
                     await handleConfigFetchSuccess(
                         newConfig: newConfig,
@@ -234,6 +236,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numBundlesFromCache: 0,
                         bundleFailCount: 0,
                         numBundleAttempts: 0,
+                        uncachedBundleSizeKB: sizeKB,
                         completion: completion
                     )
                 }
@@ -246,7 +249,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let bundles = bundlesResult.successMapBundleIdToHtml
                 guard !Task.isCancelled else { return }
                 fetchedConfig?.bundles = bundles
-                saveBundleAssets(bundles: bundles)
+                let bytesWritten = saveBundleAssets(bundles: bundles)
+                let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
@@ -272,6 +276,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numBundlesFromCache: bundlesResult.numBundlesFromCache,
                         bundleFailCount: 0,
                         numBundleAttempts: bundlesResult.numBundleAttempts,
+                        uncachedBundleSizeKB: sizeKB,
                         completion: completion
                     )
                 }
@@ -317,12 +322,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return pow(2.0, Double(retryNumber))
     }
     
-    private func saveBundleAssets(bundles: [String: String]) {
+    private func saveBundleAssets(bundles: [String: String]) -> Int {
         do {
-            try HeliumAssetManager.shared.writeBundles(bundles: bundles)
+            return try HeliumAssetManager.shared.writeBundles(bundles: bundles)
         } catch {
             // try one more time in case writing bundle assets unexpectedly fails
-            try? HeliumAssetManager.shared.writeBundles(bundles: bundles)
+            if let bytesWritten = try? HeliumAssetManager.shared.writeBundles(bundles: bundles) {
+                return bytesWritten
+            }
+            return 0
         }
     }
     
@@ -345,17 +353,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         var cachedBundleIdToHtmlMap: [String : String] = [:]
         
         for (trigger, paywallInfo) in config.triggerToPaywalls {
-            var bundleUrl: String? = paywallInfo.additionalPaywallFields?["paywallBundleUrl"].string
-            if bundleUrl == nil || bundleUrl == "" {
-                let resolvedConfig = getResolvedConfigJSONForTrigger(trigger)
-                if let resolvedConfig {
-                    if resolvedConfig["baseStack"].exists(),
-                       resolvedConfig["baseStack"]["componentProps"].exists() {
-                        bundleUrl = resolvedConfig["baseStack"]["componentProps"]["bundleURL"].stringValue
-                    }
-                }
-            }
-            if let bundleUrl, !bundleUrl.isEmpty {
+            if let bundleUrl = paywallInfo.extractedBundleUrl {
                 let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? ""
                 if cachedBundleIDs.contains(bundleId) {
                     // No need to fetch if already cached. Note that every time paywall is saved it will get new
@@ -411,7 +409,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         attemptCounter: Int
     ) async -> BundlesFetchResult {
         // Increase timeout if on last attempt
-        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 20 : nil
+        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 12 : nil
         let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, timeoutInterval: timeoutInterval)
         
         if !result.bundleUrlsNotFetched.isEmpty {
@@ -547,13 +545,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
         numBundlesFromCache: Int,
         bundleFailCount: Int,
         numBundleAttempts: Int,
+        uncachedBundleSizeKB: Int,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         // Prefetch products and build localized price map
         downloadStep = .products
         let localizedPricesStartTime = DispatchTime.now()
-        let allProductIds = getAllProductIds()
-        await buildLocalizedPriceMap(allProductIds)
+        await buildLocalizedPriceMap(config: fetchedConfig)
         let localizedPriceTimeMS = dispatchTimeDifferenceInMS(from: localizedPricesStartTime)
         
         await updateDownloadState(.downloadSuccess)
@@ -566,14 +564,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
             configDownloadTimeMS: configDownloadTimeMS,
             bundleDownloadTimeMS: bundleDownloadTimeMS,
             localizedPriceTimeMS: localizedPriceTimeMS,
-            localizedPriceSuccess: !localizedPriceMap.isEmpty
+            localizedPriceSuccess: !localizedPriceMap.isEmpty,
+            uncachedBundleSizeKB: uncachedBundleSizeKB
         )))
     }
     
-    private func getAllProductIds() -> [String] {
+    private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
         // Get all unique product IDs from all paywalls
         var allProductIds: [String] = []
-        if let config = fetchedConfig {
+        if let config {
             for paywall in config.triggerToPaywalls.values {
                 allProductIds.append(contentsOf: paywall.productsOffered)
             }
@@ -581,22 +580,25 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return Array(Set(allProductIds))
     }
     
+    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async {
+        let productIds = getAllProductIds(config: config)
+        await buildLocalizedPriceMap(productIds)
+    }
     
-    private func buildLocalizedPriceMap(_ productIds: [String]) async {
-        do {
-            if #available(iOS 15.0, *) {
-                // StoreKit 2 available
-                self.localizedPriceMap = await PriceFetcher.localizedPricing(for: productIds)
-            } else {
-                // Fallback for older iOS versions (StoreKit 1)
-                await withCheckedContinuation { continuation in
-                    PriceFetcher.localizedPricing(for: productIds) { prices in
-                        self.localizedPriceMap = prices
-                        continuation.resume()
-                    }
-                }
+    func buildLocalizedPriceMap(_ productIds: [String]) async {
+        if !productIds.isEmpty {
+            let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
+
+            // Merge the new prices into the existing map; atomic read-modify-write using withValue
+            _localizedPriceMap.withValue { map in
+                map.merge(newProductToPriceMap) { _, new in new }
             }
         }
+    }
+    
+    func refreshLocalizedPriceMap() async {
+        let productIds = Array(localizedPriceMap.keys)
+        await buildLocalizedPriceMap(productIds)
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use
