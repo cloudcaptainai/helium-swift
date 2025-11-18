@@ -37,7 +37,7 @@ public class Helium {
         eventHandlers: PaywallEventHandlers? = nil,
         customPaywallTraits: [String: Any]? = nil,
         dontShowIfAlreadyEntitled: Bool = false,
-        onPaywallNotShown: ((PaywallNotShownReason) -> Void)
+        onPaywallNotShown: @escaping ((PaywallNotShownReason) -> Void)
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return

@@ -19,15 +19,11 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
     
     @ViewBuilder
     func body(content: Content) -> some View {
-        if Helium.shared.canShowPaywallFor(trigger: trigger).canShow {
-            content
-                .fullScreenCover(isPresented: $isPresented) {
-                    createPaywallView()
-                        .environment(\.paywallPresentationState, presentationState)
-                }
-        } else {
-            content
-        }
+        content
+            .fullScreenCover(isPresented: $isPresented) {
+                createPaywallView()
+                    .environment(\.paywallPresentationState, presentationState)
+            }
     }
     
     @ViewBuilder

@@ -108,9 +108,9 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             
             try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
             
-            // After timeout, re-resolve state (will transition to ready or unavailable)
+            // After timeout, re-resolve state
             loadingBudgetExpired = true
-            state = resolvePaywallState(for: trigger)
+            state = resolvePaywallState(for: trigger, allowLoadingState: false)
         }
     }
     
@@ -164,8 +164,11 @@ enum HeliumPaywallViewState: Equatable {
 // MARK: - Helper Functions
 
 /// Returns the current state of a paywall for the trigger
-fileprivate func resolvePaywallState(for trigger: String) -> HeliumPaywallViewState {
-    if shouldShowLoadingState(for: trigger) {
+fileprivate func resolvePaywallState(
+    for trigger: String,
+    allowLoadingState: Bool = true
+) -> HeliumPaywallViewState {
+    if allowLoadingState && shouldShowLoadingState(for: trigger) {
         return .loading
     }
     
