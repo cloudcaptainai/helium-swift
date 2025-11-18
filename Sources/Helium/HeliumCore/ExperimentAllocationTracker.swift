@@ -84,25 +84,32 @@ class ExperimentAllocationTracker {
             return true
         }
         
+        return !isSameExperimentAllocation(current, existing)
+    }
+
+    private func isSameExperimentAllocation(
+        _ first: StoredAllocation,
+        _ second: StoredAllocation
+    ) -> Bool {
         // Check each field explicitly to detect any change
-        if current.experimentId != existing.experimentId {
-            return true  // Different experiment
+        if first.experimentId != second.experimentId {
+            return false  // Different experiment
         }
         
-        if current.allocationId != existing.allocationId {
-            return true  // Different paywall variant
+        if first.allocationId != second.allocationId {
+            return false  // Different paywall variant
         }
         
-        if current.allocationIndex != existing.allocationIndex {
-            return true  // Different variant position
+        if first.allocationIndex != second.allocationIndex {
+            return false  // Different variant position
         }
         
-        if current.audienceId != existing.audienceId {
-            return true  // Different audience matched
+        if first.audienceId != second.audienceId {
+            return false  // Different audience matched
         }
         
-        // All fields match - no change, don't fire event
-        return false
+        // All fields match
+        return true
     }
     
     /// Tracks allocation and fires UserAllocatedEvent if this is the first time
@@ -122,7 +129,7 @@ class ExperimentAllocationTracker {
         
         // Extract experiment info
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger),
-              let experimentInfo = paywallInfo.extractExperimentInfo(trigger: trigger) else {
+              var experimentInfo = paywallInfo.extractExperimentInfo(trigger: trigger) else {
             return
         }
         
@@ -142,6 +149,9 @@ class ExperimentAllocationTracker {
         // Store the new allocation
         storedAllocations[key] = currentAllocation
         saveStoredAllocations()
+        
+        // Update experiment info with enrollment timestamp for the event
+        experimentInfo.enrolledAt = currentAllocation.enrolledAt
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(experimentInfo: experimentInfo)
@@ -169,9 +179,25 @@ class ExperimentAllocationTracker {
     /// - Parameters:
     ///   - persistentId: The user's Helium persistent ID
     ///   - trigger: The trigger name to check
-    /// - Returns: Date when user was first enrolled, or nil if not enrolled
-    func getEnrollmentDate(persistentId: String, trigger: String) -> Date? {
+    ///   - experimentInfo: The current experiment info to validate against stored allocation
+    /// - Returns: Date when user was first enrolled, or nil if not enrolled or allocation changed
+    func getEnrollmentDate(
+        persistentId: String,
+        trigger: String,
+        experimentInfo: ExperimentInfo
+    ) -> Date? {
         let key = storageKey(persistentId: persistentId, trigger: trigger)
-        return storedAllocations[key]?.enrolledAt
+        
+        guard let storedAllocation = storedAllocations[key] else {
+            return nil
+        }
+        
+        // Only return enrollment date if allocation hasn't changed
+        let currentAllocation = StoredAllocation(from: experimentInfo)
+        guard isSameExperimentAllocation(storedAllocation, currentAllocation) else {
+            return nil
+        }
+        
+        return storedAllocation.enrolledAt
     }
 }

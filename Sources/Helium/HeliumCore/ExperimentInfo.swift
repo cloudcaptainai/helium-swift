@@ -143,7 +143,7 @@ public struct ExperimentInfo: Codable {
     public let hashDetails: HashDetails?
     
     /// When the user was first enrolled in this experiment (nil if not enrolled yet)
-    public let enrolledAt: Date?
+    public var enrolledAt: Date?
     
     /// Computed enrollment status based on whether user has been allocated
     public var enrollmentStatus: ExperimentEnrollmentStatus {
