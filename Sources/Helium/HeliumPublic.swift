@@ -215,6 +215,10 @@ public class Helium {
                 return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .forceShowFallback)
             }
             
+            if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: bundleSkip.reason)
+            }
+            
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
                     return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .couldNotFindBundleUrl)

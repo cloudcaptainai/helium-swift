@@ -38,7 +38,7 @@ struct HeliumFetchMetrics {
 private struct BundlesRetrieveResult {
     let successMapBundleIdToHtml: [String : String]
     let triggersWithNoBundle: [String]
-    let triggersSkippedWithReason: [(trigger: String, reason: String)]
+    let triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)]
     let numBundles: Int
     let numBundlesFromCache: Int
     let numBundleAttempts: Int
@@ -47,7 +47,7 @@ private struct BundlesRetrieveResult {
 private struct BundlesFetchResult {
     let successMapBundleIdToHtml: [String : String]
     let bundleUrlsFailedToFetched: [String]
-    let bundleUrlsSkipped: [(url: String, reason: String)]
+    let bundleUrlsSkipped: [(url: String, reason: PaywallUnavailableReason)]
     var numBundleAttempts: Int? = nil
 }
 
@@ -55,33 +55,11 @@ private struct SingleBundleFetchResult {
     let url: String
     let html: String?
     let isPermanentFailure: Bool
-    let failureReason: String?
+    let failureReason: PaywallUnavailableReason?
 }
 
-enum BundleFetchPermanentError: Error {
-    case invalidURL
-    case httpError(statusCode: Int)
-    case cannotDecodeContent
-    
-    var reason: String {
-        switch self {
-        case .invalidURL:
-            return "Invalid URL format"
-        case .httpError(let statusCode):
-            switch statusCode {
-            case 403:
-                return "HTTP 403 Forbidden"
-            case 404:
-                return "HTTP 404 Not Found"
-            case 410:
-                return "HTTP 410 Gone"
-            default:
-                return "HTTP \(statusCode)"
-            }
-        case .cannotDecodeContent:
-            return "Cannot decode content"
-        }
-    }
+enum BundleFetchError: Error {
+    case permanentFailure(PaywallUnavailableReason)
 }
 
 class NetworkReachability {
@@ -154,6 +132,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         }
         shared.fetchedConfig = nil
         shared.fetchedConfigJSON = nil
+        shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
     }
     
@@ -171,6 +150,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
+    private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
@@ -281,6 +261,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let bytesWritten = saveBundleAssets(bundles: bundles)
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                 
+                triggersWithSkippedBundleAndReason = bundlesResult.triggersWithSkippedBundleAndReason
+                
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
                     completion(.failure(
@@ -369,7 +351,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             return BundlesRetrieveResult(
                 successMapBundleIdToHtml: [:],
                 triggersWithNoBundle: [],
-                triggersSkippedWithReason: [],
+                triggersWithSkippedBundleAndReason: [],
                 numBundles: 0,
                 numBundlesFromCache: 0,
                 numBundleAttempts: 0
@@ -401,6 +383,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 // Validate URL before processing - skip silently if invalid (don't fail entire download)
                 guard isValidURL(bundleUrl) else {
+                    //todo handle this
                     print("[Helium] Invalid URL format for trigger \(trigger): \(bundleUrl)")
                     continue
                 }
@@ -430,7 +413,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return BundlesRetrieveResult(
             successMapBundleIdToHtml: finalResult,
             triggersWithNoBundle: triggersWithNoBundle + additionalTriggersNotFetchedFor,
-            triggersSkippedWithReason: skippedTriggers,
+            triggersWithSkippedBundleAndReason: skippedTriggers,
             numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
             numBundlesFromCache: cachedBundleIdToHtmlMap.count,
             numBundleAttempts: fetchResult.numBundleAttempts ?? 0
@@ -493,7 +476,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         timeoutInterval: TimeInterval? = nil
     ) async -> BundlesFetchResult {
         var bundleUrlsNotFetched: [String] = []
-        var bundleUrlsSkipped: [(String, String)] = []
+        var bundleUrlsSkipped: [(String, PaywallUnavailableReason)] = []
 
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.httpMaximumConnectionsPerHost = 15
@@ -509,9 +492,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
                         return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false, failureReason: nil)
                     } catch {
-                        if let bundleError = error as? BundleFetchPermanentError {
-                            print("[Helium] Permanent failure for triggers \(triggers): \(bundleError.reason)")
-                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: bundleError.reason)
+                        if case let BundleFetchError.permanentFailure(reason) = error {
+                            print("[Helium] Permanent failure for triggers \(triggers): \(reason.rawValue)")
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason)
                         } else {
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil)
                         }
@@ -549,7 +532,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         timeoutInterval: TimeInterval? = nil
     ) async throws -> String {
         guard let url = URL(string: urlString) else {
-            throw BundleFetchPermanentError.invalidURL
+            throw BundleFetchError.permanentFailure(.bundleFetchInvalidUrl)
         }
 
         var request = URLRequest(url: url)
@@ -567,16 +550,22 @@ public class HeliumFetchedConfigManager: ObservableObject {
         guard (200...299).contains(statusCode) else {
             // Treat specific client errors as permanent failures (non-retryable)
             // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
-            if statusCode == 403 || statusCode == 404 || statusCode == 410 {
+            if statusCode == 403 {
                 print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
-                throw BundleFetchPermanentError.httpError(statusCode: statusCode)
+                throw BundleFetchError.permanentFailure(.bundleFetch403)
+            } else if statusCode == 404 {
+                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                throw BundleFetchError.permanentFailure(.bundleFetch404)
+            } else if statusCode == 410 {
+                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                throw BundleFetchError.permanentFailure(.bundleFetch410)
             }
             // All other errors (5xx server errors, etc.) are retryable
             throw URLError(.badServerResponse)
         }
 
         guard let html = String(data: data, encoding: .utf8) else {
-            throw BundleFetchPermanentError.cannotDecodeContent
+            throw BundleFetchError.permanentFailure(.bundleFetchCannotDecodeContent)
         }
 
         return html
