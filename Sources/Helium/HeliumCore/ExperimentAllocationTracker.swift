@@ -13,7 +13,7 @@ private struct StoredAllocation: Codable {
     let allocationId: String?
     let allocationIndex: Int?
     let audienceId: String?
-    let enrolledAt: Date
+    let enrolledAt: Date?
     
     init(from experimentInfo: ExperimentInfo) {
         self.experimentId = experimentInfo.experimentId
@@ -34,14 +34,14 @@ class ExperimentAllocationTracker {
         loadStoredAllocations()
     }
     
-    private let storageKey = "heliumExperimentAllocations"
+    private let allocationsUserDefaultsKey = "heliumExperimentAllocations"
     
     /// Maps "persistentId_trigger" to stored allocation details
     private var storedAllocations: [String: StoredAllocation] = [:]
     
     /// Loads stored allocations from UserDefaults
     private func loadStoredAllocations() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+        guard let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
               let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) else {
             return
         }
@@ -54,7 +54,7 @@ class ExperimentAllocationTracker {
             print("[Helium] Failed to persist experiment allocations")
             return
         }
-        UserDefaults.standard.set(encoded, forKey: storageKey)
+        UserDefaults.standard.set(encoded, forKey: allocationsUserDefaultsKey)
     }
     
     /// Creates a storage key for user + trigger combination
@@ -152,7 +152,7 @@ class ExperimentAllocationTracker {
     /// - Note: Called when SDK cache is cleared via clearAllCachedState()
     func reset() {
        storedAllocations.removeAll()
-       UserDefaults.standard.removeObject(forKey: storageKey)
+       UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
     }
     
     /// Check if allocation exists for a specific user and trigger
