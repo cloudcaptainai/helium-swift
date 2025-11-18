@@ -110,16 +110,19 @@ public struct HeliumPaywallInfo: Codable {
             audienceData: response.audienceData,
             chosenVariantDetails: response.chosenVariantDetails,
             hashDetails: response.hashDetails,
-            enrolledAt: nil
+            enrolledAt: nil,
+            isEnrolled: false
         )
         
-        // enrolledAt is stored locally by sdk
+        // enrolledAt and isEnrolled are stored locally by sdk
         let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
-        experimentInfo.enrolledAt = ExperimentAllocationTracker.shared.getEnrollmentDate(
+        let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
             persistentId: persistentId,
             trigger: trigger,
             experimentInfo: experimentInfo
         )
+        experimentInfo.enrolledAt = enrollment.enrolledAt
+        experimentInfo.isEnrolled = enrollment.isEnrolled
         
         return experimentInfo
     }

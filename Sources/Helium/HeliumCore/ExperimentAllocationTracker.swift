@@ -150,8 +150,9 @@ class ExperimentAllocationTracker {
         storedAllocations[key] = currentAllocation
         saveStoredAllocations()
         
-        // Update experiment info with enrollment timestamp for the event
+        // Update experiment info to mark as enrolled for userAllocated event
         experimentInfo.enrolledAt = currentAllocation.enrolledAt
+        experimentInfo.isEnrolled = true
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(experimentInfo: experimentInfo)
@@ -165,42 +166,30 @@ class ExperimentAllocationTracker {
        UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
     }
     
-    /// Check if allocation exists for a specific user and trigger
-    /// - Parameters:
-    ///   - persistentId: The user's Helium persistent ID
-    ///   - trigger: The trigger name to check
-    /// - Returns: true if an allocation has been tracked for this user + trigger
-    func hasTrackedAllocation(persistentId: String, trigger: String) -> Bool {
-        let key = storageKey(persistentId: persistentId, trigger: trigger)
-        return storedAllocations[key] != nil
-    }
-    
-    /// Get the enrollment timestamp for a specific user and trigger
+    /// Get the enrollment timestamp and status for a specific user and trigger
     /// - Parameters:
     ///   - persistentId: The user's Helium persistent ID
     ///   - trigger: The trigger name to check
     ///   - experimentInfo: The current experiment info to validate against stored allocation
-    /// - Returns: Date when user was first enrolled, or nil if not enrolled or allocation changed
-    func getEnrollmentDate(
+    /// - Returns: Tuple of (enrolledAt: Date?, isEnrolled: Bool) where isEnrolled is true if user has a matching allocation
+    func getEnrollmentInfo(
         persistentId: String,
         trigger: String,
         experimentInfo: ExperimentInfo
-    ) -> Date? {
+    ) -> (enrolledAt: Date?, isEnrolled: Bool) {
         let key = storageKey(persistentId: persistentId, trigger: trigger)
         
         guard let storedAllocation = storedAllocations[key] else {
-            return nil
+            return (nil, false)
         }
         
-        // Only return enrollment date if allocation hasn't changed
+        // Only return enrollment if allocation hasn't changed
         let currentAllocation = StoredAllocation(from: experimentInfo)
         guard isSameExperimentAllocation(storedAllocation, currentAllocation) else {
-            return nil
+            return (nil, false)
         }
         
-        // At this point we know they were enrolled. If enrolledAt is nil that means they enrolled
-        // on an older version of the sdk... so just go back a week so at least we know it was
-        // sometime in the past.
-        return storedAllocation.enrolledAt ?? Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        // User is enrolled - return date (may be nil for old SDK data) and isEnrolled = true
+        return (storedAllocation.enrolledAt, true)
     }
 }

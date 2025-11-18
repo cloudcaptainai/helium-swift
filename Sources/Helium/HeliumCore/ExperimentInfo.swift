@@ -145,9 +145,12 @@ public struct ExperimentInfo: Codable {
     /// When the user was first enrolled in this experiment (nil if not enrolled yet)
     public var enrolledAt: Date?
     
+    /// Whether the user is currently enrolled in this experiment
+    public var isEnrolled: Bool
+    
     /// Computed enrollment status based on whether user has been allocated
     public var enrollmentStatus: ExperimentEnrollmentStatus {
-        if enrolledAt != nil {
+        if isEnrolled {
             return .activeEnrollment
         } else if experimentId != nil && !experimentId!.isEmpty {
             return .predictedEnrollment
@@ -168,7 +171,8 @@ public struct ExperimentInfo: Codable {
         audienceData: AnyCodable?,
         chosenVariantDetails: VariantDetails?,
         hashDetails: HashDetails?,
-        enrolledAt: Date? = nil
+        enrolledAt: Date? = nil,
+        isEnrolled: Bool = false
     ) {
         self.trigger = trigger
         self.experimentName = experimentName
@@ -182,6 +186,7 @@ public struct ExperimentInfo: Codable {
         self.chosenVariantDetails = chosenVariantDetails
         self.hashDetails = hashDetails
         self.enrolledAt = enrolledAt
+        self.isEnrolled = isEnrolled
     }
     
     // MARK: - Codable
@@ -199,6 +204,7 @@ public struct ExperimentInfo: Codable {
         case chosenVariantDetails
         case hashDetails
         case enrolledAt
+        case isEnrolled
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -225,6 +231,7 @@ public struct ExperimentInfo: Codable {
         try container.encodeIfPresent(chosenVariantDetails, forKey: .chosenVariantDetails)
         try container.encodeIfPresent(hashDetails, forKey: .hashDetails)
         try container.encodeIfPresent(enrolledAt, forKey: .enrolledAt)
+        try container.encode(isEnrolled, forKey: .isEnrolled)
     }
     
     public init(from decoder: Decoder) throws {
@@ -250,5 +257,6 @@ public struct ExperimentInfo: Codable {
         chosenVariantDetails = try container.decodeIfPresent(VariantDetails.self, forKey: .chosenVariantDetails)
         hashDetails = try container.decodeIfPresent(HashDetails.self, forKey: .hashDetails)
         enrolledAt = try container.decodeIfPresent(Date.self, forKey: .enrolledAt)
+        isEnrolled = try container.decodeIfPresent(Bool.self, forKey: .isEnrolled) ?? false
     }
 }
