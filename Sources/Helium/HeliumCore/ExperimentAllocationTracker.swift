@@ -198,6 +198,9 @@ class ExperimentAllocationTracker {
             return nil
         }
         
-        return storedAllocation.enrolledAt
+        // At this point we know they were enrolled. If enrolledAt is nil that means they enrolled
+        // on an older version of the sdk... so just go back a week so at least we know it was
+        // sometime in the past.
+        return storedAllocation.enrolledAt ?? Date().addingTimeInterval(-7 * 24 * 60 * 60)
     }
 }
