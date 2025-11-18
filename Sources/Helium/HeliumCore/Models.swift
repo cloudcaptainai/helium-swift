@@ -690,6 +690,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case webviewRenderFail
     case bridgingError
     case couldNotFindBundleUrl
+    case bundleFetchInvalidUrlDetected
     case bundleFetchInvalidUrl
     case bundleFetch403
     case bundleFetch404

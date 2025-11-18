@@ -360,6 +360,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         
         var bundleUrlToTriggersMap: [String : [String]] = [:]
         var triggersWithNoBundle: [String] = []
+        var triggersWithSkippedBundle: [(trigger: String, reason: PaywallUnavailableReason)] = []
 
         let cachedBundleIDs = HeliumAssetManager.shared.getExistingBundleIDs()
         var cachedBundleIdToHtmlMap: [String : String] = [:]
@@ -383,8 +384,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 // Validate URL before processing - skip silently if invalid (don't fail entire download)
                 guard isValidURL(bundleUrl) else {
-                    //todo handle this
                     print("[Helium] Invalid URL format for trigger \(trigger): \(bundleUrl)")
+                    triggersWithSkippedBundle.append((trigger, .bundleFetchInvalidUrlDetected))
                     continue
                 }
 
@@ -405,7 +406,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         let additionalTriggersNotFetchedFor = fetchResult.bundleUrlsFailedToFetched.flatMap {
             bundleUrlToTriggersMap[$0] ?? []
         }
-        let skippedTriggers = fetchResult.bundleUrlsSkipped.flatMap { urlAndReason in
+        let additionalTriggersWithSkippedBundle = fetchResult.bundleUrlsSkipped.flatMap { urlAndReason in
             (bundleUrlToTriggersMap[urlAndReason.url] ?? []).map { ($0, urlAndReason.reason) }
         }
         
@@ -413,7 +414,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return BundlesRetrieveResult(
             successMapBundleIdToHtml: finalResult,
             triggersWithNoBundle: triggersWithNoBundle + additionalTriggersNotFetchedFor,
-            triggersWithSkippedBundleAndReason: skippedTriggers,
+            triggersWithSkippedBundleAndReason: triggersWithSkippedBundle + additionalTriggersWithSkippedBundle,
             numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
             numBundlesFromCache: cachedBundleIdToHtmlMap.count,
             numBundleAttempts: fetchResult.numBundleAttempts ?? 0
