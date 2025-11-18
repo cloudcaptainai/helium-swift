@@ -847,9 +847,6 @@ public class Helium {
         // Completely reset all fallback configurations
         HeliumFallbackViewManager.reset()
         
-        // Reset experiment allocation tracking
-        ExperimentAllocationTracker.shared.reset()
-        
         restorePurchaseConfig.reset()
         
         HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
