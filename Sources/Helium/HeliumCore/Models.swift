@@ -527,7 +527,7 @@ public enum HeliumPaywallEvent: Codable {
         case .offerSelected(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionPressed(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionCancelled(let productKey, let triggerName, let paywallTemplateName),
-             .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName, let _, let _, let _),
+             .subscriptionSucceeded(let productKey, let triggerName, let paywallTemplateName, _, _, _, _),
              .subscriptionRestored(let productKey, let triggerName, let paywallTemplateName),
              .subscriptionPending(let productKey, let triggerName, let paywallTemplateName):
             dict["productKey"] = productKey
