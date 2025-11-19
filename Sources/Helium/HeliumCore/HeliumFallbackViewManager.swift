@@ -38,7 +38,7 @@ public class HeliumFallbackViewManager {
         if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
             print("[Helium] ‼️⚠️‼️ Fallback bundle URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
         } else {
-            print("[Helium] Fallback bundle URL provided. 🎉")
+            print("[Helium] Fallback bundle URL provided! 🎉 Remember to update with the latest paywalls! https://docs.tryhelium.com/guides/fallback-bundle")
         }
         Task {
             do {
@@ -52,7 +52,7 @@ public class HeliumFallbackViewManager {
                 
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file!  🎉")
+                    print("[Helium] Successfully loaded paywalls from fallback bundle file! 🎉")
                 } else {
                     print("[Helium] ‼️⚠️‼️ No bundles found in fallback bundle file.")
                 }
