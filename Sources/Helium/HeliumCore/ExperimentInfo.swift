@@ -234,6 +234,7 @@ public struct ExperimentInfo: Codable {
         try container.encode(isEnrolled, forKey: .isEnrolled)
     }
     
+    // Note - currently this custom decoder does not seem to be used at all
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         trigger = try container.decode(String.self, forKey: .trigger)
