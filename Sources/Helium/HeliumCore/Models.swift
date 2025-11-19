@@ -713,10 +713,25 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetchCannotDecodeContent
 }
 
-public enum PaywallNotShownReason: Equatable {
+public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
     case error(unavailableReason: PaywallUnavailableReason?)
     case alreadyEntitled
     case skipped
+    
+    public var description: String {
+        switch self {
+        case .error(let unavailableReason):
+            if let reason = unavailableReason {
+                return "error: \(reason.rawValue)"
+            } else {
+                return "error: unknown"
+            }
+        case .alreadyEntitled:
+            return "alreadyEntitled"
+        case .skipped:
+            return "skipped"
+        }
+    }
 }
 
 public enum HeliumLightDarkMode {
