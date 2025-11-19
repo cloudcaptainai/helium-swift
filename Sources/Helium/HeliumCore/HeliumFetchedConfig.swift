@@ -226,6 +226,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             guard !Task.isCancelled else { return }
             self.fetchedConfig = newConfig
             self.fetchedConfigJSON = newConfigJSON
+            triggersWithSkippedBundleAndReason = []
             
             // Download assets
             
