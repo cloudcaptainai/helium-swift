@@ -13,12 +13,14 @@ private struct StoredAllocation: Codable {
     let allocationId: String?
     let allocationIndex: Int?
     let audienceId: String?
+    let enrolledAt: Date?
     
     init(from experimentInfo: ExperimentInfo) {
         self.experimentId = experimentInfo.experimentId
         self.allocationId = experimentInfo.chosenVariantDetails?.allocationId
         self.allocationIndex = experimentInfo.chosenVariantDetails?.allocationIndex
         self.audienceId = experimentInfo.audienceId
+        self.enrolledAt = Date()
     }
 }
 
@@ -32,14 +34,14 @@ class ExperimentAllocationTracker {
         loadStoredAllocations()
     }
     
-    private let storageKey = "heliumExperimentAllocations"
+    private let allocationsUserDefaultsKey = "heliumExperimentAllocations"
     
     /// Maps "persistentId_trigger" to stored allocation details
     private var storedAllocations: [String: StoredAllocation] = [:]
     
     /// Loads stored allocations from UserDefaults
     private func loadStoredAllocations() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+        guard let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
               let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) else {
             return
         }
@@ -52,7 +54,7 @@ class ExperimentAllocationTracker {
             print("[Helium] Failed to persist experiment allocations")
             return
         }
-        UserDefaults.standard.set(encoded, forKey: storageKey)
+        UserDefaults.standard.set(encoded, forKey: allocationsUserDefaultsKey)
     }
     
     /// Creates a storage key for user + trigger combination
@@ -82,25 +84,32 @@ class ExperimentAllocationTracker {
             return true
         }
         
+        return !isSameExperimentAllocation(current, existing)
+    }
+
+    private func isSameExperimentAllocation(
+        _ first: StoredAllocation,
+        _ second: StoredAllocation
+    ) -> Bool {
         // Check each field explicitly to detect any change
-        if current.experimentId != existing.experimentId {
-            return true  // Different experiment
+        if first.experimentId != second.experimentId {
+            return false  // Different experiment
         }
         
-        if current.allocationId != existing.allocationId {
-            return true  // Different paywall variant
+        if first.allocationId != second.allocationId {
+            return false  // Different paywall variant
         }
         
-        if current.allocationIndex != existing.allocationIndex {
-            return true  // Different variant position
+        if first.allocationIndex != second.allocationIndex {
+            return false  // Different variant position
         }
         
-        if current.audienceId != existing.audienceId {
-            return true  // Different audience matched
+        if first.audienceId != second.audienceId {
+            return false  // Different audience matched
         }
         
-        // All fields match - no change, don't fire event
-        return false
+        // All fields match
+        return true
     }
     
     /// Tracks allocation and fires UserAllocatedEvent if this is the first time
@@ -120,7 +129,7 @@ class ExperimentAllocationTracker {
         
         // Extract experiment info
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger),
-              let experimentInfo = paywallInfo.extractExperimentInfo(trigger: trigger) else {
+              var experimentInfo = paywallInfo.extractExperimentInfo(trigger: trigger) else {
             return
         }
         
@@ -141,6 +150,10 @@ class ExperimentAllocationTracker {
         storedAllocations[key] = currentAllocation
         saveStoredAllocations()
         
+        // Update experiment info to mark as enrolled for userAllocated event
+        experimentInfo.enrolledAt = currentAllocation.enrolledAt
+        experimentInfo.isEnrolled = true
+        
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(experimentInfo: experimentInfo)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent)
@@ -150,16 +163,33 @@ class ExperimentAllocationTracker {
     /// - Note: Called when SDK cache is cleared via clearAllCachedState()
     func reset() {
        storedAllocations.removeAll()
-       UserDefaults.standard.removeObject(forKey: storageKey)
+       UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
     }
     
-    /// Check if allocation exists for a specific user and trigger
+    /// Get the enrollment timestamp and status for a specific user and trigger
     /// - Parameters:
     ///   - persistentId: The user's Helium persistent ID
     ///   - trigger: The trigger name to check
-    /// - Returns: true if an allocation has been tracked for this user + trigger
-    func hasTrackedAllocation(persistentId: String, trigger: String) -> Bool {
+    ///   - experimentInfo: The current experiment info to validate against stored allocation
+    /// - Returns: Tuple of (enrolledAt: Date?, isEnrolled: Bool) where isEnrolled is true if user has a matching allocation
+    func getEnrollmentInfo(
+        persistentId: String,
+        trigger: String,
+        experimentInfo: ExperimentInfo
+    ) -> (enrolledAt: Date?, isEnrolled: Bool) {
         let key = storageKey(persistentId: persistentId, trigger: trigger)
-        return storedAllocations[key] != nil
+        
+        guard let storedAllocation = storedAllocations[key] else {
+            return (nil, false)
+        }
+        
+        // Only return enrollment if allocation hasn't changed
+        let currentAllocation = StoredAllocation(from: experimentInfo)
+        guard isSameExperimentAllocation(storedAllocation, currentAllocation) else {
+            return (nil, false)
+        }
+        
+        // User is enrolled - return date (may be nil for old SDK data) and isEnrolled = true
+        return (storedAllocation.enrolledAt, true)
     }
 }

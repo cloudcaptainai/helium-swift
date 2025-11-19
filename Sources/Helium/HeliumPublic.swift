@@ -217,6 +217,10 @@ public class Helium {
                 return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .forceShowFallback)
             }
             
+            if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
+                return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: bundleSkip.reason)
+            }
+            
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
                     return fallbackViewFor(trigger: trigger, templateName: templatePaywallInfo.paywallTemplateName, fallbackReason: .couldNotFindBundleUrl)
@@ -345,6 +349,120 @@ public class Helium {
         }
         
         return paywallInfo.extractExperimentInfo(trigger: trigger)
+    }
+    
+    /// Get all experiments this user hasn't been enrolled in yet, but are predicted to be enrolled in this session.
+    ///
+    /// Returns experiments that:
+    /// - Have been set up on a trigger in the app
+    /// - User is eligible for the experiment
+    /// - User has not hit the trigger yet (no enrollment)
+    ///
+    /// - Returns: Array of ExperimentInfo for predicted enrollments, or nil if there was an issue (e.g., SDK not initialized)
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let predictedExperiments = Helium.shared.getPredictedEnrolledExperiments() {
+    ///     for experiment in predictedExperiments {
+    ///         print("Predicted: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
+    ///         print("Status: \(experiment.enrollmentStatus)")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `getActiveEnrolledExperiments()`, `getAllEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func getPredictedEnrolledExperiments() -> [ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var predictedExperiments: [ExperimentInfo] = []
+        
+        for trigger in triggers {
+            if let experimentInfo = getExperimentInfoForTrigger(trigger),
+               experimentInfo.enrollmentStatus == .predictedEnrollment {
+                predictedExperiments.append(experimentInfo)
+            }
+        }
+        
+        return predictedExperiments.isEmpty ? nil : predictedExperiments
+    }
+    
+    /// Get all experiments this user has already been enrolled in, for which the experiment is running.
+    ///
+    /// Returns experiments that:
+    /// - User has hit the trigger and been allocated
+    /// - Experiment is currently running
+    ///
+    /// - Returns: Array of ExperimentInfo for active enrollments, or nil if there was an issue (e.g., SDK not initialized)
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let activeExperiments = Helium.shared.getActiveEnrolledExperiments() {
+    ///     for experiment in activeExperiments {
+    ///         print("Active: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
+    ///         print("Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
+    ///         print("Variant: \(experiment.chosenVariantDetails?.allocationName ?? "unknown")")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `getPredictedEnrolledExperiments()`, `getAllEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func getActiveEnrolledExperiments() -> [ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var activeExperiments: [ExperimentInfo] = []
+        
+        for trigger in triggers {
+            if let experimentInfo = getExperimentInfoForTrigger(trigger),
+               experimentInfo.enrollmentStatus == .activeEnrollment {
+                activeExperiments.append(experimentInfo)
+            }
+        }
+        
+        return activeExperiments.isEmpty ? nil : activeExperiments
+    }
+    
+    /// Get all experiment info for this user (both predicted and active enrollments).
+    ///
+    /// This is a convenience method that combines results from both
+    /// `getPredictedEnrolledExperiments()` and `getActiveEnrolledExperiments()`.
+    ///
+    /// - Returns: Array of all ExperimentInfo (predicted + active), or nil if there was an issue (e.g., SDK not initialized)
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let allExperiments = Helium.shared.getAllEnrolledExperiments() {
+    ///     for experiment in allExperiments {
+    ///         print("\(experiment.trigger): \(experiment.enrollmentStatus)")
+    ///         if experiment.enrollmentStatus == .activeEnrollment {
+    ///             print("  Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `getPredictedEnrolledExperiments()`, `getActiveEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func getAllEnrolledExperiments() -> [ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var allExperiments: [ExperimentInfo] = []
+        
+        for trigger in triggers {
+            if let experimentInfo = getExperimentInfoForTrigger(trigger),
+               experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
+                allExperiments.append(experimentInfo)
+            }
+        }
+        
+        return allExperiments.isEmpty ? nil : allExperiments
     }
     
     /// Initializes the Helium paywall system with configuration options.
@@ -663,9 +781,6 @@ public class Helium {
         
         // Completely reset all fallback configurations
         HeliumFallbackViewManager.reset()
-        
-        // Reset experiment allocation tracking
-        ExperimentAllocationTracker.shared.reset()
         
         restorePurchaseConfig.reset()
         
