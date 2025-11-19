@@ -36,9 +36,9 @@ public class HeliumFallbackViewManager {
         // Give immediate feedback if assets are not accessible & avoid trying to use later.
         // This is synchronous but very fast (typically < 1 ms).
         if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
-            print("[Helium] Fallback bundle URL not accessible.")
+            print("[Helium] ‼️⚠️‼️ Fallback bundle URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
         } else {
-            print("[Helium] Fallback bundle URL provided.")
+            print("[Helium] Fallback bundle URL provided. 🎉")
         }
         Task {
             do {
@@ -52,16 +52,16 @@ public class HeliumFallbackViewManager {
                 
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file.")
+                    print("[Helium] Successfully loaded paywalls from fallback bundle file!  🎉")
                 } else {
-                    print("[Helium] No bundles found in fallback bundle file.")
+                    print("[Helium] ‼️⚠️‼️ No bundles found in fallback bundle file.")
                 }
                 
                 Task {
                     await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
                 }
             } catch {
-                print("[Helium] Failed to load fallback bundle: \(error)")
+                print("[Helium] ‼️⚠️‼️ Failed to load fallback bundle: \(error)")
             }
         }
     }

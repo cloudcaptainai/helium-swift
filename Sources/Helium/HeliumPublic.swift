@@ -16,12 +16,14 @@ public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
+    var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
     private(set) var lightDarkModeOverride: HeliumLightDarkMode = .system
     
     private func reset() {
         initialized = false
         controller = nil
+        fallbackConfig = nil
         baseTemplateViewType = nil
         lightDarkModeOverride = .system
     }
@@ -532,6 +534,8 @@ public class Helium {
         if fallbackBundleURL == nil && fallbackConfig?.fallbackBundle == nil {
             print("[Helium] ‼️⚠️‼️ No fallback bundle provided! Fallback bundles are highly recommended. Go to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
         }
+        
+        self.fallbackConfig = fallbackConfig
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
