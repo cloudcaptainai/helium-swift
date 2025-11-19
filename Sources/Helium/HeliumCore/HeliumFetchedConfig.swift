@@ -335,15 +335,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     }
     
     private func saveBundleAssets(bundles: [String: String]) -> Int {
-        do {
-            return try HeliumAssetManager.shared.writeBundles(bundles: bundles)
-        } catch {
-            // try one more time in case writing bundle assets unexpectedly fails
-            if let bytesWritten = try? HeliumAssetManager.shared.writeBundles(bundles: bundles) {
-                return bytesWritten
-            }
-            return 0
-        }
+        return HeliumAssetManager.shared.writeBundles(bundles: bundles)
     }
     
     private func retrieveBundles(config: HeliumFetchedConfig) async -> BundlesRetrieveResult {
