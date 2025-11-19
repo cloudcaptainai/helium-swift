@@ -234,7 +234,11 @@ public class HeliumPaywallDelegateWrapper {
             eventService?.handleEvent(event)
             if let openFail = event as? PaywallOpenFailedEvent {
                 onPaywallNotShown?(.error(unavailableReason: openFail.paywallUnavailableReason))
+            } else if let skipEvent = event as? PaywallSkippedEvent {
+                onPaywallNotShown?(.skipped)
             }
+            // todo HEL-3404 fire a new event or altered PaywallSkippedEvent if already entitled
+            // and call onPaywallNotShown
             
             // Then fire the new typed event to delegate
             delegate?.onPaywallEvent(event)
