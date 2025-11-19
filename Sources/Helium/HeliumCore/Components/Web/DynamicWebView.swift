@@ -43,18 +43,12 @@ public struct DynamicWebView: View {
         }
     }
     
-    init(json: JSON, backupJson: JSON?, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
-        let bundleURL = json["bundleURL"].stringValue
-        self.bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleURL)
-        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: bundleURL)!
-        if let backupJson {
-            let backupBundleURL = backupJson["bundleURL"].stringValue
-            backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupBundleURL)
-            backupFilePath = HeliumAssetManager.shared.localPathForURL(bundleURL: backupBundleURL)
-        } else {
-            backupBundleId = nil
-            backupFilePath = nil
-        }
+    init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+        self.filePath = filePath
+        self.backupFilePath = backupFilePath
+        
+        self.bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
+        self.backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
@@ -286,7 +280,7 @@ public struct DynamicWebView: View {
             // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
             let event = PaywallWebViewRenderedEvent(
                 triggerName: trigger,
-                paywallName: paywallName,
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 paywallUnavailableReason: .webviewRenderFail
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event)
