@@ -181,7 +181,7 @@ class HeliumPaywallPresenter {
         return nil
     }
     
-    private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
+    func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
         // Use shimmer view to match the app open PR approach
         let defaultShimmerConfig = JSON([
             "layout": [

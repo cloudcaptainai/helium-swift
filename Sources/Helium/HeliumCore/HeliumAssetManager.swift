@@ -103,6 +103,7 @@ public class HeliumAssetManager: ObservableObject {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
+    @discardableResult
     public func writeBundles(bundles: [String: String]) -> Int {
         let bundleDir = HeliumAssetManager.bundleDir
         
