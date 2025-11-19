@@ -16,14 +16,12 @@ public class Helium {
     var controller: HeliumController?
     private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
-    var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
     private(set) var lightDarkModeOverride: HeliumLightDarkMode = .system
     
     private func reset() {
         initialized = false
         controller = nil
-        fallbackConfig = nil
         baseTemplateViewType = nil
         lightDarkModeOverride = .system
     }
@@ -498,7 +496,8 @@ public class Helium {
     /// ### Fallback Priority
     /// When paywalls cannot be fetched, fallbacks are shown in this order:
     /// 1. **Fallback bundle** - If trigger exists in bundle JSON
-    /// 2. **Global fallback view** - From `fallbackView`
+    /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
+    /// 3. **Global fallback view** - From `fallbackView`
     ///
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
@@ -514,28 +513,25 @@ public class Helium {
     /// - Note: Deprecated parameters disable loading states for backward compatibility
     /// - Warning: Mixing `fallbackConfig` with deprecated parameters causes a fatal error
     ///
-    @available(iOS 15.0, *)
     public func initialize(
         apiKey: String,
+        fallbackBundleURL: URL?,
         heliumPaywallDelegate: HeliumPaywallDelegate? = nil,
-        fallbackConfig: HeliumFallbackConfig? = nil,
-        triggers: [String]? = nil,
         customUserId: String? = nil,
         customAPIEndpoint: String? = nil,
         customUserTraits: HeliumUserTraits? = nil,
         appAttributionToken: UUID? = nil,
         revenueCatAppUserId: String? = nil,
+        fallbackConfig: HeliumFallbackConfig? = nil, // deprecated
     ) {
         if initialized {
             return
         }
         initialized = true
         
-        if fallbackConfig == nil {
-            print("[Helium] ‼️⚠️‼️ No fallback config provided! Fallback bundles are highly recommended. Go to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
+        if fallbackBundleURL == nil && fallbackConfig?.fallbackBundle == nil {
+            print("[Helium] ‼️⚠️‼️ No fallback bundle provided! Fallback bundles are highly recommended. Go to https://docs.tryhelium.com/guides/fallback-bundle to get set up.")
         }
-        
-        self.fallbackConfig = fallbackConfig
         
         if (customUserId != nil) {
             self.overrideUserId(newUserId: customUserId!);
@@ -561,9 +557,14 @@ public class Helium {
             HeliumFallbackViewManager.shared.setDefaultFallback(fallbackView: fallbackView);
         }
         
+        // Set up trigger-specific fallback views if provided
+        if let triggerFallbacks = fallbackConfig?.fallbackPerTrigger {
+            HeliumFallbackViewManager.shared.setTriggerToFallback(toSet: triggerFallbacks)
+        }
+        
         // Set up fallback bundle if provided
-        if let fallbackBundleURL = fallbackConfig?.fallbackBundle {
-            HeliumFallbackViewManager.shared.setFallbackBundleURL(fallbackBundleURL)
+        if let flbkBundleUrl = fallbackBundleURL ?? fallbackConfig?.fallbackBundle {
+            HeliumFallbackViewManager.shared.setFallbackBundleURL(flbkBundleUrl)
         }
         
         self.controller = HeliumController(

@@ -14,7 +14,12 @@ public class HeliumFallbackViewManager {
         shared.fallbackBundleURL = nil
         shared.loadedConfig = nil
         shared.loadedConfigJSON = nil
+        shared.triggerToFallbackView = [:]
         shared.defaultFallback = nil
+    }
+    
+    private init() {
+        self.triggerToFallbackView = [:]
     }
     
     // **MARK: - Properties**
@@ -22,6 +27,7 @@ public class HeliumFallbackViewManager {
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
     
+    private var triggerToFallbackView: [String: AnyView]
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
@@ -60,6 +66,10 @@ public class HeliumFallbackViewManager {
         }
     }
     
+    public func setTriggerToFallback(toSet: [String: AnyView]) {
+        self.triggerToFallbackView = toSet
+    }
+    
     public func setDefaultFallback(fallbackView: AnyView) {
         self.defaultFallback = fallbackView
     }
@@ -70,7 +80,14 @@ public class HeliumFallbackViewManager {
     
     
     public func getFallbackForTrigger(trigger: String) -> AnyView? {
-        return defaultFallback
+        if let fallbackView = triggerToFallbackView[trigger] {
+            return fallbackView
+        }
+        // Safe handling of optional defaultFallback
+        if let defaultFallback = defaultFallback {
+            return defaultFallback
+        }
+        return nil
     }
     
     public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
