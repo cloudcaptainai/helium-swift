@@ -98,8 +98,7 @@ public struct HeliumPaywallInfo: Codable {
             return nil
         }
         
-        // Server now sends complete nested structure, just add trigger
-        return ExperimentInfo(
+        var experimentInfo = ExperimentInfo(
             trigger: trigger,
             experimentName: response.experimentName,
             experimentId: response.experimentId,
@@ -110,8 +109,22 @@ public struct HeliumPaywallInfo: Codable {
             audienceId: response.audienceId,
             audienceData: response.audienceData,
             chosenVariantDetails: response.chosenVariantDetails,
-            hashDetails: response.hashDetails
+            hashDetails: response.hashDetails,
+            enrolledAt: nil,
+            isEnrolled: false
         )
+        
+        // enrolledAt and isEnrolled are stored locally by sdk
+        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+        let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
+            persistentId: persistentId,
+            trigger: trigger,
+            experimentInfo: experimentInfo
+        )
+        experimentInfo.enrolledAt = enrollment.enrolledAt
+        experimentInfo.isEnrolled = enrollment.isEnrolled
+        
+        return experimentInfo
     }
 }
 
