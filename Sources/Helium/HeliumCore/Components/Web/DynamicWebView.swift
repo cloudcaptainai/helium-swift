@@ -47,8 +47,13 @@ public struct DynamicWebView: View {
         self.filePath = filePath
         self.backupFilePath = backupFilePath
         
-        self.bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
-        self.backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
+        bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
+        if let backupFilePath {
+            backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
+        } else {
+            backupBundleId = nil
+        }
+        
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         

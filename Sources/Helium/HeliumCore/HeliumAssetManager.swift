@@ -103,7 +103,7 @@ public class HeliumAssetManager: ObservableObject {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
-    public func writeBundles(bundles: [String: String]) throws -> Int {
+    public func writeBundles(bundles: [String: String]) -> Int {
         let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.createDirectory(
@@ -112,7 +112,7 @@ public class HeliumAssetManager: ObservableObject {
         )
         
         var updatedIds = bundleIds
-        var totalBytesWritten = 0
+        var totalBytesOfUncachedBundles = 0
         
         for (bundleId, content) in bundles {
             let fileName = "\(bundleId).html"
@@ -123,7 +123,7 @@ public class HeliumAssetManager: ObservableObject {
                 let unescapedContent = content
                 
                 if let data = unescapedContent.data(using: .utf8) {
-                    totalBytesWritten += data.count
+                    totalBytesOfUncachedBundles += data.count
                     print("[Helium] Writing to \(localURL)")
                     do {
                         try data.write(to: localURL)
@@ -142,6 +142,6 @@ public class HeliumAssetManager: ObservableObject {
         }
         
         bundleIds = updatedIds
-        return totalBytesWritten
+        return totalBytesOfUncachedBundles
     }
 }
