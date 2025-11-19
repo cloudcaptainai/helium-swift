@@ -570,6 +570,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
         ]
         if let storeKitTransactionId {
             dict["storeKitTransactionId"] = storeKitTransactionId
+            dict["canonicalJoinTransactionId"] = storeKitTransactionId
         }
         if let storeKitOriginalTransactionId {
             dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
@@ -581,7 +582,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId)
     }
 }
 
