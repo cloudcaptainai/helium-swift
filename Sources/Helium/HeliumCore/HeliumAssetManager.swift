@@ -39,22 +39,14 @@ class HeliumAssetManager {
             return nil
         }
         
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
-        
-        let value = bundleDir.appendingPathComponent("\(bundleId).html").path
+        let value = Self.bundleDir.appendingPathComponent("\(bundleId).html").path
 //        print("Reading from \(value)");
         return value;
     }
     
     func getExistingBundleIDs() -> [String] {
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
-        
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: bundleDir,
+            at: Self.bundleDir,
             includingPropertiesForKeys: nil
         ) else {
             return []
