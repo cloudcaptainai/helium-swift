@@ -20,29 +20,10 @@ public class HeliumAssetManager: ObservableObject {
             .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
     }
     
-    private var bundleIds: Set<String> {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Self.bundleCacheKey),
-                  let ids = try? JSONDecoder().decode(Set<String>.self, from: data) else {
-                return []
-            }
-            return ids
-        }
-        set {
-            guard let data = try? JSONEncoder().encode(newValue) else { return }
-            UserDefaults.standard.set(data, forKey: Self.bundleCacheKey)
-        }
-    }
-    
     public func clearCache() {
         let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.removeItem(at: bundleDir)
-        bundleIds = []
-    }
-    
-    func removeBundleIdFromCache(_ id: String) {
-        bundleIds.remove(id)
     }
     
     func getBundleIdFromURL(_ url: String) -> String? {
@@ -92,29 +73,32 @@ public class HeliumAssetManager: ObservableObject {
             withIntermediateDirectories: true
         )
         
-        var updatedIds = bundleIds
+        let existingBundleIds = getExistingBundleIDs()
         var totalBytesOfUncachedBundles = 0
         
         for (bundleId, content) in bundles {
             let fileName = "\(bundleId).html"
             let localURL = bundleDir.appendingPathComponent(fileName)
             
-            let alreadySaved = updatedIds.contains(bundleId)
-            if !alreadySaved {
-                let unescapedContent = content
-                
-                if let data = unescapedContent.data(using: .utf8) {
+            let bundleWasAlreadyCached = existingBundleIds.contains(bundleId)
+            
+            // Always write asset even if cached, so asset is fresh and theoretically less likely to be cleared from cache
+            // (not exactly sure what method iOS uses to clear from cache directory, hence the *theoretically*)
+            
+            let unescapedContent = content
+            
+            if let data = unescapedContent.data(using: .utf8) {
+                if !bundleWasAlreadyCached {
                     totalBytesOfUncachedBundles += data.count
-                    print("[Helium] Writing to \(localURL)")
-                    do {
-                        try data.write(to: localURL)
-                        updatedIds.insert(bundleId)
-                    } catch {
-                        print("[Helium] Failed to write paywall bundle with id \(bundleId)")
-                    }
-                } else {
+                }
+                print("[Helium] Writing to \(localURL)")
+                do {
+                    try data.write(to: localURL)
+                } catch {
                     print("[Helium] Failed to write paywall bundle with id \(bundleId)")
                 }
+            } else {
+                print("[Helium] Failed to write paywall bundle with id \(bundleId)")
             }
             
             Task {
@@ -122,7 +106,6 @@ public class HeliumAssetManager: ObservableObject {
             }
         }
         
-        bundleIds = updatedIds
         return totalBytesOfUncachedBundles
     }
 }

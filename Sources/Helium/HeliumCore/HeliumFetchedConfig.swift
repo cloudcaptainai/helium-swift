@@ -370,8 +370,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         cachedBundleIdToHtmlMap[bundleId] = cachedHtml
                         continue
                     } else {
-                        // Something is wrong with the cached file, clear it so can get overwritten
-                        HeliumAssetManager.shared.removeBundleIdFromCache(bundleId)
+                        // Something is wrong with the cached file, fetch it again
                     }
                 }
                 
