@@ -17,7 +17,7 @@ public class HeliumAssetManager: ObservableObject {
     static var bundleDir: URL {
         return FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
     }
     
     private var bundleIds: Set<String> {
@@ -60,36 +60,17 @@ public class HeliumAssetManager: ObservableObject {
         
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
         
         let value = bundleDir.appendingPathComponent("\(bundleId).html").path
 //        print("Reading from \(value)");
         return value;
     }
     
-    func collectBundleURLs(from json: JSON, into bundleURLs: inout Set<String>) {
-        switch json.type {
-        case .dictionary:
-            for (key, value) in json {
-                if key == "bundleURL", let url = value.string {
-                    bundleURLs.insert(url)
-                } else {
-                    collectBundleURLs(from: value, into: &bundleURLs)
-                }
-            }
-        case .array:
-            for item in json.arrayValue {
-                collectBundleURLs(from: item, into: &bundleURLs)
-            }
-        default:
-            break
-        }
-    }
-    
     public func getExistingBundleIDs() -> [String] {
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
         
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: bundleDir,
