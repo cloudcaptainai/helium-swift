@@ -8,7 +8,7 @@ public enum HeliumAssetDownloadStatus: String, Codable {
     case failed
 }
 
-public class HeliumAssetManager: ObservableObject {
+class HeliumAssetManager {
     public static let shared = HeliumAssetManager()
     private init() {}
     
@@ -20,7 +20,7 @@ public class HeliumAssetManager: ObservableObject {
             .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
     }
     
-    public func clearCache() {
+    func clearCache() {
         let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.removeItem(at: bundleDir)
@@ -33,7 +33,7 @@ public class HeliumAssetManager: ObservableObject {
         return filename.hasPrefix("bundle_") ? String(filename.dropFirst(7)) : String(filename)
     }
     
-    public func localPathForURL(bundleURL: String) -> String? {
+    func localPathForURL(bundleURL: String) -> String? {
         guard let bundleId = getBundleIdFromURL(bundleURL) else {
             print("couldnt get from url \(bundleURL)");
             return nil
@@ -48,7 +48,7 @@ public class HeliumAssetManager: ObservableObject {
         return value;
     }
     
-    public func getExistingBundleIDs() -> [String] {
+    func getExistingBundleIDs() -> [String] {
         let bundleDir = FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
@@ -65,7 +65,7 @@ public class HeliumAssetManager: ObservableObject {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
-    public func writeBundles(bundles: [String: String]) -> Int {
+    func writeBundles(bundles: [String: String]) -> Int {
         let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.createDirectory(
