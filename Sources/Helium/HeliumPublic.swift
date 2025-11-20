@@ -349,44 +349,6 @@ public class Helium {
         return paywallInfo.extractExperimentInfo(trigger: trigger)
     }
     
-    /// Get all experiments this user hasn't been enrolled in yet, but are predicted to be enrolled in this session.
-    ///
-    /// Returns experiments that:
-    /// - Have been set up on a trigger in the app
-    /// - User is eligible for the experiment
-    /// - User has not hit the trigger yet (no enrollment)
-    ///
-    /// - Returns: Array of ExperimentInfo for predicted enrollments, or nil if there was an issue (e.g., SDK not initialized)
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// if let predictedExperiments = Helium.shared.getPredictedEnrolledExperiments() {
-    ///     for experiment in predictedExperiments {
-    ///         print("Predicted: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
-    ///         print("Status: \(experiment.enrollmentStatus)")
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// - SeeAlso: `getActiveEnrolledExperiments()`, `getAllEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func getPredictedEnrolledExperiments() -> [ExperimentInfo]? {
-        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
-            return nil
-        }
-        
-        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        var predictedExperiments: [ExperimentInfo] = []
-        
-        for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger),
-               experimentInfo.enrollmentStatus == .predictedEnrollment {
-                predictedExperiments.append(experimentInfo)
-            }
-        }
-        
-        return predictedExperiments.isEmpty ? nil : predictedExperiments
-    }
-    
     /// Get all experiments this user has already been enrolled in, for which the experiment is running.
     ///
     /// Returns experiments that:
@@ -397,7 +359,7 @@ public class Helium {
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let activeExperiments = Helium.shared.getActiveEnrolledExperiments() {
+    /// if let activeExperiments = Helium.shared.enrolledExperiments() {
     ///     for experiment in activeExperiments {
     ///         print("Active: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
     ///         print("Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
@@ -405,9 +367,8 @@ public class Helium {
     ///     }
     /// }
     /// ```
-    ///
-    /// - SeeAlso: `getPredictedEnrolledExperiments()`, `getAllEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func getActiveEnrolledExperiments() -> [ExperimentInfo]? {
+    /// - SeeAlso: `allExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func enrolledExperiments() -> [ExperimentInfo]? {
         guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
             return nil
         }
@@ -427,14 +388,11 @@ public class Helium {
     
     /// Get all experiment info for this user (both predicted and active enrollments).
     ///
-    /// This is a convenience method that combines results from both
-    /// `getPredictedEnrolledExperiments()` and `getActiveEnrolledExperiments()`.
-    ///
     /// - Returns: Array of all ExperimentInfo (predicted + active), or nil if there was an issue (e.g., SDK not initialized)
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let allExperiments = Helium.shared.getAllEnrolledExperiments() {
+    /// if let allExperiments = Helium.shared.allExperiments() {
     ///     for experiment in allExperiments {
     ///         print("\(experiment.trigger): \(experiment.enrollmentStatus)")
     ///         if experiment.enrollmentStatus == .activeEnrollment {
@@ -444,8 +402,8 @@ public class Helium {
     /// }
     /// ```
     ///
-    /// - SeeAlso: `getPredictedEnrolledExperiments()`, `getActiveEnrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func getAllEnrolledExperiments() -> [ExperimentInfo]? {
+    /// - SeeAlso: `enrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func allExperiments() -> [ExperimentInfo]? {
         guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
             return nil
         }
