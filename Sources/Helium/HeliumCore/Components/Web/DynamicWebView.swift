@@ -8,7 +8,9 @@ enum FileLoadAttempt {
 }
 
 public struct DynamicWebView: View {
+    let bundleId: String?
     let filePath: String
+    let backupBundleId: String?
     let backupFilePath: String?
     @State private var fileLoadAttempt: FileLoadAttempt = .initialLoad
     
@@ -41,13 +43,17 @@ public struct DynamicWebView: View {
         }
     }
     
-    init(json: JSON, backupJson: JSON?, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
-        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
-        if let backupJson {
-            backupFilePath = HeliumAssetManager.shared.localPathForURL(bundleURL: backupJson["bundleURL"].stringValue)
+    init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+        self.filePath = filePath
+        self.backupFilePath = backupFilePath
+        
+        bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
+        if let backupFilePath {
+            backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
         } else {
-            backupFilePath = nil
+            backupBundleId = nil
         }
+        
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
@@ -227,7 +233,22 @@ public struct DynamicWebView: View {
                 _ = Date()
                 
                 do {
-                    try WebViewManager.shared.loadFilePath(filePathToLoad, toWebView: preparedWebView)
+                    var htmlStringIfNeeded: String? = nil
+                    if !useBackup, let bundleId {
+                        htmlStringIfNeeded = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleId]
+                        if htmlStringIfNeeded == nil && backupFilePath == nil {
+                            // This can happen if bundleId is actually for a fallback bundle
+                            htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[bundleId]
+                        }
+                    } else if useBackup, let backupBundleId {
+                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
+                    }
+                    
+                    try WebViewManager.shared.loadFilePath(
+                        filePathToLoad,
+                        toWebView: preparedWebView,
+                        htmlStringIfNeeded: htmlStringIfNeeded
+                    )
                     webView = preparedWebView
                 } catch {
                     webViewLoadFail(reason: "WebViewLoadFail")
@@ -264,7 +285,7 @@ public struct DynamicWebView: View {
             // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
             let event = PaywallWebViewRenderedEvent(
                 triggerName: trigger,
-                paywallName: paywallName,
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 paywallUnavailableReason: .webviewRenderFail
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event)
@@ -499,13 +520,15 @@ class WebViewManager {
         try? loadFilePath(filePath, toWebView: webView)
     }
     
-    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) throws {
+    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView, htmlStringIfNeeded: String? = nil) throws {
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
             _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+        } else if let htmlStringIfNeeded {
+            toWebView.loadHTMLString(htmlStringIfNeeded, baseURL: nil)
         } else {
             throw WebViewError.bundleNotFound
         }

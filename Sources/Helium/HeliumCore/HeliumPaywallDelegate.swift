@@ -171,6 +171,9 @@ public class HeliumPaywallDelegateWrapper {
             
             Task {
                 await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+                
+                // update localized products (and offer eligibility) after purchase
+                await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
             }
             #if compiler(>=6.2)
             if let atID = transactionIds?.transaction?.appTransactionID {
