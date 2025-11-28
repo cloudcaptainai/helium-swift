@@ -100,7 +100,7 @@ public enum ExperimentEnrollmentStatus: String, Codable {
 /// Complete experiment allocation information for a user
 public struct ExperimentInfo: Codable {
     /// Trigger name at which user was enrolled
-    public let trigger: String
+    public let trigger: String // should we take this out?
     
     /// Experiment name
     public let experimentName: String?

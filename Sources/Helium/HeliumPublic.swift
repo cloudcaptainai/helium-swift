@@ -379,11 +379,13 @@ public class Helium {
         for trigger in triggers {
             if let experimentInfo = getExperimentInfoForTrigger(trigger),
                experimentInfo.enrollmentStatus == .activeEnrollment {
-                activeExperiments.append(experimentInfo)
+                if !activeExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
+                    activeExperiments.append(experimentInfo)
+                }
             }
         }
         
-        return activeExperiments.isEmpty ? nil : activeExperiments
+        return activeExperiments
     }
     
     /// Get all experiment info for this user (both predicted and active enrollments).
@@ -414,11 +416,16 @@ public class Helium {
         for trigger in triggers {
             if let experimentInfo = getExperimentInfoForTrigger(trigger),
                experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
-                allExperiments.append(experimentInfo)
+                if experimentInfo.isEnrolled { // favor experiment with trigger where actually enrolled
+                    allExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
+                }
+                if !allExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
+                    allExperiments.append(experimentInfo)
+                }
             }
         }
         
-        return allExperiments.isEmpty ? nil : allExperiments
+        return allExperiments
     }
     
     /// Initializes the Helium paywall system with configuration options.
