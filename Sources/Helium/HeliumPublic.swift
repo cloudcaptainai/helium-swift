@@ -342,11 +342,7 @@ public class Helium {
     ///
     /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
     public func getExperimentInfoForTrigger(_ trigger: String) -> ExperimentInfo? {
-        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
-            return nil
-        }
-        
-        return paywallInfo.extractExperimentInfo(trigger: trigger)
+        return HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: trigger)
     }
     
     /// Get all experiments this user has already been enrolled in, for which the experiment is running.
@@ -416,7 +412,7 @@ public class Helium {
         for trigger in triggers {
             if let experimentInfo = getExperimentInfoForTrigger(trigger),
                experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
-                if experimentInfo.isEnrolled { // favor experiment with trigger where actually enrolled
+                if experimentInfo.enrolledTrigger == trigger { // favor experiment with trigger where actually enrolled
                     allExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
                 }
                 if !allExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
