@@ -100,7 +100,7 @@ public enum ExperimentEnrollmentStatus: String, Codable {
 /// Complete experiment allocation information for a user
 public struct ExperimentInfo: Codable {
     /// Trigger where this user was enrolled
-    public var enrolledTrigger: String
+    public var enrolledTrigger: String?
     
     /// All triggers where this experiment is configured
     public let triggers: [String]?
