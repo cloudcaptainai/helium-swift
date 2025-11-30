@@ -162,7 +162,7 @@ public struct HeliumFetchedConfig: Codable {
         )
         experimentInfo.enrolledAt = enrollment.enrolledAt
         experimentInfo.isEnrolled = enrollment.isEnrolled
-        experimentInfo.enrolledTrigger = enrollment.enrolledTrigger ?? trigger
+        experimentInfo.enrolledTrigger = enrollment.enrolledTrigger
         
         return experimentInfo
     }

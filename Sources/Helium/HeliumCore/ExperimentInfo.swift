@@ -103,7 +103,7 @@ public struct ExperimentInfo: Codable {
     public var enrolledTrigger: String?
     
     /// All triggers where this experiment is configured
-    public let triggers: [String]?
+    public let allTriggers: [String]?
     
     /// Experiment name
     public let experimentName: String?
@@ -179,7 +179,7 @@ public struct ExperimentInfo: Codable {
         isEnrolled: Bool = false
     ) {
         self.enrolledTrigger = enrolledTrigger
-        self.triggers = triggers
+        self.allTriggers = triggers
         self.experimentName = experimentName
         self.experimentId = experimentId
         self.experimentType = experimentType
@@ -216,7 +216,7 @@ public struct ExperimentInfo: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(enrolledTrigger, forKey: .enrolledTrigger)
-        try container.encodeIfPresent(triggers, forKey: .triggers)
+        try container.encodeIfPresent(allTriggers, forKey: .triggers)
         try container.encodeIfPresent(experimentName, forKey: .experimentName)
         try container.encodeIfPresent(experimentId, forKey: .experimentId)
         try container.encodeIfPresent(experimentType, forKey: .experimentType)
@@ -245,7 +245,7 @@ public struct ExperimentInfo: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         enrolledTrigger = try container.decode(String.self, forKey: .enrolledTrigger)
-        triggers = try container.decodeIfPresent([String].self, forKey: .triggers)
+        allTriggers = try container.decodeIfPresent([String].self, forKey: .triggers)
         experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
         experimentId = try container.decodeIfPresent(String.self, forKey: .experimentId)
         experimentType = try container.decodeIfPresent(String.self, forKey: .experimentType)

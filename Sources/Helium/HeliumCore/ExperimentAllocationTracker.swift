@@ -199,9 +199,11 @@ class ExperimentAllocationTracker {
         }
         
         // Then legacy key format (persistentId_trigger) for backward compatibility
+        var legacyEnrolledTrigger: String? = nil
         if storedAllocation == nil {
             let legacyKey = legacyStorageKey(persistentId: persistentId, trigger: trigger)
             storedAllocation = storedAllocations[legacyKey]
+            legacyEnrolledTrigger = trigger
         }
         
         guard let storedAllocation = storedAllocation else {
@@ -215,6 +217,6 @@ class ExperimentAllocationTracker {
         }
         
         // User is enrolled - return date (may be nil for old SDK data), isEnrolled = true, and enrolledTrigger
-        return (storedAllocation.enrolledAt, true, storedAllocation.enrolledTrigger)
+        return (storedAllocation.enrolledAt, true, storedAllocation.enrolledTrigger ?? legacyEnrolledTrigger)
     }
 }
