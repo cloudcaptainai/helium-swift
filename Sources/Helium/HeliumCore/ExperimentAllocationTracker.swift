@@ -14,13 +14,15 @@ private struct StoredAllocation: Codable {
     let allocationIndex: Int?
     let audienceId: String?
     let enrolledAt: Date?
+    let enrolledTrigger: String?
     
-    init(from experimentInfo: ExperimentInfo) {
+    init(from experimentInfo: ExperimentInfo, trigger: String) {
         self.experimentId = experimentInfo.experimentId
         self.allocationId = experimentInfo.chosenVariantDetails?.allocationId
         self.allocationIndex = experimentInfo.chosenVariantDetails?.allocationIndex
         self.audienceId = experimentInfo.audienceId
         self.enrolledAt = Date()
+        self.enrolledTrigger = trigger
     }
 }
 
@@ -57,8 +59,13 @@ class ExperimentAllocationTracker {
         UserDefaults.standard.set(encoded, forKey: allocationsUserDefaultsKey)
     }
     
-    /// Creates a storage key for user + trigger combination
-    private func storageKey(persistentId: String, trigger: String) -> String {
+    /// Creates a storage key for user + experiment combination
+    private func storageKey(persistentId: String, experimentId: String) -> String {
+        return "\(persistentId)_\(experimentId)"
+    }
+    
+    /// Creates a legacy storage key for backward compatibility (user + trigger)
+    private func legacyStorageKey(persistentId: String, trigger: String) -> String {
         return "\(persistentId)_\(trigger)"
     }
     
@@ -113,7 +120,7 @@ class ExperimentAllocationTracker {
     }
     
     /// Tracks allocation and fires UserAllocatedEvent if this is the first time
-    /// this user is allocated to this trigger, or if the experiment details have changed
+    /// this user is allocated to this experiment, or if the experiment details have changed
     ///
     /// - Parameters:
     ///   - trigger: The trigger name being displayed
@@ -128,34 +135,41 @@ class ExperimentAllocationTracker {
         }
         
         // Extract experiment info
-        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger),
-              var experimentInfo = paywallInfo.extractExperimentInfo(trigger: trigger) else {
+        guard let config = HeliumFetchedConfigManager.shared.getConfig(),
+              var experimentInfo = config.extractExperimentInfo(trigger: trigger) else {
+            return
+        }
+        
+        // Need experiment ID to track allocations
+        guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
             return
         }
         
         // Get user's persistent ID
         let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
-        let key = storageKey(persistentId: persistentId, trigger: trigger)
+        let newKey = storageKey(persistentId: persistentId, experimentId: experimentId)
+        let legacyKey = legacyStorageKey(persistentId: persistentId, trigger: trigger)
         
         // Create current allocation details
-        let currentAllocation = StoredAllocation(from: experimentInfo)
+        let currentAllocation = StoredAllocation(from: experimentInfo, trigger: trigger)
         
-        // Check if we should fire the allocation event
-        let existingAllocation = storedAllocations[key]
+        // Check both new and legacy keys for existing allocation
+        let existingAllocation = storedAllocations[newKey] ?? storedAllocations[legacyKey]
         guard shouldFireAllocationEvent(current: currentAllocation, existing: existingAllocation) else {
             return  // No change, don't fire event
         }
         
-        // Store the new allocation
-        storedAllocations[key] = currentAllocation
+        // Store the new allocation using experiment ID key
+        storedAllocations[newKey] = currentAllocation
         saveStoredAllocations()
         
         // Update experiment info to mark as enrolled for userAllocated event
         experimentInfo.enrolledAt = currentAllocation.enrolledAt
         experimentInfo.isEnrolled = true
+        experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(experimentInfo: experimentInfo)
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent)
     }
     
@@ -171,25 +185,38 @@ class ExperimentAllocationTracker {
     ///   - persistentId: The user's Helium persistent ID
     ///   - trigger: The trigger name to check
     ///   - experimentInfo: The current experiment info to validate against stored allocation
-    /// - Returns: Tuple of (enrolledAt: Date?, isEnrolled: Bool) where isEnrolled is true if user has a matching allocation
+    /// - Returns: Tuple of (enrolledAt: Date?, isEnrolled: Bool, enrolledTrigger: String?) where isEnrolled is true if user has a matching allocation
     func getEnrollmentInfo(
         persistentId: String,
         trigger: String,
         experimentInfo: ExperimentInfo
-    ) -> (enrolledAt: Date?, isEnrolled: Bool) {
-        let key = storageKey(persistentId: persistentId, trigger: trigger)
+    ) -> (enrolledAt: Date?, isEnrolled: Bool, enrolledTrigger: String?) {
+        // Try new key format first (persistentId_experimentId)
+        var storedAllocation: StoredAllocation? = nil
+        if let experimentId = experimentInfo.experimentId, !experimentId.isEmpty {
+            let newKey = storageKey(persistentId: persistentId, experimentId: experimentId)
+            storedAllocation = storedAllocations[newKey]
+        }
         
-        guard let storedAllocation = storedAllocations[key] else {
-            return (nil, false)
+        // Then legacy key format (persistentId_trigger) for backward compatibility
+        var legacyEnrolledTrigger: String? = nil
+        if storedAllocation == nil {
+            let legacyKey = legacyStorageKey(persistentId: persistentId, trigger: trigger)
+            storedAllocation = storedAllocations[legacyKey]
+            legacyEnrolledTrigger = trigger
+        }
+        
+        guard let storedAllocation = storedAllocation else {
+            return (nil, false, nil)
         }
         
         // Only return enrollment if allocation hasn't changed
-        let currentAllocation = StoredAllocation(from: experimentInfo)
+        let currentAllocation = StoredAllocation(from: experimentInfo, trigger: trigger)
         guard isSameExperimentAllocation(storedAllocation, currentAllocation) else {
-            return (nil, false)
+            return (nil, false, nil)
         }
         
-        // User is enrolled - return date (may be nil for old SDK data) and isEnrolled = true
-        return (storedAllocation.enrolledAt, true)
+        // User is enrolled - return date (may be nil for old SDK data), isEnrolled = true, and enrolledTrigger
+        return (storedAllocation.enrolledAt, true, storedAllocation.enrolledTrigger ?? legacyEnrolledTrigger)
     }
 }

@@ -290,7 +290,7 @@ public class HeliumPaywallDelegateWrapper {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
                     paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
-                    experimentInfo = paywallInfo?.extractExperimentInfo(trigger: triggerName);
+                    experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName);
                     if paywallInfo == nil {
                         isFallback = true;
                     } else {

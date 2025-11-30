@@ -86,46 +86,6 @@ public struct HeliumPaywallInfo: Codable {
         guard let bundleUrl = extractedBundleUrl else { return nil }
         return HeliumAssetManager.shared.localPathForURL(bundleURL: bundleUrl)
     }
-    
-    /// Extract experiment info from top-level experimentInfo field
-    /// - Parameter trigger: The trigger name for this paywall
-    /// - Returns: ExperimentInfo if experiment data is available
-    func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
-        // Check top-level experimentInfo field
-        guard let expInfo = experimentInfo, expInfo.exists(),
-              let experimentInfoData = try? JSONEncoder().encode(expInfo),
-              let response = try? JSONDecoder().decode(ExperimentInfoResponse.self, from: experimentInfoData) else {
-            return nil
-        }
-        
-        var experimentInfo = ExperimentInfo(
-            trigger: trigger,
-            experimentName: response.experimentName,
-            experimentId: response.experimentId,
-            experimentType: response.experimentType,
-            experimentMetadata: response.experimentMetadata,
-            startDate: response.startDate,
-            endDate: response.endDate,
-            audienceId: response.audienceId,
-            audienceData: response.audienceData,
-            chosenVariantDetails: response.chosenVariantDetails,
-            hashDetails: response.hashDetails,
-            enrolledAt: nil,
-            isEnrolled: false
-        )
-        
-        // enrolledAt and isEnrolled are stored locally by sdk
-        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
-        let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
-            persistentId: persistentId,
-            trigger: trigger,
-            experimentInfo: experimentInfo
-        )
-        experimentInfo.enrolledAt = enrollment.enrolledAt
-        experimentInfo.isEnrolled = enrollment.isEnrolled
-        
-        return experimentInfo
-    }
 }
 
 //User-facing details about a paywall
@@ -149,6 +109,63 @@ public struct HeliumFetchedConfig: Codable {
     var fetchedConfigID: UUID
     var additionalFields: JSON?
     var bundles: [String: String]?;
+    
+    /// Extract experiment info for a specific trigger
+    /// - Parameter trigger: The trigger name to extract experiment info for
+    /// - Returns: ExperimentInfo if experiment data is available
+    func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
+        // Get paywall info for this trigger
+        guard let paywallInfo = triggerToPaywalls[trigger] else {
+            return nil
+        }
+        
+        // Check top-level experimentInfo field
+        guard let expInfo = paywallInfo.experimentInfo, expInfo.exists(),
+              let experimentInfoData = try? JSONEncoder().encode(expInfo),
+              let response = try? JSONDecoder().decode(ExperimentInfoResponse.self, from: experimentInfoData) else {
+            return nil
+        }
+        
+        // Find all triggers with the same experiment ID
+        var allTriggersForExperiment: [String] = []
+        if let experimentId = response.experimentId, !experimentId.isEmpty {
+            for (triggerName, info) in triggerToPaywalls {
+                if info.experimentID == experimentId {
+                    allTriggersForExperiment.append(triggerName)
+                }
+            }
+        }
+        
+        var experimentInfo = ExperimentInfo(
+            enrolledTrigger: trigger,
+            triggers: allTriggersForExperiment.isEmpty ? nil : allTriggersForExperiment,
+            experimentName: response.experimentName,
+            experimentId: response.experimentId,
+            experimentType: response.experimentType,
+            experimentMetadata: response.experimentMetadata,
+            startDate: response.startDate,
+            endDate: response.endDate,
+            audienceId: response.audienceId,
+            audienceData: response.audienceData,
+            chosenVariantDetails: response.chosenVariantDetails,
+            hashDetails: response.hashDetails,
+            enrolledAt: nil,
+            isEnrolled: false
+        )
+        
+        // enrolledAt, isEnrolled, and enrolledTrigger are stored locally by sdk
+        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+        let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
+            persistentId: persistentId,
+            trigger: trigger,
+            experimentInfo: experimentInfo
+        )
+        experimentInfo.enrolledAt = enrollment.enrolledAt
+        experimentInfo.isEnrolled = enrollment.isEnrolled
+        experimentInfo.enrolledTrigger = enrollment.enrolledTrigger
+        
+        return experimentInfo
+    }
 }
 
 public enum HeliumPaywallEvent: Codable {
@@ -461,7 +478,7 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
             // Using empty ExperimentInfo as placeholder for legacy enum compatibility
-            let placeholderInfo = ExperimentInfo(trigger: triggerName, experimentName: nil, experimentId: nil, experimentType: nil, experimentMetadata: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, chosenVariantDetails: nil, hashDetails: nil)
+            let placeholderInfo = ExperimentInfo(enrolledTrigger: triggerName, triggers: nil, experimentName: nil, experimentId: nil, experimentType: nil, experimentMetadata: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, chosenVariantDetails: nil, hashDetails: nil)
             self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
         case "customPaywallAction":
             let actionName = try container.decode(String.self, forKey: .actionName)

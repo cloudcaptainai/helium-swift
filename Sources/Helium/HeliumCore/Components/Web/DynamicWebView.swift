@@ -525,7 +525,6 @@ class WebViewManager {
         let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
-            _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
         } else if let htmlStringIfNeeded {
             toWebView.loadHTMLString(htmlStringIfNeeded, baseURL: nil)

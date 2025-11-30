@@ -668,6 +668,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return fetchedConfig?.triggerToPaywalls[trigger]
     }
     
+    /// Extract experiment info for a specific trigger
+    /// - Parameter trigger: The trigger name to extract experiment info for
+    /// - Returns: ExperimentInfo if experiment data is available
+    public func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
+        return fetchedConfig?.extractExperimentInfo(trigger: trigger)
+    }
+    
     // Be careful with this as there can be multiple triggers using the same paywall (and associated uuid.)
     func getTriggerFromPaywallUuid(_ uuid: String) -> String? {
         return fetchedConfig?.triggerToPaywalls
