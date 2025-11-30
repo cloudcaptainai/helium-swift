@@ -183,36 +183,33 @@ public class PriceFetcher {
                 print("[Helium] Retrying product localization lookup... (attempt \(attempt) of \(maxAttempts))")
             }
             do {
-                // Only apply timeout if not on the last attempt
-                if attempt < maxAttempts {
-                    return try await withThrowingTaskGroup(of: [Product].self) { group in
-                        group.addTask {
-                            try await ProductsCache.shared.fetchProducts(for: skus)
-                        }
-                        
-                        group.addTask {
-                            // 5 second timeout
-                            try await Task.sleep(nanoseconds: 5_000_000_000)
-                            throw PriceFetcherProductsError.timeout
-                        }
-                        
-                        // Return whichever completes first
-                        if let result = try await group.next() {
-                            group.cancelAll()
-                            return result
-                        }
-                        return []
+                var timeoutNanoseconds: UInt64 = 10_000_000_000
+                if attempt == 1 {
+                    timeoutNanoseconds = 3_000_000_000
+                } else if attempt == 2 {
+                    timeoutNanoseconds = 4_000_000_000
+                }
+                return try await withThrowingTaskGroup(of: [Product].self) { group in
+                    group.addTask {
+                        try await ProductsCache.shared.fetchProducts(for: skus)
                     }
-                } else {
-                    // Last attempt - no timeout
-                    return try await ProductsCache.shared.fetchProducts(for: skus)
+                    
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                        throw PriceFetcherProductsError.timeout
+                    }
+                    
+                    // Return whichever completes first
+                    if let result = try await group.next() {
+                        group.cancelAll()
+                        return result
+                    }
+                    return []
                 }
             } catch {
                 // Don't delay after the last attempt
                 if attempt < maxAttempts {
-                    // Random delay between for jitter
-                    let delay = Double.random(in: 1.5...3.5)
-                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
         }

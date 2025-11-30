@@ -197,6 +197,7 @@ public struct ExperimentInfo: Codable {
     // MARK: - Codable
     
     enum CodingKeys: String, CodingKey {
+        case trigger
         case enrolledTrigger
         case triggers
         case experimentName
@@ -215,7 +216,9 @@ public struct ExperimentInfo: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(enrolledTrigger, forKey: .enrolledTrigger)
+        // keep "trigger" for now, for better backwards-compatibility
+        try container.encodeIfPresent(enrolledTrigger, forKey: .trigger)
+        try container.encodeIfPresent(enrolledTrigger, forKey: .enrolledTrigger)
         try container.encodeIfPresent(allTriggers, forKey: .triggers)
         try container.encodeIfPresent(experimentName, forKey: .experimentName)
         try container.encodeIfPresent(experimentId, forKey: .experimentId)

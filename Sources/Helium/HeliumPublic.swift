@@ -124,7 +124,7 @@ public class Helium {
             }
         }
         
-        return experimentInfoMap.isEmpty ? nil : experimentInfoMap
+        return experimentInfoMap
     }
     
     /// Clears all cached Helium state and allows safe re-initialization.
@@ -311,6 +311,9 @@ public class Helium {
     }
     
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
+        if !paywallsLoaded() {
+            return nil
+        }
         guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
             return nil
         }
@@ -801,7 +804,7 @@ public class Helium {
     }
     
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
-    public static func resetHelium(clearUserTraits: Bool = true) {
+    public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
         HeliumPaywallPresenter.shared.hideAllUpsells()
         
         HeliumPaywallDelegateWrapper.reset()
@@ -811,6 +814,10 @@ public class Helium {
         
         // Completely reset all fallback configurations
         HeliumFallbackViewManager.reset()
+        
+        if clearExperimentAllocations {
+            ExperimentAllocationTracker.shared.reset()
+        }
         
         restorePurchaseConfig.reset()
         
