@@ -245,14 +245,6 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
         if hiddenBehindSecondTry {
             return
         }
-        // Use new typed event
-        let event = PaywallOpenEvent(
-            triggerName: trigger,
-            paywallName: paywallInfo.paywallTemplateName,
-            viewType: viewType,
-            paywallUnavailableReason: fallbackReason
-        )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
         
         // Track experiment allocation for embedded/triggered views
         // Determine if this is a fallback by checking if it's in the fetched config
@@ -262,6 +254,14 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             trigger: trigger,
             isFallback: isFallback
         )
+        
+        let event = PaywallOpenEvent(
+            triggerName: trigger,
+            paywallName: paywallInfo.paywallTemplateName,
+            viewType: viewType,
+            paywallUnavailableReason: fallbackReason
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
     }
     
     public func logClosure() {

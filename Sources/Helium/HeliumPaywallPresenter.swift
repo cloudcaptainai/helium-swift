@@ -360,13 +360,13 @@ class HeliumPaywallPresenter {
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
-        dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
-        
         // Fire user allocation event if this is the first time showing this trigger
         ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
             trigger: paywallVC.trigger,
             isFallback: paywallVC.isFallback
         )
+        
+        dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
     }
     
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {

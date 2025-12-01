@@ -163,7 +163,7 @@ public struct ExperimentInfo: Codable {
     }
     
     internal init(
-        enrolledTrigger: String,
+        enrolledTrigger: String?,
         triggers: [String]?,
         experimentName: String?,
         experimentId: String?,

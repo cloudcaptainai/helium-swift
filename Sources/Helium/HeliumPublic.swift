@@ -378,6 +378,11 @@ public class Helium {
         for trigger in triggers {
             if let experimentInfo = getExperimentInfoForTrigger(trigger),
                experimentInfo.enrollmentStatus == .activeEnrollment {
+                if experimentInfo.enrolledTrigger == trigger {
+                    // favor experiment with trigger where actually enrolled
+                    // although technically they should be the same exact experiment data
+                    activeExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
+                }
                 if !activeExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
                     activeExperiments.append(experimentInfo)
                 }
@@ -415,7 +420,9 @@ public class Helium {
         for trigger in triggers {
             if let experimentInfo = getExperimentInfoForTrigger(trigger),
                experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
-                if experimentInfo.enrolledTrigger == trigger { // favor experiment with trigger where actually enrolled
+                if experimentInfo.enrolledTrigger == trigger {
+                    // favor experiment with trigger where actually enrolled
+                    // although technically they should be the same exact experiment data
                     allExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
                 }
                 if !allExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
