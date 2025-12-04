@@ -105,7 +105,7 @@ public struct CodableUserContext: Codable {
                 "usesMetricSystem": self.locale.usesMetricSystem,
                 "storeCountryCode": self.locale.storeCountryCode ?? "",
                 "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
-            ] as [String: Any],
+            ],
             "screenInfo": [
                 "brightness": self.screenInfo.brightness,
                 "nativeBounds": [
