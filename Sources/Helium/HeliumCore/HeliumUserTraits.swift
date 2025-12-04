@@ -10,7 +10,9 @@ import Foundation
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
     
-    // Main dictionary initializer that others will call into
+    /// Create HeliumUserTraits with a dictionary.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
     public init(_ traits: [String: Any]) {
         self.storage = traits.compactMapValues { value -> AnyCodable? in
             if let safeValue = Self.toJSONSafeValue(value) {
