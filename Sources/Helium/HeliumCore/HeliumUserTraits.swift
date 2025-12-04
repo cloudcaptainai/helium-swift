@@ -12,7 +12,35 @@ public struct HeliumUserTraits {
     
     // Main dictionary initializer that others will call into
     public init(_ traits: [String: Any]) {
-        self.storage = traits.mapValues { AnyCodable($0) }
+        self.storage = traits.compactMapValues { value -> AnyCodable? in
+            if let safeValue = Self.toJSONSafeValue(value) {
+                return AnyCodable(safeValue)
+            }
+            return nil
+        }
+    }
+
+    /// Converts a value to a JSON-safe type, or returns nil if not convertible
+    private static func toJSONSafeValue(_ value: Any) -> Any? {
+        // Already JSON-safe primitives (String, Int, Double, Bool, Array, Dictionary)
+        if JSONSerialization.isValidJSONObject(["k": value]) {
+            return value
+        }
+
+        // Convert known types to JSON-safe equivalents
+        if let date = value as? Date {
+            return ISO8601DateFormatter().string(from: date)
+        }
+        if let uuid = value as? UUID {
+            return uuid.uuidString
+        }
+        if let url = value as? URL {
+            return url.absoluteString
+        }
+
+        // Non-serializable type - log warning and skip
+        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value))")
+        return nil
     }
     
     public subscript<T: Codable>(key: String) -> T? {
