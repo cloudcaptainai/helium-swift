@@ -38,6 +38,8 @@ struct CodableApplicationInfo: Codable {
     var heliumSdkVersion: String
     var heliumSdk: String
     var heliumPlatform: String
+    var purchaseDelegate: String
+    var customAPIEndpoint: String?
     var environment: String
 }
 
@@ -79,6 +81,8 @@ func createApplicationInfo() -> CodableApplicationInfo {
         heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
         heliumSdk: HeliumSdkConfig.shared.heliumSdk,
         heliumPlatform: HeliumSdkConfig.shared.heliumPlatform,
+        purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
+        customAPIEndpoint: HeliumSdkConfig.shared.customAPIEndpoint,
         environment: AppReceiptsHelper.shared.getEnvironment()
     )
 }
@@ -148,6 +152,9 @@ public struct CodableUserContext: Codable {
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
                 "heliumSdk": self.applicationInfo.heliumSdk,
                 "heliumPlatform": self.applicationInfo.heliumPlatform,
+                "purchaseDelegate": self.applicationInfo.purchaseDelegate,
+                "customAPIEndpoint": self.applicationInfo.customAPIEndpoint as Any,
+                "environment": self.applicationInfo.environment
             ],
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
