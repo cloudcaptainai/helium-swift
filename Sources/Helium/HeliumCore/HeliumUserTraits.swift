@@ -22,14 +22,9 @@ public struct HeliumUserTraits {
         }
     }
 
-    /// Converts a value to a JSON-safe type, or returns nil if not convertible
+    /// Converts a value to a JSON-safe type recursively, or returns nil if not convertible
     private static func toJSONSafeValue(_ value: Any) -> Any? {
-        // Already JSON-safe primitives (String, Int, Double, Bool, Array, Dictionary)
-        if JSONSerialization.isValidJSONObject(["k": value]) {
-            return value
-        }
-
-        // Convert known types to JSON-safe equivalents
+        // Convert known types to JSON-safe equivalents first
         if let date = value as? Date {
             return ISO8601DateFormatter().string(from: date)
         }
@@ -40,6 +35,21 @@ public struct HeliumUserTraits {
             return url.absoluteString
         }
 
+        // Handle arrays recursively
+        if let array = value as? [Any] {
+            return array.compactMap { toJSONSafeValue($0) }
+        }
+
+        // Handle dictionaries recursively
+        if let dict = value as? [String: Any] {
+            return dict.compactMapValues { toJSONSafeValue($0) }
+        }
+
+        // Check if it's a JSON-safe primitive (String, Int, Double, Bool, NSNull)
+        if JSONSerialization.isValidJSONObject(["k": value]) {
+            return value
+        }
+
         // Non-serializable type - log warning and skip
         print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value))")
         return nil
@@ -47,10 +57,21 @@ public struct HeliumUserTraits {
     
     public subscript<T: Codable>(key: String) -> T? {
         get { storage[key]?.value as? T }
-        set { storage[key] = newValue.map(AnyCodable.init) }
+        set {
+            guard let newValue else {
+                storage[key] = nil
+                return
+            }
+            if let safeValue = Self.toJSONSafeValue(newValue) {
+                storage[key] = AnyCodable(safeValue)
+            }
+            // If toJSONSafeValue returns nil, the value is silently dropped
+        }
     }
-    
-    // Fluent setter for chaining
+
+    /// Fluent setter for chaining.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
     @discardableResult
     public mutating func set<T: Codable>(_ key: String, _ value: T?) -> Self {
         self[key] = value
