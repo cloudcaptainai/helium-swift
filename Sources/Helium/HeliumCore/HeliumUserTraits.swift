@@ -10,17 +10,68 @@ import Foundation
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
     
-    // Main dictionary initializer that others will call into
+    /// Create HeliumUserTraits with a dictionary.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
     public init(_ traits: [String: Any]) {
-        self.storage = traits.mapValues { AnyCodable($0) }
+        self.storage = traits.compactMapValues { value -> AnyCodable? in
+            if let safeValue = Self.toJSONSafeValue(value) {
+                return AnyCodable(safeValue)
+            }
+            return nil
+        }
+    }
+
+    /// Converts a value to a JSON-safe type recursively, or returns nil if not convertible
+    private static func toJSONSafeValue(_ value: Any) -> Any? {
+        // Convert known types to JSON-safe equivalents first
+        if let date = value as? Date {
+            return ISO8601DateFormatter().string(from: date)
+        }
+        if let uuid = value as? UUID {
+            return uuid.uuidString
+        }
+        if let url = value as? URL {
+            return url.absoluteString
+        }
+
+        // Handle arrays recursively
+        if let array = value as? [Any] {
+            return array.compactMap { toJSONSafeValue($0) }
+        }
+
+        // Handle dictionaries recursively
+        if let dict = value as? [String: Any] {
+            return dict.compactMapValues { toJSONSafeValue($0) }
+        }
+
+        // Check if it's a JSON-safe primitive (String, Int, Double, Bool, NSNull)
+        if JSONSerialization.isValidJSONObject(["k": value]) {
+            return value
+        }
+
+        // Non-serializable type - log warning and skip
+        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value))")
+        return nil
     }
     
     public subscript<T: Codable>(key: String) -> T? {
         get { storage[key]?.value as? T }
-        set { storage[key] = newValue.map(AnyCodable.init) }
+        set {
+            guard let newValue else {
+                storage[key] = nil
+                return
+            }
+            if let safeValue = Self.toJSONSafeValue(newValue) {
+                storage[key] = AnyCodable(safeValue)
+            }
+            // If toJSONSafeValue returns nil, the value is silently dropped
+        }
     }
-    
-    // Fluent setter for chaining
+
+    /// Fluent setter for chaining.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
     @discardableResult
     public mutating func set<T: Codable>(_ key: String, _ value: T?) -> Self {
         self[key] = value
