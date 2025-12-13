@@ -122,6 +122,10 @@ public class HeliumSdkConfig {
     private var wrapperSdk: String?
     private var wrapperSdkVersion: String?
 
+    // Private storage for initialization config
+    private(set) var purchaseDelegate: String = "h_storekit"
+    private(set) var customAPIEndpoint: String?
+
     /// Called by wrapper SDKs (React Native, Flutter) before Helium.initialize()
     /// - Parameters:
     ///   - sdk: The wrapper SDK identifier (e.g., "react-native", "flutter")
@@ -129,6 +133,12 @@ public class HeliumSdkConfig {
     public func setWrapperSdkInfo(sdk: String, version: String) {
         self.wrapperSdk = sdk
         self.wrapperSdkVersion = version
+    }
+
+    /// Called during Helium.initialize() to set initialization config
+    func setInitializeConfig(purchaseDelegate: String, customAPIEndpoint: String?) {
+        self.purchaseDelegate = purchaseDelegate
+        self.customAPIEndpoint = customAPIEndpoint
     }
 
     /// The platform identifier, always "ios" for this SDK

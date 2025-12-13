@@ -606,13 +606,19 @@ public class Helium {
             HeliumFallbackViewManager.shared.setFallbackBundleURL(bundleURL)
         }
         
+        // Use provided delegate or default to StoreKitDelegate
+        let delegate = heliumPaywallDelegate ?? StoreKitDelegate()
+        
+        HeliumSdkConfig.shared.setInitializeConfig(
+            purchaseDelegate: delegate.delegateType,
+            customAPIEndpoint: customAPIEndpoint
+        )
+        
         self.controller = HeliumController(
             apiKey: apiKey
         )
         self.controller?.logInitializeEvent();
         
-        // Use provided delegate or default to StoreKitDelegate
-        let delegate = heliumPaywallDelegate ?? StoreKitDelegate()
         HeliumPaywallDelegateWrapper.shared.setDelegate(delegate);
         if (customAPIEndpoint != nil) {
             self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
