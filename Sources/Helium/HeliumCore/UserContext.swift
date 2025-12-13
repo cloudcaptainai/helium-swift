@@ -34,7 +34,10 @@ struct CodableApplicationInfo: Codable {
     var build: String?
     var completeAppVersion: String?
     var appDisplayName: String?
-    var heliumSdkVersion: String?
+    var heliumNativeSdkVersion: String
+    var heliumSdkVersion: String
+    var heliumSdk: String
+    var heliumPlatform: String
     var environment: String
 }
 
@@ -67,9 +70,17 @@ func createApplicationInfo() -> CodableApplicationInfo {
         appDisplayName = nil;
     }
     
-    let heliumSdkVersion = BuildConstants.version;
-    
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment())
+    return CodableApplicationInfo(
+        version: version,
+        build: build,
+        completeAppVersion: completeAppVersion,
+        appDisplayName: appDisplayName,
+        heliumNativeSdkVersion: HeliumSdkConfig.shared.heliumNativeSdkVersion,
+        heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
+        heliumSdk: HeliumSdkConfig.shared.heliumSdk,
+        heliumPlatform: HeliumSdkConfig.shared.heliumPlatform,
+        environment: AppReceiptsHelper.shared.getEnvironment()
+    )
 }
 
 public struct CodableUserContext: Codable {
@@ -133,7 +144,10 @@ public struct CodableUserContext: Codable {
                 "build": self.applicationInfo.build as Any,
                 "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
                 "appDisplayName": self.applicationInfo.appDisplayName as Any,
-                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion as Any,
+                "heliumNativeSdkVersion": self.applicationInfo.heliumNativeSdkVersion,
+                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
+                "heliumSdk": self.applicationInfo.heliumSdk,
+                "heliumPlatform": self.applicationInfo.heliumPlatform,
             ],
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
