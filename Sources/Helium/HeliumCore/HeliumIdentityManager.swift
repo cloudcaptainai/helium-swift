@@ -119,7 +119,9 @@ public class HeliumSdkConfig {
     private init() {}
 
     // Private storage for wrapper SDK info
+    @HeliumAtomic
     private var wrapperSdk: String?
+    @HeliumAtomic
     private var wrapperSdkVersion: String?
 
     /// Called by wrapper SDKs (React Native, Flutter) before Helium.initialize()
