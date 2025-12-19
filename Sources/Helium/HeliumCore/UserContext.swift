@@ -18,6 +18,7 @@ struct CodableLocale: Codable {
     var currentTimeZoneName: String?
     var decimalSeparator: String?
     var usesMetricSystem: Bool
+    var storeCountryCode: String?
 }
 
 struct CodableScreenInfo: Codable {
@@ -93,15 +94,16 @@ public struct CodableUserContext: Codable {
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": [
-                "currentCountry": self.locale.currentCountry ?? "",
-                "currentCurrency": self.locale.currentCurrency ?? "",
-                "currentCurrencySymbol": self.locale.currentCurrencySymbol ?? "",
-                "preferredLanguages": self.locale.preferredLanguages ?? [],
-                "currentLanguage": self.locale.currentLanguage ?? "",
-                "currentTimeZone": self.locale.currentTimeZone?.identifier ?? "",
-                "currentTimeZoneName": self.locale.currentTimeZoneName ?? "",
-                "decimalSeparator": self.locale.decimalSeparator ?? "",
-                "usesMetricSystem": self.locale.usesMetricSystem
+                "currentCountry": self.locale.currentCountry as Any,
+                "currentCurrency": self.locale.currentCurrency as Any,
+                "currentCurrencySymbol": self.locale.currentCurrencySymbol as Any,
+                "preferredLanguages": self.locale.preferredLanguages as Any,
+                "currentLanguage": self.locale.currentLanguage as Any,
+                "currentTimeZone": self.locale.currentTimeZone?.identifier as Any,
+                "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
+                "decimalSeparator": self.locale.decimalSeparator as Any,
+                "usesMetricSystem": self.locale.usesMetricSystem,
+                "storeCountryCode": self.locale.storeCountryCode as Any
             ],
             "screenInfo": [
                 "brightness": self.screenInfo.brightness,
@@ -158,7 +160,8 @@ public struct CodableUserContext: Codable {
             currentTimeZone: TimeZone.current,
             currentTimeZoneName: TimeZone.current.identifier,
             decimalSeparator: Locale.current.decimalSeparator,
-            usesMetricSystem: Locale.current.usesMetricSystem
+            usesMetricSystem: Locale.current.usesMetricSystem,
+            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode()
         )
 
         let screenInfo = CodableScreenInfo(
