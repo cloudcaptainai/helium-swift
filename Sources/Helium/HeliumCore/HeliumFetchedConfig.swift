@@ -168,7 +168,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
 
             // Try to ensure App Store country code is available. It should not take longer
             // than 5ms but do a 50ms timeout to make sure we don't delay config fetch.
-            let storeCountryCode = await withTimeoutOrNil(milliseconds: 50) {
+            let _ = await withTimeoutOrNil(milliseconds: 50) {
                 await AppStoreCountryHelper.shared.fetchStoreCountryCode()
             }
             
@@ -176,8 +176,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 "apiKey": apiKey,
                 "userId": HeliumIdentityManager.shared.getUserId(),
                 "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
-                "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs(),
-                "storeCountryCode": storeCountryCode as Any
+                "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
             ]
             
             let configStartTime = DispatchTime.now()
