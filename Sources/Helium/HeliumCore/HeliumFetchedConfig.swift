@@ -167,8 +167,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
             downloadStep = .config
 
             // Try to ensure App Store country code is available. It should not take longer
-            // than 5ms but do a 50ms timeout to make sure we don't delay config fetch.
-            let _ = await withTimeoutOrNil(milliseconds: 50) {
+            // than 5ms but do a short timeout to make sure we don't delay config fetch too long.
+            let _ = await withTimeoutOrNil(milliseconds: 25) {
                 await AppStoreCountryHelper.shared.fetchStoreCountryCode()
             }
             
