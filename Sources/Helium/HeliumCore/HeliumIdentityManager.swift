@@ -116,32 +116,37 @@ public class HeliumIdentityManager {
 
 public class AppStoreCountryHelper {
     public static let shared = AppStoreCountryHelper()
-    private init() {}
     
     private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
     private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
-    private var hasFetched = false
+    private var fetchTask: Task<String?, Never>?
     
-    /// Fetches and caches the App Store country code from StoreKit
-    /// - Returns: The 2-char alpha-2 country code (e.g., "US", "GB"), or nil if unavailable
-    public func fetchStoreCountryCode() async -> String? {
-        if hasFetched { return cachedCountryCode2 }
+    private init() {
+        fetchTask = Task { await self.performFetch() }
+    }
+    
+    private func performFetch() async -> String? {
         if let alpha3 = await Storefront.current?.countryCode {
             cachedCountryCode3 = alpha3
             cachedCountryCode2 = convertAlpha3ToAlpha2(alpha3)
         }
-        hasFetched = true
         return cachedCountryCode2
     }
     
+    /// Awaits the fetch task and returns the 2-char alpha-2 country code
+    /// - Returns: The 2-char country code (e.g., "US", "GB"), or nil if unavailable
+    public func fetchStoreCountryCode() async -> String? {
+        return await fetchTask?.value
+    }
+    
     /// Returns the cached 2-char store country code synchronously
-    /// - Returns: The cached alpha-2 country code, or nil if not yet fetched
+    /// - Returns: The cached alpha-2 country code, or nil if fetch not yet complete
     public func getStoreCountryCode() -> String? {
         return cachedCountryCode2
     }
     
     /// Returns the cached 3-char store country code synchronously
-    /// - Returns: The cached alpha-3 country code, or nil if not yet fetched
+    /// - Returns: The cached alpha-3 country code, or nil if fetch not yet complete
     public func getStoreCountryCode3() -> String? {
         return cachedCountryCode3
     }
