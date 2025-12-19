@@ -1,4 +1,5 @@
 import Foundation
+import StoreKit
 
 public class HeliumIdentityManager {
     // MARK: - Singleton
@@ -110,5 +111,28 @@ public class HeliumIdentityManager {
     ) -> CodableUserContext {
         let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
         return userContext
+    }
+}
+
+public class AppStoreCountryHelper {
+    public static let shared = AppStoreCountryHelper()
+    private init() {}
+    
+    private var cachedCountryCode: String?
+    private var hasFetched = false
+    
+    /// Fetches and caches the App Store country code from StoreKit
+    /// - Returns: The 3-char alpha-3 country code (e.g., "USA", "GBR"), or nil if unavailable
+    public func fetchStoreCountryCode() async -> String? {
+        if hasFetched { return cachedCountryCode }
+        cachedCountryCode = await Storefront.current?.countryCode
+        hasFetched = true
+        return cachedCountryCode
+    }
+    
+    /// Returns the cached store country code synchronously
+    /// - Returns: The cached country code, or nil if not yet fetched
+    public func getStoreCountryCode() -> String? {
+        return cachedCountryCode
     }
 }
