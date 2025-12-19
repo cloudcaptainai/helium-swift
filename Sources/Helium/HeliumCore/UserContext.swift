@@ -18,7 +18,7 @@ struct CodableLocale: Codable {
     var currentTimeZoneName: String?
     var decimalSeparator: String?
     var usesMetricSystem: Bool
-    var storeCountryCode: String?
+    var storeCountryCode: String?  // 2-letter alpha-2 code
 }
 
 struct CodableScreenInfo: Codable {
@@ -102,7 +102,8 @@ public struct CodableUserContext: Codable {
                 "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
                 "decimalSeparator": self.locale.decimalSeparator as Any,
                 "usesMetricSystem": self.locale.usesMetricSystem,
-                "storeCountryCode": self.locale.storeCountryCode as Any
+                "storeCountryCode": self.locale.storeCountryCode as Any,
+                "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() as Any
             ],
             "screenInfo": [
                 "brightness": self.screenInfo.brightness,

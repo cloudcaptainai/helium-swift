@@ -118,21 +118,31 @@ public class AppStoreCountryHelper {
     public static let shared = AppStoreCountryHelper()
     private init() {}
     
-    private var cachedCountryCode: String?
+    private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
+    private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
     private var hasFetched = false
     
     /// Fetches and caches the App Store country code from StoreKit
-    /// - Returns: The 3-char alpha-3 country code (e.g., "USA", "GBR"), or nil if unavailable
+    /// - Returns: The 2-char alpha-2 country code (e.g., "US", "GB"), or nil if unavailable
     public func fetchStoreCountryCode() async -> String? {
-        if hasFetched { return cachedCountryCode }
-        cachedCountryCode = await Storefront.current?.countryCode
+        if hasFetched { return cachedCountryCode2 }
+        if let alpha3 = await Storefront.current?.countryCode {
+            cachedCountryCode3 = alpha3
+            cachedCountryCode2 = convertAlpha3ToAlpha2(alpha3)
+        }
         hasFetched = true
-        return cachedCountryCode
+        return cachedCountryCode2
     }
     
-    /// Returns the cached store country code synchronously
-    /// - Returns: The cached country code, or nil if not yet fetched
+    /// Returns the cached 2-char store country code synchronously
+    /// - Returns: The cached alpha-2 country code, or nil if not yet fetched
     public func getStoreCountryCode() -> String? {
-        return cachedCountryCode
+        return cachedCountryCode2
+    }
+    
+    /// Returns the cached 3-char store country code synchronously
+    /// - Returns: The cached alpha-3 country code, or nil if not yet fetched
+    public func getStoreCountryCode3() -> String? {
+        return cachedCountryCode3
     }
 }
