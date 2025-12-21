@@ -15,6 +15,8 @@ public protocol HeliumDelegateReturnsTransaction {
 @available(iOS 15.0, *)
 open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
     
+    public var delegateType: String { "h_storekit" }
+    
     private var latestCompletedTransaction: Transaction? = nil
     
     /// @param productIds  (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.

@@ -18,6 +18,9 @@ public enum HeliumPaywallTransactionStatus {
 
 public protocol HeliumPaywallDelegate: AnyObject {
     
+    /// The delegate type identifier used for SDK analytics
+    var delegateType: String { get }
+    
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
     
     func restorePurchases() async -> Bool
@@ -54,6 +57,8 @@ public protocol HeliumPaywallDelegate: AnyObject {
 
 // Extension to provide default implementation
 public extension HeliumPaywallDelegate {
+    var delegateType: String { "custom" }
+
     /// Default implementation for legacy events - does nothing
     func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
         // Default implementation does nothing
