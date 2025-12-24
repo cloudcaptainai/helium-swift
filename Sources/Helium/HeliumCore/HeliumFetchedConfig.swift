@@ -100,7 +100,11 @@ func fetchEndpoint(
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+    request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
+    // Use HTTP 3 if possible
+    if #available(iOS 14.5, *) {
+        request.assumesHTTP3Capable = true
+    }
     request.setValue("true", forHTTPHeaderField: "X-Helium-Skip-Bundles")
     
     request.timeoutInterval = timeoutInterval ?? 15
