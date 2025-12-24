@@ -1,18 +1,13 @@
 import Foundation
 import SwiftUI
-import SwiftyJSON
 
-
-public protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String)
+enum TemplateError: Error {
+    case missingRequiredFields(String)
 }
 
-public extension BaseTemplateView {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
-        self.init(paywallInfo: paywallInfo, trigger: trigger)
-    }
+protocol BaseTemplateView: View {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws
 }
-
 
 public struct DynamicBaseTemplateView: BaseTemplateView {
     
@@ -20,68 +15,61 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
-    var templateValues: JSON
+    let filePath: String
+    let backupFilePath: String?
+    var componentPropsJSON: JSON
     var triggerName: String?
+    let fallbackReason: PaywallUnavailableReason?
     
-    public init(paywallInfo: HeliumPaywallInfo, trigger: String, resolvedConfig: JSON?) {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         
-        self.templateValues = resolvedConfig ?? JSON([:]);
-        self.triggerName = trigger;
-    }
-    
-    public init(paywallInfo: HeliumPaywallInfo, trigger: String) {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
-        _actionsDelegate = StateObject(wrappedValue: delegate)
-        _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
+        self.filePath = filePath
+        self.backupFilePath = backupFilePath
         
-        let encoder = JSONEncoder()
-        let jsonData = try! encoder.encode(paywallInfo.resolvedConfig)
-        self.templateValues = try! JSON(data: jsonData);
+        let templateValues = resolvedConfig ?? JSON([:])
+        
+        // Validate required fields exist
+        guard templateValues["baseStack"].exists(),
+              templateValues["baseStack"]["componentProps"].exists() else {
+            throw TemplateError.missingRequiredFields("Missing baseStack or componentProps in template configuration")
+        }
+        
+        self.componentPropsJSON = templateValues["baseStack"]["componentProps"]
         self.triggerName = trigger;
+        self.fallbackReason = fallbackReason
     }
     
     public var body: some View {
-        GeometryReader { reader in
-            DynamicPositionedComponent(
-                json: templateValues["baseStack"],
-                geometryProxy: reader,
-                triggerName: triggerName
-            )
-            .adaptiveSheet(isPresented: $actionsDelegate.isShowingModal, heightFraction: 0.45) {
-                if let modalScreenToShow = actionsDelegate.showingModalScreen,
-                   templateValues[modalScreenToShow].exists() {
-                    DynamicPositionedComponent(
-                        json: templateValues[modalScreenToShow],
-                        geometryProxy: reader
-                    )
-                }
-            }
-        }
+        // Use validated componentProps
+        DynamicWebView(
+            filePath: filePath,
+            backupFilePath: backupFilePath,
+            json: componentPropsJSON,
+            actionsDelegate: actionsDelegateWrapper,
+            triggerName: triggerName
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
-        .environmentObject(actionsDelegateWrapper)
         .onAppear {
             actionsDelegate.setDismissAction {
                 dismiss()
             }
-            if !presentationState.firstOnAppearHandled {
-                presentationState.handleOnAppear()
+            if presentationState.viewType != .presented {
+                if !presentationState.isOpen {
+                    presentationState.isOpen = true
+                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason)
+                }
             }
         }
         .onDisappear {
-            presentationState.handleOnDisappear()
-        }
-        .onReceive(presentationState.$isOpen) { newIsOpen in
-            if presentationState.viewType == .presented {
-                return
-            }
-            if newIsOpen {
-                actionsDelegateWrapper.logImpression(viewType: presentationState.viewType)
-            } else {
-                actionsDelegateWrapper.logClosure()
+            if presentationState.viewType != .presented {
+                if presentationState.isOpen {
+                    presentationState.isOpen = false
+                    actionsDelegateWrapper.logClosure()
+                }
             }
         }
     }

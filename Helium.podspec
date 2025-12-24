@@ -11,14 +11,20 @@ Pod::Spec.new do |s|
     :branch => 'main'
   }
 
-  s.ios.deployment_target = '14.0'
+  s.ios.deployment_target = '15.0'
   s.swift_version = '5.0'
   
-  s.source_files = ['Sources/Helium/**/*']
-
-  s.dependency 'Kingfisher', '~> 7.0'
-  s.dependency 'AnyCodable-FlightSchool', '~> 0.6.0'
-  s.dependency 'AnalyticsSwiftCocoapod', '~> 1.7.3'
-  s.dependency 'SwiftyJSON', '~> 5.0.2'
-  s.dependency 'DeviceKit', '~> 4.0.0'
+  s.default_subspec = 'Core'
+  
+  # Core subspec - base Helium functionality without RevenueCat
+  s.subspec 'Core' do |core|
+    core.source_files = 'Sources/Helium/**/*'
+  end
+  
+  # RevenueCat subspec - adds RevenueCat integration
+  s.subspec 'RevenueCat' do |rc|
+    rc.source_files = 'Sources/HeliumRevenueCat/**/*'
+    rc.dependency 'Helium/Core'
+    rc.dependency 'RevenueCat', '~> 5.0.0'
+  end
 end

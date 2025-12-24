@@ -1,9 +1,19 @@
 import SwiftUI
 import WebKit
-import SwiftyJSON
+
+enum FileLoadAttempt {
+    case initialLoad
+    case secondLoad
+    case backupLoad
+}
 
 public struct DynamicWebView: View {
+    let bundleId: String?
     let filePath: String
+    let backupBundleId: String?
+    let backupFilePath: String?
+    @State private var fileLoadAttempt: FileLoadAttempt = .initialLoad
+    
     let triggerName: String?
     let actionConfig: JSON
     let templateConfig: JSON
@@ -16,6 +26,7 @@ public struct DynamicWebView: View {
     let shimmerConfig: JSON
     let showProgressView: Bool
     var fallbackPaywall: AnyView?
+    let shouldEnableScroll: Bool
     
     @State private var isContentLoaded = false
     @State private var webView: WKWebView? = nil
@@ -24,8 +35,25 @@ public struct DynamicWebView: View {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
-    public init(json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
-        self.filePath = HeliumAssetManager.shared.localPathForURL(bundleURL: json["bundleURL"].stringValue)!
+    private var effectiveColorScheme: ColorScheme {
+        switch Helium.shared.lightDarkModeOverride {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return colorScheme // fall back to environment
+        }
+    }
+    
+    init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+        self.filePath = filePath
+        self.backupFilePath = backupFilePath
+        
+        bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
+        if let backupFilePath {
+            backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
+        } else {
+            backupBundleId = nil
+        }
+        
         self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
@@ -40,20 +68,22 @@ public struct DynamicWebView: View {
         self.showShimmer = json["showShimmer"].bool ?? false;
         self.shimmerConfig = json["shimmerConfig"].type == .null ? JSON([:]) : json["shimmerConfig"];
         self.showProgressView = json["showProgress"].bool ?? false;
+        
+        shouldEnableScroll = json["shouldEnableScroll"].bool ?? true
     }
 
     public var body: some View {
        ZStack {
            // Background view - shows either initial background or post-load background when content is loaded
            if isContentLoaded {
-               if let postLoadBg = colorScheme == .dark && darkModePostLoadBackgroundConfig != nil ? 
+               if let postLoadBg = effectiveColorScheme == .dark && darkModePostLoadBackgroundConfig != nil ?
                    darkModePostLoadBackgroundConfig : postLoadBackgroundConfig {
                    // Show post-load background if content is loaded and postLoadBackgroundConfig exists
                    postLoadBg.makeBackgroundView()
                        .ignoresSafeArea()
                        .transition(.opacity)
                }
-           } else if let bg = colorScheme == .dark && darkModeBackgroundConfig != nil ? 
+           } else if let bg = effectiveColorScheme == .dark && darkModeBackgroundConfig != nil ?
                darkModeBackgroundConfig : backgroundConfig {
                // Show initial background
                bg.makeBackgroundView()
@@ -65,23 +95,22 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                
-        } else if let webView {
-              WebViewRepresentable(webView: webView)
-                  .padding(.horizontal, -1)
-                  .ignoresSafeArea()
-                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-          } else if showShimmer {
-              VStack {}
-              .padding()
-              .padding(.top, UIScreen.main.bounds.height * 0.2)
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .shimmer(config: shimmerConfig)
-              
-          } else if showProgressView {
-              ProgressView()
-                  .ignoresSafeArea()
-                  .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-          }
+           } else if let webView {
+               WebViewRepresentable(webView: webView)
+                   .padding(.horizontal, -1)
+                   .ignoresSafeArea()
+                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+           } else if showShimmer {
+               VStack {}
+                   .padding()
+                   .padding(.top, UIScreen.main.bounds.height * 0.2)
+                   .frame(maxWidth: .infinity, maxHeight: .infinity)
+                   .shimmer(config: shimmerConfig)
+           } else if showProgressView {
+               ProgressView()
+                   .ignoresSafeArea()
+                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+           }
        }
        .edgesIgnoringSafeArea(.all)
        .onAppear {
@@ -92,22 +121,37 @@ public struct DynamicWebView: View {
            webView?.stopLoading()
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { res in
-          if res.object as? WKNavigationDelegate === webView?.navigationDelegate {
+          if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               isContentLoaded = true
               if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
+                  let isFallback = fileLoadAttempt == .backupLoad
                   Task {
-                      self.actionsDelegate.logRenderTime(timeTakenMS: milliseconds)
+                      self.actionsDelegate.logRenderTime(
+                        timeTakenMS: milliseconds,
+                        isFallback: isFallback
+                      )
                   }
               }
               lowPowerModeAutoPlayVideoWorkaround()
           }
       }
+      .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoadFail)) { res in
+          if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
+              webViewLoadFail(reason: "Failed to render paywall.")
+          }
+      }
     }
 
-    private func loadWebView() {
+    private func loadWebView(useBackup: Bool = false) {
         if webView != nil {
+            return
+        }
+        print("[Helium] WebView loading html - \(fileLoadAttempt)")
+        
+        guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
+            webViewLoadFail(reason: "NoBackupFilePath")
             return
         }
         
@@ -170,10 +214,15 @@ public struct DynamicWebView: View {
             Task {
                 // WebView creation timing
                 _ = Date()
-                let preparedWebView = await WebViewManager.shared.prepareForShowing(filePath: filePath, delegateWrapper: actionsDelegate, heliumViewController: presentationState.heliumViewController)
+                let preparedWebView = await WebViewManager.shared.prepareForShowing(
+                    filePath: filePathToLoad,
+                    shouldEnableScroll: shouldEnableScroll,
+                    delegateWrapper: actionsDelegate,
+                    heliumViewController: presentationState.heliumViewController
+                )
                 guard let preparedWebView else {
                     print("Failed to retrieve preparedWebView!")
-                    shouldShowFallback = true
+                    webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
                     return
                 }
                 
@@ -183,8 +232,27 @@ public struct DynamicWebView: View {
                 // File loading timing
                 _ = Date()
                 
-                await WebViewManager.shared.loadFilePath(filePath, toWebView: preparedWebView)
-                webView = preparedWebView
+                do {
+                    var htmlStringIfNeeded: String? = nil
+                    if !useBackup, let bundleId {
+                        htmlStringIfNeeded = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleId]
+                        if htmlStringIfNeeded == nil && backupFilePath == nil {
+                            // This can happen if bundleId is actually for a fallback bundle
+                            htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[bundleId]
+                        }
+                    } else if useBackup, let backupBundleId {
+                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
+                    }
+                    
+                    try WebViewManager.shared.loadFilePath(
+                        filePathToLoad,
+                        toWebView: preparedWebView,
+                        htmlStringIfNeeded: htmlStringIfNeeded
+                    )
+                    webView = preparedWebView
+                } catch {
+                    webViewLoadFail(reason: "WebViewLoadFail")
+                }
             }
             Task {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
@@ -192,13 +260,59 @@ public struct DynamicWebView: View {
                 lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
             }
         } catch {
-            HeliumPaywallDelegateWrapper.shared.onHeliumPaywallEvent(event: .paywallOpenFailed(
-                triggerName: triggerName ?? "",
-                paywallTemplateName: "WebView"
-            ));
-            if (fallbackPaywall != nil) {
-                shouldShowFallback = true;
+            webViewLoadFail(reason: "WebViewContextError")
+        }
+    }
+    
+    private func webViewLoadFail(reason: String) {
+        print("[Helium] WebView failed to load - \(reason)")
+        switch fileLoadAttempt {
+        case .initialLoad:
+            advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
+            return
+        case .secondLoad:
+            if backupFilePath != nil {
+                advanceFileLoadAttempt(to: .backupLoad, useBackup: true)
+                return
             }
+        default:
+            break
+        }
+        let trigger = triggerName ?? ""
+        let paywallName = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallTemplateName ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.paywallTemplateName ?? "unknown"
+        if fallbackPaywall != nil {
+            shouldShowFallback = true
+            // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
+            let event = PaywallWebViewRenderedEvent(
+                triggerName: trigger,
+                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
+                paywallUnavailableReason: .webviewRenderFail
+            )
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        } else {
+            let openFailEvent = PaywallOpenFailedEvent(
+                triggerName: trigger,
+                paywallName: paywallName,
+                error: "WebView failed to load - \(reason)",
+                paywallUnavailableReason: .webviewRenderFail
+            )
+            if presentationState.viewType == .presented {
+                HeliumPaywallPresenter.shared.hideUpsell {
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+                }
+            } else {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+            }
+        }
+    }
+    
+    private func advanceFileLoadAttempt(to attempt: FileLoadAttempt, useBackup: Bool) {
+        Task { @MainActor in
+            fileLoadAttempt = attempt
+            webView = nil
+            // give time for SwiftUI to update otherwise any existing webview display might remain
+            await Task.yield()
+            loadWebView(useBackup: useBackup)
         }
     }
     
@@ -223,7 +337,7 @@ public struct DynamicWebView: View {
                     try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                     
                     // Second attempt
-                    await forceVideoPlay()
+                    let _ = await forceVideoPlay()
                 }
             }
         }
@@ -265,28 +379,46 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
                 webView.bottomAnchor.constraint(equalTo: superview.bottomAnchor)
             ])
         }
+        
+        guard let window = UIWindowHelper.findActiveWindow() else {
+            return
+        }
+        let insets = window.safeAreaInsets
+        
+        let js = """
+            if (window.heliumUpdateSafeAreaInsets) {
+                window.heliumUpdateSafeAreaInsets({
+                    top: \(insets.top),
+                    bottom: \(insets.bottom),
+                    left: \(insets.left),
+                    right: \(insets.right)
+                });
+            }
+        """
+        webView.evaluateJavaScript(js)
     }
 }
 
 /**
  Preload as much as possible for smoother rendering/display. Note that simply creating any WKWebView creates notable initialization performance improvements for future WKWebViews, but doing more here including setting up WKWebViewConfiguration, basic scripts, etc.
  */
+@MainActor
 class WebViewManager {
     
     static let shared: WebViewManager = WebViewManager()
     
-    private(set) var preparedWebViewBundles: [PaywallWebViewBundle] = []
+    private var preloadWebViewHolder: PaywallWebViewHolder? = nil
+    private(set) var preparedWebViewHolders: [PaywallWebViewHolder] = []
     
-    func preCreateFirstWebView() {
-        Task {
-            let bundle = await createWebViewBundle(filePath: nil)
-            preparedWebViewBundles.append(
-                bundle
-            )
-        }
+    func preCreateFirstWebView() async {
+        // Just use this one for preloading purposes
+        preloadWebViewHolder = await createWebViewHolder(filePath: nil)
+        // Speed things up slightly by having first one ready for use
+        let initialWebViewHolder = await createWebViewHolder(filePath: nil)
+        preparedWebViewHolders.append(initialWebViewHolder)
     }
     
-    fileprivate func createWebViewBundle(filePath: String? = nil) async -> PaywallWebViewBundle {
+    fileprivate func createWebViewHolder(filePath: String? = nil) async -> PaywallWebViewHolder {
         let messageHandler = WebViewMessageHandler()
         
         let config = WKWebViewConfiguration()
@@ -312,47 +444,58 @@ class WebViewManager {
         config.userContentController = contentController
         config.websiteDataStore = WKWebsiteDataStore.default()
         
-        let webView = await WKWebView(frame: .zero, configuration: config)
-        await webView.configuration.preferences.javaScriptEnabled = true
+        let webView = WKWebView(frame: .zero, configuration: config)
         
-        return PaywallWebViewBundle(
+        return PaywallWebViewHolder(
             filePath: filePath, webView: webView, msgHandler: messageHandler
         )
     }
     
-    @MainActor
-    fileprivate func prepareForShowing(filePath: String, delegateWrapper: ActionsDelegateWrapper, heliumViewController: HeliumViewController?) async -> WKWebView? {
-        var webViewBundle = preparedWebViewBundles.first { $0.filePath == filePath && !$0.isInUse }
-        if webViewBundle == nil {
-            webViewBundle = preparedWebViewBundles.first { $0.filePath == nil } // see if there's one available
-            if let webViewBundle {
-                webViewBundle.filePath = filePath
+    fileprivate func prepareForShowing(
+        filePath: String,
+        shouldEnableScroll: Bool,
+        delegateWrapper: ActionsDelegateWrapper,
+        heliumViewController: HeliumViewController?
+    ) async -> WKWebView? {
+        var webViewHolder = preparedWebViewHolders.first { $0.filePath == filePath && !$0.isInUse }
+        if webViewHolder == nil {
+            webViewHolder = preparedWebViewHolders.first { $0.filePath == nil } // see if there's one available
+            if let webViewHolder {
+                webViewHolder.filePath = filePath
             } else {
-                let newBundle = await createWebViewBundle(filePath: filePath)
-                preparedWebViewBundles.append(newBundle)
-                webViewBundle = newBundle
+                let newWebViewHolder = await createWebViewHolder(filePath: filePath)
+                preparedWebViewHolders.append(newWebViewHolder)
+                webViewHolder = newWebViewHolder
             }
         }
-        guard let webViewBundle else { return nil }
-        webViewBundle.heliumViewController = heliumViewController
-        webViewBundle.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
+        guard let webViewHolder else { return nil }
+        webViewHolder.heliumViewController = heliumViewController
+        webViewHolder.messageHandler.setActionsDelegate(delegateWrapper: delegateWrapper)
         
-        let webView = webViewBundle.preparedWebView
+        let webView = webViewHolder.preparedWebView
         
-        webView.navigationDelegate = webViewBundle.messageHandler
+        webView.navigationDelegate = webViewHolder.messageHandler
         webView.contentMode = .scaleToFill
         webView.backgroundColor = .clear
         webView.isOpaque = false
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
-
         
-        webView.scrollView.isScrollEnabled = true
+        switch Helium.shared.lightDarkModeOverride {
+        case .light:
+            webView.overrideUserInterfaceStyle = .light
+        case .dark:
+            webView.overrideUserInterfaceStyle = .dark
+        case .system:
+            webView.overrideUserInterfaceStyle = .unspecified
+        }
+        
+        webView.scrollView.isScrollEnabled = shouldEnableScroll
+        webView.scrollView.bounces = shouldEnableScroll
         webView.scrollView.bouncesZoom = false
         webView.scrollView.minimumZoomScale = 1.0
         webView.scrollView.maximumZoomScale = 1.0
         webView.scrollView.isDirectionalLockEnabled = true
-        webView.scrollView.bounces = true
         webView.scrollView.scrollsToTop = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
@@ -363,39 +506,36 @@ class WebViewManager {
         return webView
     }
     
-    func preLoad(filePath: String) {
+    func preLoad(filePath: String) async {
         let startTime = Date()
         
-        Task {
-            await preloadFilePath(filePath)
-            print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
-        }
+        preloadFilePath(filePath)
+        print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
     }
     
-    @MainActor
     fileprivate func preloadFilePath(_ filePath: String) {
-        // can use any webview for preloading
-        var webViewBundle: PaywallWebViewBundle? = preparedWebViewBundles.first
-        guard let webView = webViewBundle?.preparedWebView else {
+        guard let webView = preloadWebViewHolder?.preparedWebView else {
             return
         }
-        loadFilePath(filePath, toWebView: webView)
+        try? loadFilePath(filePath, toWebView: webView)
     }
     
-    @MainActor
-    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView) {
+    fileprivate func loadFilePath(_ filePath: String, toWebView: WKWebView, htmlStringIfNeeded: String? = nil) throws {
         let fileURL = URL(fileURLWithPath: filePath)
         let baseDirectory = HeliumAssetManager.bundleDir
         
         if FileManager.default.fileExists(atPath: filePath) {
-            _ = try? String(contentsOfFile: filePath, encoding: .utf8)
             toWebView.loadFileURL(fileURL, allowingReadAccessTo: baseDirectory)
+        } else if let htmlStringIfNeeded {
+            toWebView.loadHTMLString(htmlStringIfNeeded, baseURL: nil)
+        } else {
+            throw WebViewError.bundleNotFound
         }
     }
     
 }
 
-class PaywallWebViewBundle {
+class PaywallWebViewHolder {
     var filePath: String? = nil
     let preparedWebView: WKWebView
     let messageHandler: WebViewMessageHandler
@@ -409,4 +549,8 @@ class PaywallWebViewBundle {
         preparedWebView = webView
         messageHandler = msgHandler
     }
+}
+
+public enum WebViewError: Error {
+    case bundleNotFound
 }

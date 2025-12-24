@@ -48,7 +48,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         Task { @MainActor in
             switch type {
             case "select-product":
-                if let productId = data["product"] as? String {
+                if let productId = data["productId"] as? String {
                     self.delegateWrapper?.selectProduct(productId: productId)
                     respond(["status": "success", "selectedProduct": productId]);
                 }
@@ -110,12 +110,69 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 self.delegateWrapper?.dismissAll()
                 respond(["status": "success"])
                 
+            case "custom-action":
+                if let actionName = data["actionName"] as? String,
+                   let params = data["params"] as? [String: Any] {
+                    // Convert Objective-C types to Swift types
+                    let swiftParams = convertToSwiftTypes(params) as? [String: Any] ?? params
+                    self.delegateWrapper?.onCustomAction(actionName: actionName, params: swiftParams)
+                    respond(["status": "success"])
+                } else {
+                    respond(["status": "error", "message": "Missing actionName or params"])
+                }
+                
             default:
                 respond(["message": "Unknown message type"])
             }
         }
-        print("Message handling complete for: \(message.name)")
     }
+    
+    /// Converts Objective-C types from JavaScript bridge to native Swift types
+    private func convertToSwiftTypes(_ value: Any) -> Any {
+        // Handle NSArray -> Swift Array
+        if let nsArray = value as? NSArray {
+            return nsArray.map { convertToSwiftTypes($0) }
+        }
+
+        // Handle NSDictionary -> Swift Dictionary
+        if let nsDict = value as? NSDictionary {
+            var swiftDict = [String: Any]()
+            for (key, val) in nsDict {
+                if let keyStr = key as? String {
+                    swiftDict[keyStr] = convertToSwiftTypes(val)
+                }
+            }
+            return swiftDict
+        }
+
+        // Handle NSNumber (booleans come as 0/1 NSNumbers from JS)
+        if let nsNumber = value as? NSNumber {
+            // Check if it's a boolean by looking at the objCType
+            let objCType = String(cString: nsNumber.objCType)
+            if objCType == "c" || objCType == "B" {
+                // It's a boolean
+                return nsNumber.boolValue
+            }
+
+            // For all non-boolean numbers, return as Double
+            // This matches JavaScript's single number type (64-bit float)
+            return nsNumber.doubleValue
+        }
+
+        // Handle NSString -> Swift String
+        if let nsString = value as? NSString {
+            return nsString as String
+        }
+
+        // Handle NSDate -> Date
+        if let nsDate = value as? NSDate {
+            return nsDate as Date
+        }
+
+        // Return other types as-is (including NSNull)
+        return value
+    }
+    
 }
 
 
@@ -144,15 +201,18 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     }
     
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-          webView.evaluateJavaScript("document.readyState") { (result, error) in
-              if let readyState = result as? String, readyState == "complete" {
-                  NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
-              }
-          }
-      }
+        NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
+    }
+    
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        print("[Helium] WebView failed to load \(error)")
+        NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
+    }
+    
 }
 
 // Add notification name
 extension Notification.Name {
    static let webViewContentLoaded = Notification.Name("webViewContentLoaded")
+   static let webViewContentLoadFail = Notification.Name("webViewContentLoadFail")
 }

@@ -1,51 +1,6 @@
 {
-  "originHash" : "1a2b54b1be94d06ccf70d5f768d8581846d43db8852e11dd3f9d5fbfe8c3b63e",
+  "originHash" : "31594d5bb560ea43e7887154183890bc24c7861d88640f0c7980c04775f21164",
   "pins" : [
-    {
-      "identity" : "analytics-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/segmentio/analytics-swift",
-      "state" : {
-        "revision" : "f6f3a7fafcace7bcdbda329f9b309f31bf9a42a1",
-        "version" : "1.5.11"
-      }
-    },
-    {
-      "identity" : "anycodable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Flight-School/AnyCodable",
-      "state" : {
-        "revision" : "862808b2070cd908cb04f9aafe7de83d35f81b05",
-        "version" : "0.6.7"
-      }
-    },
-    {
-      "identity" : "devicekit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/devicekit/DeviceKit.git",
-      "state" : {
-        "revision" : "d37e70cb2646666dcf276d7d3d4a9760a41ff8a6",
-        "version" : "4.9.0"
-      }
-    },
-    {
-      "identity" : "jsonsafeencoding-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/segmentio/jsonsafeencoding-swift.git",
-      "state" : {
-        "revision" : "af6a8b360984085e36c6341b21ecb35c12f47ebd",
-        "version" : "2.0.0"
-      }
-    },
-    {
-      "identity" : "kingfisher",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/onevcat/Kingfisher.git",
-      "state" : {
-        "revision" : "7deda23bbdca612076c5c315003d8638a08ed0f1",
-        "version" : "8.3.2"
-      }
-    },
     {
       "identity" : "purchases-ios-spm",
       "kind" : "remoteSourceControl",
@@ -53,24 +8,6 @@
       "state" : {
         "revision" : "9cb74af9c5e9b4e9c22a511d8df4481fa7e3de16",
         "version" : "5.32.0"
-      }
-    },
-    {
-      "identity" : "sovran-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/segmentio/sovran-swift.git",
-      "state" : {
-        "revision" : "24867f3e4ac62027db9827112135e6531b6f4051",
-        "version" : "1.1.2"
-      }
-    },
-    {
-      "identity" : "swiftyjson",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SwiftyJSON/SwiftyJSON.git",
-      "state" : {
-        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
-        "version" : "5.0.2"
       }
     }
   ],

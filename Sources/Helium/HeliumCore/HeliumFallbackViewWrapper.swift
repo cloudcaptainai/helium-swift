@@ -17,30 +17,35 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     
     let content: Content
     let trigger: String?
+    let fallbackReason: PaywallUnavailableReason
     
     public init(
         trigger: String? = nil,
+        fallbackReason: PaywallUnavailableReason,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
         self.trigger = trigger
+        self.fallbackReason = fallbackReason
     }
     
     public var body: some View {
         content
             .onAppear {
-                if !presentationState.firstOnAppearHandled {
-                    presentationState.handleOnAppear()
+                if presentationState.viewType != .presented {
+                    if !presentationState.isOpen {
+                        presentationState.isOpen = true
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: true, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                    }
                 }
             }
             .onDisappear {
-                presentationState.handleOnDisappear()
-            }
-            .onReceive(presentationState.$isOpen) { newIsOpen in
-                if presentationState.viewType == .presented {
-                    return
+                if presentationState.viewType != .presented {
+                    if presentationState.isOpen {
+                        presentationState.isOpen = false
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: false, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                    }
                 }
-                HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: newIsOpen, viewType: presentationState.viewType.rawValue)
             }
     }
 }

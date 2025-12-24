@@ -13,49 +13,12 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
-    @Published var isOpen: Bool = false
+    var isOpen: Bool = false // only used by .embedded and .triggered
     
     private let useAppearanceToSetIsOpen: Bool
     init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
         self.viewType = viewType
         self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appWillTerminate),
-            name: UIApplication.willTerminateNotification,
-            object: nil
-        )
-    }
-    
-    // Use this to try and prevent unnecessary extra open events.
-    // (Extra close events are harder to prevent, since we can't be sure if the paywall is
-    // completely closed since onDisappear can potentially be called multiple times.)
-    private(set) var firstOnAppearHandled: Bool = false
-    
-    func handleOnAppear() {
-        firstOnAppearHandled = true
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if !isOpen {
-            isOpen = true
-        }
-    }
-    func handleOnDisappear() {
-        if !useAppearanceToSetIsOpen {
-            return
-        }
-        if isOpen {
-            isOpen = false
-        }
-    }
-    
-    @objc private func appWillTerminate() {
-        // attempt to dispatch paywallClose analytics event even if user rage quits
-        if isOpen {
-            isOpen = false
-        }
     }
     
 }
@@ -77,18 +40,65 @@ extension EnvironmentValues {
 
 class HeliumViewController: UIViewController {
     let trigger: String
-    private let contentView: AnyView
+    private(set) var fallbackReason: PaywallUnavailableReason? = nil
+    var isFallback: Bool {
+        fallbackReason != nil
+    }
+    private(set) var isLoading: Bool
+    let isSecondTry: Bool
+    private var contentView: AnyView
+    private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
-    init(trigger: String, contentView: AnyView) {
+    var customWindow: UIWindow?
+    
+    private let loadStartTime: DispatchTime?
+    private var displayTime: DispatchTime? = nil
+    
+    init(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
+        self.fallbackReason = fallbackReason
+        self.isSecondTry = isSecondTry
+        self.isLoading = isLoading
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
+        if isLoading {
+            loadStartTime = DispatchTime.now()
+        } else {
+            loadStartTime = nil
+            displayTime = DispatchTime.now()
+        }
         super.init(nibName: nil, bundle: nil)
     }
     
+    func updateContent(_ newContent: AnyView, fallbackReason: PaywallUnavailableReason?, isLoading: Bool) {
+        self.contentView = AnyView(newContent
+            .environment(\.paywallPresentationState, presentationState))
+        
+        // Update the hosting controller's root view
+        hostingController?.rootView = self.contentView
+        
+        let completedLoading = !isLoading && self.isLoading
+        self.fallbackReason = fallbackReason
+        self.isLoading = isLoading
+        if completedLoading {
+            displayTime = DispatchTime.now()
+        }
+    }
+    
+    var loadTimeTakenMS: UInt64? {
+        let compareTime = displayTime ?? DispatchTime.now()
+        if let loadStartTime {
+            return dispatchTimeDifferenceInMS(from: loadStartTime, to: compareTime)
+        }
+        return nil
+    }
+    
+    @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        // This should never be called due to @available(*, unavailable)
+        // But if it somehow is, return nil instead of crashing
+        return nil
     }
     
     override func viewDidLoad() {
@@ -97,20 +107,18 @@ class HeliumViewController: UIViewController {
         presentationState.heliumViewController = self
         
         let modalView = UIHostingController(rootView: contentView)
+        self.hostingController = modalView
         addChild(modalView)
         view.addSubview(modalView.view)
         modalView.view.frame = view.bounds
         modalView.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         modalView.didMove(toParent: self)
-        
-        presentationState.isOpen = true
     }
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed || isMovingFromParent {
             HeliumPaywallPresenter.shared.cleanUpPaywall(heliumViewController: self)
-            presentationState.isOpen = false
         }
     }
     

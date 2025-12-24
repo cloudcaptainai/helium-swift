@@ -7,8 +7,6 @@
 
 import Foundation
 import UIKit
-import DeviceKit
-import AnyCodable
 
 struct CodableLocale: Codable {
     var currentCountry: String?
@@ -81,14 +79,18 @@ public struct CodableUserContext: Codable {
     var applicationInfo: CodableApplicationInfo
     var additionalParams: HeliumUserTraits
     var heliumSessionId: String?
+    var heliumInitializeId: String?
     var heliumPersistentId: String?
     var organizationID: String?
+    var appTransactionId: String?
     
     public func asParams() -> [String: Any] {
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
+            "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
+            "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": [
                 "currentCountry": self.locale.currentCountry as Any,
                 "currentCurrency": self.locale.currentCurrency as Any,
@@ -162,16 +164,15 @@ public struct CodableUserContext: Codable {
         
         let applicationInfo = createApplicationInfo()
 
-        
         let deviceInfo = CodableDeviceInfo(
             currentDeviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             orientation: UIDevice.current.orientation.rawValue,
             systemName: UIDevice.current.systemName,
             systemVersion: UIDevice.current.systemVersion,
-            deviceModel: Device.current.safeDescription,
+            deviceModel: DeviceHelpers.current.getDeviceModel(),
             userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
-            totalCapacity: skipDeviceCapacity ? -1 : Device.volumeTotalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : Device.volumeAvailableCapacityForOpportunisticUsage
+            totalCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.totalCapacity,
+            availableCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.availableCapacity
         )
 
         return CodableUserContext(

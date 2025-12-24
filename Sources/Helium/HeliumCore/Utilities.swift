@@ -6,11 +6,9 @@
 //
 
 import Foundation
-import AnyCodable
 import SwiftUI
-import SwiftyJSON
 
-public extension Encodable {
+extension Encodable {
     /// Converting object to postable JSON
     func toJSON(_ encoder: JSONEncoder = JSONEncoder()) throws -> String {
         let data = try encoder.encode(self)
@@ -23,9 +21,19 @@ public extension Encodable {
         let json = try JSON(data: data)
         return json
     }
+    
+    /// Convert Codable object to dictionary
+    public func toDictionary() -> [String: Any] {
+        guard let data = try? JSONEncoder().encode(self),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("[Helium] Failed to encode \(type(of: self)) to dictionary")
+            return [:]
+        }
+        return dict
+    }
 }
 
-public extension JSON {
+extension JSON {
     func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [:]
         
@@ -51,7 +59,7 @@ public extension JSON {
     }
 }
 
-public extension AnyCodable {
+extension AnyCodable {
     func value<T>(at path: String, default defaultValue: T) -> T {
         let components = path.components(separatedBy: CharacterSet(charactersIn: ".[]"))
                             .filter { !$0.isEmpty }
@@ -78,6 +86,10 @@ func formatAsTimestamp(date: Date) -> String {
     formatter.locale = Locale.current // Use user's current locale
     formatter.timeZone = TimeZone.current // Use user's current timezone
     return formatter.string(from: date)
+}
+
+func dispatchTimeDifferenceInMS(from: DispatchTime, to: DispatchTime = DispatchTime.now()) -> UInt64 {
+    return UInt64(Double(to.uptimeNanoseconds - from.uptimeNanoseconds) / 1_000_000.0)
 }
 
 
@@ -118,4 +130,38 @@ public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 
             .first { $0.isKeyWindow }?.safeAreaInsets.right ?? 0
     }
     return EdgeInsets(top: topPadding + additionalTopPadding, leading: leftPadding, bottom: bottomPadding + additionalBottomPadding, trailing: rightPadding);
+}
+
+
+@MainActor
+class UIWindowHelper {
+    
+    static func findTopMostViewController() -> UIViewController? {
+        guard let activeWindow = findActiveWindow(),
+              var topController = activeWindow.rootViewController else {
+            return nil
+        }
+        
+        while let presentedViewController = topController.presentedViewController {
+            topController = presentedViewController
+        }
+        
+        return topController
+    }
+    
+    static func findActiveWindow() -> UIWindow? {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
+            return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
+        }
+        
+        let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
+        return allWindows.first { $0.isKeyWindow } ?? allWindows.first
+    }
+    
 }

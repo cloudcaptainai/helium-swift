@@ -1,6 +1,4 @@
 import Foundation
-import SwiftyJSON
-import Kingfisher
 import Combine
 
 public enum HeliumAssetDownloadStatus: String, Codable {
@@ -10,7 +8,7 @@ public enum HeliumAssetDownloadStatus: String, Codable {
     case failed
 }
 
-public class HeliumAssetManager: ObservableObject {
+class HeliumAssetManager {
     public static let shared = HeliumAssetManager()
     private init() {}
     
@@ -19,79 +17,36 @@ public class HeliumAssetManager: ObservableObject {
     static var bundleDir: URL {
         return FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
+            .appendingPathComponent(Self.bundleCacheKey, isDirectory: true)
     }
     
-    private var bundleIds: Set<String> {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Self.bundleCacheKey),
-                  let ids = try? JSONDecoder().decode(Set<String>.self, from: data) else {
-                return []
-            }
-            return ids
-        }
-        set {
-            guard let data = try? JSONEncoder().encode(newValue) else { return }
-            UserDefaults.standard.set(data, forKey: Self.bundleCacheKey)
-        }
-    }
-    
-    public func clearCache() {
+    func clearCache() {
         let bundleDir = HeliumAssetManager.bundleDir
         
         try? FileManager.default.removeItem(at: bundleDir)
-        bundleIds = []
     }
     
-    private func getBundleIdFromURL(_ url: String) -> String? {
+    func getBundleIdFromURL(_ url: String) -> String? {
         guard let filename = url.split(separator: "/").last?.split(separator: ".").first else {
             return nil
         }
         return filename.hasPrefix("bundle_") ? String(filename.dropFirst(7)) : String(filename)
     }
     
-    public func localPathForURL(bundleURL: String) -> String? {
-        print("Requesting local path")
+    func localPathForURL(bundleURL: String) -> String? {
         guard let bundleId = getBundleIdFromURL(bundleURL) else {
             print("couldnt get from url \(bundleURL)");
             return nil
         }
         
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
-        
-        let value = bundleDir.appendingPathComponent("\(bundleId).html").path
-        print("Reading from \(value)");
+        let value = Self.bundleDir.appendingPathComponent("\(bundleId).html").path
+//        print("Reading from \(value)");
         return value;
     }
     
-    public func collectBundleURLs(from json: JSON, into bundleURLs: inout Set<String>) {
-        switch json.type {
-        case .dictionary:
-            for (key, value) in json {
-                if key == "bundleURL", let url = value.string {
-                    bundleURLs.insert(url)
-                } else {
-                    collectBundleURLs(from: value, into: &bundleURLs)
-                }
-            }
-        case .array:
-            for item in json.arrayValue {
-                collectBundleURLs(from: item, into: &bundleURLs)
-            }
-        default:
-            break
-        }
-    }
-    
-    public func getExistingBundleIDs() -> [String] {
-        let bundleDir = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("helium_bundles_cache", isDirectory: true)
-        
+    func getExistingBundleIDs() -> [String] {
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: bundleDir,
+            at: Self.bundleDir,
             includingPropertiesForKeys: nil
         ) else {
             return []
@@ -102,31 +57,48 @@ public class HeliumAssetManager: ObservableObject {
             .map { $0.deletingPathExtension().lastPathComponent }
     }
     
-    public func writeBundles(bundles: [String: String]) throws {
+    @discardableResult
+    func writeBundles(bundles: [String: String]) -> Int {
         let bundleDir = HeliumAssetManager.bundleDir
         
-        try FileManager.default.createDirectory(
+        try? FileManager.default.createDirectory(
             at: bundleDir,
             withIntermediateDirectories: true
         )
         
-        var updatedIds = bundleIds
+        let existingBundleIds = getExistingBundleIDs()
+        var totalBytesOfUncachedBundles = 0
         
         for (bundleId, content) in bundles {
             let fileName = "\(bundleId).html"
             let localURL = bundleDir.appendingPathComponent(fileName)
             
+            let bundleWasAlreadyCached = existingBundleIds.contains(bundleId)
+            
+            // Always write asset even if cached, so asset is fresh and theoretically less likely to be cleared from cache
+            // (not exactly sure what method iOS uses to clear from cache directory, hence the *theoretically*)
+            
             let unescapedContent = content
-          
+            
             if let data = unescapedContent.data(using: .utf8) {
-                print("Writing to \(localURL)");
-                try data.write(to: localURL)
-                updatedIds.insert(bundleId)
+                if !bundleWasAlreadyCached {
+                    totalBytesOfUncachedBundles += data.count
+                }
+                print("[Helium] Writing to \(localURL)")
+                do {
+                    try data.write(to: localURL)
+                } catch {
+                    print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+                }
+            } else {
+                print("[Helium] Failed to write paywall bundle with id \(bundleId)")
             }
             
-            WebViewManager.shared.preLoad(filePath: bundleDir.appendingPathComponent(fileName).path)
+            Task {
+                await WebViewManager.shared.preLoad(filePath: localURL.path)
+            }
         }
         
-        bundleIds = updatedIds
+        return totalBytesOfUncachedBundles
     }
 }
