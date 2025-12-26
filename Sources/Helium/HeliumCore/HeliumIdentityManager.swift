@@ -117,8 +117,8 @@ public class HeliumIdentityManager {
 class AppStoreCountryHelper {
     static let shared = AppStoreCountryHelper()
     
-    private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
-    private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
+    @HeliumAtomic private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
+    @HeliumAtomic private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
     private var fetchTask: Task<String?, Never>?
     
     private init() {
