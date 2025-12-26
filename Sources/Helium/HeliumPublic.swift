@@ -507,6 +507,9 @@ public class Helium {
         }
         initialized = true
         
+        // Start store country code fetch immediately
+        _ = AppStoreCountryHelper.shared
+        
         // Validate that only one fallback approach is used
         let hasDeprecatedParams = fallbackPaywall != nil || fallbackBundleURL != nil || fallbackPaywallPerTrigger != nil
         let hasNewConfig = fallbackConfig != nil
