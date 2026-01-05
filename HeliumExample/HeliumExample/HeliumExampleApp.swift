@@ -12,13 +12,15 @@ import Helium
 struct HeliumExampleApp: App {
     init() {
         // Create fallback configuration with a fallback bundle
-        // (recommended - see Fallbacks and Loading Budgets section)
-//        let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle", withExtension: "json")
-//        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(fallbackBundleURL)
+        // (recommended - see https://docs.tryhelium.com/guides/fallback-bundle)
+        // If you are copying this example code, BE SURE TO DOWNLOAD AND ADJUST THIS CODE TO
+        // POINT TO THE CORRECT FILE.
+        let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
+        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(fallbackBundleURL!)
 
         Helium.shared.initialize(
-            apiKey: "blah",
-//            fallbackConfig: fallbackConfig,
+            apiKey: "insert_api_key_here",
+            fallbackConfig: fallbackConfig,
         )
     }
     
