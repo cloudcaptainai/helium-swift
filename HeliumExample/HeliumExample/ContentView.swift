@@ -16,7 +16,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 30) {
             Button("show paywall") {
-                Helium.shared.presentUpsell(trigger: "insert_trigger_here")
+                Helium.shared.presentUpsell(trigger: AppConfig.triggerKey)
             }
             .accessibilityIdentifier("presentPaywall")
             
@@ -24,7 +24,7 @@ struct ContentView: View {
                 showModifierPaywall = true
             }
             .accessibilityIdentifier("showPaywallViaModifier")
-            .triggerUpsell(isPresented: $showModifierPaywall, trigger: "insert_trigger_here")
+            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey)
         }
         .padding()
     }

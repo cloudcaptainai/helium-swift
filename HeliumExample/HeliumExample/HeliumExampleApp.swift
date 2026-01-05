@@ -24,7 +24,7 @@ struct HeliumExampleApp: App {
             : nil
 
         Helium.shared.initialize(
-            apiKey: "insert_api_key_here",
+            apiKey: AppConfig.apiKey,
             heliumPaywallDelegate: delegate,
             fallbackConfig: fallbackConfig
         )

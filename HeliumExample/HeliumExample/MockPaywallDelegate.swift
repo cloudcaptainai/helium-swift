@@ -10,7 +10,7 @@ import Helium
 
 /// A mock delegate for UI testing that simulates successful purchases
 class MockPaywallDelegate: HeliumPaywallDelegate {
-
+    
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         // Show visual indicator that UI tests can detect
         await MainActor.run {
@@ -18,7 +18,7 @@ class MockPaywallDelegate: HeliumPaywallDelegate {
         }
         return .purchased
     }
-
+    
     @MainActor
     private func showPurchaseIndicator() {
         guard let window = UIApplication.shared.connectedScenes
