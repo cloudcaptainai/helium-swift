@@ -18,10 +18,22 @@ struct HeliumExampleApp: App {
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
         let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(fallbackBundleURL!)
 
+        // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
+        let delegate: HeliumPaywallDelegate? = ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE")
+            ? MockPaywallDelegate()
+            : nil
+
         Helium.shared.initialize(
             apiKey: "insert_api_key_here",
-            fallbackConfig: fallbackConfig,
+            heliumPaywallDelegate: delegate,
+            fallbackConfig: fallbackConfig
         )
+        
+        // For UI tests:
+        let loadStateTestTrigger = ProcessInfo.processInfo.environment["LOAD_STATE_TEST_TRIGGER"]
+        if let loadStateTestTrigger {
+            Helium.shared.presentUpsell(trigger: loadStateTestTrigger)
+        }
     }
     
     var body: some Scene {
