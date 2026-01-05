@@ -1,4 +1,4 @@
-name: Release CI - Run Tests and Create Release
+name: Release CI - Test and Create Release
 
 on:
   push:
@@ -17,26 +17,18 @@ jobs:
         id: get_version
         run: |
           VERSION=$(grep -o 'version = "[^"]*"' Sources/Helium/HeliumCore/BuildConstants.swift | cut -d'"' -f2)
-          echo "version extracted! $VERSION"
+          echo "Version extracted: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
   run-ui-tests:
     needs: extract-version
-    uses: ./.github/workflows/ui-tests.yml
+    uses: ./.github/workflows/run-tests.yml
     secrets: inherit
 
-  trigger-release:
+  create-release:
     needs: [extract-version, run-ui-tests]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger create-release workflow
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          event-type: tests-passed
-          client-payload: '{"version": "${{ needs.extract-version.outputs.version }}", "sha": "${{ github.sha }}"}'
-
-      - name: Release triggered
-        run: |
-          echo "UI tests passed! Release workflow triggered for version ${{ needs.extract-version.outputs.version }}"
+    uses: ./.github/workflows/create-release.yaml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      sha: ${{ github.sha }}
+    secrets: inherit
