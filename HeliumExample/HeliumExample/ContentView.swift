@@ -16,26 +16,13 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 30) {
             Button("show paywall") {
-                Helium.shared.presentUpsell(trigger: "sdk_testf") { reason in
-                    print("aosyfdouydof \(reason)")
-                }
+                Helium.shared.presentUpsell(trigger: "insert_trigger_here")
             }
             
             Button("show via modifier") {
                 showModifierPaywall = true
             }
-            .triggerUpsell(isPresented: $showModifierPaywall, trigger: "sdk_test") { reason in
-                Text("no show! \(reason)")
-            }
-            
-            Button("show via embedded") {
-                showEmbeddedPaywall = true
-            }
-            .fullScreenCover(isPresented: $showEmbeddedPaywall) {
-                HeliumPaywallView(trigger: "sdk_test") { reason in
-                    Text("no show embedded! \(reason)")
-                }
-            }
+            .triggerUpsell(isPresented: $showModifierPaywall, trigger: "insert_trigger_here")
         }
         .padding()
     }
