@@ -11,12 +11,18 @@ import Helium
 @main
 struct HeliumExampleApp: App {
     init() {
+        // For UI tests:
+        let loadStateTestTrigger = ProcessInfo.processInfo.environment["LOAD_STATE_TEST_TRIGGER"]
+        
         // Create fallback configuration with a fallback bundle
         // (recommended - see https://docs.tryhelium.com/guides/fallback-bundle)
         // If you are copying this example code, BE SURE TO DOWNLOAD AND ADJUST THIS CODE TO
         // POINT TO THE CORRECT FILE.
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
-        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(fallbackBundleURL!)
+        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(
+            fallbackBundleURL!,
+            loadingBudget: loadStateTestTrigger != nil ? 12 : HeliumFallbackConfig.defaultLoadingBudget
+        )
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
         let delegate: HeliumPaywallDelegate? = ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE")
@@ -30,7 +36,6 @@ struct HeliumExampleApp: App {
         )
         
         // For UI tests:
-        let loadStateTestTrigger = ProcessInfo.processInfo.environment["LOAD_STATE_TEST_TRIGGER"]
         if let loadStateTestTrigger {
             Helium.shared.presentUpsell(trigger: loadStateTestTrigger)
         }
