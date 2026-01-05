@@ -25,6 +25,9 @@ final class HeliumExampleUITests: XCTestCase {
         if let triggerKey = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] {
             app.launchEnvironment["HELIUM_TRIGGER_KEY"] = triggerKey
         }
+        
+        // Ensure this is cleared
+        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = nil
 
         return app
     }
