@@ -10,14 +10,30 @@
 		271266E72ECBF6A6005479C2 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = 271266E62ECBF6A6005479C2 /* Helium */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		278BFE792F0C46F6003347CF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 271266C92ECBF5CA005479C2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 271266D02ECBF5CA005479C2;
+			remoteInfo = HeliumExample;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		271266D12ECBF5CA005479C2 /* HeliumExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HeliumExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		278BFE732F0C46F6003347CF /* HeliumExampleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HeliumExampleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		271266D32ECBF5CA005479C2 /* HeliumExample */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HeliumExample;
+			sourceTree = "<group>";
+		};
+		278BFE742F0C46F6003347CF /* HeliumExampleUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HeliumExampleUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		278BFE702F0C46F6003347CF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				271266D32ECBF5CA005479C2 /* HeliumExample */,
+				278BFE742F0C46F6003347CF /* HeliumExampleUITests */,
 				271266D22ECBF5CA005479C2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				271266D12ECBF5CA005479C2 /* HeliumExample.app */,
+				278BFE732F0C46F6003347CF /* HeliumExampleUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +101,29 @@
 			productReference = 271266D12ECBF5CA005479C2 /* HeliumExample.app */;
 			productType = "com.apple.product-type.application";
 		};
+		278BFE722F0C46F6003347CF /* HeliumExampleUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 278BFE7B2F0C46F6003347CF /* Build configuration list for PBXNativeTarget "HeliumExampleUITests" */;
+			buildPhases = (
+				278BFE6F2F0C46F6003347CF /* Sources */,
+				278BFE702F0C46F6003347CF /* Frameworks */,
+				278BFE712F0C46F6003347CF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				278BFE7A2F0C46F6003347CF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				278BFE742F0C46F6003347CF /* HeliumExampleUITests */,
+			);
+			name = HeliumExampleUITests;
+			packageProductDependencies = (
+			);
+			productName = HeliumExampleUITests;
+			productReference = 278BFE732F0C46F6003347CF /* HeliumExampleUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -83,11 +131,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2610;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					271266D02ECBF5CA005479C2 = {
 						CreatedOnToolsVersion = 26.1.1;
+					};
+					278BFE722F0C46F6003347CF = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 271266D02ECBF5CA005479C2;
 					};
 				};
 			};
@@ -109,12 +161,20 @@
 			projectRoot = "";
 			targets = (
 				271266D02ECBF5CA005479C2 /* HeliumExample */,
+				278BFE722F0C46F6003347CF /* HeliumExampleUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		271266CF2ECBF5CA005479C2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		278BFE712F0C46F6003347CF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +191,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		278BFE6F2F0C46F6003347CF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		278BFE7A2F0C46F6003347CF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 271266D02ECBF5CA005479C2 /* HeliumExample */;
+			targetProxy = 278BFE792F0C46F6003347CF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		271266DA2ECBF5CC005479C2 /* Debug */ = {
@@ -319,6 +394,48 @@
 			};
 			name = Release;
 		};
+		278BFE7C2F0C46F6003347CF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6NH2CQ3V8N;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = helium.HeliumExampleUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HeliumExample;
+			};
+			name = Debug;
+		};
+		278BFE7D2F0C46F6003347CF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6NH2CQ3V8N;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = helium.HeliumExampleUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HeliumExample;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -336,6 +453,15 @@
 			buildConfigurations = (
 				271266DD2ECBF5CC005479C2 /* Debug */,
 				271266DE2ECBF5CC005479C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		278BFE7B2F0C46F6003347CF /* Build configuration list for PBXNativeTarget "HeliumExampleUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				278BFE7C2F0C46F6003347CF /* Debug */,
+				278BFE7D2F0C46F6003347CF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -18,10 +18,12 @@ struct ContentView: View {
             Button("show paywall") {
                 Helium.shared.presentUpsell(trigger: "insert_trigger_here")
             }
+            .accessibilityIdentifier("presentPaywall")
             
             Button("show via modifier") {
                 showModifierPaywall = true
             }
+            .accessibilityIdentifier("showPaywallViaModifier")
             .triggerUpsell(isPresented: $showModifierPaywall, trigger: "insert_trigger_here")
         }
         .padding()
