@@ -1,7 +1,20 @@
 name: Create Release
 on:
-  repository_dispatch:
-    types: [tests-passed]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version tag for the release'
+        required: true
+        type: string
+      sha:
+        description: 'Commit hash to create release from'
+        required: true
+        type: string
+      prerelease:
+        description: 'Create as a pre-release'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -24,9 +37,9 @@ jobs:
     permissions:
       contents: write # so can create release and create tag
     env:
-      RELEASE_VERSION: ${{ github.event.client_payload.version || github.event.inputs.version }}
-      COMMIT_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
-      MANUAL_PRERELEASE: ${{ github.event.inputs.prerelease || false }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      COMMIT_SHA: ${{ inputs.sha }}
+      MANUAL_PRERELEASE: ${{ inputs.prerelease || false }}
     steps:
       - uses: actions/checkout@v4
       
