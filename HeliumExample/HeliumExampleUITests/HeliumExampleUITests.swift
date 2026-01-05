@@ -10,28 +10,33 @@ import XCTest
 final class HeliumExampleUITests: XCTestCase {
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+    /// Creates a configured XCUIApplication with env vars passed from CI
+    private func makeApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["UI_TESTING_PURCHASE", "AUTO_FETCH"]
+
+        // Pass env vars from CI to the app
+        if let apiKey = ProcessInfo.processInfo.environment["HELIUM_API_KEY"] {
+            app.launchEnvironment["HELIUM_API_KEY"] = apiKey
+        }
+        if let triggerKey = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] {
+            app.launchEnvironment["HELIUM_TRIGGER_KEY"] = triggerKey
+        }
+
+        return app
     }
 
-//    func testAPIKeysAreNotEmpty() {
-//        XCTAssertFalse((ProcessInfo.processInfo.environment["HELIUM_API_KEY"] ?? "").isEmpty, "HELIUM_API_KEY should not be empty")
-//        XCTAssertFalse((ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "").isEmpty, "HELIUM_TRIGGER_KEY should not be empty")
-//    }
+    func testAPIKeysAreNotEmpty() {
+        XCTAssertFalse((ProcessInfo.processInfo.environment["HELIUM_API_KEY"] ?? "").isEmpty, "HELIUM_API_KEY should not be empty")
+        XCTAssertFalse((ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "").isEmpty, "HELIUM_TRIGGER_KEY should not be empty")
+    }
 
     @MainActor
     func testPurchase() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["UI_TESTING_PURCHASE", "AUTO_FETCH"]
-        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = nil
+        let app = makeApp()
         app.launch()
         
         let triggerButton = app.buttons.matching(identifier: "presentPaywall").firstMatch
@@ -62,9 +67,7 @@ final class HeliumExampleUITests: XCTestCase {
     
     @MainActor
     func testModifierDisplayAndDismiss() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["UI_TESTING_PURCHASE", "AUTO_FETCH"]
-        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = nil
+        let app = makeApp()
         app.launch()
         
         let triggerButton = app.buttons.matching(identifier: "showPaywallViaModifier").firstMatch
@@ -108,9 +111,9 @@ final class HeliumExampleUITests: XCTestCase {
     
     @MainActor
     func testLoadingStateThenPaywall() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["UI_TESTING_PURCHASE", "AUTO_FETCH"]
-        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = "ci_annual_monthly"
+        let app = makeApp()
+        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
+        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
         app.launch()
         
         // Paywall loading state should automatically be opened and then show content once paywalls download

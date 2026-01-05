@@ -1,0 +1,92 @@
+name: UI Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_call:  # Allow other workflows to call this
+  workflow_dispatch:
+
+jobs:
+  ui-tests:
+    runs-on: macos-15
+    env:
+      HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
+      HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2'
+
+      - name: Check Xcode version
+        run: xcodebuild -version
+
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -project HeliumExample/HeliumExample.xcodeproj \
+            -scheme "HeliumExample" \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=18.2" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            -allowProvisioningUpdates
+
+      - name: Run UI tests with retry logic
+        run: |
+          run_tests() {
+            xcodebuild test-without-building \
+              -project HeliumExample/HeliumExample.xcodeproj \
+              -scheme "HeliumExample" \
+              -destination "platform=iOS Simulator,name=iPhone 16,OS=18.2" \
+              -only-testing:HeliumExampleUITests \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO
+          }
+
+          # Retry logic with 2 attempts
+          for attempt in {1..2}; do
+            echo "Test attempt $attempt of 2..."
+
+            if run_tests; then
+              echo "✅ Tests passed on attempt $attempt"
+              exit 0
+            else
+              echo "❌ Tests failed on attempt $attempt"
+
+              if [ $attempt -eq 2 ]; then
+                echo "All test attempts failed"
+                exit 1
+              else
+                echo "Retrying in 10 seconds..."
+                sleep 10
+              fi
+            fi
+          done
+
+      - name: Collect test results and logs
+        if: always()
+        run: |
+          echo "=== Test Results Summary ==="
+          find ~/Library/Developer/Xcode/DerivedData -name "*.xcresult" -type d | head -5
+
+          LATEST_RESULT=$(find ~/Library/Developer/Xcode/DerivedData -name "*.xcresult" -type d | sort -t/ -k9 -r | head -1)
+
+          if [ -n "$LATEST_RESULT" ]; then
+            echo "Latest test result: $LATEST_RESULT"
+
+            if command -v xcrun >/dev/null 2>&1; then
+              echo "=== Test Summary ==="
+              xcrun xcresulttool get test-results summary --path "$LATEST_RESULT" || echo "Could not extract test summary"
+            fi
+          fi
+
+      - name: Upload xcresult bundle
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-xcresult
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/**.xcresult
+          retention-days: 3
