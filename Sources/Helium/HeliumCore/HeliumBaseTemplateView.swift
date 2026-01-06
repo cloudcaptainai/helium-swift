@@ -5,7 +5,11 @@ enum TemplateError: Error {
     case missingRequiredFields(String)
 }
 
-public struct DynamicBaseTemplateView: View {
+protocol BaseTemplateView: View {
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws
+}
+
+public struct DynamicBaseTemplateView: BaseTemplateView {
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
@@ -17,8 +21,8 @@ public struct DynamicBaseTemplateView: View {
     var triggerName: String?
     let fallbackReason: PaywallUnavailableReason?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, paywallSessionId: String, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger, paywallSessionId: paywallSessionId);
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
+        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         

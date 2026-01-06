@@ -18,18 +18,15 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     let content: Content
     let trigger: String?
     let fallbackReason: PaywallUnavailableReason
-    let paywallSessionId: String
     
     public init(
         trigger: String? = nil,
         fallbackReason: PaywallUnavailableReason,
-        paywallSessionId: String,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
         self.trigger = trigger
         self.fallbackReason = fallbackReason
-        self.paywallSessionId = paywallSessionId
     }
     
     public var body: some View {
@@ -38,13 +35,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType != .presented {
                     if !presentationState.isOpen {
                         presentationState.isOpen = true
-                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(
-                            trigger: trigger,
-                            isOpen: true,
-                            viewType: presentationState.viewType.rawValue,
-                            fallbackReason: fallbackReason,
-                            paywallSessionId: paywallSessionId
-                        )
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: true, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
                     }
                 }
             }
@@ -52,13 +43,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType != .presented {
                     if presentationState.isOpen {
                         presentationState.isOpen = false
-                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(
-                            trigger: trigger,
-                            isOpen: false,
-                            viewType: presentationState.viewType.rawValue,
-                            fallbackReason: fallbackReason,
-                            paywallSessionId: paywallSessionId
-                        )
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: false, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
                     }
                 }
             }
