@@ -378,12 +378,6 @@ class HeliumPaywallPresenter {
         if paywallVC.isLoading {
             return // don't fire an event in this case
         }
-        // Fire user allocation event if this is the first time showing this trigger
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: paywallVC.trigger,
-            isFallback: paywallVC.isFallback,
-            paywallSession: paywallVC.paywallSession
-        )
         
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
@@ -393,6 +387,12 @@ class HeliumPaywallPresenter {
         
         let event: HeliumEvent
         if openEvent {
+            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+                trigger: paywallVC.trigger,
+                isFallback: paywallVC.isFallback,
+                paywallSession: paywallVC.paywallSession
+            )
+            
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             
