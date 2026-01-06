@@ -334,12 +334,12 @@ class HeliumPaywallDelegateWrapper {
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 viewType: viewTypeEnum,
                 paywallUnavailableReason: fallbackReason
-            ))
+            ), paywallSession: nil)
         } else {
             fireEvent(PaywallCloseEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME
-            ))
+            ), paywallSession: nil)
         }
     }
     

@@ -100,7 +100,8 @@ public class HeliumController {
                         uncachedBundleSizeKB: metrics.uncachedBundleSizeKB,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts
-                    )
+                    ),
+                    paywallSession: nil
                 )
                 
                 Task { @MainActor in
@@ -141,7 +142,8 @@ public class HeliumController {
                         numBundlesNotDownloaded: metrics.bundleFailCount,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts
-                    )
+                    ),
+                    paywallSession: nil
                 )
             }
         }
