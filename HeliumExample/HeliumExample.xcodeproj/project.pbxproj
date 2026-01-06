@@ -469,9 +469,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference "../../helium-swift" */ = {
+		271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../helium-swift";
+			relativePath = "..";
 		};
 /* End XCLocalSwiftPackageReference section */
 
