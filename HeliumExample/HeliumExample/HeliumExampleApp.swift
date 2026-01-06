@@ -21,7 +21,7 @@ struct HeliumExampleApp: App {
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
         let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(
             fallbackBundleURL!,
-            loadingBudget: loadStateTestTrigger != nil ? 12 : HeliumFallbackConfig.defaultLoadingBudget
+            loadingBudget: loadStateTestTrigger != nil ? 25 : HeliumFallbackConfig.defaultLoadingBudget
         )
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
