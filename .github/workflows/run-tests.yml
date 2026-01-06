@@ -42,7 +42,7 @@ jobs:
           xcodebuild build-for-testing \
             -project HeliumExample/HeliumExample.xcodeproj \
             -scheme "CI HeliumExample" \
-            -destination "platform=iOS Simulator,name=iPhone 17,OS=26.1" \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=18.5" \
             HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
             HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
             CODE_SIGN_IDENTITY="" \
@@ -55,7 +55,7 @@ jobs:
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
-              -destination "platform=iOS Simulator,name=iPhone 17,OS=26.1" \
+              -destination "platform=iOS Simulator,name=iPhone 16,OS=18.5" \
               -only-testing:HeliumExampleUITests \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
               HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
