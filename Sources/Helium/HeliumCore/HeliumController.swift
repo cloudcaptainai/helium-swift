@@ -107,7 +107,8 @@ public class HeliumController {
                         numBundlesFromCache: metrics.numBundlesFromCache,
                         uncachedBundleSizeKB: metrics.uncachedBundleSizeKB,
                         numAttempts: metrics.numConfigAttempts,
-                        numBundleAttempts: metrics.numBundleAttempts
+                        numBundleAttempts: metrics.numBundleAttempts,
+                        totalTimeMS: metrics.totalTimeMS
                     )
                 )
                 
@@ -148,7 +149,8 @@ public class HeliumController {
                         numBundles: metrics.numBundles,
                         numBundlesNotDownloaded: metrics.bundleFailCount,
                         numAttempts: metrics.numConfigAttempts,
-                        numBundleAttempts: metrics.numBundleAttempts
+                        numBundleAttempts: metrics.numBundleAttempts,
+                        totalTimeMS: metrics.totalTimeMS
                     )
                 )
             }
