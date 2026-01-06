@@ -55,7 +55,7 @@ class HeliumPaywallPresenter {
                 )
                 return
             }
-            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, paywallSessionId: upsellViewResult.paywallSessionId, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -103,7 +103,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
+            presentPaywall(trigger: trigger, fallbackReason: nil, paywallSessionId: nil, contentView: loadingView, from: viewController, isLoading: true)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -138,7 +138,7 @@ class HeliumPaywallPresenter {
             return
         }
         
-        let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
+        let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, existingSessionId: loadingPaywall.paywallSessionId)
         guard let upsellView = upsellViewResult.view else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
@@ -264,8 +264,15 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, paywallSessionId: String?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(
+            trigger: trigger,
+            fallbackReason: fallbackReason,
+            paywallSessionId: paywallSessionId ?? PaywallSessionManager.shared.createSession(),
+            isSecondTry: isSecondTry,
+            contentView: contentView,
+            isLoading: isLoading
+        )
         modalVC.modalPresentationStyle = .fullScreen
         
         var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
@@ -404,7 +411,7 @@ class HeliumPaywallPresenter {
                 secondTry: paywallVC.isSecondTry
             )
         }
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallVC.paywallSessionId)
     }
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {

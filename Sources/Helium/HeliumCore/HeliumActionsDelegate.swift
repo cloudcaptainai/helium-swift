@@ -88,6 +88,7 @@ public class ActionsDelegateWrapper: ObservableObject {
 public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     let paywallInfo: HeliumPaywallInfo
     let trigger: String
+    let paywallSessionId: String
     @Published var selectedProductId: String
     @Published var isShowingModal: Bool = false
     @Published var showingModalScreen: String? = nil
@@ -95,10 +96,11 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
     private var lastShownSecondTryTrigger: String? = nil
     
     var dismissAction: (() -> Void)?
-        
-    init(paywallInfo: HeliumPaywallInfo, trigger: String) {
+    
+    init(paywallInfo: HeliumPaywallInfo, trigger: String, paywallSessionId: String) {
         self.paywallInfo = paywallInfo
         self.trigger = trigger
+        self.paywallSessionId = paywallSessionId
         self.selectedProductId = "";
         if (!paywallInfo.productsOffered.isEmpty) {
             self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
@@ -112,7 +114,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             webviewRenderTimeTakenMS: timeTakenMS,
             paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
         )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
     }
     
     public func getIsLoading() -> Bool {
@@ -130,7 +132,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                     triggerName: trigger,
                     paywallName: paywallInfo.paywallTemplateName
                 )
-                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
             }
             let dismissed = HeliumPaywallPresenter.shared.hideUpsell() // assumes this paywall is the most recent one shown!
             if !dismissed {
@@ -148,7 +150,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                     paywallName: paywallInfo.paywallTemplateName,
                     dismissAll: true
                 )
-                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
             }
             HeliumPaywallPresenter.shared.hideAllUpsells(onComplete: { [weak self] in
                 self?.dismissAction?()
@@ -174,7 +176,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                     error: "Second try - no paywall found for trigger.",
                     paywallUnavailableReason: .secondTryNoMatch
                 )
-                HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
             }
         }
     }
@@ -186,7 +188,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                 triggerName: trigger,
                 paywallName: paywallInfo.paywallTemplateName
             )
-            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
         }
     }
     
@@ -206,7 +208,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName
         )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent, paywallSessionId: paywallSessionId)
         
         isLoading = true
         let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName)
@@ -261,7 +263,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             viewType: viewType,
             paywallUnavailableReason: fallbackReason
         )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
     }
     
     public func logClosure() {
@@ -273,7 +275,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName
         )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
     }
     
     public func onCustomAction(actionName: String, params: [String: Any]) {
@@ -284,7 +286,7 @@ public class HeliumActionsDelegate: BaseActionsDelegate, ObservableObject {
                 triggerName: trigger,
                 paywallName: paywallInfo.paywallTemplateName
             )
-            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSessionId: paywallSessionId)
         }
     }
 }
