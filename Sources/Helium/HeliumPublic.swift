@@ -14,7 +14,6 @@ struct UpsellViewResult {
 
 public class Helium {
     var controller: HeliumController?
-    private var baseTemplateViewType: (any BaseTemplateView.Type)?
     private var initialized: Bool = false;
     var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
@@ -24,7 +23,6 @@ public class Helium {
         initialized = false
         controller = nil
         fallbackConfig = nil
-        baseTemplateViewType = nil
         lightDarkModeOverride = .system
     }
     
