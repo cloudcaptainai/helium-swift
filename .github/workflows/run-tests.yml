@@ -8,7 +8,7 @@ on:
 
 jobs:
   ui-tests:
-    runs-on: macos-15
+    runs-on: macos-latest
     env:
       HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
       HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
@@ -29,11 +29,6 @@ jobs:
             echo "❌ HELIUM_TRIGGER_KEY is NOT set or empty"
           fi
 
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.4'
-
       - name: Check Xcode version
         run: xcodebuild -version
 
@@ -42,7 +37,7 @@ jobs:
           xcodebuild build-for-testing \
             -project HeliumExample/HeliumExample.xcodeproj \
             -scheme "CI HeliumExample" \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=18.5" \
+            -destination "platform=iOS Simulator,name=iPhone 17" \
             HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
             HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
             CODE_SIGN_IDENTITY="" \
@@ -55,7 +50,7 @@ jobs:
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
-              -destination "platform=iOS Simulator,name=iPhone 16,OS=18.5" \
+              -destination "platform=iOS Simulator,name=iPhone 17" \
               -only-testing:HeliumExampleUITests \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
               HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
