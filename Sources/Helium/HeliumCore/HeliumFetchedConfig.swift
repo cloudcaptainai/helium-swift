@@ -233,8 +233,6 @@ public class HeliumFetchedConfigManager: ObservableObject {
             // Download assets
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
-                downloadStep = .bundles
-
                 // Start price fetch async (with timing), then do sync bundle save, then await price
                 async let priceTask: UInt64 = {
                     let start = DispatchTime.now()
