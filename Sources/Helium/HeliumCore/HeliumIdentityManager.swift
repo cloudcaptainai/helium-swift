@@ -1,4 +1,5 @@
 import Foundation
+import StoreKit
 
 public class HeliumIdentityManager {
     // MARK: - Singleton
@@ -110,5 +111,43 @@ public class HeliumIdentityManager {
     ) -> CodableUserContext {
         let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
         return userContext
+    }
+}
+
+class AppStoreCountryHelper {
+    static let shared = AppStoreCountryHelper()
+    
+    @HeliumAtomic private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
+    @HeliumAtomic private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
+    private var fetchTask: Task<String?, Never>?
+    
+    private init() {
+        fetchTask = Task { await self.performFetch() }
+    }
+    
+    private func performFetch() async -> String? {
+        if let alpha3 = await Storefront.current?.countryCode {
+            cachedCountryCode3 = alpha3
+            cachedCountryCode2 = convertAlpha3ToAlpha2(alpha3)
+        }
+        return cachedCountryCode2
+    }
+    
+    /// Awaits the fetch task and returns the 2-char alpha-2 country code
+    /// - Returns: The 2-char country code (e.g., "US", "GB"), or nil if unavailable
+    func fetchStoreCountryCode() async -> String? {
+        return await fetchTask?.value
+    }
+    
+    /// Returns the cached 2-char store country code synchronously
+    /// - Returns: The cached alpha-2 country code, or nil if fetch not yet complete
+    func getStoreCountryCode() -> String? {
+        return cachedCountryCode2
+    }
+    
+    /// Returns the cached 3-char store country code synchronously
+    /// - Returns: The cached alpha-3 country code, or nil if fetch not yet complete
+    func getStoreCountryCode3() -> String? {
+        return cachedCountryCode3
     }
 }

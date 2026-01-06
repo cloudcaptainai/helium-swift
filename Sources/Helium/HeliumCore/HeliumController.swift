@@ -63,17 +63,9 @@ public class HeliumController {
     }
     
     func downloadConfig() {
-        var payload: [String: Any]
-        payload = [
-            "apiKey": self.apiKey,
-            "userId": HeliumIdentityManager.shared.getUserId(),
-            "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
-            "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
-        ]
-        
-        let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT;
+        let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT
 
-        HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, params: payload) { result in
+        HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
             case .success(let fetchedConfig, let metrics):
                 let configuration = SegmentConfiguration(writeKey: fetchedConfig.segmentBrowserWriteKey)
