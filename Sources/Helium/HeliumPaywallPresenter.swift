@@ -367,12 +367,6 @@ class HeliumPaywallPresenter {
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
-        // Fire user allocation event if this is the first time showing this trigger
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: paywallVC.trigger,
-            isFallback: paywallVC.isFallback
-        )
-        
         dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
     }
     
@@ -384,6 +378,13 @@ class HeliumPaywallPresenter {
         if paywallVC.isLoading {
             return // don't fire an event in this case
         }
+        // Fire user allocation event if this is the first time showing this trigger
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: paywallVC.trigger,
+            isFallback: paywallVC.isFallback,
+            paywallSession: paywallVC.paywallSession
+        )
+        
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
         let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
