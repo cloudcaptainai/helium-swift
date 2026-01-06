@@ -16,16 +16,19 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     
     let content: Content
-    let trigger: String?
+    let trigger: String
+    let paywallSession: PaywallSession
     let fallbackReason: PaywallUnavailableReason
     
-    public init(
-        trigger: String? = nil,
+    init(
+        trigger: String,
+        paywallSession: PaywallSession,
         fallbackReason: PaywallUnavailableReason,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
         self.trigger = trigger
+        self.paywallSession = paywallSession
         self.fallbackReason = fallbackReason
     }
     
@@ -35,7 +38,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType != .presented {
                     if !presentationState.isOpen {
                         presentationState.isOpen = true
-                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: true, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: true, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason, paywallSession: paywallSession)
                     }
                 }
             }
@@ -43,7 +46,7 @@ public struct HeliumFallbackViewWrapper<Content: View>: View {
                 if presentationState.viewType != .presented {
                     if presentationState.isOpen {
                         presentationState.isOpen = false
-                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: false, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason)
+                        HeliumPaywallDelegateWrapper.shared.onFallbackOpenCloseEvent(trigger: trigger, isOpen: false, viewType: presentationState.viewType.rawValue, fallbackReason: fallbackReason, paywallSession: paywallSession)
                     }
                 }
             }

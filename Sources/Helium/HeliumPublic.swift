@@ -57,7 +57,8 @@ public class Helium {
             // Fire allocation event even when paywall is skipped
             ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
                 trigger: trigger,
-                isFallback: false
+                isFallback: false,
+                paywallSession: nil
             )
             
             HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -265,17 +266,17 @@ public class Helium {
     private func fallbackViewFor(trigger: String, templateName: String?, fallbackReason: PaywallUnavailableReason) -> PaywallViewResult {
         var result: AnyView?
         
+        let paywallSession = PaywallSession(trigger: trigger)
+        
         let getFallbackViewForTrigger: () -> AnyView? = {
             if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger, fallbackReason: fallbackReason) {
+                return AnyView(HeliumFallbackViewWrapper(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason) {
                     fallbackView
                 })
             } else {
                 return nil
             }
         }
-        
-        let paywallSession = PaywallSession(trigger: trigger)
         
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
