@@ -7,10 +7,10 @@
 
 import Foundation
 
-public class ActionsDelegateWrapper: ObservableObject {
-    private let delegate: HeliumActionsDelegate
+class ActionsDelegateWrapper: ObservableObject {
+    let delegate: HeliumActionsDelegate
     
-    public init(delegate: HeliumActionsDelegate) {
+    init(delegate: HeliumActionsDelegate) {
         self.delegate = delegate
     }
     
@@ -84,9 +84,9 @@ public class HeliumActionsDelegate: ObservableObject {
         return paywallSession.trigger
     }
         
-    init(paywallInfo: HeliumPaywallInfo, trigger: String) {
+    init(paywallInfo: HeliumPaywallInfo, paywallSession: PaywallSession, trigger: String) {
         self.paywallInfo = paywallInfo
-        self.paywallSession = PaywallSession(trigger: trigger)
+        self.paywallSession = paywallSession
         self.selectedProductId = "";
         if (!paywallInfo.productsOffered.isEmpty) {
             self.selectedProductId = paywallInfo.productsOffered[0] ?? "";

@@ -50,13 +50,16 @@ class HeliumViewController: UIViewController {
     private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
     
+    var paywallSession: PaywallSession // should only ever be modified in updateContent
+    
     var customWindow: UIWindow?
     
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     
-    init(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
+    init(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
         self.trigger = trigger
+        self.paywallSession = paywallSession
         self.fallbackReason = fallbackReason
         self.isSecondTry = isSecondTry
         self.isLoading = isLoading
@@ -71,7 +74,10 @@ class HeliumViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    func updateContent(_ newContent: AnyView, fallbackReason: PaywallUnavailableReason?, isLoading: Bool) {
+    func updateContent(_ newContent: AnyView, newPaywallSession: PaywallSession?, fallbackReason: PaywallUnavailableReason?, isLoading: Bool) {
+        if let newPaywallSession {
+            self.paywallSession = newPaywallSession
+        }
         self.contentView = AnyView(newContent
             .environment(\.paywallPresentationState, presentationState))
         

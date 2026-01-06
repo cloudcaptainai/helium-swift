@@ -216,7 +216,7 @@ class ExperimentAllocationTracker {
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
-        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
     }
     
     /// Resets all allocation tracking

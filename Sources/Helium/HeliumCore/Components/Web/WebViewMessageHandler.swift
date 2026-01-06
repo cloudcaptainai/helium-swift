@@ -13,7 +13,7 @@ import WebKit
 public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var delegateWrapper: ActionsDelegateWrapper?
     
-    public func setActionsDelegate(delegateWrapper: ActionsDelegateWrapper) {
+    func setActionsDelegate(delegateWrapper: ActionsDelegateWrapper) {
         self.delegateWrapper = delegateWrapper
     }
 

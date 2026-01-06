@@ -43,6 +43,10 @@ public struct DynamicWebView: View {
         }
     }
     
+    private var paywallSession: PaywallSession? {
+        return actionsDelegate.delegate.paywallSession
+    }
+    
     init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = filePath
         self.backupFilePath = backupFilePath
@@ -288,7 +292,7 @@ public struct DynamicWebView: View {
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 paywallUnavailableReason: .webviewRenderFail
             )
-            HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+            HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         } else {
             let openFailEvent = PaywallOpenFailedEvent(
                 triggerName: trigger,
@@ -298,10 +302,10 @@ public struct DynamicWebView: View {
             )
             if presentationState.viewType == .presented {
                 HeliumPaywallPresenter.shared.hideUpsell {
-                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
                 }
             } else {
-                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
             }
         }
     }
