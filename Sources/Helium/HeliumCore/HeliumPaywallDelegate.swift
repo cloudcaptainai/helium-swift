@@ -224,7 +224,7 @@ public class HeliumPaywallDelegateWrapper {
     
     
     /// Fire a v2 typed event - main entry point for all SDK events
-    public func fireEvent(_ event: HeliumEvent) {
+    public func fireEvent(_ event: HeliumEvent, paywallSessionId: String? = nil) {
         Task { @MainActor in
             // First, call the event service if configured
             eventService?.handleEvent(event)
@@ -235,7 +235,7 @@ public class HeliumPaywallDelegateWrapper {
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
             
-            // Clear presentation context (event service and custom traits) on close events
+            // Clear presentation context on close events
             if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
                 clearPresentationContext()
             }
@@ -244,11 +244,11 @@ public class HeliumPaywallDelegateWrapper {
         // Then convert to legacy format and handle internally (analytics, etc)
         // AND call the legacy delegate method for backward compatibility
         let legacyEvent = event.toLegacyEvent()
-        onHeliumPaywallEvent(event: legacyEvent)
+        onHeliumPaywallEvent(event: legacyEvent, paywallSessionId: paywallSessionId)
     }
     
     /// Legacy event handler - handles analytics and calls delegate
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+    public func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSessionId: String? = nil) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
         var analyticsForEvent = analytics
@@ -269,12 +269,6 @@ public class HeliumPaywallDelegateWrapper {
             );
             // Store this Analytics instance for future use
             HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!)
-        }
-        
-        if case .paywallOpen = event {
-            HeliumIdentityManager.shared.setPaywallSessionId()
-        } else if case .paywallClose = event {
-            HeliumIdentityManager.shared.clearPaywallSessionId()
         }
         
         do {
@@ -314,7 +308,7 @@ public class HeliumPaywallDelegateWrapper {
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
-                    heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
+                    heliumPaywallSessionId: paywallSessionId,
                     appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                     appTransactionId: HeliumIdentityManager.shared.appTransactionID,
                     revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
@@ -330,9 +324,18 @@ public class HeliumPaywallDelegateWrapper {
         } catch {
             print("Delegate action failed.");
         }
+
+        if let paywallSessionId {
+            switch event {
+            case .paywallClose, .paywallOpenFailed:
+                PaywallSessionManager.shared.removeSession(paywallSessionId: paywallSessionId)
+            default:
+                break
+            }
+        }
     }
     
-    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?) {
+    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?, paywallSessionId: String? = nil) {
         if isOpen {
             let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
             fireEvent(PaywallOpenEvent(
@@ -340,12 +343,12 @@ public class HeliumPaywallDelegateWrapper {
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 viewType: viewTypeEnum,
                 paywallUnavailableReason: fallbackReason
-            ))
+            ), paywallSessionId: paywallSessionId)
         } else {
             fireEvent(PaywallCloseEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME
-            ))
+            ), paywallSessionId: paywallSessionId)
         }
     }
     
