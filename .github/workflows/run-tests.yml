@@ -63,9 +63,9 @@ jobs:
               CODE_SIGNING_REQUIRED=NO
           }
 
-          # Retry logic with 2 attempts
+          # Retry logic with 1 attempt/s
           for attempt in {1..1}; do
-            echo "Test attempt $attempt of 2..."
+            echo "Test attempt $attempt of 1..."
 
             if run_tests; then
               echo "✅ Tests passed on attempt $attempt"
@@ -73,7 +73,7 @@ jobs:
             else
               echo "❌ Tests failed on attempt $attempt"
 
-              if [ $attempt -eq 2 ]; then
+              if [ $attempt -eq 1 ]; then
                 echo "All test attempts failed"
                 exit 1
               else
