@@ -29,15 +29,18 @@ jobs:
             echo "❌ HELIUM_TRIGGER_KEY is NOT set or empty"
           fi
 
-      - name: Check Xcode version
-        run: xcodebuild -version
+      - name: Check Xcode version and available simulators
+        run: |
+          xcodebuild -version
+          echo "=== Available iOS Simulators ==="
+          xcrun simctl list devices available | grep -E "iPhone" | head -10
 
       - name: Build for testing
         run: |
           xcodebuild build-for-testing \
             -project HeliumExample/HeliumExample.xcodeproj \
             -scheme "CI HeliumExample" \
-            -destination "platform=iOS Simulator,name=iPhone 17" \
+            -destination "platform=iOS Simulator,name=iPhone 16" \
             HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
             HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
             CODE_SIGN_IDENTITY="" \
@@ -50,8 +53,9 @@ jobs:
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
-              -destination "platform=iOS Simulator,name=iPhone 17" \
+              -destination "platform=iOS Simulator,name=iPhone 16" \
               -only-testing:HeliumExampleUITests \
+              -disable-concurrent-destination-testing \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
               HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
               CODE_SIGN_IDENTITY="" \
