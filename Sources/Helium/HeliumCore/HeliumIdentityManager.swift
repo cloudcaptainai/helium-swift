@@ -9,7 +9,6 @@ public class HeliumIdentityManager {
             shared.heliumUserTraits = HeliumUserTraits([:])
         }
         shared.heliumInitializeId = UUID().uuidString
-        shared.clearPaywallSessionId()
     }
     private init() {
         self.heliumSessionId = UUID().uuidString
@@ -21,7 +20,6 @@ public class HeliumIdentityManager {
     private let heliumSessionId: String
     private(set) var heliumInitializeId: String
     private var heliumUserTraits: HeliumUserTraits
-    private var heliumPaywallSessionId: String?
     
     private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
     private(set) var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
@@ -55,18 +53,6 @@ public class HeliumIdentityManager {
     
     public func setCustomUserTraits(traits: HeliumUserTraits) {
         self.heliumUserTraits = traits;
-    }
-    
-    func setPaywallSessionId() {
-        self.heliumPaywallSessionId = UUID().uuidString;
-    }
-    
-    func clearPaywallSessionId() {
-        self.heliumPaywallSessionId = nil
-    }
-    
-    func getPaywallSessionId() -> String? {
-        return self.heliumPaywallSessionId;
     }
     
     /// Creates or retrieves the Helium persistent ID
