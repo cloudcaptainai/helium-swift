@@ -12,6 +12,7 @@ jobs:
     env:
       HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
       HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
+      SIMULATOR_NAME: iPhone 16
     steps:
       - uses: actions/checkout@v4
 
@@ -33,14 +34,20 @@ jobs:
         run: |
           xcodebuild -version
           echo "=== Available iOS Simulators ==="
-          xcrun simctl list devices available | grep -E "iPhone" | head -10
+          xcrun simctl list devices available | grep -E "iPhone"
+
+      - name: Pre-boot simulator
+        run: |
+          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+          echo "Simulator ready"
 
       - name: Build for testing
         run: |
           xcodebuild build-for-testing \
             -project HeliumExample/HeliumExample.xcodeproj \
             -scheme "CI HeliumExample" \
-            -destination "platform=iOS Simulator,name=iPhone 16" \
+            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
             HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
             HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
             CODE_SIGN_IDENTITY="" \
@@ -53,7 +60,7 @@ jobs:
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
-              -destination "platform=iOS Simulator,name=iPhone 16" \
+              -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
               -only-testing:HeliumExampleUITests \
               -disable-concurrent-destination-testing \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
