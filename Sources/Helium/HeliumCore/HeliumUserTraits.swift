@@ -51,7 +51,7 @@ public struct HeliumUserTraits {
         }
 
         // Non-serializable type - log warning and skip
-        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value))")
+        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value)). Supported types are String, Int, Double, Bool, Date, Array, Dictionary.")
         return nil
     }
     
