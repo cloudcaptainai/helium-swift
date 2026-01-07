@@ -93,18 +93,18 @@ public struct CodableUserContext: Codable {
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": [
-                "currentCountry": self.locale.currentCountry as Any,
-                "currentCurrency": self.locale.currentCurrency as Any,
-                "currentCurrencySymbol": self.locale.currentCurrencySymbol as Any,
-                "preferredLanguages": self.locale.preferredLanguages as Any,
-                "currentLanguage": self.locale.currentLanguage as Any,
-                "currentTimeZone": self.locale.currentTimeZone?.identifier as Any,
-                "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
-                "decimalSeparator": self.locale.decimalSeparator as Any,
+                "currentCountry": self.locale.currentCountry ?? "",
+                "currentCurrency": self.locale.currentCurrency ?? "",
+                "currentCurrencySymbol": self.locale.currentCurrencySymbol ?? "",
+                "preferredLanguages": self.locale.preferredLanguages ?? [],
+                "currentLanguage": self.locale.currentLanguage ?? "",
+                "currentTimeZone": self.locale.currentTimeZone?.identifier ?? "",
+                "currentTimeZoneName": self.locale.currentTimeZoneName ?? "",
+                "decimalSeparator": self.locale.decimalSeparator ?? "",
                 "usesMetricSystem": self.locale.usesMetricSystem,
-                "storeCountryCode": self.locale.storeCountryCode as Any,
-                "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() as Any
-            ],
+                "storeCountryCode": self.locale.storeCountryCode ?? "",
+                "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
+            ] as [String: Any],
             "screenInfo": [
                 "brightness": self.screenInfo.brightness,
                 "nativeBounds": [
@@ -124,7 +124,7 @@ public struct CodableUserContext: Codable {
                 "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
             ],
             "deviceInfo": [
-                "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier as Any,
+                "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier ?? "",
                 "orientation": self.deviceInfo.orientation,
                 "systemName": self.deviceInfo.systemName,
                 "systemVersion": self.deviceInfo.systemVersion,
@@ -132,11 +132,11 @@ public struct CodableUserContext: Codable {
                 "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
             ],
             "applicationInfo": [
-                "version": self.applicationInfo.version as Any,
-                "build": self.applicationInfo.build as Any,
-                "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
-                "appDisplayName": self.applicationInfo.appDisplayName as Any,
-                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion as Any,
+                "version": self.applicationInfo.version ?? "",
+                "build": self.applicationInfo.build ?? "",
+                "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
+                "appDisplayName": self.applicationInfo.appDisplayName ?? "",
+                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
             ],
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
