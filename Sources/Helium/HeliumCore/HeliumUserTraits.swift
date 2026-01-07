@@ -10,20 +10,33 @@ import Foundation
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
     
+    // MARK: - Size Limits
+    private static let maxStringLength = 5_000 // ~5KB strings
+    private static let maxArrayCount = 500 // 500 elements
+    private static let maxDictionaryCount = 100 // 100 keys
+    private static let maxNestingDepth = 10 // 10 levels deep
+    
     /// Create HeliumUserTraits with a dictionary.
     /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
     /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
+    /// Large values are truncated with a warning.
     public init(_ traits: [String: Any]) {
         self.storage = traits.compactMapValues { value -> AnyCodable? in
-            if let safeValue = Self.toJSONSafeValue(value) {
+            if let safeValue = Self.toJSONSafeValue(value, depth: 0) {
                 return AnyCodable(safeValue)
             }
             return nil
         }
     }
 
-    /// Converts a value to a JSON-safe type recursively, or returns nil if not convertible
-    private static func toJSONSafeValue(_ value: Any) -> Any? {
+    /// Converts a value to a JSON-safe type recursively, or returns nil if not convertible.
+    /// Truncates values that exceed size limits.
+    private static func toJSONSafeValue(_ value: Any, depth: Int) -> Any? {
+        // Check nesting depth first
+        if depth > maxNestingDepth {
+            print("[Helium] Warning: User trait value exceeds maximum nesting depth of \(maxNestingDepth). Skipping nested value.")
+            return nil
+        }
         // Convert known types to JSON-safe equivalents first
         if let date = value as? Date {
             return ISO8601DateFormatter().string(from: date)
@@ -35,17 +48,36 @@ public struct HeliumUserTraits {
             return url.absoluteString
         }
 
-        // Handle arrays recursively
+        // Handle strings with length limit
+        if let string = value as? String {
+            if string.count > maxStringLength {
+                print("[Helium] Warning: User trait string value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                return String(string.prefix(maxStringLength))
+            }
+            return string
+        }
+        
+        // Handle arrays recursively with count limit
         if let array = value as? [Any] {
-            return array.compactMap { toJSONSafeValue($0) }
+            var truncatedArray = array
+            if array.count > maxArrayCount {
+                print("[Helium] Warning: User trait array exceeds maximum count of \(maxArrayCount) elements. Truncating.")
+                truncatedArray = Array(array.prefix(maxArrayCount))
+            }
+            return truncatedArray.compactMap { toJSONSafeValue($0, depth: depth + 1) }
         }
 
-        // Handle dictionaries recursively
+        // Handle dictionaries recursively with count limit
         if let dict = value as? [String: Any] {
-            return dict.compactMapValues { toJSONSafeValue($0) }
+            var truncatedDict = dict
+            if dict.count > maxDictionaryCount {
+                print("[Helium] Warning: User trait dictionary exceeds maximum count of \(maxDictionaryCount) keys. Truncating.")
+                truncatedDict = Dictionary(uniqueKeysWithValues: dict.prefix(maxDictionaryCount).map { ($0.key, $0.value) })
+            }
+            return truncatedDict.compactMapValues { toJSONSafeValue($0, depth: depth + 1) }
         }
 
-        // Check if it's a JSON-safe primitive (String, Int, Double, Bool, NSNull)
+        // Check if it's a JSON-safe primitive (Int, Double, Bool, NSNull)
         if JSONSerialization.isValidJSONObject(["k": value]) {
             return value
         }
@@ -62,7 +94,7 @@ public struct HeliumUserTraits {
                 storage[key] = nil
                 return
             }
-            if let safeValue = Self.toJSONSafeValue(newValue) {
+            if let safeValue = Self.toJSONSafeValue(newValue, depth: 0) {
                 storage[key] = AnyCodable(safeValue)
             }
             // If toJSONSafeValue returns nil, the value is silently dropped
