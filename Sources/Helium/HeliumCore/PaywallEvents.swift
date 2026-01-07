@@ -878,6 +878,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
     /// - Note: 1 = succeeded on first try, higher values indicate retries were needed
     public let numBundleAttempts: Int?
     
+    /// Total time from config fetch start to completion in milliseconds
+    public let totalTimeMS: UInt64?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
@@ -894,6 +897,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         uncachedBundleSizeKB: Int? = nil,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
+        totalTimeMS: UInt64? = nil,
         timestamp: Date = Date()
     ) {
         self.downloadTimeTakenMS = downloadTimeTakenMS
@@ -907,6 +911,7 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         self.uncachedBundleSizeKB = uncachedBundleSizeKB
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
+        self.totalTimeMS = totalTimeMS
         self.timestamp = timestamp
     }
     
@@ -950,6 +955,9 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         if let numBundleAttempts {
             dict["numBundleAttempts"] = numBundleAttempts
         }
+        if let totalTimeMS {
+            dict["totalTimeMS"] = totalTimeMS
+        }
         return dict
     }
     
@@ -968,7 +976,8 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
             numBundlesFromCache: numBundlesFromCache,
             uncachedBundleSizeKB: uncachedBundleSizeKB,
             numAttempts: numAttempts,
-            numBundleAttempts: numBundleAttempts
+            numBundleAttempts: numBundleAttempts,
+            totalTimeMS: totalTimeMS
         )
     }
 }
@@ -1001,6 +1010,9 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
     /// Number of bundle download attempts
     public let numBundleAttempts: Int?
     
+    /// Total time from config fetch start to failure in milliseconds
+    public let totalTimeMS: UInt64?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
@@ -1014,6 +1026,7 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         numBundlesNotDownloaded: Int? = nil,
         numAttempts: Int? = nil,
         numBundleAttempts: Int? = nil,
+        totalTimeMS: UInt64? = nil,
         timestamp: Date = Date()
     ) {
         self.error = error
@@ -1024,6 +1037,7 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         self.numBundlesNotDownloaded = numBundlesNotDownloaded
         self.numAttempts = numAttempts
         self.numBundleAttempts = numBundleAttempts
+        self.totalTimeMS = totalTimeMS
         self.timestamp = timestamp
     }
     
@@ -1054,6 +1068,9 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         if let numBundleAttempts {
             dict["numBundleAttempts"] = numBundleAttempts
         }
+        if let totalTimeMS {
+            dict["totalTimeMS"] = totalTimeMS
+        }
         return dict
     }
     
@@ -1066,7 +1083,8 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
             numBundles: numBundles,
             numBundlesNotDownloaded: numBundlesNotDownloaded,
             numAttempts: numAttempts,
-            numBundleAttempts: numBundleAttempts
+            numBundleAttempts: numBundleAttempts,
+            totalTimeMS: totalTimeMS
         )
     }
 }
