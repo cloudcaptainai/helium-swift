@@ -44,7 +44,12 @@ public struct HeliumUserTraits {
             return uuid.uuidString
         }
         if let url = value as? URL {
-            return url.absoluteString
+            let urlString = url.absoluteString
+            if urlString.count > maxStringLength {
+                print("[Helium] Warning: User trait URL value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                return String(urlString.prefix(maxStringLength))
+            }
+            return urlString
         }
 
         // Handle strings with length limit
