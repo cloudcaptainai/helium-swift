@@ -10,7 +10,6 @@ import Foundation
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
     
-    // MARK: - Size Limits
     private static let maxStringLength = 5_000 // ~5KB strings
     private static let maxArrayCount = 500 // 500 elements
     private static let maxDictionaryCount = 100 // 100 keys
