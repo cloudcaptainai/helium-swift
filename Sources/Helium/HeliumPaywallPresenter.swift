@@ -56,7 +56,7 @@ class HeliumPaywallPresenter {
                 )
                 return
             }
-            let paywallSession = upsellViewResult.paywallSession ?? PaywallSession(trigger: trigger)
+            let paywallSession = upsellViewResult.paywallSession ?? PaywallSession(trigger: trigger, paywallInfo: nil)
             presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
@@ -104,7 +104,7 @@ class HeliumPaywallPresenter {
             // Get background config from fallback bundle if available
             let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
             
-            let paywallSession = PaywallSession(trigger: trigger)
+            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil)
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
