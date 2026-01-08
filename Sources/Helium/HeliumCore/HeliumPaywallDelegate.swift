@@ -277,19 +277,28 @@ class HeliumPaywallDelegateWrapper {
             if (isAnalyticsEnabled && analyticsForEvent != nil) {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
-                var paywallInfo: HeliumPaywallInfo? = nil;
-                var experimentInfo: ExperimentInfo? = nil;
-                var isFallback = false;
-                if let triggerName = event.getTriggerIfExists() {
+                var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
+                var experimentInfo: ExperimentInfo? = nil
+                var isFallback: Bool? = nil
+                if let paywallSession {
+                    isFallback = paywallSession.fallbackType != .notFallback
+                }
+                if let triggerName = (event.getTriggerIfExists() ?? paywallSession?.trigger) {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
-                    paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
                     experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName);
-                    if paywallInfo == nil {
-                        isFallback = true;
-                    } else {
-                        let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
-                        isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
+                    
+                    if paywallInfo == nil && paywallSession == nil {
+                        paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
+                    }
+                    if isFallback == nil {
+                        // Old isFallback determination. This can likely be removed at some point.
+                        if paywallInfo == nil {
+                            isFallback = true
+                        } else {
+                            let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
+                            isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
+                        }
                     }
                 }
                 

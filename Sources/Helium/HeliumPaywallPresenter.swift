@@ -43,11 +43,11 @@ class HeliumPaywallPresenter {
             }
             
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-            guard let contentView = upsellViewResult.view else {
+            guard let viewAndSession = upsellViewResult.viewAndSession else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
@@ -56,8 +56,8 @@ class HeliumPaywallPresenter {
                 )
                 return
             }
-            let paywallSession = upsellViewResult.paywallSession ?? PaywallSession(trigger: trigger)
-            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            let contentView = viewAndSession.view
+            presentPaywall(trigger: trigger, paywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -104,7 +104,8 @@ class HeliumPaywallPresenter {
             // Get background config from fallback bundle if available
             let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
             
-            let paywallSession = PaywallSession(trigger: trigger)
+            // Note that this paywall session will get replaced once paywall is succesfully loaded.
+            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil, fallbackType: .notFallback)
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
@@ -144,14 +145,14 @@ class HeliumPaywallPresenter {
         }
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-        guard let upsellView = upsellViewResult.view else {
+        guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadtimeTakenMS: loadTimeTakenMS,
@@ -163,7 +164,7 @@ class HeliumPaywallPresenter {
             }
             return
         }
-        loadingPaywall.updateContent(upsellView, newPaywallSession: upsellViewResult.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
+        loadingPaywall.updateContent(viewAndSession.view, newPaywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
         
         // Dispatch the official open event
         dispatchOpenEvent(paywallVC: loadingPaywall)
@@ -381,8 +382,8 @@ class HeliumPaywallPresenter {
         
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
-        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
+        let paywallInfo = paywallVC.paywallSession.paywallInfoWithBackups
+        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : ""
         let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
         
         let event: HeliumEvent
