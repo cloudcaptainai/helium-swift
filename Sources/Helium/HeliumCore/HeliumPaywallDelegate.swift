@@ -82,14 +82,12 @@ class HeliumPaywallDelegateWrapper {
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
         shared.delegate = nil
-        shared.analytics = nil
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
     }
     
     private var delegate: HeliumPaywallDelegate?
-    private var analytics: Analytics?
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
@@ -116,14 +114,6 @@ class HeliumPaywallDelegateWrapper {
         self.eventService = nil
         self.customPaywallTraits = [:]
         self.dontShowIfAlreadyEntitled = false
-    }
-    
-    func setAnalytics(_ analytics: Analytics) {
-        self.analytics = analytics
-    }
-    
-    func getAnalytics() -> Analytics? {
-        return analytics;
     }
 
     public func getCustomVariableValues() -> [String: Any?] {
@@ -238,29 +228,16 @@ class HeliumPaywallDelegateWrapper {
     }
     
     /// Legacy event handler - handles analytics and calls delegate
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
-        var analyticsForEvent = analytics
+        var analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
         
-        if analytics == nil, let fallbackBundleConfig {
-            let neededWriteKey = fallbackBundleConfig.segmentBrowserWriteKey
-
-            // Get or create Analytics instance for the fallback configuration
-            let configuration = SegmentConfiguration(writeKey: neededWriteKey)
-                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            analyticsForEvent = Analytics.getOrCreateAnalytics(configuration: configuration)
-            analyticsForEvent?.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            );
-            // Store this Analytics instance for future use
-            if let analyticsForEvent {
-                setAnalytics(analyticsForEvent)
-            }
+        if analyticsForEvent == nil, let fallbackBundleConfig {
+            analyticsForEvent = HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                writeKey: fallbackBundleConfig.segmentBrowserWriteKey,
+                endpoint: fallbackBundleConfig.segmentAnalyticsEndpoint
+            )
         }
         
         do {
