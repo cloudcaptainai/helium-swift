@@ -728,7 +728,6 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetch404
     case bundleFetch410
     case bundleFetchCannotDecodeContent
-    case failedFallbackRetrieval
 }
 
 public enum HeliumLightDarkMode {

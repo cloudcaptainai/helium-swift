@@ -300,7 +300,7 @@ public class Helium {
             result = getFallbackViewForTrigger()
         }
         guard let result else {
-            return PaywallViewResult(viewAndSession: nil, fallbackReason: .failedFallbackRetrieval)
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
         }
         return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: result, paywallSession: fallbackViewPaywallSession), fallbackReason: fallbackReason)
     }
