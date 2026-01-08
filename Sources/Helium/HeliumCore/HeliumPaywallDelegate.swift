@@ -292,6 +292,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
                     }
                     if isFallback == nil {
+                        // Old isFallback determination. This can likely be removed at some point.
                         if paywallInfo == nil {
                             isFallback = true
                         } else {
