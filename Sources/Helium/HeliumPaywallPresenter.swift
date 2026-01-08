@@ -104,7 +104,8 @@ class HeliumPaywallPresenter {
             // Get background config from fallback bundle if available
             let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
             
-            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil)
+            // Note that this paywall session will get replaced once paywall is succesfully loaded.
+            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil, fallbackType: .notFallback)
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
