@@ -279,7 +279,10 @@ class HeliumPaywallDelegateWrapper {
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
                 var experimentInfo: ExperimentInfo? = nil
-                var isFallback = paywallSession?.fallbackType != .notFallback
+                var isFallback: Bool? = nil
+                if let paywallSession {
+                    isFallback = paywallSession.fallbackType != .notFallback
+                }
                 if let triggerName = (event.getTriggerIfExists() ?? paywallSession?.trigger) {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
