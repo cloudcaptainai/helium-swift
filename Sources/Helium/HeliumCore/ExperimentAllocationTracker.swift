@@ -170,6 +170,7 @@ class ExperimentAllocationTracker {
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
+        // Include paywall session if available but note that it will not be available for holdouts
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: paywallSession)
     }
     
