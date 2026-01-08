@@ -220,13 +220,13 @@ public class Helium {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason)
             }
             
-            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: templatePaywallInfo)
-            
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
                     return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .couldNotFindBundleUrl)
                 }
                 let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
+                
+                let paywallSession = PaywallSession(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackType: .notFallback)
                 
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallSession: paywallSession,
@@ -267,7 +267,7 @@ public class Helium {
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason) -> PaywallViewResult {
         var result: AnyView?
         
-        let fallbackViewPaywallSession = PaywallSession(trigger: trigger, paywallInfo: paywallInfo)
+        let fallbackViewPaywallSession = PaywallSession(trigger: trigger, paywallInfo: paywallInfo, fallbackType: .fallbackView)
         let getFallbackViewForTrigger: () -> AnyView? = {
             if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
                 return AnyView(HeliumFallbackViewWrapper(trigger: trigger, paywallSession: fallbackViewPaywallSession, fallbackReason: fallbackReason) {
@@ -282,7 +282,7 @@ public class Helium {
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
            let filePath = fallbackPaywallInfo.localBundlePath {
             do {
-                let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo)
+                let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle)
                 let fallbackBundleView = try AnyView(
                     DynamicBaseTemplateView(
                         paywallSession: fallbackBundlePaywallSession,
