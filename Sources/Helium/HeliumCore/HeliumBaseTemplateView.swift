@@ -17,8 +17,11 @@ public struct DynamicBaseTemplateView: View {
     var triggerName: String?
     let fallbackReason: PaywallUnavailableReason?
     
-    init(paywallInfo: HeliumPaywallInfo, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
+    init(paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
         let trigger = paywallSession.trigger
+        guard let paywallInfo = paywallSession.paywallInfo else {
+            throw TemplateError.missingRequiredFields("Missing paywallInfo")
+        }
         let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, paywallSession: paywallSession, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));

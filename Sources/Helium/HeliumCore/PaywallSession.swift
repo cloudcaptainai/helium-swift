@@ -12,8 +12,11 @@ struct PaywallSession {
     let sessionId: String
     let trigger: String
     
-    init(trigger: String) {
+    var paywallInfo: HeliumPaywallInfo?
+    
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
+        self.paywallInfo = paywallInfo
     }
 }
