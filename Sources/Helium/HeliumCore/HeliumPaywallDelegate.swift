@@ -83,7 +83,6 @@ class HeliumPaywallDelegateWrapper {
     static func reset() {
         shared.delegate = nil
         shared.analytics = nil
-        shared.isAnalyticsEnabled = true
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
@@ -91,7 +90,6 @@ class HeliumPaywallDelegateWrapper {
     
     private var delegate: HeliumPaywallDelegate?
     private var analytics: Analytics?
-    private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
@@ -128,14 +126,6 @@ class HeliumPaywallDelegateWrapper {
         return analytics;
     }
 
-    public func setIsAnalyticsEnabled(shouldEnable: Bool) {
-        isAnalyticsEnabled = shouldEnable;
-    }
-    
-    public func getIsAnalyticsEnabled() -> Bool {
-        return isAnalyticsEnabled;
-    }
-    
     public func getCustomVariableValues() -> [String: Any?] {
         if !customPaywallTraits.isEmpty {
             return customPaywallTraits
@@ -268,13 +258,15 @@ class HeliumPaywallDelegateWrapper {
                 traits: HeliumIdentityManager.shared.getUserContext()
             );
             // Store this Analytics instance for future use
-            HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!)
+            if let analyticsForEvent {
+                setAnalytics(analyticsForEvent)
+            }
         }
         
         do {
             // Call the legacy delegate method for backward compatibility
             delegate?.onHeliumPaywallEvent(event: event);
-            if (isAnalyticsEnabled && analyticsForEvent != nil) {
+            if let analyticsForEvent {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
@@ -328,7 +320,7 @@ class HeliumPaywallDelegateWrapper {
                     experimentInfo: experimentInfo
                 );
                 
-                analyticsForEvent?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                analyticsForEvent.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }
         } catch {
             print("Delegate action failed.");
