@@ -8,10 +8,8 @@ class HeliumAnalyticsManager {
     static let shared = HeliumAnalyticsManager()
     
     private var analytics: Analytics?
-    
-    static func reset() {
-        shared.analytics = nil
-    }
+    private var currentWriteKey: String?
+    private var currentEndpoint: String?
     
     func getAnalytics() -> Analytics? {
         return analytics
@@ -32,9 +30,14 @@ class HeliumAnalyticsManager {
     
     /// Gets existing analytics or creates and configures a new instance.
     /// Also performs identify call with current user context.
+    /// - Parameter overrideIfNewConfiguration: If true and the writeKey or endpoint differs from the
+    ///   existing configuration, creates a new analytics instance instead of reusing the existing one.
     @discardableResult
-    func getOrSetupAnalytics(writeKey: String, endpoint: String) -> Analytics {
-        if let existingAnalytics = analytics {
+    func getOrSetupAnalytics(writeKey: String, endpoint: String, overrideIfNewConfiguration: Bool = false) -> Analytics {
+        let configurationChanged = currentWriteKey != writeKey || currentEndpoint != endpoint
+        let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
+        
+        if let existingAnalytics = analytics, !shouldCreateNew {
             existingAnalytics.identify(
                 userId: HeliumIdentityManager.shared.getUserId(),
                 traits: HeliumIdentityManager.shared.getUserContext()
@@ -49,6 +52,8 @@ class HeliumAnalyticsManager {
             traits: HeliumIdentityManager.shared.getUserContext()
         )
         self.analytics = newAnalytics
+        self.currentWriteKey = writeKey
+        self.currentEndpoint = endpoint
         return newAnalytics
     }
 }

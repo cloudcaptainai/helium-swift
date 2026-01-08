@@ -69,7 +69,8 @@ public class HeliumController {
             case .success(let fetchedConfig, let metrics):
                 HeliumAnalyticsManager.shared.getOrSetupAnalytics(
                     writeKey: fetchedConfig.segmentBrowserWriteKey,
-                    endpoint: fetchedConfig.segmentAnalyticsEndpoint
+                    endpoint: fetchedConfig.segmentAnalyticsEndpoint,
+                    overrideIfNewConfiguration: true
                 )
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(

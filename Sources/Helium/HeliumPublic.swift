@@ -826,8 +826,6 @@ public class Helium {
         
         HeliumPaywallDelegateWrapper.reset()
         
-        HeliumAnalyticsManager.reset()
-        
         // Clear fetched configuration from memory
         HeliumFetchedConfigManager.reset()
         
