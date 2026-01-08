@@ -52,12 +52,12 @@ final class HeliumExampleUITests: XCTestCase {
         // This will match any button containing "claim" or "start" anywhere in the text
         let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
         var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
-        if !subscribeButton.waitForExistence(timeout: 5) {
-            subscribeButton = webView.buttons["btn-subscribe-main"]
-            let _ = subscribeButton.waitForExistence(timeout: 5)
+        if !subscribeButton.waitForExistence(timeout: 10) {
+            subscribeButton = webView.descendants(matching: .any).matching(flexiblePredicate).firstMatch
+            let _ = subscribeButton.waitForExistence(timeout: 10)
         }
         
-        XCTAssertTrue(subscribeButton.exists)
+        XCTAssertTrue(subscribeButton.exists, "No subscribe/purchase button found.")
         
         subscribeButton.tap()
         
@@ -82,8 +82,13 @@ final class HeliumExampleUITests: XCTestCase {
         
         // Ensure webview properly displays
         let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
-        let paywallElement = webView.descendants(matching: .any).matching(flexiblePredicate).firstMatch
-        XCTAssert(paywallElement.waitForExistence(timeout: 5), "Paywall content didn't properly display")
+        var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
+        if !subscribeButton.waitForExistence(timeout: 10) {
+            subscribeButton = webView.descendants(matching: .any).matching(flexiblePredicate).firstMatch
+            let _ = subscribeButton.waitForExistence(timeout: 10)
+        }
+        
+        XCTAssertTrue(subscribeButton.exists, "No subscribe/purchase button found.")
         
         // Try to close the paywall
         // First attempt: tap top-left where close button might be

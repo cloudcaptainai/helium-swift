@@ -158,11 +158,11 @@ public class HeliumActionsDelegate: ObservableObject {
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
-                    paywallName: "unknown",
-                    error: "Second try - no paywall found for trigger.",
+                    paywallName: "",
+                    error: "Second try - no paywall found for trigger or uuid \(uuid).",
                     paywallUnavailableReason: .secondTryNoMatch
                 )
-                HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
+                HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
             }
         }
     }

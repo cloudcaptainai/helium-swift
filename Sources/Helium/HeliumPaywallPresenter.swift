@@ -47,7 +47,7 @@ class HeliumPaywallPresenter {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
@@ -152,7 +152,7 @@ class HeliumPaywallPresenter {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadtimeTakenMS: loadTimeTakenMS,
@@ -382,8 +382,8 @@ class HeliumPaywallPresenter {
         
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
-        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
+        let paywallInfo = paywallVC.paywallSession.paywallInfoWithBackups
+        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : ""
         let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
         
         let event: HeliumEvent

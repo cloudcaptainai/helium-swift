@@ -19,7 +19,7 @@ struct PaywallSession {
     let trigger: String
     let fallbackType: FallbackPaywallType
     
-    var paywallInfo: HeliumPaywallInfo?
+    private let paywallInfo: HeliumPaywallInfo?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
         if let paywallInfo {
             return paywallInfo
