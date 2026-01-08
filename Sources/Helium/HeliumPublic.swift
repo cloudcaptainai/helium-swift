@@ -3,13 +3,16 @@ import SwiftUI
 import StoreKit
 
 struct PaywallViewResult {
-    let view: AnyView?
+    let viewAndSession: PaywallViewAndSession?
     let fallbackReason: PaywallUnavailableReason?
-    let paywallSession: PaywallSession?
     
     var isFallback: Bool {
         fallbackReason != nil
     }
+}
+struct PaywallViewAndSession {
+    let view: AnyView
+    let paywallSession: PaywallSession
 }
 
 public class Helium {
@@ -185,7 +188,7 @@ public class Helium {
     }
     
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
-        let upsellView = upsellViewResultFor(trigger: trigger).view
+        let upsellView = upsellViewResultFor(trigger: trigger).viewAndSession?.view
         
         if upsellView != nil {
             // Configure presentation context (always set both to ensure proper reset)
@@ -201,7 +204,7 @@ public class Helium {
     func upsellViewResultFor(trigger: String) -> PaywallViewResult {
         if !initialized {
             print("[Helium] Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!")
-            return PaywallViewResult(view: nil, fallbackReason: .notInitialized, paywallSession: nil)
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
         }
         
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
@@ -232,7 +235,7 @@ public class Helium {
                     backupFilePath: backupFilePath,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
-                return PaywallViewResult(view: paywallView, fallbackReason: nil, paywallSession: paywallSession)
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: paywallView, paywallSession: paywallSession), fallbackReason: nil)
             } catch {
                 print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .invalidResolvedConfig)
@@ -277,10 +280,10 @@ public class Helium {
         
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
-           let filePath = fallbackPaywallInfo.localBundlePath  {
+           let filePath = fallbackPaywallInfo.localBundlePath {
             do {
                 let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo)
-                result = try AnyView(
+                let fallbackBundleView = try AnyView(
                     DynamicBaseTemplateView(
                         paywallSession: fallbackBundlePaywallSession,
                         fallbackReason: fallbackReason,
@@ -289,14 +292,17 @@ public class Helium {
                         resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
                     )
                 )
-                return PaywallViewResult(view: result, fallbackReason: fallbackReason, paywallSession: fallbackBundlePaywallSession)
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
             } catch {
                 result = getFallbackViewForTrigger()
             }
         } else {
             result = getFallbackViewForTrigger()
         }
-        return PaywallViewResult(view: result, fallbackReason: fallbackReason, paywallSession: fallbackViewPaywallSession)
+        guard let result else {
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: .failedFallbackRetrieval)
+        }
+        return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: result, paywallSession: fallbackViewPaywallSession), fallbackReason: fallbackReason)
     }
     
     public func getHeliumUserId() -> String? {
@@ -323,7 +329,7 @@ public class Helium {
     
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
         let upsellResult = upsellViewResultFor(trigger: trigger)
-        let canShow = upsellResult.view != nil
+        let canShow = upsellResult.viewAndSession?.view != nil
         return CanShowPaywallResult(
             canShow: canShow,
             isFallback: canShow ? upsellResult.isFallback : nil,
