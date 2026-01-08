@@ -47,7 +47,7 @@ class HeliumPaywallPresenter {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: upsellViewResult.paywallSession?.paywallInfo?.paywallTemplateName ?? "unknown",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
@@ -151,7 +151,7 @@ class HeliumPaywallPresenter {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: upsellViewResult.paywallSession?.paywallInfo?.paywallTemplateName ?? "unknown",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadtimeTakenMS: loadTimeTakenMS,
