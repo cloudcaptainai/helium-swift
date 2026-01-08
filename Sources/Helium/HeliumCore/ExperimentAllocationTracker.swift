@@ -128,7 +128,7 @@ class ExperimentAllocationTracker {
     ///
     /// - Note: This method only fires events when the user doesn't have an existing
     ///   allocation or when the allocation details have changed
-    func trackAllocationIfNeeded(trigger: String, isFallback: Bool) {
+    func trackAllocationIfNeeded(trigger: String, isFallback: Bool, paywallSession: PaywallSession?) {
         // Don't fire for fallbacks
         guard !isFallback else {
             return
@@ -170,7 +170,8 @@ class ExperimentAllocationTracker {
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
-        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent)
+        // Include paywall session if available but note that it will not be available for holdouts
+        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: paywallSession)
     }
     
     /// Resets all allocation tracking
