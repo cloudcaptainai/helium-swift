@@ -65,6 +65,9 @@ class Analytics {
 
     // Weak-reference cache for Analytics instances by write key
     @Atomic static private var instanceCache = [String: WeakBox<Analytics>]()
+
+    /// Serial queue to ensure thread-safe instance creation
+    private static let creationQueue = DispatchQueue(label: "com.segment.analytics.creation")
     
     /**
      This method isn't a traditional singleton implementation.  It's provided here
@@ -97,32 +100,34 @@ class Analytics {
     ///   - configuration: The configuration to use for creating a new instance
     /// - Returns: An Analytics instance for the given write key
     static func getOrCreateAnalytics(configuration: SegmentConfiguration) -> Analytics {
-        let writeKey = configuration.values.writeKey
+        creationQueue.sync {
+            let writeKey = configuration.values.writeKey
 
-        // Clean up any deallocated instances
-        instanceCache = instanceCache.compactMapValues { box in
-            return box.value == nil ? nil : box
+            // Clean up any deallocated instances
+            instanceCache = instanceCache.compactMapValues { box in
+                return box.value == nil ? nil : box
+            }
+
+            // Check if we have a live instance for this write key
+            if let existingBox = instanceCache[writeKey],
+               let existingInstance = existingBox.value {
+                return existingInstance
+            }
+
+            // Temporarily remove from active write keys to allow creation (this shouldn't happen)
+            let wasActive = isActiveWriteKey(writeKey)
+            if wasActive {
+                removeActiveWriteKey(writeKey)
+            }
+
+            // Create a new instance
+            let newInstance = Analytics(configuration: configuration)
+
+            // Store weak reference in cache
+            instanceCache[writeKey] = WeakBox(newInstance)
+
+            return newInstance
         }
-
-        // Check if we have a live instance for this write key
-        if let existingBox = instanceCache[writeKey],
-           let existingInstance = existingBox.value {
-            return existingInstance
-        }
-
-        // Temporarily remove from active write keys to allow creation (this shouldn't happen)
-        let wasActive = isActiveWriteKey(writeKey)
-        if wasActive {
-            removeActiveWriteKey(writeKey)
-        }
-
-        // Create a new instance
-        let newInstance = Analytics(configuration: configuration)
-
-        // Store weak reference in cache
-        instanceCache[writeKey] = WeakBox(newInstance)
-
-        return newInstance
     }
 
     /// Explicitly release an Analytics instance from the cache.
