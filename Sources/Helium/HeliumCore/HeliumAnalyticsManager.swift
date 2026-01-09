@@ -15,6 +15,13 @@ class HeliumAnalyticsManager {
         queue.sync { analytics }
     }
     
+    /// Flushes pending analytics events.
+    func flush() {
+        queue.async { [weak self] in
+            self?.analytics?.flush()
+        }
+    }
+    
     /// Identifies the current user with the analytics instance.
     /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
     func identify(userId: String? = nil) {
