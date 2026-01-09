@@ -635,6 +635,7 @@ public class Helium {
             await WebViewManager.shared.preCreateFirstWebView()
             
             await HeliumEntitlementsManager.shared.configure()
+            await HeliumTransactionManager.shared.configure()
         }
     }
     
