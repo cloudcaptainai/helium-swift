@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import UIKit
 
 class HeliumAnalyticsManager {
     static let shared = HeliumAnalyticsManager()
@@ -11,6 +12,20 @@ class HeliumAnalyticsManager {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     
+    init() {
+        // Flush when will resign active for more frequent event dispatch and better chance of success during app force-close.
+        // Note that this will also fire for things like checking notification drawer and phone call, but that's probably fine
+        // and perhaps preferred.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("[HeliumAnalytics] willResignActive - triggering flush")
+            self?.flush()
+        }
+    }
+
     func getAnalytics() -> Analytics? {
         queue.sync { analytics }
     }
