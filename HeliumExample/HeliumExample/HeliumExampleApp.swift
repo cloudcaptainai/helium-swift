@@ -21,13 +21,15 @@ struct HeliumExampleApp: App {
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
         let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(
             fallbackBundleURL!,
-            loadingBudget: loadStateTestTrigger != nil ? 25 : HeliumFallbackConfig.defaultLoadingBudget
+            loadingBudget: loadStateTestTrigger != nil ? 35 : HeliumFallbackConfig.defaultLoadingBudget
         )
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
         let delegate: HeliumPaywallDelegate? = ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE")
             ? MockPaywallDelegate()
             : nil
+        
+        Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
 
         Helium.shared.initialize(
             apiKey: AppConfig.apiKey,
@@ -45,5 +47,14 @@ struct HeliumExampleApp: App {
         WindowGroup {
             ContentView()
         }
+    }
+    
+}
+
+fileprivate class LogHeliumEventListener: HeliumEventListener {
+    static let shared = LogHeliumEventListener()
+
+    func onHeliumEvent(event: any HeliumEvent) {
+        print("helium event - \(event.toDictionary())")
     }
 }
