@@ -72,8 +72,14 @@ class SegmentContext: PlatformPlugin {
             app.merge(localizedInfo) { (_, new) in new }
         }
         if app.count != 0 {
+            var name: String = ""
+            if let displayName = app["CFBundleDisplayName"] as? String {
+                name = displayName
+            } else if let bundleName = app["CFBundleName"] as? String {
+                name = bundleName
+            }
             staticContext["app"] = [
-                "name": app["CFBundleDisplayName"] ?? app["CFBundleName"] ?? "" ,
+                "name": name,
                 "version": app["CFBundleShortVersionString"] ?? "",
                 "build": app["CFBundleVersion"] ?? "",
                 "namespace": Bundle.main.bundleIdentifier ?? ""
