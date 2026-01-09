@@ -10,7 +10,6 @@ class HeliumAnalyticsManager {
     private let queue = DispatchQueue(label: "com.helium.analyticsManager")
     private var analytics: Analytics?
     private var currentWriteKey: String?
-    private var currentEndpoint: String?
     
     func getAnalytics() -> Analytics? {
         queue.sync { analytics }
@@ -39,12 +38,12 @@ class HeliumAnalyticsManager {
     
     /// Gets existing analytics or creates and configures a new instance.
     /// Also performs identify call with current user context.
-    /// - Parameter overrideIfNewConfiguration: If true and the writeKey or endpoint differs from the
+    /// - Parameter overrideIfNewConfiguration: If true and the writeKey differs from the
     ///   existing configuration, creates a new analytics instance instead of reusing the existing one.
     @discardableResult
     func getOrSetupAnalytics(writeKey: String, endpoint: String, overrideIfNewConfiguration: Bool = false) -> Analytics {
         let result = queue.sync { () -> Analytics in
-            let configurationChanged = currentWriteKey != writeKey || currentEndpoint != endpoint
+            let configurationChanged = currentWriteKey != writeKey
             let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
             
             if let existingAnalytics = analytics, !shouldCreateNew {
@@ -55,7 +54,6 @@ class HeliumAnalyticsManager {
             let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
             self.analytics = newAnalytics
             self.currentWriteKey = writeKey
-            self.currentEndpoint = endpoint
             return newAnalytics
         }
         identify()
