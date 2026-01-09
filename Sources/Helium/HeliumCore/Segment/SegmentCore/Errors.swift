@@ -27,6 +27,8 @@ enum AnalyticsError: Error {
     case jsonUnknown(Error)
 
     case pluginError(Error)
+
+    case enrichmentError(String)
 }
 
 extension Analytics {

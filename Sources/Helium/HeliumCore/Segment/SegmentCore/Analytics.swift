@@ -178,11 +178,11 @@ class Analytics {
         Self.instanceCache.removeValue(forKey: writeKey)
     }
     
-    internal func process<E: RawEvent>(incomingEvent: E) {
+    internal func process<E: RawEvent>(incomingEvent: E, enrichments: [EnrichmentClosure]? = nil) {
         guard enabled == true else { return }
         let event = incomingEvent.applyRawEventData(store: store)
-        
-        _ = timeline.process(incomingEvent: event)
+
+        _ = timeline.process(incomingEvent: event, enrichments: enrichments)
         
         let flushPolicies = configuration.values.flushPolicies
         for policy in flushPolicies {
