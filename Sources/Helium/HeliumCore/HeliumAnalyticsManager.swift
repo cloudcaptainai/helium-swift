@@ -16,6 +16,8 @@ class HeliumAnalyticsManager {
         // Flush when will resign active for more frequent event dispatch and better chance of success during app force-close.
         // Note that this will also fire for things like checking notification drawer and phone call, but that's probably fine
         // and perhaps preferred.
+        // Also note that analytics-swift does NOT flush when app goes to background, despite their code calling an empty
+        // flush() {} method. It's unclear if this is intentional by them.
         NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
