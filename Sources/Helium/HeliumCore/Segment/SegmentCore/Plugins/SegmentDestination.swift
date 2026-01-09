@@ -120,10 +120,6 @@ class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
         }
     }
     
-    func flush() {
-        // unused .. see flush(group:completion:)
-    }
-    
     func flush(group: DispatchGroup) {
         group.enter()
         defer { group.leave() }
