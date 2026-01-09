@@ -471,8 +471,11 @@ extension Analytics {
         
         var jsonProperties: SegmentJSON? = nil
         if let json = try? SegmentJSON(options) {
-            jsonProperties = json
-            _ = try? jsonProperties?.add(value: url.absoluteString, forKey: "url")
+            do {
+                jsonProperties = try json.add(value: url.absoluteString, forKey: "url")
+            } catch {
+                jsonProperties = json
+            }
         } else {
             if let json = try? SegmentJSON(["url": url.absoluteString]) {
                 jsonProperties = json
