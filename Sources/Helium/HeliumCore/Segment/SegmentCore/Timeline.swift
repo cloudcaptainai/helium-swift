@@ -242,7 +242,7 @@ extension DestinationPlugin {
     
     internal func isDestinationEnabled(event: RawEvent) -> Bool {
         var customerDisabled = false
-        if let disabled: Bool = event.integrations?.value(forKeyPath: KeyPath(self.key)), disabled == false {
+        if let disabled: Bool = event.integrations?.value(forKeyPath: JSONKeyPath(self.key)), disabled == false {
             customerDisabled = true
         }
         
