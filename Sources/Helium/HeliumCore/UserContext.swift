@@ -37,6 +37,7 @@ struct CodableApplicationInfo: Codable {
     var appDisplayName: String?
     var heliumSdkVersion: String?
     var environment: String
+    var firstInstallTime: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -70,7 +71,12 @@ func createApplicationInfo() -> CodableApplicationInfo {
     
     let heliumSdkVersion = BuildConstants.version;
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment())
+    var firstInstallTime: String? = nil
+    if let installDate = AppReceiptsHelper.shared.getFirstInstallTime() {
+        firstInstallTime = formatAsTimestamp(date: installDate)
+    }
+    
+    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment(), firstInstallTime: firstInstallTime)
 }
 
 public struct CodableUserContext: Codable {
@@ -137,6 +143,7 @@ public struct CodableUserContext: Codable {
                 "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
                 "appDisplayName": self.applicationInfo.appDisplayName ?? "",
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
+                "firstInstallTime": self.applicationInfo.firstInstallTime ?? "",
             ],
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
