@@ -230,15 +230,7 @@ class HeliumPaywallDelegateWrapper {
     /// Legacy event handler - handles analytics and calls delegate
     func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-        
-        var analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
-        
-        if analyticsForEvent == nil, let fallbackBundleConfig {
-            analyticsForEvent = HeliumAnalyticsManager.shared.getOrSetupAnalytics(
-                writeKey: fallbackBundleConfig.segmentBrowserWriteKey,
-                endpoint: fallbackBundleConfig.segmentAnalyticsEndpoint
-            )
-        }
+        let analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
         
         do {
             // Call the legacy delegate method for backward compatibility
