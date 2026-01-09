@@ -103,17 +103,19 @@ class Analytics {
         creationQueue.sync {
             let writeKey = configuration.values.writeKey
 
-            // Clean up any deallocated instances
+            // Atomically clean up and check for existing instance
+            var existingInstance: Analytics? = nil
             _instanceCache.mutate { cache in
+                // Clean up deallocated instances
                 cache = cache.compactMapValues { box in
-                    return box.value == nil ? nil : box
+                    box.value == nil ? nil : box
                 }
+                // Check for live instance
+                existingInstance = cache[writeKey]?.value
             }
 
-            // Check if we have a live instance for this write key
-            if let existingBox = instanceCache[writeKey],
-               let existingInstance = existingBox.value {
-                return existingInstance
+            if let instance = existingInstance {
+                return instance
             }
 
             // Temporarily remove from active write keys to allow creation (this shouldn't happen)
