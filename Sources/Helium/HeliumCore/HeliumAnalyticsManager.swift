@@ -19,12 +19,22 @@ class HeliumAnalyticsManager {
         self.analytics = analytics
     }
     
+    /// Identifies the current user with the analytics instance.
+    /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
+    func identify(userId: String? = nil) {
+        guard let analytics = analytics else { return }
+        let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
+        let userContext = HeliumIdentityManager.shared.getUserContext()
+        analytics.identify(userId: resolvedUserId, traits: userContext)
+    }
+    
     /// Creates a SegmentConfiguration with standard settings
     func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
         return SegmentConfiguration(writeKey: writeKey)
             .apiHost(endpoint)
             .cdnHost(endpoint)
             .trackApplicationLifecycleEvents(false)
+            .flushAt(10)
             .flushInterval(10)
     }
     
@@ -38,22 +48,16 @@ class HeliumAnalyticsManager {
         let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
         
         if let existingAnalytics = analytics, !shouldCreateNew {
-            existingAnalytics.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            )
+            identify()
             return existingAnalytics
         }
-
+        
         let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
         let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-        newAnalytics.identify(
-            userId: HeliumIdentityManager.shared.getUserId(),
-            traits: HeliumIdentityManager.shared.getUserContext()
-        )
         self.analytics = newAnalytics
         self.currentWriteKey = writeKey
         self.currentEndpoint = endpoint
+        identify()
         return newAnalytics
     }
 }

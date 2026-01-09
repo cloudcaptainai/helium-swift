@@ -45,13 +45,10 @@ public class HeliumController {
     }
     
     func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
-        if (traits != nil) {
-            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits!);
+        if let traits {
+            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits)
         }
-        if let analytics = HeliumAnalyticsManager.shared.getAnalytics() {
-            let userContext = HeliumIdentityManager.shared.getUserContext()
-            analytics.identify(userId: userId, traits: userContext)
-        }
+        HeliumAnalyticsManager.shared.identify(userId: userId)
     }
     
     public func setCustomAPIEndpoint(endpoint: String) {
