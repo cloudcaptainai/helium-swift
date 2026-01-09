@@ -59,17 +59,22 @@ class iOSLifecycleMonitor: PlatformPlugin {
     }
     
     @objc
-    func notificationResponse(notification: NSNotification) {        
+    func notificationResponse(notification: NSNotification) {
+        print("[HeliumAnalytics] Lifecycle event: \(notification.name.rawValue)")
         switch (notification.name) {
         case UIApplication.didEnterBackgroundNotification:
+            print("[HeliumAnalytics] → didEnterBackground - will trigger flush")
             self.didEnterBackground(notification: notification)
         case UIApplication.willEnterForegroundNotification:
+            print("[HeliumAnalytics] → willEnterForeground")
             self.applicationWillEnterForeground(notification: notification)
         case UIApplication.didFinishLaunchingNotification:
             self.didFinishLaunching(notification: notification)
         case UIApplication.didBecomeActiveNotification:
+            print("[HeliumAnalytics] → didBecomeActive")
             self.didBecomeActive(notification: notification)
         case UIApplication.willResignActiveNotification:
+            print("[HeliumAnalytics] → willResignActive (NO flush here)")
             self.willResignActive(notification: notification)
         case UIApplication.didReceiveMemoryWarningNotification:
             self.didReceiveMemoryWarning(notification: notification)
@@ -78,7 +83,7 @@ class iOSLifecycleMonitor: PlatformPlugin {
         case UIApplication.backgroundRefreshStatusDidChangeNotification:
             self.backgroundRefreshDidChange(notification: notification)
         default:
-            
+
             break
         }
     }

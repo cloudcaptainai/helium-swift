@@ -17,7 +17,9 @@ class HeliumAnalyticsManager {
     
     /// Flushes pending analytics events.
     func flush() {
+        print("[HeliumAnalytics] flush() called")
         queue.async { [weak self] in
+            print("[HeliumAnalytics] flush() executing")
             self?.analytics?.flush()
         }
     }

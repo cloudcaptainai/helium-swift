@@ -168,14 +168,15 @@ extension DirectoryStore {
             #endif
             return
         }
-        
+
         let sentAt = Date().iso8601()
         let fileEnding = "],\"sentAt\":\"\(sentAt)\",\"writeKey\":\"\(config.writeKey)\"}"
         try? writer.writeLine(fileEnding)
-        
+
         let url = writer.url
         let newURL = url.appendingPathExtension(Self.tempExtension)
         try? FileManager.default.moveItem(at: url, to: newURL)
+        print("[HeliumAnalytics] finishFile() - batch finalized: \(newURL.lastPathComponent) (bytes: \(writer.bytesWritten))")
         self.writer = nil
         incrementIndex()
     }

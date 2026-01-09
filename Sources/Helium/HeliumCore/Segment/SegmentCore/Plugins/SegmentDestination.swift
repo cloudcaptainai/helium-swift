@@ -155,6 +155,35 @@ class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
     }
 }
 
+//---
+//Test 1: Critical event flush works
+//1. Run app
+//2. Open a paywall
+//3. Look for logs:
+//[HeliumAnalytics] Critical event flush triggered: paywallOpen
+//[HeliumAnalytics] flush() called
+//[HeliumAnalytics] flush() executing
+//[HeliumAnalytics] finishFile() - batch finalized: X-segment-events.temp (bytes: XXX)
+//[HeliumAnalytics] Upload SUCCESS: X-segment-events.temp
+//4. Close paywall → same sequence for paywallClose
+//
+//---
+//Test 2: Force-close recovery
+//1. Open paywall (triggers flush)
+//2. Immediately force-close the app (swipe up)
+//3. Reopen app, open another paywall
+//4. Check if you see upload of previous batch + new batch
+//
+//---
+//Test 3: Background flush
+//1. Track some events (not critical ones)
+//2. Press home button (app backgrounds)
+//3. Look for flush logs from background event
+//
+//---
+//Test 4: Verify events reach server
+//Check your Segment/analytics dashboard to confirm events arrive with correct timestamps and no duplicates.
+
 extension SegmentDestination {
     private func flushFiles(group: DispatchGroup) {
         guard let storage = self.storage else { return }
@@ -182,16 +211,18 @@ extension SegmentDestination {
                         guard let self else { return }
                         switch result {
                         case .success(_):
+                            print("[HeliumAnalytics] Upload SUCCESS: \(url.lastPathComponent)")
                             storage.remove(data: [url])
                             cleanupUploads()
-                            
+
                             // we don't want to retry events in a given batch when a 400
                             // response for malformed JSON is returned
                         case .failure(HTTPClientErrors.statusCode(code: 400)):
+                            print("[HeliumAnalytics] Upload FAILED (400 - discarding): \(url.lastPathComponent)")
                             storage.remove(data: [url])
                             cleanupUploads()
-                        default:
-                            break
+                        case .failure(let error):
+                            print("[HeliumAnalytics] Upload FAILED (will retry): \(url.lastPathComponent) - \(error)")
                         }
                         
                         analytics.log(message: "Processed: \(url.lastPathComponent)")
