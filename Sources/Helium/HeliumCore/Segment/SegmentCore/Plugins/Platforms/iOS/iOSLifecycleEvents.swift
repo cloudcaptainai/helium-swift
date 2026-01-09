@@ -23,46 +23,51 @@ class iOSLifecycleEvents: PlatformPlugin, iOSLifecycle {
     /// being installed or even opening.
     @Atomic
     private var didFinishLaunching = false
-    
+
+    @Atomic
+    private var wasBackgrounded = false
+
     func application(_ application: UIApplication?, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         
         // Make sure we aren't double calling application:didFinishLaunchingWithOptions
         // by resetting the check at the start
-        didFinishLaunching = true
+        _didFinishLaunching.set(true)
         
         if analytics?.configuration.values.trackApplicationLifecycleEvents == false {
             return
         }
         
-        let previousVersion = UserDefaults.standard.string(forKey: Self.versionKey)
-        let previousBuild = UserDefaults.standard.string(forKey: Self.buildKey)
-        
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-        
-        if previousBuild == nil {
+        let previousVersion: String? = UserDefaults.standard.string(forKey: Self.versionKey)
+        let previousBuild: String? = UserDefaults.standard.string(forKey: Self.buildKey)
+
+        let currentVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let currentBuild: String = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+
+        if let previousBuild {
+            if currentBuild != previousBuild {
+                analytics?.track(name: "Application Updated", properties: [
+                    "previous_version": previousVersion ?? "",
+                    "previous_build": previousBuild,
+                    "version": currentVersion,
+                    "build": currentBuild
+                ])
+            }
+        } else {
             analytics?.track(name: "Application Installed", properties: [
-                "version": currentVersion ?? "",
-                "build": currentBuild ?? ""
-            ])
-        } else if currentBuild != previousBuild {
-            analytics?.track(name: "Application Updated", properties: [
-                "previous_version": previousVersion ?? "",
-                "previous_build": previousBuild ?? "",
-                "version": currentVersion ?? "",
-                "build": currentBuild ?? ""
+                "version": currentVersion,
+                "build": currentBuild
             ])
         }
         
-        let sourceApp: String? = launchOptions?[UIApplication.LaunchOptionsKey.sourceApplication] as? String ?? ""
-        let url: String? = launchOptions?[UIApplication.LaunchOptionsKey.url] as? String ?? ""
-        
+        let sourceApp: String = launchOptions?[UIApplication.LaunchOptionsKey.sourceApplication] as? String ?? ""
+        let url = urlFrom(launchOptions)
+
         analytics?.track(name: "Application Opened", properties: [
             "from_background": false,
-            "version": currentVersion ?? "",
-            "build": currentBuild ?? "",
-            "referring_application": sourceApp ?? "",
-            "url": url ?? ""
+            "version": currentVersion,
+            "build": currentBuild,
+            "referring_application": sourceApp,
+            "url": url
         ])
         
         UserDefaults.standard.setValue(currentVersion, forKey: Self.versionKey)
@@ -73,32 +78,46 @@ class iOSLifecycleEvents: PlatformPlugin, iOSLifecycle {
         if analytics?.configuration.values.trackApplicationLifecycleEvents == false {
             return
         }
-        
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-        
+
+        let currentVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let currentBuild: String = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+
         if didFinishLaunching == false {
             analytics?.track(name: "Application Opened", properties: [
                 "from_background": true,
-                "version": currentVersion ?? "",
-                "build": currentBuild ?? ""
+                "version": currentVersion,
+                "build": currentBuild
             ])
         }
+
+        // Only fire if we were actually backgrounded
+        if wasBackgrounded {
+            analytics?.track(name: "Application Foregrounded")
+            _wasBackgrounded.set(false)
+        }
     }
-    
+
     func applicationDidEnterBackground(application: UIApplication?) {
-        didFinishLaunching = false
+        _didFinishLaunching.set(false)
+        _wasBackgrounded.set(true)
         if analytics?.configuration.values.trackApplicationLifecycleEvents == false {
             return
         }
         analytics?.track(name: "Application Backgrounded")
     }
-    
+
     func applicationDidBecomeActive(application: UIApplication?) {
-        if analytics?.configuration.values.trackApplicationLifecycleEvents == false {
-            return
+        // DO NOT USE THIS - it fires on every activation, not just foreground
+    }
+
+    private func urlFrom(_ launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> String {
+        if let url = launchOptions?[UIApplication.LaunchOptionsKey.url] as? String {
+            return url
         }
-        analytics?.track(name: "Application Foregrounded")
+        if let url = launchOptions?[UIApplication.LaunchOptionsKey.url] as? NSURL, let rawUrl = url.absoluteString {
+            return rawUrl
+        }
+        return ""
     }
 }
 

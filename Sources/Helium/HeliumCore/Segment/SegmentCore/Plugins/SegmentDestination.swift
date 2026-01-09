@@ -40,7 +40,7 @@ class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
     internal struct UploadTaskInfo {
         let url: URL?
         let data: Data?
-        let task: URLSessionDataTask
+        let task: DataTask
         // set/used via an extension in iOSLifecycleMonitor.swift
         typealias CleanupClosure = () -> Void
         var cleanup: CleanupClosure? = nil
@@ -115,13 +115,9 @@ class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
         guard let storage = self.storage else { return }
         // Send Event to File System
         storage.write(.events, value: event)
-        self._eventCount.withValue { count in
+        self._eventCount.mutate { count in
             count += 1
         }
-    }
-    
-    func flush() {
-        // unused .. see flush(group:completion:)
     }
     
     func flush(group: DispatchGroup) {
@@ -133,8 +129,8 @@ class SegmentDestination: DestinationPlugin, Subscriber, FlushCompletion {
         
         // don't flush if analytics is disabled.
         guard analytics.enabled == true else { return }
-        
-        eventCount = 0
+
+        _eventCount.set(0)
         cleanupUploads()
         
         let type = storage.dataStore.transactionType

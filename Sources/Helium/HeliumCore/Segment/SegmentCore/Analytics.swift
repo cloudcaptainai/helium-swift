@@ -103,15 +103,19 @@ class Analytics {
         creationQueue.sync {
             let writeKey = configuration.values.writeKey
 
-            // Clean up any deallocated instances
-            instanceCache = instanceCache.compactMapValues { box in
-                return box.value == nil ? nil : box
+            // Atomically clean up and check for existing instance
+            var existingInstance: Analytics? = nil
+            _instanceCache.mutate { cache in
+                // Clean up deallocated instances
+                cache = cache.compactMapValues { box in
+                    box.value == nil ? nil : box
+                }
+                // Check for live instance
+                existingInstance = cache[writeKey]?.value
             }
 
-            // Check if we have a live instance for this write key
-            if let existingBox = instanceCache[writeKey],
-               let existingInstance = existingBox.value {
-                return existingInstance
+            if let instance = existingInstance {
+                return instance
             }
 
             // Temporarily remove from active write keys to allow creation (this shouldn't happen)
@@ -124,7 +128,9 @@ class Analytics {
             let newInstance = Analytics(configuration: configuration)
 
             // Store weak reference in cache
-            instanceCache[writeKey] = WeakBox(newInstance)
+            _instanceCache.mutate { cache in
+                cache[writeKey] = WeakBox(newInstance)
+            }
 
             return newInstance
         }
@@ -135,7 +141,9 @@ class Analytics {
     /// - Parameters:
     ///   - writeKey: The write key of the instance to release
     static func releaseAnalytics(writeKey: String) {
-        instanceCache.removeValue(forKey: writeKey)
+        _instanceCache.mutate { cache in
+            cache.removeValue(forKey: writeKey)
+        }
     }
 
     /// Initialize this instance of Analytics with a given configuration setup.
@@ -175,23 +183,36 @@ class Analytics {
         let writeKey = configuration.values.writeKey
         Self.removeActiveWriteKey(writeKey)
         // Clean up from instance cache as well
-        Self.instanceCache.removeValue(forKey: writeKey)
+        Self._instanceCache.mutate { cache in
+            cache.removeValue(forKey: writeKey)
+        }
     }
     
-    internal func process<E: RawEvent>(incomingEvent: E) {
+    internal func process<E: RawEvent>(incomingEvent: E, enrichments: [EnrichmentClosure]? = nil) {
         guard enabled == true else { return }
-        let event = incomingEvent.applyRawEventData(store: store)
-        
+        let event = incomingEvent.applyRawEventData(store: store, enrichments: enrichments)
+
         _ = timeline.process(incomingEvent: event)
-        
+
         let flushPolicies = configuration.values.flushPolicies
+
+        var shouldFlush = false
+        // if any policy says to flush, make note of that
         for policy in flushPolicies {
             policy.updateState(event: event)
-            
-            if (policy.shouldFlush() == true) {
-                flush()
-                policy.reset()
+            if policy.shouldFlush() {
+                shouldFlush = true
+                // we don't need to updateState on any others since we're gonna reset it below.
+                break
             }
+        }
+        // if we were told to flush do it.
+        if shouldFlush {
+            // reset all the policies if one decided to flush.
+            flushPolicies.forEach {
+                $0.reset()
+            }
+            flush()
         }
     }
     
@@ -471,8 +492,11 @@ extension Analytics {
         
         var jsonProperties: SegmentJSON? = nil
         if let json = try? SegmentJSON(options) {
-            jsonProperties = json
-            _ = try? jsonProperties?.add(value: url.absoluteString, forKey: "url")
+            do {
+                jsonProperties = try json.add(value: url.absoluteString, forKey: "url")
+            } catch {
+                jsonProperties = json
+            }
         } else {
             if let json = try? SegmentJSON(["url": url.absoluteString]) {
                 jsonProperties = json
@@ -509,12 +533,16 @@ extension Analytics {
     }
     
     internal static func addActiveWriteKey(_ writeKey: String) {
-        Self.activeWriteKeys.append(writeKey)
+        Self._activeWriteKeys.mutate { keys in
+            keys.append(writeKey)
+        }
     }
-    
+
     internal static func removeActiveWriteKey(_ writeKey: String) {
-        Self.activeWriteKeys.removeAll { key in
-            writeKey == key
+        Self._activeWriteKeys.mutate { keys in
+            keys.removeAll { key in
+                writeKey == key
+            }
         }
     }
 }
