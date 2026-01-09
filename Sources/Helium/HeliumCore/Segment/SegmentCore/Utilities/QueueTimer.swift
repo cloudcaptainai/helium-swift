@@ -73,18 +73,18 @@ internal class QueueTimer {
 
 extension TimeInterval {
     static func milliseconds(_ value: Int) -> TimeInterval {
-        return TimeInterval(value / 1000)
+        return TimeInterval(value) / 1000
     }
-    
+
     static func seconds(_ value: Int) -> TimeInterval {
         return TimeInterval(value)
     }
-    
+
     static func hours(_ value: Int) -> TimeInterval {
-        return TimeInterval(60 * value)
+        return TimeInterval(60 * 60 * value)
     }
-    
+
     static func days(_ value: Int) -> TimeInterval {
-        return TimeInterval((60 * value) * 24)
+        return TimeInterval((60 * 60 * value) * 24)
     }
 }
