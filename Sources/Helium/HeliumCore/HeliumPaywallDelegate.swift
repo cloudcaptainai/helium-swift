@@ -294,7 +294,6 @@ class HeliumPaywallDelegateWrapper {
                 // Flush immediately for critical events to minimize event loss
                 switch event {
                 case .paywallOpen, .paywallClose, .subscriptionSucceeded:
-                    print("[HeliumAnalytics] Critical event flush triggered: \(event.caseString())")
                     HeliumAnalyticsManager.shared.flush()
                 default:
                     break
