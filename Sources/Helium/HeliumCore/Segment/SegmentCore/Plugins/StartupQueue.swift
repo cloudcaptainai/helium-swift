@@ -46,7 +46,7 @@ class StartupQueue: Plugin, Subscriber {
 
 extension StartupQueue {
     internal func runningUpdate(state: System) {
-        running = state.running
+        _running.set(state.running)
         if state.running {
             replayEvents()
         }

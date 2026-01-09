@@ -20,22 +20,22 @@ enum HTTPClientErrors: Error {
 class HTTPClient {
     private static let defaultAPIHost = "api.segment.io/v1"
     private static let defaultCDNHost = "cdn-settings.segment.com/v1"
-    
-    internal var session: URLSession
+
+    internal var session: any HTTPSession
     private var apiHost: String
     private var apiKey: String
     private var cdnHost: String
-    
+
     private weak var analytics: Analytics?
-    
+
     init(analytics: Analytics) {
         self.analytics = analytics
-        
+
         self.apiKey = analytics.configuration.values.writeKey
         self.apiHost = analytics.configuration.values.apiHost
         self.cdnHost = analytics.configuration.values.cdnHost
-        
-        self.session = Self.configuredSession(for: self.apiKey)
+
+        self.session = analytics.configuration.values.httpSession()
     }
     
     func segmentURL(for host: String, path: String) -> URL? {
@@ -52,7 +52,7 @@ class HTTPClient {
     ///   - batch: The array of the events, considered a batch of events.
     ///   - completion: The closure executed when done. Passes if the task should be retried or not if failed.
     @discardableResult
-    func startBatchUpload(writeKey: String, batch: URL, completion: @escaping (_ result: Result<Bool, Error>) -> Void) -> URLSessionDataTask? {
+    func startBatchUpload(writeKey: String, batch: URL, completion: @escaping (_ result: Result<Bool, Error>) -> Void) -> (any DataTask)? {
         guard let uploadURL = segmentURL(for: apiHost, path: "/b") else {
             self.analytics?.reportInternalError(HTTPClientErrors.failedToOpenBatch)
             completion(.failure(HTTPClientErrors.failedToOpenBatch))
@@ -63,7 +63,7 @@ class HTTPClient {
 
         let dataTask = session.uploadTask(with: urlRequest, fromFile: batch) { [weak self] (data, response, error) in
             guard let self else { return }
-            handleResponse(data: data, response: response, error: error, completion: completion)
+            handleResponse(data: data, response: response, error: error, url: uploadURL, completion: completion)
         }
         
         dataTask.resume()
@@ -77,7 +77,7 @@ class HTTPClient {
     ///   - batch: The array of the events, considered a batch of events.
     ///   - completion: The closure executed when done. Passes if the task should be retried or not if failed.
     @discardableResult
-    func startBatchUpload(writeKey: String, data: Data, completion: @escaping (_ result: Result<Bool, Error>) -> Void) -> URLSessionDataTask? {
+    func startBatchUpload(writeKey: String, data: Data, completion: @escaping (_ result: Result<Bool, Error>) -> Void) -> (any UploadTask)? {
         guard let uploadURL = segmentURL(for: apiHost, path: "/b") else {
             self.analytics?.reportInternalError(HTTPClientErrors.failedToOpenBatch)
             completion(.failure(HTTPClientErrors.failedToOpenBatch))
@@ -88,17 +88,17 @@ class HTTPClient {
 
         let dataTask = session.uploadTask(with: urlRequest, from: data) { [weak self] (data, response, error) in
             guard let self else { return }
-            handleResponse(data: data, response: response, error: error, completion: completion)
+            handleResponse(data: data, response: response, error: error, url: uploadURL, completion: completion)
         }
         
         dataTask.resume()
         return dataTask
     }
     
-    private func handleResponse(data: Data?, response: URLResponse?, error: Error?, completion: @escaping (_ result: Result<Bool, Error>) -> Void) {
+    private func handleResponse(data: Data?, response: URLResponse?, error: Error?, url: URL?, completion: @escaping (_ result: Result<Bool, Error>) -> Void) {
         if let error = error {
             analytics?.log(message: "Error uploading request \(error.localizedDescription).")
-            analytics?.reportInternalError(AnalyticsError.networkUnknown(error))
+            analytics?.reportInternalError(AnalyticsError.networkUnknown(url, error))
             completion(.failure(HTTPClientErrors.unknown(error: error)))
         } else if let httpResponse = response as? HTTPURLResponse {
             switch (httpResponse.statusCode) {
@@ -106,13 +106,13 @@ class HTTPClient {
                 completion(.success(true))
                 return
             case 300..<400:
-                analytics?.reportInternalError(AnalyticsError.networkUnexpectedHTTPCode(httpResponse.statusCode))
+                analytics?.reportInternalError(AnalyticsError.networkUnexpectedHTTPCode(url, httpResponse.statusCode))
                 completion(.failure(HTTPClientErrors.statusCode(code: httpResponse.statusCode)))
             case 429:
-                analytics?.reportInternalError(AnalyticsError.networkServerLimited(httpResponse.statusCode))
+                analytics?.reportInternalError(AnalyticsError.networkServerLimited(url, httpResponse.statusCode))
                 completion(.failure(HTTPClientErrors.statusCode(code: httpResponse.statusCode)))
             default:
-                analytics?.reportInternalError(AnalyticsError.networkServerRejected(httpResponse.statusCode))
+                analytics?.reportInternalError(AnalyticsError.networkServerRejected(url, httpResponse.statusCode))
                 completion(.failure(HTTPClientErrors.statusCode(code: httpResponse.statusCode)))
             }
         }
@@ -128,34 +128,34 @@ class HTTPClient {
         
         let dataTask = session.dataTask(with: urlRequest) { [weak self] (data, response, error) in
             if let error = error {
-                self?.analytics?.reportInternalError(AnalyticsError.networkUnknown(error))
+                self?.analytics?.reportInternalError(AnalyticsError.settingsFail(AnalyticsError.networkUnknown(settingsURL, error)))
                 completion(false, nil)
                 return
             }
 
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode > 300 {
-                    self?.analytics?.reportInternalError(AnalyticsError.networkUnexpectedHTTPCode(httpResponse.statusCode))
+                    self?.analytics?.reportInternalError(AnalyticsError.settingsFail(AnalyticsError.networkUnexpectedHTTPCode(settingsURL, httpResponse.statusCode)))
                     completion(false, nil)
                     return
                 }
             }
 
             guard let data = data else {
-                self?.analytics?.reportInternalError(AnalyticsError.networkInvalidData)
+                self?.analytics?.reportInternalError(AnalyticsError.settingsFail(AnalyticsError.networkInvalidData))
                 completion(false, nil)
                 return
             }
-            
+
             do {
                 let responseJSON = try JSONDecoder.default.decode(Settings.self, from: data)
                 completion(true, responseJSON)
             } catch {
-                self?.analytics?.reportInternalError(AnalyticsError.jsonUnableToDeserialize(error))
+                self?.analytics?.reportInternalError(AnalyticsError.settingsFail(AnalyticsError.jsonUnableToDeserialize(error)))
                 completion(false, nil)
                 return
             }
-            
+
         }
         
         dataTask.resume()
@@ -198,12 +198,5 @@ extension HTTPClient {
         }
         
         return request
-    }
-    
-    internal static func configuredSession(for writeKey: String) -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpMaximumConnectionsPerHost = 2
-        let session = URLSession(configuration: configuration, delegate: nil, delegateQueue: nil)
-        return session
     }
 }

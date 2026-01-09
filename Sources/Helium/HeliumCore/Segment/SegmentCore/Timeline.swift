@@ -28,13 +28,23 @@ class Timeline {
         // apply .before and .enrichment types first ...
         let beforeResult = applyPlugins(type: .before, event: incomingEvent)
         // .enrichment here is akin to source middleware in the old analytics-ios.
-        let enrichmentResult = applyPlugins(type: .enrichment, event: beforeResult)
-        
+        var enrichmentResult = applyPlugins(type: .enrichment, event: beforeResult)
+
+        if let enrichments = enrichmentResult?.enrichments {
+            for closure in enrichments {
+                if let result = closure(enrichmentResult) as? E {
+                    enrichmentResult = result
+                } else {
+                    Analytics.reportInternalError(AnalyticsError.enrichmentError("The given enrichment attempted to change the event type!"))
+                }
+            }
+        }
+
         // once the event enters a destination, we don't want
         // to know about changes that happen there. those changes
         // are to only be received by the destination.
         _ = applyPlugins(type: .destination, event: enrichmentResult)
-        
+
         // apply .after plugins ...
         let afterResult = applyPlugins(type: .after, event: enrichmentResult)
 
@@ -232,7 +242,7 @@ extension DestinationPlugin {
     
     internal func isDestinationEnabled(event: RawEvent) -> Bool {
         var customerDisabled = false
-        if let disabled: Bool = event.integrations?.value(forKeyPath: KeyPath(self.key)), disabled == false {
+        if let disabled: Bool = event.integrations?.value(forKeyPath: JSONKeyPath(self.key)), disabled == false {
             customerDisabled = true
         }
         
