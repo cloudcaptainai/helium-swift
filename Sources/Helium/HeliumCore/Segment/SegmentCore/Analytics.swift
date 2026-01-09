@@ -104,8 +104,10 @@ class Analytics {
             let writeKey = configuration.values.writeKey
 
             // Clean up any deallocated instances
-            instanceCache = instanceCache.compactMapValues { box in
-                return box.value == nil ? nil : box
+            _instanceCache.mutate { cache in
+                cache = cache.compactMapValues { box in
+                    return box.value == nil ? nil : box
+                }
             }
 
             // Check if we have a live instance for this write key
@@ -124,7 +126,9 @@ class Analytics {
             let newInstance = Analytics(configuration: configuration)
 
             // Store weak reference in cache
-            instanceCache[writeKey] = WeakBox(newInstance)
+            _instanceCache.mutate { cache in
+                cache[writeKey] = WeakBox(newInstance)
+            }
 
             return newInstance
         }
@@ -135,7 +139,9 @@ class Analytics {
     /// - Parameters:
     ///   - writeKey: The write key of the instance to release
     static func releaseAnalytics(writeKey: String) {
-        instanceCache.removeValue(forKey: writeKey)
+        _instanceCache.mutate { cache in
+            cache.removeValue(forKey: writeKey)
+        }
     }
 
     /// Initialize this instance of Analytics with a given configuration setup.
@@ -175,7 +181,9 @@ class Analytics {
         let writeKey = configuration.values.writeKey
         Self.removeActiveWriteKey(writeKey)
         // Clean up from instance cache as well
-        Self.instanceCache.removeValue(forKey: writeKey)
+        Self._instanceCache.mutate { cache in
+            cache.removeValue(forKey: writeKey)
+        }
     }
     
     internal func process<E: RawEvent>(incomingEvent: E, enrichments: [EnrichmentClosure]? = nil) {
