@@ -8,7 +8,7 @@
 import Foundation
 
 /// Stored allocation details for comparison
-private struct StoredAllocation: Codable {
+struct StoredAllocation: Codable {
     let experimentId: String?
     let allocationId: String?
     let allocationIndex: Int?
@@ -37,26 +37,72 @@ class ExperimentAllocationTracker {
     }
     
     private let allocationsUserDefaultsKey = "heliumExperimentAllocations"
+    private let allocationsFileName = "helium_experiment_allocations.json"
     
     /// Maps "persistentId_trigger" to stored allocation details
     private var storedAllocations: [String: StoredAllocation] = [:]
     
-    /// Loads stored allocations from UserDefaults
-    private func loadStoredAllocations() {
-        guard let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
-              let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) else {
-            return
-        }
-        storedAllocations = decoded
+    /// File URL for fallback storage
+    private var allocationsFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Helium", isDirectory: true)
+            .appendingPathComponent(allocationsFileName)
     }
     
-    /// Persists allocations to UserDefaults
+    /// Loads stored allocations - tries UserDefaults first, falls back to file
+    private func loadStoredAllocations() {
+        // Try UserDefaults first
+        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
+            storedAllocations = decoded
+            return
+        }
+        
+        // Fallback to file
+        if let fileURL = allocationsFileURL,
+           let data = try? Data(contentsOf: fileURL),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
+            storedAllocations = decoded
+        }
+    }
+    
+    /// Persists allocations to UserDefaults and file (as backup)
     private func saveStoredAllocations() {
         guard let encoded = try? JSONEncoder().encode(storedAllocations) else {
             print("[Helium] Failed to persist experiment allocations")
             return
         }
+        
+        // Save to UserDefaults
         UserDefaults.standard.set(encoded, forKey: allocationsUserDefaultsKey)
+        
+        // Also save to file as backup
+        saveToFile(encoded)
+    }
+    
+    private let saveQueue = DispatchQueue(label: "com.helium.allocationSave")
+    
+    /// Saves encoded data to file asynchronously
+    private func saveToFile(_ data: Data) {
+        guard let fileURL = allocationsFileURL else { return }
+        
+        saveQueue.async {
+            let startTime = Date()
+            do {
+                // Create directory if needed
+                let directory = fileURL.deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try data.write(to: fileURL, options: .atomic)
+                
+                let elapsed = Date().timeIntervalSince(startTime)
+                if elapsed > 2.0 {
+                    print("[Helium] Allocation file save was slow: \(String(format: "%.2f", elapsed))s")
+                }
+            } catch {
+                print("[Helium] Failed to persist allocations to file: \(error.localizedDescription)")
+            }
+        }
     }
     
     /// Creates a storage key for user + experiment combination
@@ -177,8 +223,18 @@ class ExperimentAllocationTracker {
     /// Resets all allocation tracking
     /// - Note: Called when SDK cache is cleared via clearAllCachedState()
     func reset() {
-       storedAllocations.removeAll()
-       UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
+        storedAllocations.removeAll()
+        UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
+        
+        // Also delete file backup
+        if let fileURL = allocationsFileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+    
+    /// Returns all stored allocations for this user
+    func getAllocationHistory() -> [StoredAllocation] {
+        return Array(storedAllocations.values)
     }
     
     /// Get the enrollment timestamp and status for a specific user and trigger
