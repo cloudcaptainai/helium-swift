@@ -290,6 +290,14 @@ class HeliumPaywallDelegateWrapper {
                 );
                 
                 analyticsForEvent.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                
+                // Flush immediately for critical events to minimize event loss
+                switch event {
+                case .paywallOpen, .paywallClose, .subscriptionSucceeded:
+                    HeliumAnalyticsManager.shared.flush()
+                default:
+                    break
+                }
             }
         } catch {
             print("Delegate action failed.");
