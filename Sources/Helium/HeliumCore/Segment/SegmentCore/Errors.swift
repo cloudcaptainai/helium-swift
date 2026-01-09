@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum AnalyticsError: Error {
+indirect enum AnalyticsError: Error {
     case storageUnableToCreate(String)
     case storageUnableToWrite(String)
     case storageUnableToRename(String)
@@ -16,10 +16,10 @@ enum AnalyticsError: Error {
     case storageInvalid(String)
     case storageUnknown(Error)
 
-    case networkUnexpectedHTTPCode(Int)
-    case networkServerLimited(Int)
-    case networkServerRejected(Int)
-    case networkUnknown(Error)
+    case networkUnexpectedHTTPCode(URL?, Int)
+    case networkServerLimited(URL?, Int)
+    case networkServerRejected(URL?, Int)
+    case networkUnknown(URL?, Error)
     case networkInvalidData
 
     case jsonUnableToSerialize(Error)
@@ -29,6 +29,9 @@ enum AnalyticsError: Error {
     case pluginError(Error)
 
     case enrichmentError(String)
+
+    case settingsFail(AnalyticsError)
+    case batchUploadFail(AnalyticsError)
 }
 
 extension Analytics {
