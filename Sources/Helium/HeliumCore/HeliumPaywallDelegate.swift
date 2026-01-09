@@ -82,16 +82,12 @@ class HeliumPaywallDelegateWrapper {
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
         shared.delegate = nil
-        shared.analytics = nil
-        shared.isAnalyticsEnabled = true
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
     }
     
     private var delegate: HeliumPaywallDelegate?
-    private var analytics: Analytics?
-    private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
@@ -119,23 +115,7 @@ class HeliumPaywallDelegateWrapper {
         self.customPaywallTraits = [:]
         self.dontShowIfAlreadyEntitled = false
     }
-    
-    func setAnalytics(_ analytics: Analytics) {
-        self.analytics = analytics
-    }
-    
-    func getAnalytics() -> Analytics? {
-        return analytics;
-    }
 
-    public func setIsAnalyticsEnabled(shouldEnable: Bool) {
-        isAnalyticsEnabled = shouldEnable;
-    }
-    
-    public func getIsAnalyticsEnabled() -> Bool {
-        return isAnalyticsEnabled;
-    }
-    
     public func getCustomVariableValues() -> [String: Any?] {
         if !customPaywallTraits.isEmpty {
             return customPaywallTraits
@@ -248,33 +228,14 @@ class HeliumPaywallDelegateWrapper {
     }
     
     /// Legacy event handler - handles analytics and calls delegate
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-        
-        var analyticsForEvent = analytics
-        
-        if analytics == nil, let fallbackBundleConfig {
-            let neededWriteKey = fallbackBundleConfig.segmentBrowserWriteKey
-
-            // Get or create Analytics instance for the fallback configuration
-            let configuration = SegmentConfiguration(writeKey: neededWriteKey)
-                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            analyticsForEvent = Analytics.getOrCreateAnalytics(configuration: configuration)
-            analyticsForEvent?.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            );
-            // Store this Analytics instance for future use
-            HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!)
-        }
+        let analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
         
         do {
             // Call the legacy delegate method for backward compatibility
             delegate?.onHeliumPaywallEvent(event: event);
-            if (isAnalyticsEnabled && analyticsForEvent != nil) {
+            if let analyticsForEvent {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
@@ -328,7 +289,7 @@ class HeliumPaywallDelegateWrapper {
                     experimentInfo: experimentInfo
                 );
                 
-                analyticsForEvent?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                analyticsForEvent.track(name: "helium_" + event.caseString(), properties: eventForLogging);
             }
         } catch {
             print("Delegate action failed.");
