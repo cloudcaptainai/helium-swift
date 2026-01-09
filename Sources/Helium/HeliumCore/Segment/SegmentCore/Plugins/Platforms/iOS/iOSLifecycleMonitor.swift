@@ -80,7 +80,7 @@ class iOSLifecycleMonitor: PlatformPlugin {
         case UIApplication.willTerminateNotification:
             self.willTerminate(notification: notification)
         default:
-            
+
             break
         }
     }

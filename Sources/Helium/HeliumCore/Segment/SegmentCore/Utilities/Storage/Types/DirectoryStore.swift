@@ -170,11 +170,11 @@ extension DirectoryStore {
             #endif
             return
         }
-
+        
         let sentAt = Date().iso8601()
         let fileEnding = "],\"sentAt\":\"\(sentAt)\",\"writeKey\":\"\(config.writeKey)\"}"
         try? writer.writeLine(fileEnding)
-
+        
         let url = writer.url
 
         // do validation before we rename to prevent the file disappearing out from under us.
@@ -183,7 +183,6 @@ extension DirectoryStore {
         // move it to make available for flushing ...
         let newURL = url.appendingPathExtension(Self.tempExtension)
         try? FileManager.default.moveItem(at: url, to: newURL)
-        print("[HeliumAnalytics] finishFile() - batch finalized: \(newURL.lastPathComponent) (bytes: \(writer.bytesWritten))")
         self.writer = nil
         incrementIndex()
     }
