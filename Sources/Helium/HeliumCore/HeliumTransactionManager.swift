@@ -9,16 +9,15 @@ actor HeliumTransactionManager {
     static let shared = HeliumTransactionManager()
     
     private let syncedTransactionIdsKey = "heliumSyncedTransactionIds"
-    private var syncedTransactionIds: Set<UInt64> = []
-    private var updateListenerTask: Task<Void, Never>?
+    private let maxSyncedIdsToStore = 1000
+    private let maxTransactionAgeDays = 365 * 2  // 2 years
+    
+    /// Maps transaction ID to the date it was synced
+    private var syncedTransactionIds: [UInt64: Date] = [:]
     private var isConfigured = false
     
     private init() {
         syncedTransactionIds = loadSyncedIds()
-    }
-    
-    deinit {
-        updateListenerTask?.cancel()
     }
     
     // MARK: - Configuration
@@ -34,7 +33,7 @@ actor HeliumTransactionManager {
     // MARK: - Transaction Listening
 
     private func startTransactionListener() {
-        updateListenerTask = Task {
+        Task {
             for await verificationResult in Transaction.updates {
                 guard case .verified(let transaction) = verificationResult else {
                     continue
@@ -47,13 +46,18 @@ actor HeliumTransactionManager {
     // MARK: - Transaction History
     
     private func loadAndSyncTransactionHistory() async {
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
         var transactionsToSync: [Transaction] = []
 
         for await verificationResult in Transaction.all {
             guard case .verified(let transaction) = verificationResult else {
                 continue
             }
-            if !syncedTransactionIds.contains(transaction.id) {
+            // Skip transactions older than cutoff
+            if transaction.purchaseDate < cutoffDate {
+                continue
+            }
+            if syncedTransactionIds[transaction.id] == nil {
                 transactionsToSync.append(transaction)
             }
         }
@@ -66,7 +70,7 @@ actor HeliumTransactionManager {
     // MARK: - Processing
     
     private func processTransaction(_ transaction: Transaction) async {
-        guard !syncedTransactionIds.contains(transaction.id) else {
+        guard syncedTransactionIds[transaction.id] == nil else {
             return
         }
         await syncWithServer(transactions: [transaction])
@@ -77,24 +81,35 @@ actor HeliumTransactionManager {
     private func syncWithServer(transactions: [Transaction]) async {
         // TODO: Implement actual server sync with batching/retries
         // For now, just mark as synced
+        let now = Date()
         for transaction in transactions {
-            syncedTransactionIds.insert(transaction.id)
+            syncedTransactionIds[transaction.id] = now
         }
-        saveSyncedIds(syncedTransactionIds)
+        pruneAndSave()
     }
     
     // MARK: - Persistence
     
-    private func loadSyncedIds() -> Set<UInt64> {
+    private func loadSyncedIds() -> [UInt64: Date] {
         guard let data = UserDefaults.standard.data(forKey: syncedTransactionIdsKey),
-              let ids = try? JSONDecoder().decode(Set<UInt64>.self, from: data) else {
-            return []
+              let ids = try? JSONDecoder().decode([UInt64: Date].self, from: data) else {
+            return [:]
         }
         return ids
     }
     
-    private func saveSyncedIds(_ ids: Set<UInt64>) {
-        guard let data = try? JSONEncoder().encode(ids) else {
+    private func pruneAndSave() {
+        // Remove entries older than maxTransactionAgeDays
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
+        syncedTransactionIds = syncedTransactionIds.filter { $0.value >= cutoffDate }
+
+        // If still over limit, keep only the most recent
+        if syncedTransactionIds.count > maxSyncedIdsToStore {
+            let sorted = syncedTransactionIds.sorted { $0.value > $1.value }
+            syncedTransactionIds = Dictionary(uniqueKeysWithValues: sorted.prefix(maxSyncedIdsToStore).map { ($0.key, $0.value) })
+        }
+        
+        guard let data = try? JSONEncoder().encode(syncedTransactionIds) else {
             print("[Helium] Failed to persist synced transaction IDs")
             return
         }
