@@ -689,7 +689,7 @@ public class Helium {
         lightDarkModeOverride = mode
     }
     
-    /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
+    /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid" or "helium-test://helium-test?burl=https://..."
     /// - Returns: The result of the purchase.
     @discardableResult
     public func handleDeepLink(_ url: URL?) -> Bool {
@@ -707,28 +707,33 @@ public class Helium {
             return false
         }
         
-        var triggerValue = queryItems.first(where: { $0.name == "trigger" })?.value
+        let triggerValue = queryItems.first(where: { $0.name == "trigger" })?.value
         let paywallUUID = queryItems.first(where: { $0.name == "puid" })?.value
+        let bundleUrl = queryItems.first(where: { $0.name == "burl" })?.value
         
+        // Handle burl (bundle URL) parameter for testing
+        if let bundleUrl {
+            Task {
+                await handleBundleUrlDeepLink(bundleUrl: bundleUrl, sourceTrigger: triggerValue)
+            }
+            return true
+        }
+        
+        // For trigger/puid deep links, require initialized state
         if triggerValue == nil && paywallUUID == nil {
-            print("[Helium] handleDeepLink - Test URL needs 'trigger' or 'puid': \(url)")
+            print("[Helium] handleDeepLink - Test URL needs 'trigger', 'puid', or 'burl': \(url)")
             return false
         }
         
-        // Do not show fallbacks... check to see if the needed bundle is available
-        if !paywallsLoaded() {
-            print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
-            return false
-        }
-        
-        if let paywallUUID, triggerValue == nil {
-            triggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
-            if triggerValue == nil {
+        var resolvedTriggerValue = triggerValue
+        if let paywallUUID, resolvedTriggerValue == nil {
+            resolvedTriggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
+            if resolvedTriggerValue == nil {
                 print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID).")
             }
         }
         
-        guard let trigger = triggerValue else {
+        guard let trigger = resolvedTriggerValue else {
             return false
         }
         
@@ -742,6 +747,58 @@ public class Helium {
         
         presentUpsell(trigger: trigger)
         return true
+    }
+    
+    /// Handles a deep link with a bundle URL for testing purposes.
+    /// - Parameters:
+    ///   - bundleUrl: The URL of the bundle to fetch and display
+    ///   - sourceTrigger: Optional trigger to clone config from. If nil, uses first available trigger.
+    private func handleBundleUrlDeepLink(bundleUrl: String, sourceTrigger: String?) async {
+        if !initialized {
+            print("[Helium] handleDeepLink - Helium not initialized")
+            return
+        }
+
+        let status = HeliumFetchedConfigManager.shared.downloadStatus
+        if status == .inProgress || status == .notDownloadedYet {
+            print("[Helium] handleDeepLink - Waiting for config download to complete...")
+            await waitForDownloadCompletion()
+        }
+        
+        do {
+            let (bundleId, html) = try await HeliumFetchedConfigManager.shared.fetchSingleBundle(bundleURL: bundleUrl)
+            
+            HeliumFetchedConfigManager.shared.setTestTriggerConfig(
+                sourceTrigger: sourceTrigger,
+                bundleId: bundleId,
+                bundleUrl: bundleUrl,
+                bundleHtml: html
+            )
+            
+            await MainActor.run {
+                hideAllUpsells()
+                presentUpsell(trigger: HeliumFetchedConfigManager.HELIUM_DEEPLINK_TEST_TRIGGER)
+            }
+        } catch {
+            print("[Helium] handleDeepLink - Failed to fetch bundle from \(bundleUrl): \(error)")
+        }
+    }
+    
+    /// Waits for the config download to complete using NotificationCenter.
+    private func waitForDownloadCompletion() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            var observer: NSObjectProtocol?
+            observer = NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("HeliumConfigDownloadComplete"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if let observer = observer {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                continuation.resume()
+            }
+        }
     }
     
     // MARK: - Entitlements / Subscription Status

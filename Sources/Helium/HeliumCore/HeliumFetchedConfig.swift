@@ -577,6 +577,101 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return html
     }
     
+    /// Fetches a single bundle from a URL for deep link testing purposes.
+    /// - Parameter bundleURL: The URL of the bundle to fetch
+    /// - Returns: A tuple containing the bundleId extracted from the URL and the HTML content
+    /// - Throws: BundleFetchError if the fetch fails
+    func fetchSingleBundle(bundleURL: String) async throws -> (bundleId: String, html: String) {
+        guard isValidURL(bundleURL) else {
+            throw BundleFetchError.permanentFailure(.bundleFetchInvalidUrl)
+        }
+        
+        guard let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleURL) else {
+            throw BundleFetchError.permanentFailure(.bundleFetchInvalidUrl)
+        }
+        
+        let sessionConfig = URLSessionConfiguration.default
+        let session = URLSession(configuration: sessionConfig)
+        
+        let html = try await fetchBundleHTML(from: bundleURL, using: session, timeoutInterval: 10)
+        
+        return (bundleId, html)
+    }
+    
+    /// The trigger name used for deep link bundle testing
+    static let HELIUM_DEEPLINK_TEST_TRIGGER = "helium_deeplink_test_trigger"
+    
+    /// Sets up a test trigger configuration for deep link testing.
+    /// Clones an existing trigger's config and updates it to use the specified bundle.
+    /// - Parameters:
+    ///   - sourceTrigger: The trigger to clone config from. If nil, uses the first available trigger.
+    ///   - bundleId: The bundle ID extracted from the bundle URL
+    ///   - bundleUrl: The bundle URL to use for this test trigger
+    ///   - bundleHtml: The HTML content of the bundle
+    func setTestTriggerConfig(
+        sourceTrigger: String?,
+        bundleId: String,
+        bundleUrl: String,
+        bundleHtml: String
+    ) {
+        guard var config = fetchedConfig else {
+            print("[Helium] setTestTriggerConfig - No fetched config available")
+            return
+        }
+        
+        // Determine the actual source trigger name
+        let resolvedSourceTrigger: String?
+        if let sourceTrigger {
+            resolvedSourceTrigger = sourceTrigger
+        } else {
+            // Use the first available trigger's name
+            resolvedSourceTrigger = config.triggerToPaywalls.keys.first
+        }
+        
+        // Get source paywall info to clone
+        guard let resolvedSourceTrigger,
+              var testPaywallInfo = config.triggerToPaywalls[resolvedSourceTrigger] else {
+            print("[Helium] setTestTriggerConfig - No source trigger config available")
+            return
+        }
+        
+        // Update the bundle URL in resolvedConfig so extractedBundleUrl returns our new URL
+        // extractedBundleUrl checks resolvedConfig["baseStack"]["componentProps"]["bundleURL"] first
+        if var resolvedConfigDict = testPaywallInfo.resolvedConfig.value as? [String: Any],
+           var baseStack = resolvedConfigDict["baseStack"] as? [String: Any],
+           var componentProps = baseStack["componentProps"] as? [String: Any] {
+            componentProps["bundleURL"] = bundleUrl
+            baseStack["componentProps"] = componentProps
+            resolvedConfigDict["baseStack"] = baseStack
+            testPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
+        }
+        // And update additional paywall fields
+        var additionalFields = testPaywallInfo.additionalPaywallFields ?? JSON([:])
+        additionalFields["paywallBundleUrl"] = JSON(bundleUrl)
+        testPaywallInfo.additionalPaywallFields = additionalFields
+        
+        // Store the test trigger config
+        config.triggerToPaywalls[HeliumFetchedConfigManager.HELIUM_DEEPLINK_TEST_TRIGGER] = testPaywallInfo
+        
+        // Store the bundle HTML
+        if config.bundles == nil {
+            config.bundles = [:]
+        }
+        config.bundles?[bundleId] = bundleHtml
+        
+        // Update the fetched config
+        fetchedConfig = config
+        
+        // Also update fetchedConfigJSON so getResolvedConfigJSONForTrigger works
+        if var configJSON = fetchedConfigJSON {
+            var sourceJSON = configJSON["triggerToPaywalls"][resolvedSourceTrigger]
+            // Update the bundleURL in resolvedConfig so extractedBundleUrl returns our new URL
+            sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
+            configJSON["triggerToPaywalls"][HeliumFetchedConfigManager.HELIUM_DEEPLINK_TEST_TRIGGER] = sourceJSON
+            fetchedConfigJSON = configJSON
+        }
+    }
+    
     private func handleConfigFetchSuccess(
         newConfig: HeliumFetchedConfig,
         numConfigAttempts: Int,

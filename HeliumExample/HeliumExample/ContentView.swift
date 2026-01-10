@@ -25,6 +25,10 @@ struct ContentView: View {
             }
             .accessibilityIdentifier("showPaywallViaModifier")
             .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey)
+            
+            Button("deep link test") {
+                Helium.shared.handleDeepLink(URL(string: "helium-test://helium-test?burl=https://bundles.t3.storage.dev/e5546567-858d-4275-97eb-1a3f73cdba43/d9e10954-bbf0-47c7-af0b-42178bdacefc/bundle_1761021697892.html")!)
+            }
         }
         .padding()
     }
