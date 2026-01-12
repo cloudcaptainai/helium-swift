@@ -117,27 +117,54 @@ class ExperimentAllocationTracker {
         return "\(persistentId)_\(trigger)"
     }
     
-    /// Determines if an allocation event should fire based on allocation changes.
-    /// Only one allocation event should fire per user per experiment (sticky bucketing).
+    /// Determines if an allocation event should fire based on allocation changes
+    /// 
+    /// - Parameters:
+    ///   - current: The current allocation details
+    ///   - existing: The previously stored allocation details (nil if no previous allocation)
+    /// - Returns: true if the event should fire (new allocation or details changed), false otherwise
     ///
     /// An allocation event fires when:
-    /// - No previous allocation exists (first time user sees this experiment)
+    /// - No previous allocation exists (first time user sees this trigger)
     /// - The experimentId changed (different experiment is running)
+    /// - The allocationId changed (different paywall variant assigned)
+    /// - The allocationIndex changed (different position in variant array)
+    /// - The audienceId changed (user matched a different audience)
     private func shouldFireAllocationEvent(
         current: StoredAllocation,
         existing: StoredAllocation?
     ) -> Bool {
+        // No previous allocation - this is a new allocation
         guard let existing = existing else {
             return true
         }
+        
         return !isSameExperimentAllocation(current, existing)
     }
-    
+
     private func isSameExperimentAllocation(
         _ first: StoredAllocation,
         _ second: StoredAllocation
     ) -> Bool {
-        return first.experimentId == second.experimentId
+        // Check each field explicitly to detect any change
+        if first.experimentId != second.experimentId {
+            return false  // Different experiment
+        }
+        
+        if first.allocationId != second.allocationId {
+            return false  // Different paywall variant
+        }
+        
+        if first.allocationIndex != second.allocationIndex {
+            return false  // Different variant position
+        }
+        
+        if first.audienceId != second.audienceId {
+            return false  // Different audience matched
+        }
+        
+        // All fields match
+        return true
     }
     
     /// Tracks allocation and fires UserAllocatedEvent if this is the first time
