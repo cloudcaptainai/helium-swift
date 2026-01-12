@@ -117,13 +117,18 @@ class ExperimentAllocationTracker {
         return "\(persistentId)_\(trigger)"
     }
     
-    /// Determines if an allocation event should fire based on allocation changes
+    /// Determines if an allocation event should fire based on allocation changes.
+    /// Only one allocation event should fire per user per experiment (sticky bucketing).
+    ///
+    /// An allocation event fires when:
+    /// - No previous allocation exists (first time user sees this experiment)
+    /// - The experimentId changed (different experiment is running)
     private func shouldFireAllocationEvent(
         current: StoredAllocation,
         existing: StoredAllocation?
     ) -> Bool {
         guard let existing = existing else {
-            return true  // No previous allocation - fire event
+            return true
         }
         return !isSameExperimentAllocation(current, existing)
     }
