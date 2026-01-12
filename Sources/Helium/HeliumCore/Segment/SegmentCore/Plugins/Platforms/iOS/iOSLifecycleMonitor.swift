@@ -77,8 +77,10 @@ class iOSLifecycleMonitor: PlatformPlugin {
             self.significantTimeChange(notification: notification)
         case UIApplication.backgroundRefreshStatusDidChangeNotification:
             self.backgroundRefreshDidChange(notification: notification)
+        case UIApplication.willTerminateNotification:
+            self.willTerminate(notification: notification)
         default:
-            
+
             break
         }
     }
@@ -186,15 +188,16 @@ extension SegmentDestination: iOSLifecycle {
 }
 
 extension SegmentDestination.UploadTaskInfo {
-    init(url: URL?, data: Data?, task: URLSessionDataTask) {
+    init(url: URL?, data: Data?, task: any DataTask) {
         self.url = url
         self.data = data
         self.task = task
         
-        if let application = UIApplication.safeShared {
+        if let application = UIApplication.safeShared,
+           let urlTask = task as? URLSessionTask {
             var taskIdentifier: UIBackgroundTaskIdentifier = .invalid
             taskIdentifier = application.beginBackgroundTask {
-                task.cancel()
+                urlTask.cancel()
                 application.endBackgroundTask(taskIdentifier)
             }
             
