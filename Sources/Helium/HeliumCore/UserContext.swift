@@ -87,19 +87,6 @@ public struct CodableUserContext: Codable {
     var experimentAllocationHistory: [String: StoredAllocation]
     
     public func asParams() -> [String: Any] {
-        // Convert allocation history to dictionary with experiment version ID
-        var allocationHistoryDict: [String: [String: Any]?] = [:]
-        for (experimentId, allocation) in experimentAllocationHistory {
-            var allocationDict: [String: Any] = [
-                "allocationId": allocation.allocationId as Any,
-                "enrolledAt": allocation.enrolledAt?.timeIntervalSince1970 as Any
-            ]
-            if let experimentVersionId = allocation.experimentVersionId {
-                allocationDict["experimentVersionId"] = experimentVersionId
-            }
-            allocationHistoryDict[experimentId] = allocationDict
-        }
-        
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
@@ -152,7 +139,7 @@ public struct CodableUserContext: Codable {
                 "appDisplayName": self.applicationInfo.appDisplayName ?? "",
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
             ],
-            "experimentAllocationHistory": allocationHistoryDict,
+            "experimentAllocationHistory": ExperimentAllocationTracker.shared.getAllocationHistoryAsParams(),
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }

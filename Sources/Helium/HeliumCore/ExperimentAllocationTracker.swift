@@ -213,6 +213,20 @@ class ExperimentAllocationTracker {
         return result
     }
     
+    /// Returns allocation history as dictionary for API params
+    func getAllocationHistoryAsParams() -> [String: [String: Any]] {
+        var result: [String: [String: Any]] = [:]
+        for allocation in storedAllocations.values {
+            guard let experimentId = allocation.experimentId else { continue }
+            result[experimentId] = [
+                "allocationId": allocation.allocationId ?? "",
+                "enrolledAt": allocation.enrolledAt?.timeIntervalSince1970 ?? 0,
+                "experimentVersionId": allocation.experimentVersionId ?? ""
+            ]
+        }
+        return result
+    }
+    
     /// Get the enrollment timestamp and status for a specific user and trigger
     /// - Parameters:
     ///   - persistentId: The user's Helium persistent ID
