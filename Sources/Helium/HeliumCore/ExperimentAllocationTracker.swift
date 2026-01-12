@@ -201,25 +201,15 @@ class ExperimentAllocationTracker {
         storedAllocations.removeAll()
         UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
         
-        // Also delete file backup
+        // Delete file backup on saveQueue to avoid race with pending async saves
         if let fileURL = allocationsFileURL {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
-    }
-    
-    /// Returns stored allocations keyed by experiment ID
-    func getAllocationHistoryByExperimentId() -> [String: StoredAllocation] {
-        var result: [String: StoredAllocation] = [:]
-        for allocation in storedAllocations.values {
-            if let experimentId = allocation.experimentId {
-                result[experimentId] = allocation
+            saveQueue.async {
+                try? FileManager.default.removeItem(at: fileURL)
             }
         }
-        return result
     }
     
-    /// Returns allocation history as dictionary for API params
-    func getAllocationHistoryAsParams() -> [String: [String: Any]] {
+    func buildAllocationHistoryRequestPayload() -> [String: [String: Any]] {
         var result: [String: [String: Any]] = [:]
         for allocation in storedAllocations.values {
             guard let experimentId = allocation.experimentId else { continue }

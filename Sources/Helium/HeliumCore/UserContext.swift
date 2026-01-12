@@ -84,9 +84,8 @@ public struct CodableUserContext: Codable {
     var heliumPersistentId: String?
     var organizationID: String?
     var appTransactionId: String?
-    var experimentAllocationHistory: [String: StoredAllocation]
     
-    public func asParams() -> [String: Any] {
+    public func buildRequestPayload() -> [String: Any] {
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
@@ -139,7 +138,7 @@ public struct CodableUserContext: Codable {
                 "appDisplayName": self.applicationInfo.appDisplayName ?? "",
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
             ],
-            "experimentAllocationHistory": ExperimentAllocationTracker.shared.getAllocationHistoryAsParams(),
+            "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
@@ -181,15 +180,12 @@ public struct CodableUserContext: Codable {
             availableCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.availableCapacity
         )
 
-        let allocationHistory = ExperimentAllocationTracker.shared.getAllocationHistoryByExperimentId()
-        
         return CodableUserContext(
             locale: locale,
             screenInfo: screenInfo,
             deviceInfo: deviceInfo,
             applicationInfo: applicationInfo,
-            additionalParams: userTraits ?? HeliumUserTraits([:]),
-            experimentAllocationHistory: allocationHistory
+            additionalParams: userTraits ?? HeliumUserTraits([:])
         )
     }
 }
