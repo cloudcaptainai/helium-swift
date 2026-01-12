@@ -44,7 +44,7 @@ class ExperimentAllocationTracker {
     /// Maps "persistentId_experimentId" (or legacy "persistentId_trigger") to stored allocation details
     private var storedAllocations: [String: StoredAllocation] = [:]
     
-    /// File URL for fallback storage
+    /// File URL for allocations storage, as a backup to UserDefaults
     private var allocationsFileURL: URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
