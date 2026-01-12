@@ -42,7 +42,7 @@ class ExperimentAllocationTracker {
     private let allocationsFileName = "helium_experiment_allocations.json"
     
     /// Maps "persistentId_experimentId" (or legacy "persistentId_trigger") to stored allocation details
-    private var storedAllocations: [String: StoredAllocation] = [:]
+    @HeliumAtomic private var storedAllocations: [String: StoredAllocation] = [:]
     
     /// File URL for allocations storage, as a backup to UserDefaults
     private var allocationsFileURL: URL? {

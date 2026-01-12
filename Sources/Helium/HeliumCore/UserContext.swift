@@ -86,58 +86,70 @@ public struct CodableUserContext: Codable {
     var appTransactionId: String?
     
     public func buildRequestPayload() -> [String: Any] {
+        let localeDict: [String: Any] = [
+            "currentCountry": self.locale.currentCountry ?? "",
+            "currentCurrency": self.locale.currentCurrency ?? "",
+            "currentCurrencySymbol": self.locale.currentCurrencySymbol ?? "",
+            "preferredLanguages": self.locale.preferredLanguages ?? [],
+            "currentLanguage": self.locale.currentLanguage ?? "",
+            "currentTimeZone": self.locale.currentTimeZone?.identifier ?? "",
+            "currentTimeZoneName": self.locale.currentTimeZoneName ?? "",
+            "decimalSeparator": self.locale.decimalSeparator ?? "",
+            "usesMetricSystem": self.locale.usesMetricSystem,
+            "storeCountryCode": self.locale.storeCountryCode ?? "",
+            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
+        ]
+        
+        let nativeBoundsDict: [String: Any] = [
+            "x": self.screenInfo.nativeBounds.origin.x,
+            "y": self.screenInfo.nativeBounds.origin.y,
+            "width": self.screenInfo.nativeBounds.size.width,
+            "height": self.screenInfo.nativeBounds.size.height
+        ]
+        
+        let boundsDict: [String: Any] = [
+            "x": self.screenInfo.bounds.origin.x,
+            "y": self.screenInfo.bounds.origin.y,
+            "width": self.screenInfo.bounds.size.width,
+            "height": self.screenInfo.bounds.size.height
+        ]
+        
+        let screenInfoDict: [String: Any] = [
+            "brightness": self.screenInfo.brightness,
+            "nativeBounds": nativeBoundsDict,
+            "nativeScale": self.screenInfo.nativeScale,
+            "bounds": boundsDict,
+            "scale": self.screenInfo.scale,
+            "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
+        ]
+        
+        let deviceInfoDict: [String: Any] = [
+            "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier ?? "",
+            "orientation": self.deviceInfo.orientation,
+            "systemName": self.deviceInfo.systemName,
+            "systemVersion": self.deviceInfo.systemVersion,
+            "deviceModel": self.deviceInfo.deviceModel,
+            "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
+        ]
+        
+        let applicationInfoDict: [String: Any] = [
+            "version": self.applicationInfo.version ?? "",
+            "build": self.applicationInfo.build ?? "",
+            "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
+            "appDisplayName": self.applicationInfo.appDisplayName ?? "",
+            "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? ""
+        ]
+        
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
-            "locale": [
-                "currentCountry": self.locale.currentCountry ?? "",
-                "currentCurrency": self.locale.currentCurrency ?? "",
-                "currentCurrencySymbol": self.locale.currentCurrencySymbol ?? "",
-                "preferredLanguages": self.locale.preferredLanguages ?? [],
-                "currentLanguage": self.locale.currentLanguage ?? "",
-                "currentTimeZone": self.locale.currentTimeZone?.identifier ?? "",
-                "currentTimeZoneName": self.locale.currentTimeZoneName ?? "",
-                "decimalSeparator": self.locale.decimalSeparator ?? "",
-                "usesMetricSystem": self.locale.usesMetricSystem,
-                "storeCountryCode": self.locale.storeCountryCode ?? "",
-                "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
-            ],
-            "screenInfo": [
-                "brightness": self.screenInfo.brightness,
-                "nativeBounds": [
-                    "x": self.screenInfo.nativeBounds.origin.x,
-                    "y": self.screenInfo.nativeBounds.origin.y,
-                    "width": self.screenInfo.nativeBounds.size.width,
-                    "height": self.screenInfo.nativeBounds.size.height
-                ],
-                "nativeScale": self.screenInfo.nativeScale,
-                "bounds": [
-                    "x": self.screenInfo.bounds.origin.x,
-                    "y": self.screenInfo.bounds.origin.y,
-                    "width": self.screenInfo.bounds.size.width,
-                    "height": self.screenInfo.bounds.size.height
-                ],
-                "scale": self.screenInfo.scale,
-                "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
-            ],
-            "deviceInfo": [
-                "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier ?? "",
-                "orientation": self.deviceInfo.orientation,
-                "systemName": self.deviceInfo.systemName,
-                "systemVersion": self.deviceInfo.systemVersion,
-                "deviceModel": self.deviceInfo.deviceModel,
-                "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
-            ],
-            "applicationInfo": [
-                "version": self.applicationInfo.version ?? "",
-                "build": self.applicationInfo.build ?? "",
-                "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
-                "appDisplayName": self.applicationInfo.appDisplayName ?? "",
-                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
-            ],
+            "locale": localeDict,
+            "screenInfo": screenInfoDict,
+            "deviceInfo": deviceInfoDict,
+            "applicationInfo": applicationInfoDict,
             "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
