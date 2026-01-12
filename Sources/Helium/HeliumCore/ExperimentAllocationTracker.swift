@@ -13,6 +13,7 @@ struct StoredAllocation: Codable {
     let allocationId: String?
     let allocationIndex: Int?
     let audienceId: String?
+    let experimentVersionId: String?
     let enrolledAt: Date?
     let enrolledTrigger: String?
     
@@ -21,6 +22,7 @@ struct StoredAllocation: Codable {
         self.allocationId = experimentInfo.chosenVariantDetails?.allocationId
         self.allocationIndex = experimentInfo.chosenVariantDetails?.allocationIndex
         self.audienceId = experimentInfo.audienceId
+        self.experimentVersionId = experimentInfo.experimentVersionId
         self.enrolledAt = Date()
         self.enrolledTrigger = trigger
     }
@@ -39,7 +41,7 @@ class ExperimentAllocationTracker {
     private let allocationsUserDefaultsKey = "heliumExperimentAllocations"
     private let allocationsFileName = "helium_experiment_allocations.json"
     
-    /// Maps "persistentId_trigger" to stored allocation details
+    /// Maps "persistentId_experimentId" (or legacy "persistentId_trigger") to stored allocation details
     private var storedAllocations: [String: StoredAllocation] = [:]
     
     /// File URL for fallback storage
@@ -116,53 +118,21 @@ class ExperimentAllocationTracker {
     }
     
     /// Determines if an allocation event should fire based on allocation changes
-    /// 
-    /// - Parameters:
-    ///   - current: The current allocation details
-    ///   - existing: The previously stored allocation details (nil if no previous allocation)
-    /// - Returns: true if the event should fire (new allocation or details changed), false otherwise
-    ///
-    /// An allocation event fires when:
-    /// - No previous allocation exists (first time user sees this trigger)
-    /// - The experimentId changed (different experiment is running)
-    /// - The allocationId changed (different paywall variant assigned)
-    /// - The allocationIndex changed (different position in variant array)
-    /// - The audienceId changed (user matched a different audience)
     private func shouldFireAllocationEvent(
         current: StoredAllocation,
         existing: StoredAllocation?
     ) -> Bool {
-        // No previous allocation - this is a new allocation
         guard let existing = existing else {
-            return true
+            return true  // No previous allocation - fire event
         }
-        
         return !isSameExperimentAllocation(current, existing)
     }
-
+    
     private func isSameExperimentAllocation(
         _ first: StoredAllocation,
         _ second: StoredAllocation
     ) -> Bool {
-        // Check each field explicitly to detect any change
-        if first.experimentId != second.experimentId {
-            return false  // Different experiment
-        }
-        
-        if first.allocationId != second.allocationId {
-            return false  // Different paywall variant
-        }
-        
-        if first.allocationIndex != second.allocationIndex {
-            return false  // Different variant position
-        }
-        
-        if first.audienceId != second.audienceId {
-            return false  // Different audience matched
-        }
-        
-        // All fields match
-        return true
+        return first.experimentId == second.experimentId
     }
     
     /// Tracks allocation and fires UserAllocatedEvent if this is the first time
@@ -232,9 +202,15 @@ class ExperimentAllocationTracker {
         }
     }
     
-    /// Returns all stored allocations for this user
-    func getAllocationHistory() -> [StoredAllocation] {
-        return Array(storedAllocations.values)
+    /// Returns stored allocations keyed by experiment ID
+    func getAllocationHistoryByExperimentId() -> [String: StoredAllocation] {
+        var result: [String: StoredAllocation] = [:]
+        for allocation in storedAllocations.values {
+            if let experimentId = allocation.experimentId {
+                result[experimentId] = allocation
+            }
+        }
+        return result
     }
     
     /// Get the enrollment timestamp and status for a specific user and trigger

@@ -142,6 +142,7 @@ public struct HeliumFetchedConfig: Codable {
             experimentName: response.experimentName,
             experimentId: response.experimentId,
             experimentType: response.experimentType,
+            experimentVersionId: response.experimentVersionId,
             experimentMetadata: response.experimentMetadata,
             startDate: response.startDate,
             endDate: response.endDate,
@@ -478,7 +479,7 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             // Note: experimentInfo is in HeliumPaywallLoggedEvent.experimentInfo, not decoded here
             // Using empty ExperimentInfo as placeholder for legacy enum compatibility
-            let placeholderInfo = ExperimentInfo(enrolledTrigger: nil, triggers: nil, experimentName: nil, experimentId: nil, experimentType: nil, experimentMetadata: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, chosenVariantDetails: nil, hashDetails: nil)
+            let placeholderInfo = ExperimentInfo(enrolledTrigger: nil, triggers: nil, experimentName: nil, experimentId: nil, experimentType: nil, experimentVersionId: nil, experimentMetadata: nil, startDate: nil, endDate: nil, audienceId: nil, audienceData: nil as AnyCodable?, chosenVariantDetails: nil, hashDetails: nil)
             self = .userAllocated(triggerName: triggerName, experimentInfo: placeholderInfo)
         case "customPaywallAction":
             let actionName = try container.decode(String.self, forKey: .actionName)

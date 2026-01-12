@@ -16,6 +16,7 @@ struct ExperimentInfoResponse: Codable {
     let experimentName: String?
     let experimentType: String?
     let experimentMetadata: AnyCodable?
+    let experimentVersionId: String?
     let startDate: String?
     let endDate: String?
     let audienceId: String?
@@ -114,6 +115,9 @@ public struct ExperimentInfo: Codable {
     /// Experiment type (e.g., "A/B/n test")
     public let experimentType: String?
     
+    /// Experiment version ID for version resolution
+    public let experimentVersionId: String?
+    
     /// Additional experiment metadata (internal storage)
     let experimentMetadata: AnyCodable?
     
@@ -168,6 +172,7 @@ public struct ExperimentInfo: Codable {
         experimentName: String?,
         experimentId: String?,
         experimentType: String?,
+        experimentVersionId: String?,
         experimentMetadata: AnyCodable?,
         startDate: String?,
         endDate: String?,
@@ -183,6 +188,7 @@ public struct ExperimentInfo: Codable {
         self.experimentName = experimentName
         self.experimentId = experimentId
         self.experimentType = experimentType
+        self.experimentVersionId = experimentVersionId
         self.experimentMetadata = experimentMetadata
         self.startDate = startDate
         self.endDate = endDate
@@ -203,6 +209,7 @@ public struct ExperimentInfo: Codable {
         case experimentName
         case experimentId
         case experimentType
+        case experimentVersionId
         case experimentMetadata
         case startDate
         case endDate
@@ -223,6 +230,7 @@ public struct ExperimentInfo: Codable {
         try container.encodeIfPresent(experimentName, forKey: .experimentName)
         try container.encodeIfPresent(experimentId, forKey: .experimentId)
         try container.encodeIfPresent(experimentType, forKey: .experimentType)
+        try container.encodeIfPresent(experimentVersionId, forKey: .experimentVersionId)
         try container.encodeIfPresent(experimentMetadata, forKey: .experimentMetadata)
         try container.encodeIfPresent(startDate, forKey: .startDate)
         try container.encodeIfPresent(endDate, forKey: .endDate)
@@ -252,6 +260,7 @@ public struct ExperimentInfo: Codable {
         experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
         experimentId = try container.decodeIfPresent(String.self, forKey: .experimentId)
         experimentType = try container.decodeIfPresent(String.self, forKey: .experimentType)
+        experimentVersionId = try container.decodeIfPresent(String.self, forKey: .experimentVersionId)
         experimentMetadata = try container.decodeIfPresent(AnyCodable.self, forKey: .experimentMetadata)
         startDate = try container.decodeIfPresent(String.self, forKey: .startDate)
         endDate = try container.decodeIfPresent(String.self, forKey: .endDate)
