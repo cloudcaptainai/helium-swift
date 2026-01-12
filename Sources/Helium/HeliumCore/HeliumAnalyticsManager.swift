@@ -19,15 +19,17 @@ class HeliumAnalyticsManager {
         // Also note that analytics-swift does NOT flush when app goes to background, despite their code calling an empty
         // flush() {} method. It's unclear if this is intentional by them.
         NotificationCenter.default.addObserver(
-            forName: UIApplication.willResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            print("[HeliumAnalytics] willResignActive - triggering flush")
-            self?.flush()
-        }
+            self,
+            selector: #selector(handleResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
     }
-
+    
+    @objc private func handleResignActive() {
+        flush()
+    }
+    
     func getAnalytics() -> Analytics? {
         queue.sync { analytics }
     }
