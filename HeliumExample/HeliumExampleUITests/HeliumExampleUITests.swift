@@ -41,13 +41,15 @@ final class HeliumExampleUITests: XCTestCase {
     func testPurchase() throws {
         let app = makeApp()
         app.launch()
+        sleep(2) // Let CI simulator stabilize
         
         let triggerButton = app.buttons.matching(identifier: "presentPaywall").firstMatch
         triggerButton.tap()
         
         // Wait for the webview to load
         let webView = app.webViews.firstMatch
-        XCTAssert(webView.waitForExistence(timeout: 15), "Paywall WebView did not appear")
+        XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
+        sleep(2) // Buffer for WebView to finish rendering
         
         // This will match any button containing "claim" or "start" anywhere in the text
         let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
@@ -72,13 +74,15 @@ final class HeliumExampleUITests: XCTestCase {
     func testModifierDisplayAndDismiss() throws {
         let app = makeApp()
         app.launch()
+        sleep(2) // Let CI simulator stabilize
         
         let triggerButton = app.buttons.matching(identifier: "showPaywallViaModifier").firstMatch
         triggerButton.tap()
         
         // Wait for the webview to load
         let webView = app.webViews.firstMatch
-        XCTAssert(webView.waitForExistence(timeout: 15), "Paywall WebView did not appear")
+        XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
+        sleep(2) // Buffer for WebView to finish rendering
         
         // Ensure webview properly displays
         let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
@@ -124,13 +128,15 @@ final class HeliumExampleUITests: XCTestCase {
 //        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
 //        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
 //        app.launch()
-//        
+//        sleep(2) // Let CI simulator stabilize
+//
 //        // Paywall loading state should automatically be opened and then show content once paywalls download
 //        
 //        // Wait for the webview to load
 //        let webView = app.webViews.firstMatch
 //        XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
-//        
+//        sleep(2) // Buffer for WebView to finish rendering
+//
 //        // This will match any button containing "claim" or "start" anywhere in the text
 //        let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
 //        var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
