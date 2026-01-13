@@ -81,7 +81,7 @@ public class HeliumController {
                         uncachedBundleSizeKB: metrics.uncachedBundleSizeKB,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts,
-                        totalTimeMS: metrics.totalTimeMS
+                        totalInitializeTimeMS: metrics.totalTimeMS
                     ),
                     paywallSession: nil
                 )
@@ -108,7 +108,7 @@ public class HeliumController {
                         numBundlesNotDownloaded: metrics.bundleFailCount,
                         numAttempts: metrics.numConfigAttempts,
                         numBundleAttempts: metrics.numBundleAttempts,
-                        totalTimeMS: metrics.totalTimeMS
+                        totalInitializeTimeMS: metrics.totalTimeMS
                     ),
                     paywallSession: nil
                 )
