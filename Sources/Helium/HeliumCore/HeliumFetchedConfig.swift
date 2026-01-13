@@ -163,6 +163,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             print("[Helium] Config download already in progress. Skipping new request.")
             return
         }
+        let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
             await updateDownloadState(.inProgress)
             downloadStep = .config
@@ -186,6 +187,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 params: params,
                 maxAttempts: HeliumFetchedConfigManager.MAX_NUM_CONFIG_ATTEMPTS,
                 attemptCounter: 1,
+                initializeStartTime: initializeStartTime,
                 configStartTime: configStartTime,
                 completion: completion
             )
@@ -197,6 +199,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         maxAttempts: Int,
         attemptCounter: Int,
+        initializeStartTime: DispatchTime,
         configStartTime: DispatchTime,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
@@ -216,6 +219,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         params: params,
                         maxAttempts: maxAttempts,
                         attemptCounter: attemptCounter + 1,
+                        initializeStartTime: initializeStartTime,
                         configStartTime: configStartTime,
                         completion: completion
                     )
@@ -261,7 +265,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 downloadStep = .products
 
                 let localizedPriceTimeMS = await priceTask
-                let totalTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
 
                 let metrics = HeliumFetchMetrics(
                     numConfigAttempts: attemptCounter,
@@ -310,7 +314,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 
                 triggersWithSkippedBundleAndReason = bundlesResult.triggersWithSkippedBundleAndReason
                 
-                let totalTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
@@ -361,6 +365,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     params: params,
                     maxAttempts: maxAttempts,
                     attemptCounter: attemptCounter + 1,
+                    initializeStartTime: initializeStartTime,
                     configStartTime: configStartTime,
                     completion: completion
                 )
