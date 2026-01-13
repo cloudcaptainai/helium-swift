@@ -2,13 +2,14 @@ name: UI Tests
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
   workflow_call:  # Allow other workflows to call this
   workflow_dispatch:
 
 jobs:
   ui-tests:
     runs-on: macos-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     env:
       HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
       HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
