@@ -140,15 +140,42 @@ class TransactionSyncClient {
     
     func syncTransactions(_ transactions: [Transaction]) {
         guard !transactions.isEmpty else { return }
-
+        
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
-
+        let userId = HeliumIdentityManager.shared.getUserId()
+        let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
+        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? ""
+        let timestamp = formatAsTimestamp(date: Date())
+        
         for transaction in transactions {
-            analytics.track(name: "helium_transactionSynced", properties: [
+            var properties: [String: Any] = [
                 "transactionId": transaction.id,
                 "originalTransactionId": transaction.originalID,
-                "heliumPersistentId": heliumPersistentId
-            ])
+                "heliumPersistentId": heliumPersistentId,
+                "userId": userId,
+                "heliumSessionId": heliumSessionId,
+                "organizationId": organizationId,
+                "appBundleId": transaction.appBundleID,
+                "productId": transaction.productID,
+                "purchasedQuantity": transaction.purchasedQuantity,
+                "storefrontCountryCode": transaction.storefrontCountryCode,
+                "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
+                "timestamp": timestamp
+            ]
+            
+            if let appAccountToken = transaction.appAccountToken {
+                properties["appAccountToken"] = appAccountToken.uuidString
+            }
+            
+#if compiler(>=6.2)
+            properties["appTransactionId"] = transaction.appTransactionID
+            properties["price"] = transaction.price
+            if #available(iOS 16.0, *) {
+                properties["currency"] = transaction.currency?.identifier ?? ""
+            }
+#endif
+            
+            analytics.track(name: "helium_transactionSynced", properties: properties)
         }
         
         analytics.flush()
