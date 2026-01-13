@@ -224,7 +224,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         completion: completion
                     )
                 } else {
-                    let totalTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                    let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                     await self.updateDownloadState(.downloadFailure)
                     completion(.failure(
                         errorMessage: "Reached max retries for config.",
@@ -371,7 +371,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 )
             } else {
                 await self.updateDownloadState(.downloadFailure)
-                let totalTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
                     errorMessage: error.localizedDescription,
                     HeliumFetchMetrics(
