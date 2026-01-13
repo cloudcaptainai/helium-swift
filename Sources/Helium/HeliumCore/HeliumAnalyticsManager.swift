@@ -12,7 +12,7 @@ class HeliumAnalyticsManager {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     
-    init() {
+    private init() {
         // Flush when will resign active for more frequent event dispatch and better chance of success during app force-close.
         // Note that this will also fire for things like checking notification drawer and phone call, but that's probably fine
         // and perhaps preferred.
