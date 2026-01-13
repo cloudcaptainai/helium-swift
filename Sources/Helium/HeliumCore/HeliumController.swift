@@ -52,7 +52,7 @@ public class HeliumController {
     }
     
     public func setCustomAPIEndpoint(endpoint: String?) {
-        self.customAPIEndpoint = endpoint
+        customAPIEndpoint = endpoint
     }
     
     func downloadConfig() {
