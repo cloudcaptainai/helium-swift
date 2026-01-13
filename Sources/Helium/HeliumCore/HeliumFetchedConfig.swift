@@ -156,7 +156,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     func fetchConfig(
         endpoint: String,
-        params: [String: Any],
+        apiKey: String,
         completion: @escaping (HeliumFetchResult) -> Void
     ) {
         if downloadStatus == .inProgress {
@@ -166,6 +166,19 @@ public class HeliumFetchedConfigManager: ObservableObject {
         fetchTask = Task {
             await updateDownloadState(.inProgress)
             downloadStep = .config
+
+            // Try to ensure App Store country code is available. It should not take longer
+            // than 5ms but do a short timeout to make sure we don't delay config fetch too long.
+            let _ = await withTimeoutOrNil(milliseconds: 25) {
+                await AppStoreCountryHelper.shared.fetchStoreCountryCode()
+            }
+            
+            let params: [String: Any] = [
+                "apiKey": apiKey,
+                "userId": HeliumIdentityManager.shared.getUserId(),
+                "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
+                "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
+            ]
             
             let configStartTime = DispatchTime.now()
             await fetchConfigWithRetry(
@@ -750,5 +763,19 @@ enum FetchError: LocalizedError {
         case .couldNotFetchForAllTriggers:
             return "Failed to fetch bundles for all triggers."
         }
+    }
+}
+
+/// Executes an async operation with a timeout, returning nil if the timeout is exceeded
+func withTimeoutOrNil<T>(milliseconds: UInt64, operation: @escaping () async -> T?) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask { await operation() }
+        group.addTask {
+            try? await Task.sleep(nanoseconds: milliseconds * 1_000_000)
+            return nil
+        }
+        let result = await group.next()
+        group.cancelAll()
+        return result ?? nil
     }
 }

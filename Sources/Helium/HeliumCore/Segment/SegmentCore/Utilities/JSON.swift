@@ -437,7 +437,7 @@ extension SegmentJSON {
     }
 
     /// Directly access or set a value within the JSON object using a key path.
-    subscript<T: Codable>(keyPath keyPath: KeyPath) -> T? {
+    subscript<T: Codable>(keyPath keyPath: JSONKeyPath) -> T? {
         get {
             var result: T? = nil
             switch self {
@@ -493,14 +493,14 @@ extension SegmentJSON {
     ///   - forKeyPath: The keypath within the object to retrieve.  eg: `context.device.ip`
     ///
     /// - Returns: The value as typed, or nil.
-    func value<T: Codable>(forKeyPath keyPath: KeyPath) -> T? {
+    func value<T: Codable>(forKeyPath keyPath: JSONKeyPath) -> T? {
         return self[keyPath: keyPath]
     }
     
     /// Directly access a value within the JSON object using a key path.
     /// - Parameters:
     ///   - forKeyPath: The keypath within the object to set.  eg: `context.device.ip`
-    mutating func setValue<T: Codable>(_ value: T?, forKeyPath keyPath: KeyPath) {
+    mutating func setValue<T: Codable>(_ value: T?, forKeyPath keyPath: JSONKeyPath) {
         self[keyPath: keyPath] = value
     }
 

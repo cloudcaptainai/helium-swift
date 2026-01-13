@@ -5,11 +5,7 @@ enum TemplateError: Error {
     case missingRequiredFields(String)
 }
 
-protocol BaseTemplateView: View {
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws
-}
-
-public struct DynamicBaseTemplateView: BaseTemplateView {
+public struct DynamicBaseTemplateView: View {
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
@@ -21,8 +17,12 @@ public struct DynamicBaseTemplateView: BaseTemplateView {
     var triggerName: String?
     let fallbackReason: PaywallUnavailableReason?
     
-    init(paywallInfo: HeliumPaywallInfo, trigger: String, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
-        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, trigger: trigger);
+    init(paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
+        let trigger = paywallSession.trigger
+        guard let paywallInfo = paywallSession.paywallInfoWithBackups else {
+            throw TemplateError.missingRequiredFields("Missing paywallInfo")
+        }
+        let delegate = HeliumActionsDelegate(paywallInfo: paywallInfo, paywallSession: paywallSession, trigger: trigger);
         _actionsDelegate = StateObject(wrappedValue: delegate)
         _actionsDelegateWrapper = StateObject(wrappedValue: ActionsDelegateWrapper(delegate: delegate));
         

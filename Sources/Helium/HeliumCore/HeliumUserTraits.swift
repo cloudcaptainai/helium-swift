@@ -10,17 +10,104 @@ import Foundation
 public struct HeliumUserTraits {
     private var storage: [String: AnyCodable]
     
-    // Main dictionary initializer that others will call into
+    private static let maxStringLength = 5_000 // ~5KB strings
+    private static let maxArrayCount = 500 // 500 elements
+    private static let maxDictionaryCount = 100 // 100 keys
+    private static let maxNestingDepth = 10 // 10 levels deep
+    
+    /// Create HeliumUserTraits with a dictionary.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
+    /// Large values are truncated with a warning.
     public init(_ traits: [String: Any]) {
-        self.storage = traits.mapValues { AnyCodable($0) }
+        self.storage = traits.compactMapValues { value -> AnyCodable? in
+            if let safeValue = Self.toJSONSafeValue(value, depth: 0) {
+                return AnyCodable(safeValue)
+            }
+            return nil
+        }
+    }
+
+    /// Converts a value to a JSON-safe type recursively, or returns nil if not convertible.
+    /// Truncates values that exceed size limits.
+    private static func toJSONSafeValue(_ value: Any, depth: Int) -> Any? {
+        // Check nesting depth first
+        if depth > maxNestingDepth {
+            print("[Helium] Warning: User trait value exceeds maximum nesting depth of \(maxNestingDepth). Skipping nested value.")
+            return nil
+        }
+        // Convert known types to JSON-safe equivalents first
+        if let date = value as? Date {
+            return ISO8601DateFormatter().string(from: date)
+        }
+        if let uuid = value as? UUID {
+            return uuid.uuidString
+        }
+        if let url = value as? URL {
+            let urlString = url.absoluteString
+            if urlString.count > maxStringLength {
+                print("[Helium] Warning: User trait URL value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                return String(urlString.prefix(maxStringLength))
+            }
+            return urlString
+        }
+
+        // Handle strings with length limit
+        if let string = value as? String {
+            if string.count > maxStringLength {
+                print("[Helium] Warning: User trait string value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                return String(string.prefix(maxStringLength))
+            }
+            return string
+        }
+        
+        // Handle arrays recursively with count limit
+        if let array = value as? [Any] {
+            var truncatedArray = array
+            if array.count > maxArrayCount {
+                print("[Helium] Warning: User trait array exceeds maximum count of \(maxArrayCount) elements. Truncating.")
+                truncatedArray = Array(array.prefix(maxArrayCount))
+            }
+            return truncatedArray.compactMap { toJSONSafeValue($0, depth: depth + 1) }
+        }
+
+        // Handle dictionaries recursively with count limit
+        if let dict = value as? [String: Any] {
+            var truncatedDict = dict
+            if dict.count > maxDictionaryCount {
+                print("[Helium] Warning: User trait dictionary exceeds maximum count of \(maxDictionaryCount) keys. Truncating.")
+                truncatedDict = Dictionary(uniqueKeysWithValues: dict.prefix(maxDictionaryCount).map { ($0.key, $0.value) })
+            }
+            return truncatedDict.compactMapValues { toJSONSafeValue($0, depth: depth + 1) }
+        }
+
+        // Check if it's a JSON-safe primitive (Int, Double, Bool, NSNull)
+        if JSONSerialization.isValidJSONObject(["k": value]) {
+            return value
+        }
+
+        // Non-serializable type - log warning and skip
+        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value)). Supported types are String, Int, Double, Bool, Date, Array, Dictionary.")
+        return nil
     }
     
     public subscript<T: Codable>(key: String) -> T? {
         get { storage[key]?.value as? T }
-        set { storage[key] = newValue.map(AnyCodable.init) }
+        set {
+            guard let newValue else {
+                storage[key] = nil
+                return
+            }
+            if let safeValue = Self.toJSONSafeValue(newValue, depth: 0) {
+                storage[key] = AnyCodable(safeValue)
+            }
+            // If toJSONSafeValue returns nil, the value is silently dropped
+        }
     }
-    
-    // Fluent setter for chaining
+
+    /// Fluent setter for chaining.
+    /// Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    /// Date, UUID, and URL are auto-converted to strings; other types are skipped.
     @discardableResult
     public mutating func set<T: Codable>(_ key: String, _ value: T?) -> Self {
         self[key] = value
