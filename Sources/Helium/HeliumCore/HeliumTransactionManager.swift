@@ -122,9 +122,8 @@ actor HeliumTransactionManager {
 // MARK: - Transaction Sync Client
 
 class TransactionSyncClient {
-    // TODO: Replace with actual values
-    private let writeKey = "PLACEHOLDER_TRANSACTION_WRITE_KEY"
-    private let endpoint = "PLACEHOLDER_TRANSACTION_ENDPOINT"
+    private let writeKey = "hXu1HzJUX6S3rEZ32C2dRFQOCQBndfiA:ddc16R0zXeNBZWjBXTBh1ybv1sOI8e0N"
+    private let endpoint = "cmkc1txw400002e7eyfkbi9rg.d.jitsu.com"
     
     private let analytics: Analytics
     
@@ -149,7 +148,7 @@ class TransactionSyncClient {
         
         for transaction in transactions {
             var properties: [String: Any] = [
-                "transactionId": transaction.id,
+                "canonicalTransactionId": transaction.id,
                 "originalTransactionId": transaction.originalID,
                 "heliumPersistentId": heliumPersistentId,
                 "userId": userId,
