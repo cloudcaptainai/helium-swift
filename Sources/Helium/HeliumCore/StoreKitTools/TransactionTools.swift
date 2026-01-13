@@ -63,7 +63,12 @@ class TransactionTools {
             return TransactionIdPair(storeKit1Purchase: storeKit1Purchase)
         }
         
-        // Then try to look up StoreKit2
+        // Try HeliumTransactionManager cache
+        if let transaction = await HeliumTransactionManager.shared.getRecentTransaction(productId: productId) {
+            return TransactionIdPair(transaction: transaction)
+        }
+        
+        // Then try to look up directly from StoreKit2
         if let transaction = await retrieveTransaction(productId: productId) {
             return TransactionIdPair(transaction: transaction)
         }
@@ -71,6 +76,11 @@ class TransactionTools {
         // Check StoreKit1 one more time
         if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId) {
             return TransactionIdPair(storeKit1Purchase: storeKit1Purchase)
+        }
+        
+        // Final attempt: check HeliumTransactionManager cache again
+        if let transaction = await HeliumTransactionManager.shared.getRecentTransaction(productId: productId) {
+            return TransactionIdPair(transaction: transaction)
         }
         
         return nil

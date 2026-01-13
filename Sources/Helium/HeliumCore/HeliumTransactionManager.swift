@@ -17,6 +17,10 @@ actor HeliumTransactionManager {
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
     
+    /// Cache of recent transactions for lookup (e.g. consumables that don't appear in latestTransaction)
+    private let maxRecentTransactions = 3
+    private var recentTransactions: [Transaction] = []
+    
     private init() {
         syncedTransactionIds = loadSyncedIds()
     }
@@ -39,7 +43,7 @@ actor HeliumTransactionManager {
                 guard case .verified(let transaction) = verificationResult else {
                     continue
                 }
-                await processTransaction(transaction)
+                await processTransactionFromUpdate(transaction)
             }
         }
     }
@@ -70,11 +74,32 @@ actor HeliumTransactionManager {
     
     // MARK: - Processing
     
-    private func processTransaction(_ transaction: Transaction) async {
+    private func processTransactionFromUpdate(_ transaction: Transaction) async {
+        cacheTransaction(transaction)
+
         guard syncedTransactionIds[transaction.id] == nil else {
             return
         }
         await syncWithServer(transactions: [transaction])
+    }
+    
+    private func cacheTransaction(_ transaction: Transaction) {
+        // Remove if already exists (will be moved to front)
+        recentTransactions.removeAll { $0.id == transaction.id }
+        // Add to front
+        recentTransactions.insert(transaction, at: 0)
+        // Trim to max size
+        if recentTransactions.count > maxRecentTransactions {
+            recentTransactions.removeLast()
+        }
+    }
+    
+    // MARK: - Recent Transaction Lookup
+    
+    /// Returns a recent transaction matching the given product ID, if available.
+    /// Useful for consumables which don't appear in `latestTransaction` or `Transaction.latest`.
+    func getRecentTransaction(productId: String) -> Transaction? {
+        return recentTransactions.first { $0.productID == productId }
     }
     
     // MARK: - Server Sync
