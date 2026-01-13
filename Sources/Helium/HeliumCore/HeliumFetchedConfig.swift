@@ -224,6 +224,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         completion: completion
                     )
                 } else {
+                    let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                     let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                     await self.updateDownloadState(.downloadFailure)
                     completion(.failure(
@@ -232,7 +233,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             numConfigAttempts: attemptCounter,
                             numBundleAttempts: 0,
                             configSuccess: false,
-                            configDownloadTimeMS: totalTimeMS,
+                            configDownloadTimeMS: configDownloadTimeMS,
                             totalTimeMS: totalTimeMS
                         )
                     ))
@@ -371,6 +372,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 )
             } else {
                 await self.updateDownloadState(.downloadFailure)
+                let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
                     errorMessage: error.localizedDescription,
@@ -378,7 +380,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         numConfigAttempts: attemptCounter,
                         numBundleAttempts: 0,
                         configSuccess: false,
-                        configDownloadTimeMS: totalTimeMS,
+                        configDownloadTimeMS: configDownloadTimeMS,
                         totalTimeMS: totalTimeMS
                     )
                 ))
