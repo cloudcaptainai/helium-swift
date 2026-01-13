@@ -82,9 +82,8 @@ actor HeliumTransactionManager {
     private func syncWithServer(transactions: [Transaction]) async {
         syncClient.syncTransactions(transactions)
         
-        let now = Date()
         for transaction in transactions {
-            syncedTransactionIds[transaction.id] = now
+            syncedTransactionIds[transaction.id] = transaction.purchaseDate
         }
         pruneAndSave()
     }
