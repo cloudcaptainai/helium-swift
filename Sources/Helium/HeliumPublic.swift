@@ -624,11 +624,7 @@ public class Helium {
         // Use provided delegate or default to StoreKitDelegate
         let delegate = heliumPaywallDelegate ?? StoreKitDelegate()
         HeliumPaywallDelegateWrapper.shared.setDelegate(delegate);
-        if (customAPIEndpoint != nil) {
-            self.controller!.setCustomAPIEndpoint(endpoint: customAPIEndpoint!);
-        } else {
-            self.controller!.clearCustomAPIEndpoint()
-        }
+        controller?.setCustomAPIEndpoint(endpoint: customAPIEndpoint)
         self.controller!.downloadConfig();
         
         Task {
