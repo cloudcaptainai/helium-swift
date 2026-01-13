@@ -27,7 +27,7 @@ class HeliumAnalyticsManager {
     }
     
     /// Creates a SegmentConfiguration with standard settings
-    func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
+    private func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
         return SegmentConfiguration(writeKey: writeKey)
             .apiHost(endpoint)
             .cdnHost(endpoint)

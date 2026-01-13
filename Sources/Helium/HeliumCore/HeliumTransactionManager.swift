@@ -15,6 +15,7 @@ actor HeliumTransactionManager {
     /// Maps transaction ID to the date it was synced
     private var syncedTransactionIds: [UInt64: Date] = [:]
     private var isConfigured = false
+    private let syncClient = TransactionSyncClient()
     
     private init() {
         syncedTransactionIds = loadSyncedIds()
@@ -76,11 +77,11 @@ actor HeliumTransactionManager {
         await syncWithServer(transactions: [transaction])
     }
     
-    // MARK: - Server Sync (placeholder)
+    // MARK: - Server Sync
     
     private func syncWithServer(transactions: [Transaction]) async {
-        // TODO: Implement actual server sync with batching/retries
-        // For now, just mark as synced
+        syncClient.syncTransactions(transactions)
+        
         let now = Date()
         for transaction in transactions {
             syncedTransactionIds[transaction.id] = now
@@ -115,5 +116,41 @@ actor HeliumTransactionManager {
         }
         UserDefaults.standard.set(data, forKey: syncedTransactionIdsKey)
     }
+
+}
+
+// MARK: - Transaction Sync Client
+
+class TransactionSyncClient {
+    // TODO: Replace with actual values
+    private let writeKey = "PLACEHOLDER_TRANSACTION_WRITE_KEY"
+    private let endpoint = "PLACEHOLDER_TRANSACTION_ENDPOINT"
     
+    private let analytics: Analytics
+    
+    init() {
+        let configuration = SegmentConfiguration(writeKey: writeKey)
+            .apiHost(endpoint)
+            .cdnHost(endpoint)
+            .trackApplicationLifecycleEvents(false)
+        // Using Segment defaults: flushAt=20, flushInterval=30
+
+        analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
+    }
+    
+    func syncTransactions(_ transactions: [Transaction]) {
+        guard !transactions.isEmpty else { return }
+
+        let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+
+        for transaction in transactions {
+            analytics.track(name: "helium_transactionSynced", properties: [
+                "transactionId": transaction.id,
+                "originalTransactionId": transaction.originalID,
+                "heliumPersistentId": heliumPersistentId
+            ])
+        }
+        
+        analytics.flush()
+    }
 }
