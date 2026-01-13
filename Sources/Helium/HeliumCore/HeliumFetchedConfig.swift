@@ -251,10 +251,10 @@ public class HeliumFetchedConfigManager: ObservableObject {
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
                 // Start price fetch async (with timing), then do sync bundle save, then await price
-                async let priceTask: UInt64 = {
+                async let priceTask: (UInt64, Bool) = {
                     let start = DispatchTime.now()
-                    await self.buildLocalizedPriceMap(config: newConfig)
-                    return dispatchTimeDifferenceInMS(from: start)
+                    let success = await self.buildLocalizedPriceMap(config: newConfig)
+                    return (dispatchTimeDifferenceInMS(from: start), success)
                 }()
 
                 let bundles = (self.fetchedConfig?.bundles)!
@@ -264,7 +264,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 // Bundles saved, switch to products step
                 downloadStep = .products
 
-                let localizedPriceTimeMS = await priceTask
+                let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
 
                 let metrics = HeliumFetchMetrics(
@@ -274,7 +274,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     bundleFailCount: 0,
                     configDownloadTimeMS: configDownloadTimeMS,
                     localizedPriceTimeMS: localizedPriceTimeMS,
-                    localizedPriceSuccess: !localizedPriceMap.isEmpty,
+                    localizedPriceSuccess: localizedPriceSuccess,
                     uncachedBundleSizeKB: sizeKB,
                     totalTimeMS: totalTimeMS
                 )
@@ -296,15 +296,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     return (result, timeMS)
                 }()
                 
-                async let priceTask: UInt64 = {
+                async let priceTask: (UInt64, Bool) = {
                     let start = DispatchTime.now()
-                    await buildLocalizedPriceMap(config: newConfig)
-                    return dispatchTimeDifferenceInMS(from: start)
+                    let success = await buildLocalizedPriceMap(config: newConfig)
+                    return (dispatchTimeDifferenceInMS(from: start), success)
                 }()
                 
                 // Wait for both to complete
                 let (bundlesResult, bundleDownloadTimeMS) = await bundlesTask
-                let localizedPriceTimeMS = await priceTask
+                let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
                 
                 let bundles = bundlesResult.successMapBundleIdToHtml
                 guard !Task.isCancelled else { return }
@@ -341,7 +341,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         configDownloadTimeMS: configDownloadTimeMS,
                         bundleDownloadTimeMS: bundleDownloadTimeMS,
                         localizedPriceTimeMS: localizedPriceTimeMS,
-                        localizedPriceSuccess: !localizedPriceMap.isEmpty,
+                        localizedPriceSuccess: localizedPriceSuccess,
                         uncachedBundleSizeKB: sizeKB,
                         totalTimeMS: totalTimeMS
                     )
@@ -645,9 +645,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return Array(Set(allProductIds))
     }
     
-    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async {
+    @discardableResult
+    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
         let productIds = getAllProductIds(config: config)
         await buildLocalizedPriceMap(productIds)
+        var allFound = false
+        _localizedPriceMap.withValue { map in
+            allFound = productIds.allSatisfy { map.keys.contains($0) }
+        }
+        return allFound
     }
     
     func buildLocalizedPriceMap(_ productIds: [String]) async {
