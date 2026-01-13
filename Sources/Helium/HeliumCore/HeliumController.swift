@@ -44,15 +44,11 @@ public class HeliumController {
         ]);
     }
     
-    public func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
-        if (traits != nil) {
-            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits!);
+    func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
+        if let traits {
+            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits)
         }
-        if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil && HeliumPaywallDelegateWrapper.shared.getIsAnalyticsEnabled()) {
-            let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-            let userContext = HeliumIdentityManager.shared.getUserContext();
-            analytics.identify(userId: userId, traits: userContext);
-        }
+        HeliumAnalyticsManager.shared.identify(userId: userId)
     }
     
     public func setCustomAPIEndpoint(endpoint: String) {
@@ -68,26 +64,11 @@ public class HeliumController {
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
             case .success(let fetchedConfig, let metrics):
-                let configuration = SegmentConfiguration(writeKey: fetchedConfig.segmentBrowserWriteKey)
-                    .apiHost(fetchedConfig.segmentAnalyticsEndpoint)
-                    .cdnHost(fetchedConfig.segmentAnalyticsEndpoint)
-                    .trackApplicationLifecycleEvents(false)
-                    .flushInterval(10)
-                
-                if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
-                    let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-                    analytics.identify(
-                        userId: HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext()
-                    );
-                } else {
-                    let analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-                    analytics.identify(
-                        userId: HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext()
-                    );
-                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
-                }
+                HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                    writeKey: fetchedConfig.segmentBrowserWriteKey,
+                    endpoint: fetchedConfig.segmentAnalyticsEndpoint,
+                    overrideIfNewConfiguration: true
+                )
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadSuccessEvent(
@@ -111,27 +92,11 @@ public class HeliumController {
                     )
                 }
             case .failure(let errorMessage, let metrics):
-                let configuration = SegmentConfiguration(writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY)
-                    .apiHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
-                    .cdnHost(self.FAILURE_MONITOR_ANALYTICS_ENDPOINT)
-                    .trackApplicationLifecycleEvents(false)
-                    .flushInterval(10)
+                HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                    writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,
+                    endpoint: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT
+                )
                 
-                if (HeliumPaywallDelegateWrapper.shared.getAnalytics() != nil) {
-                    let analytics = HeliumPaywallDelegateWrapper.shared.getAnalytics()!;
-                    analytics.identify(
-                        userId: HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext()
-                    );
-                } else {
-                    let analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-                    analytics.identify(
-                        userId: HeliumIdentityManager.shared.getUserId(),
-                        traits: HeliumIdentityManager.shared.getUserContext()
-                    );
-                    HeliumPaywallDelegateWrapper.shared.setAnalytics(analytics);
-                }
-
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
                         error: errorMessage,

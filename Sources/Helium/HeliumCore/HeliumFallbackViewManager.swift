@@ -60,6 +60,13 @@ public class HeliumFallbackViewManager {
                 Task {
                     await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
                 }
+                
+                if let config = loadedConfig {
+                    HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                        writeKey: config.segmentBrowserWriteKey,
+                        endpoint: config.segmentAnalyticsEndpoint
+                    )
+                }
             } catch {
                 print("[Helium] Failed to load fallback bundle: \(error)")
             }
