@@ -8,6 +8,8 @@
 import Foundation
 
 class DirectoryStore: DataStore {
+    internal static var fileValidator: ((URL) -> Void)? = nil
+
     typealias StoreConfiguration = Configuration
     
     struct Configuration {
@@ -174,6 +176,11 @@ extension DirectoryStore {
         try? writer.writeLine(fileEnding)
         
         let url = writer.url
+
+        // do validation before we rename to prevent the file disappearing out from under us.
+        DirectoryStore.fileValidator?(url)
+
+        // move it to make available for flushing ...
         let newURL = url.appendingPathExtension(Self.tempExtension)
         try? FileManager.default.moveItem(at: url, to: newURL)
         self.writer = nil

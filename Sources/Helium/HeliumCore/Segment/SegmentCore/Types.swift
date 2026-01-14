@@ -18,12 +18,13 @@ struct DestinationMetadata: Codable {
 // MARK: - Event Types
 
 protocol RawEvent: Codable {
+    var enrichments: [EnrichmentClosure]? { get set }
     var type: String? { get set }
     var anonymousId: String? { get set }
     var messageId: String? { get set }
     var userId: String? { get set }
     var timestamp: String? { get set }
-    
+
     var context: SegmentJSON? { get set }
     var integrations: SegmentJSON? { get set }
     var metrics: [SegmentJSON]? { get set }
@@ -31,6 +32,7 @@ protocol RawEvent: Codable {
 }
 
 struct TrackEvent: RawEvent {
+    @Noncodable var enrichments: [EnrichmentClosure]? = nil
     var type: String? = "track"
     var anonymousId: String? = nil
     var messageId: String? = nil
@@ -56,6 +58,7 @@ struct TrackEvent: RawEvent {
 }
 
 struct IdentifyEvent: RawEvent {
+    @Noncodable var enrichments: [EnrichmentClosure]? = nil
     var type: String? = "identify"
     var anonymousId: String? = nil
     var messageId: String? = nil
@@ -81,6 +84,7 @@ struct IdentifyEvent: RawEvent {
 }
 
 struct ScreenEvent: RawEvent {
+    @Noncodable var enrichments: [EnrichmentClosure]? = nil
     var type: String? = "screen"
     var anonymousId: String? = nil
     var messageId: String? = nil
@@ -108,6 +112,7 @@ struct ScreenEvent: RawEvent {
 }
 
 struct GroupEvent: RawEvent {
+    @Noncodable var enrichments: [EnrichmentClosure]? = nil
     var type: String? = "group"
     var anonymousId: String? = nil
     var messageId: String? = nil
@@ -133,6 +138,7 @@ struct GroupEvent: RawEvent {
 }
 
 struct AliasEvent: RawEvent {
+    @Noncodable var enrichments: [EnrichmentClosure]? = nil
     var type: String? = "alias"
     var anonymousId: String? = nil
     var messageId: String? = nil
@@ -288,18 +294,19 @@ extension RawEvent {
         }
     }
 
-    internal func applyRawEventData(store: Store) -> Self {
+    internal func applyRawEventData(store: Store, enrichments: [EnrichmentClosure]?) -> Self {
         var result: Self = self
-        
+
         guard let userInfo: UserInfo = store.currentState() else { return self }
-        
+
+        result.enrichments = enrichments
         result.anonymousId = userInfo.anonymousId
         result.userId = userInfo.userId
         result.messageId = UUID().uuidString
         result.timestamp = Date().iso8601()
         result.integrations = try? SegmentJSON([String: Any]())
         result._metadata = DestinationMetadata()
-        
+
         return result
     }
 }

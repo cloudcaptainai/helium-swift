@@ -10,7 +10,6 @@ import SwiftUI
 
 public class HeliumController {
     let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
-    let API_STORAGE_KEY = "heliumApiEndpoint"
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
@@ -18,6 +17,7 @@ public class HeliumController {
     let INITIALIZATION_ANALYTICS_ENDPOINT = "cm7mjur1o00003p6r7lio27sb.d.jitsu.com";
     
     var apiKey: String
+    var customAPIEndpoint: String?
     
     public init(apiKey: String) {
         self.apiKey = apiKey
@@ -51,15 +51,12 @@ public class HeliumController {
         HeliumAnalyticsManager.shared.identify(userId: userId)
     }
     
-    public func setCustomAPIEndpoint(endpoint: String) {
-        UserDefaults.standard.setValue(endpoint, forKey: API_STORAGE_KEY);
-    }
-    public func clearCustomAPIEndpoint() {
-        UserDefaults.standard.removeObject(forKey: API_STORAGE_KEY)
+    public func setCustomAPIEndpoint(endpoint: String?) {
+        customAPIEndpoint = endpoint
     }
     
     func downloadConfig() {
-        let apiEndpointOrDefault = UserDefaults.standard.string(forKey: API_STORAGE_KEY) ?? DEFAULT_API_ENDPOINT
+        let apiEndpointOrDefault = customAPIEndpoint ?? DEFAULT_API_ENDPOINT
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {

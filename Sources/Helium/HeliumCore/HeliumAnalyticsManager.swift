@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import UIKit
 
 class HeliumAnalyticsManager {
     static let shared = HeliumAnalyticsManager()
@@ -11,8 +12,33 @@ class HeliumAnalyticsManager {
     private var analytics: Analytics?
     private var currentWriteKey: String?
     
+    private init() {
+        // Flush when will resign active for more frequent event dispatch and better chance of success during app force-close.
+        // Note that this will also fire for things like checking notification drawer and phone call, but that's probably fine
+        // and perhaps preferred.
+        // Also note that analytics-swift does NOT flush when app goes to background, despite their code calling an empty
+        // flush() {} method. It's unclear if this is intentional by them.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func handleResignActive() {
+        flush()
+    }
+    
     func getAnalytics() -> Analytics? {
         queue.sync { analytics }
+    }
+    
+    /// Flushes pending analytics events.
+    func flush() {
+        queue.async { [weak self] in
+            self?.analytics?.flush()
+        }
     }
     
     /// Identifies the current user with the analytics instance.
@@ -27,7 +53,7 @@ class HeliumAnalyticsManager {
     }
     
     /// Creates a SegmentConfiguration with standard settings
-    func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
+    private func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
         return SegmentConfiguration(writeKey: writeKey)
             .apiHost(endpoint)
             .cdnHost(endpoint)
