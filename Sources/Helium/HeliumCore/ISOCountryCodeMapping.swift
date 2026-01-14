@@ -258,5 +258,5 @@ let isoAlpha3ToAlpha2: [String: String] = [
 /// - Parameter alpha3: The 3-letter country code (e.g., "USA")
 /// - Returns: The 2-letter country code (e.g., "US"), or nil if not found
 func convertAlpha3ToAlpha2(_ alpha3: String) -> String? {
-    return isoAlpha3ToAlpha2[alpha3.uppercased()]
+    return isoAlpha3ToAlpha2[alpha3.uppercased()] ?? alpha3
 }

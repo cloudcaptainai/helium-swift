@@ -29,6 +29,19 @@ actor HeliumTransactionManager {
 
         startTransactionListener()
         await loadAndSyncTransactionHistory()
+        startPeriodicSync()
+    }
+    
+    // Loop through all transactions periodically because Transaction.updates is not guaranteed
+    // to run for purchases directly from the app. This is especially important for purchases
+    // not made through Helium.
+    private func startPeriodicSync() {
+        Task {
+            while true {
+                try? await Task.sleep(nanoseconds: 1_800_000_000_000) // 30 min
+                await loadAndSyncTransactionHistory()
+            }
+        }
     }
     
     // MARK: - Transaction Listening
@@ -42,6 +55,14 @@ actor HeliumTransactionManager {
                 await processTransaction(transaction)
             }
         }
+    }
+    
+    // Ensure we track a recent purchase
+    func updateAfterPurchase(transaction: Transaction?) async {
+        guard let transaction else {
+            return
+        }
+        await processTransaction(transaction)
     }
     
     // MARK: - Transaction History
@@ -142,7 +163,7 @@ class TransactionSyncClient {
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
-        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? ""
+        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
@@ -156,10 +177,14 @@ class TransactionSyncClient {
                 "appBundleId": transaction.appBundleID,
                 "productId": transaction.productID,
                 "purchasedQuantity": transaction.purchasedQuantity,
-                "storefrontCountryCode": transaction.storefrontCountryCode,
+                "storeCountryCode": convertAlpha3ToAlpha2(transaction.storefrontCountryCode),
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "timestamp": timestamp
             ]
+            
+            if #available(iOS 16.0, *) {
+                properties["environment"] = transaction.environment.rawValue
+            }
             
             if let appAccountToken = transaction.appAccountToken {
                 properties["appAccountToken"] = appAccountToken.uuidString
