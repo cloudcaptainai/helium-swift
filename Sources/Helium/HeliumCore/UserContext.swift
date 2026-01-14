@@ -38,6 +38,7 @@ struct CodableApplicationInfo: Codable {
     var heliumSdkVersion: String?
     var environment: String
     var firstInstallTime: String?
+    var hasFallbackBundle: Bool
 }
 
 struct CodableDeviceInfo: Codable {
@@ -51,7 +52,7 @@ struct CodableDeviceInfo: Codable {
     var availableCapacity: Int64?
 }
 
-func createApplicationInfo() -> CodableApplicationInfo {
+func createApplicationInfo(hasFallbackBundle: Bool = false) -> CodableApplicationInfo {
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
     
@@ -76,7 +77,16 @@ func createApplicationInfo() -> CodableApplicationInfo {
         firstInstallTime = formatAsTimestamp(date: installDate)
     }
     
-    return CodableApplicationInfo(version: version, build: build, completeAppVersion: completeAppVersion, appDisplayName: appDisplayName, heliumSdkVersion: heliumSdkVersion, environment: AppReceiptsHelper.shared.getEnvironment(), firstInstallTime: firstInstallTime)
+    return CodableApplicationInfo(
+        version: version,
+        build: build,
+        completeAppVersion: completeAppVersion,
+        appDisplayName: appDisplayName,
+        heliumSdkVersion: heliumSdkVersion,
+        environment: AppReceiptsHelper.shared.getEnvironment(),
+        firstInstallTime: firstInstallTime,
+        hasFallbackBundle: hasFallbackBundle
+    )
 }
 
 public struct CodableUserContext: Codable {
@@ -144,12 +154,13 @@ public struct CodableUserContext: Codable {
                 "appDisplayName": self.applicationInfo.appDisplayName ?? "",
                 "heliumSdkVersion": self.applicationInfo.heliumSdkVersion ?? "",
                 "firstInstallTime": self.applicationInfo.firstInstallTime ?? "",
+                "hasFallbackBundle": self.applicationInfo.hasFallbackBundle,
             ],
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
 
-    static func create(userTraits: HeliumUserTraits?, skipDeviceCapacity: Bool = false) -> CodableUserContext {
+    static func create(userTraits: HeliumUserTraits?, skipDeviceCapacity: Bool = false, hasFallbackBundle: Bool = false) -> CodableUserContext {
         
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
@@ -173,7 +184,7 @@ public struct CodableUserContext: Codable {
             isDarkModeEnabled: UITraitCollection.current.userInterfaceStyle == .dark
         )
         
-        let applicationInfo = createApplicationInfo()
+        let applicationInfo = createApplicationInfo(hasFallbackBundle: hasFallbackBundle)
 
         let deviceInfo = CodableDeviceInfo(
             currentDeviceIdentifier: UIDevice.current.identifierForVendor?.uuidString,
