@@ -95,7 +95,12 @@ public class HeliumIdentityManager {
     public func getUserContext(
         skipDeviceCapacity: Bool = false
     ) -> CodableUserContext {
-        let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
+        let hasFallbackBundle = Helium.shared.fallbackConfig?.fallbackBundle != nil
+        let userContext = CodableUserContext.create(
+            userTraits: self.heliumUserTraits,
+            skipDeviceCapacity: skipDeviceCapacity,
+            hasFallbackBundle: hasFallbackBundle
+        )
         return userContext
     }
 }
