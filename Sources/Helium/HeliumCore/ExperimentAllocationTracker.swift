@@ -209,6 +209,10 @@ class ExperimentAllocationTracker {
         
         // Store the new allocation using experiment ID key
         storedAllocations[newKey] = currentAllocation
+        // Remove the legacy key if we've stored the new one, to avoid duplicates
+        if storedAllocations[newKey] != nil && newKey != legacyKey {
+            storedAllocations.removeValue(forKey: legacyKey)
+        }
         saveStoredAllocations()
         
         // Update experiment info to mark as enrolled for userAllocated event
