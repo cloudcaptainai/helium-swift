@@ -167,6 +167,13 @@ class TransactionSyncClient {
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
+            let rawCountryCode: String
+            if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
+                rawCountryCode = transaction.storefront.countryCode
+            } else {
+                rawCountryCode = transaction.storefrontCountryCode
+            }
+            let storeCountryCode = convertAlpha3ToAlpha2(rawCountryCode) ?? rawCountryCode
             var properties: [String: Any] = [
                 "canonicalTransactionId": transaction.id,
                 "originalTransactionId": transaction.originalID,
@@ -177,7 +184,7 @@ class TransactionSyncClient {
                 "appBundleId": transaction.appBundleID,
                 "productId": transaction.productID,
                 "purchasedQuantity": transaction.purchasedQuantity,
-                "storeCountryCode": convertAlpha3ToAlpha2(transaction.storefrontCountryCode),
+                "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "timestamp": timestamp
             ]
