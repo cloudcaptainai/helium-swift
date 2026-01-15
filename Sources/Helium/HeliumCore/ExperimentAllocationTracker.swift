@@ -8,11 +8,12 @@
 import Foundation
 
 /// Stored allocation details for comparison
-private struct StoredAllocation: Codable {
+struct StoredAllocation: Codable {
     let experimentId: String?
     let allocationId: String?
     let allocationIndex: Int?
     let audienceId: String?
+    let experimentVersionId: String?
     let enrolledAt: Date?
     let enrolledTrigger: String?
     
@@ -21,6 +22,7 @@ private struct StoredAllocation: Codable {
         self.allocationId = experimentInfo.chosenVariantDetails?.allocationId
         self.allocationIndex = experimentInfo.chosenVariantDetails?.allocationIndex
         self.audienceId = experimentInfo.audienceId
+        self.experimentVersionId = experimentInfo.experimentVersionId
         self.enrolledAt = Date()
         self.enrolledTrigger = trigger
     }
@@ -37,26 +39,72 @@ class ExperimentAllocationTracker {
     }
     
     private let allocationsUserDefaultsKey = "heliumExperimentAllocations"
+    private let allocationsFileName = "helium_experiment_allocations.json"
     
-    /// Maps "persistentId_trigger" to stored allocation details
-    private var storedAllocations: [String: StoredAllocation] = [:]
+    /// Maps "persistentId_experimentId" (or legacy "persistentId_trigger") to stored allocation details
+    @HeliumAtomic private var storedAllocations: [String: StoredAllocation] = [:]
     
-    /// Loads stored allocations from UserDefaults
-    private func loadStoredAllocations() {
-        guard let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
-              let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) else {
-            return
-        }
-        storedAllocations = decoded
+    /// File URL for allocations storage, as a backup to UserDefaults
+    private var allocationsFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Helium", isDirectory: true)
+            .appendingPathComponent(allocationsFileName)
     }
     
-    /// Persists allocations to UserDefaults
+    /// Loads stored allocations - tries UserDefaults first, falls back to file
+    private func loadStoredAllocations() {
+        // Try UserDefaults first
+        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
+            storedAllocations = decoded
+            return
+        }
+        
+        // Fallback to file
+        if let fileURL = allocationsFileURL,
+           let data = try? Data(contentsOf: fileURL),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
+            storedAllocations = decoded
+        }
+    }
+    
+    /// Persists allocations to UserDefaults and file (as backup)
     private func saveStoredAllocations() {
         guard let encoded = try? JSONEncoder().encode(storedAllocations) else {
             print("[Helium] Failed to persist experiment allocations")
             return
         }
+        
+        // Save to UserDefaults
         UserDefaults.standard.set(encoded, forKey: allocationsUserDefaultsKey)
+        
+        // Also save to file as backup
+        saveToFile(encoded)
+    }
+    
+    private let saveQueue = DispatchQueue(label: "com.helium.allocationSave")
+    
+    /// Saves encoded data to file asynchronously
+    private func saveToFile(_ data: Data) {
+        guard let fileURL = allocationsFileURL else { return }
+        
+        saveQueue.async {
+            let startTime = Date()
+            do {
+                // Create directory if needed
+                let directory = fileURL.deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try data.write(to: fileURL, options: .atomic)
+                
+                let elapsed = Date().timeIntervalSince(startTime)
+                if elapsed > 2.0 {
+                    print("[Helium] Allocation file save was slow: \(String(format: "%.2f", elapsed))s")
+                }
+            } catch {
+                print("[Helium] Failed to persist allocations to file: \(error.localizedDescription)")
+            }
+        }
     }
     
     /// Creates a storage key for user + experiment combination
@@ -161,6 +209,10 @@ class ExperimentAllocationTracker {
         
         // Store the new allocation using experiment ID key
         storedAllocations[newKey] = currentAllocation
+        // Remove the legacy key if we've stored the new one, to avoid duplicates
+        if storedAllocations[newKey] != nil && newKey != legacyKey {
+            storedAllocations.removeValue(forKey: legacyKey)
+        }
         saveStoredAllocations()
         
         // Update experiment info to mark as enrolled for userAllocated event
@@ -177,8 +229,37 @@ class ExperimentAllocationTracker {
     /// Resets all allocation tracking
     /// - Note: Called when SDK cache is cleared via clearAllCachedState()
     func reset() {
-       storedAllocations.removeAll()
-       UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
+        storedAllocations.removeAll()
+        UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
+        
+        // Delete file backup on saveQueue to avoid race with pending async saves
+        if let fileURL = allocationsFileURL {
+            saveQueue.async {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+    }
+    
+    func buildAllocationHistoryRequestPayload() -> [String: [String: Any]] {
+        var result: [String: [String: Any]] = [:]
+        for allocation in storedAllocations.values {
+            guard let experimentId = allocation.experimentId else { continue }
+            
+            // If duplicate experimentId, prefer entry with experimentVersionId
+            if let existing = result[experimentId],
+               let existingVersion = existing["experimentVersionId"] as? String,
+               !existingVersion.isEmpty,
+               (allocation.experimentVersionId ?? "").isEmpty {
+                continue
+            }
+            
+            result[experimentId] = [
+                "allocationId": allocation.allocationId ?? "",
+                "enrolledAt": allocation.enrolledAt?.timeIntervalSince1970 ?? 0,
+                "experimentVersionId": allocation.experimentVersionId ?? ""
+            ]
+        }
+        return result
     }
     
     /// Get the enrollment timestamp and status for a specific user and trigger

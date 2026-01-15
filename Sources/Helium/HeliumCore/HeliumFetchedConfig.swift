@@ -175,7 +175,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             let params: [String: Any] = [
                 "apiKey": apiKey,
                 "userId": HeliumIdentityManager.shared.getUserId(),
-                "userContext": HeliumIdentityManager.shared.getUserContext().asParams(),
+                "userContext": HeliumIdentityManager.shared.getUserContext().buildRequestPayload(),
                 "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
             ]
             

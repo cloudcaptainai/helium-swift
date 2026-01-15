@@ -30,7 +30,7 @@ func createHeliumContext(triggerName: String?) -> JSON {
         )
         
         // Create the base context JSON from user context params
-        var contextJSON = JSON(userContext.asParams())
+        var contextJSON = JSON(userContext.buildRequestPayload())
         
         // Add trigger information
         contextJSON["trigger"] = JSON(triggerName ?? "")
