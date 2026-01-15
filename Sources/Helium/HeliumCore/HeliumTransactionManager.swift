@@ -16,6 +16,7 @@ actor HeliumTransactionManager {
     private var syncedTransactionIds: [UInt64: Date] = [:]
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
+    private var periodicSyncTask: Task<Void, Never>?
     
     private init() {
         syncedTransactionIds = loadSyncedIds()
@@ -36,9 +37,13 @@ actor HeliumTransactionManager {
     // to run for purchases directly from the app. This is especially important for purchases
     // not made through Helium.
     private func startPeriodicSync() {
-        Task {
+        periodicSyncTask = Task {
             while true {
-                try? await Task.sleep(nanoseconds: 1_800_000_000_000) // 30 min
+                do {
+                    try await Task.sleep(nanoseconds: 1_800_000_000_000) // 30 min
+                } catch {
+                    break
+                }
                 await loadAndSyncTransactionHistory()
             }
         }
