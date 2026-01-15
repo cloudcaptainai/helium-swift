@@ -33,6 +33,7 @@ struct HeliumFetchMetrics {
     var localizedPriceTimeMS: UInt64?
     var localizedPriceSuccess: Bool? = nil
     var uncachedBundleSizeKB: Int? = nil
+    var totalTimeMS: UInt64?
 }
 
 private struct BundlesRetrieveResult {
@@ -162,6 +163,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
             print("[Helium] Config download already in progress. Skipping new request.")
             return
         }
+        let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
             await updateDownloadState(.inProgress)
             downloadStep = .config
@@ -185,6 +187,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 params: params,
                 maxAttempts: HeliumFetchedConfigManager.MAX_NUM_CONFIG_ATTEMPTS,
                 attemptCounter: 1,
+                initializeStartTime: initializeStartTime,
                 configStartTime: configStartTime,
                 completion: completion
             )
@@ -196,6 +199,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         params: [String: Any],
         maxAttempts: Int,
         attemptCounter: Int,
+        initializeStartTime: DispatchTime,
         configStartTime: DispatchTime,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
@@ -215,11 +219,13 @@ public class HeliumFetchedConfigManager: ObservableObject {
                         params: params,
                         maxAttempts: maxAttempts,
                         attemptCounter: attemptCounter + 1,
+                        initializeStartTime: initializeStartTime,
                         configStartTime: configStartTime,
                         completion: completion
                     )
                 } else {
                     let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                    let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                     await self.updateDownloadState(.downloadFailure)
                     completion(.failure(
                         errorMessage: "Reached max retries for config.",
@@ -227,7 +233,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             numConfigAttempts: attemptCounter,
                             numBundleAttempts: 0,
                             configSuccess: false,
-                            configDownloadTimeMS: configDownloadTimeMS
+                            configDownloadTimeMS: configDownloadTimeMS,
+                            totalTimeMS: totalTimeMS
                         )
                     ))
                 }
@@ -244,30 +251,61 @@ public class HeliumFetchedConfigManager: ObservableObject {
             // Download assets
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
-                do {
-                    let bundles = (self.fetchedConfig?.bundles)!
-                    
-                    let bytesWritten = saveBundleAssets(bundles: bundles)
-                    let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
-                    
-                    await handleConfigFetchSuccess(
-                        newConfig: newConfig,
-                        numConfigAttempts: attemptCounter,
-                        configDownloadTimeMS: configDownloadTimeMS,
-                        bundleDownloadTimeMS: nil,
-                        numBundles: fetchedConfig?.bundles?.count ?? 0,
-                        numBundlesFromCache: 0,
-                        bundleFailCount: 0,
-                        numBundleAttempts: 0,
-                        uncachedBundleSizeKB: sizeKB,
-                        completion: completion
-                    )
-                }
+                // Start price fetch async (with timing), then do sync bundle save, then await price
+                async let priceTask: (UInt64, Bool) = {
+                    let start = DispatchTime.now()
+                    let success = await self.buildLocalizedPriceMap(config: newConfig)
+                    return (dispatchTimeDifferenceInMS(from: start), success)
+                }()
+
+                let bundles = (self.fetchedConfig?.bundles)!
+                let bytesWritten = saveBundleAssets(bundles: bundles)
+                let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
+
+                // Bundles saved, switch to products step
+                downloadStep = .products
+
+                let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
+
+                let metrics = HeliumFetchMetrics(
+                    numConfigAttempts: attemptCounter,
+                    numBundles: fetchedConfig?.bundles?.count ?? 0,
+                    numBundlesFromCache: 0,
+                    bundleFailCount: 0,
+                    configDownloadTimeMS: configDownloadTimeMS,
+                    localizedPriceTimeMS: localizedPriceTimeMS,
+                    localizedPriceSuccess: localizedPriceSuccess,
+                    uncachedBundleSizeKB: sizeKB,
+                    totalTimeMS: totalTimeMS
+                )
+                await handleConfigFetchSuccess(
+                    newConfig: newConfig,
+                    metrics: metrics,
+                    completion: completion
+                )
             } else {
                 downloadStep = .bundles
-                let bundleStartTime = DispatchTime.now()
-                let bundlesResult = await retrieveBundles(config: newConfig)
-                let bundleDownloadTimeMS = dispatchTimeDifferenceInMS(from: bundleStartTime)
+                
+                // Start both operations in parallel, each tracking its own time
+                async let bundlesTask: (BundlesRetrieveResult, UInt64) = {
+                    let start = DispatchTime.now()
+                    let result = await retrieveBundles(config: newConfig)
+                    let timeMS = dispatchTimeDifferenceInMS(from: start)
+                    // Bundles are fetched, switch to products step
+                    downloadStep = .products
+                    return (result, timeMS)
+                }()
+                
+                async let priceTask: (UInt64, Bool) = {
+                    let start = DispatchTime.now()
+                    let success = await buildLocalizedPriceMap(config: newConfig)
+                    return (dispatchTimeDifferenceInMS(from: start), success)
+                }()
+                
+                // Wait for both to complete
+                let (bundlesResult, bundleDownloadTimeMS) = await bundlesTask
+                let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
                 
                 let bundles = bundlesResult.successMapBundleIdToHtml
                 guard !Task.isCancelled else { return }
@@ -276,6 +314,8 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                 
                 triggersWithSkippedBundleAndReason = bundlesResult.triggersWithSkippedBundleAndReason
+                
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     await self.updateDownloadState(.downloadFailure)
@@ -288,20 +328,27 @@ public class HeliumFetchedConfigManager: ObservableObject {
                             numBundles: bundlesResult.numBundles,
                             bundleFailCount: bundlesResult.triggersWithNoBundle.count,
                             configDownloadTimeMS: configDownloadTimeMS,
-                            bundleDownloadTimeMS: bundleDownloadTimeMS
+                            bundleDownloadTimeMS: bundleDownloadTimeMS,
+                            totalTimeMS: totalTimeMS
                         )
                     ))
                 } else {
-                    await handleConfigFetchSuccess(
-                        newConfig: newConfig,
+                    let metrics = HeliumFetchMetrics(
                         numConfigAttempts: attemptCounter,
-                        configDownloadTimeMS: configDownloadTimeMS,
-                        bundleDownloadTimeMS: bundleDownloadTimeMS,
+                        numBundleAttempts: bundlesResult.numBundleAttempts,
                         numBundles: bundlesResult.numBundles,
                         numBundlesFromCache: bundlesResult.numBundlesFromCache,
                         bundleFailCount: 0,
-                        numBundleAttempts: bundlesResult.numBundleAttempts,
+                        configDownloadTimeMS: configDownloadTimeMS,
+                        bundleDownloadTimeMS: bundleDownloadTimeMS,
+                        localizedPriceTimeMS: localizedPriceTimeMS,
+                        localizedPriceSuccess: localizedPriceSuccess,
                         uncachedBundleSizeKB: sizeKB,
+                        totalTimeMS: totalTimeMS
+                    )
+                    await handleConfigFetchSuccess(
+                        newConfig: newConfig,
+                        metrics: metrics,
                         completion: completion
                     )
                 }
@@ -319,19 +366,22 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     params: params,
                     maxAttempts: maxAttempts,
                     attemptCounter: attemptCounter + 1,
+                    initializeStartTime: initializeStartTime,
                     configStartTime: configStartTime,
                     completion: completion
                 )
             } else {
                 await self.updateDownloadState(.downloadFailure)
-                let configTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
                     errorMessage: error.localizedDescription,
                     HeliumFetchMetrics(
                         numConfigAttempts: attemptCounter,
                         numBundleAttempts: 0,
                         configSuccess: false,
-                        configDownloadTimeMS: configTimeMS
+                        configDownloadTimeMS: configDownloadTimeMS,
+                        totalTimeMS: totalTimeMS
                     )
                 ))
             }
@@ -579,35 +629,11 @@ public class HeliumFetchedConfigManager: ObservableObject {
     
     private func handleConfigFetchSuccess(
         newConfig: HeliumFetchedConfig,
-        numConfigAttempts: Int,
-        configDownloadTimeMS: UInt64?,
-        bundleDownloadTimeMS: UInt64?,
-        numBundles: Int,
-        numBundlesFromCache: Int,
-        bundleFailCount: Int,
-        numBundleAttempts: Int,
-        uncachedBundleSizeKB: Int,
+        metrics: HeliumFetchMetrics,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
-        // Prefetch products and build localized price map
-        downloadStep = .products
-        let localizedPricesStartTime = DispatchTime.now()
-        await buildLocalizedPriceMap(config: fetchedConfig)
-        let localizedPriceTimeMS = dispatchTimeDifferenceInMS(from: localizedPricesStartTime)
-        
         await updateDownloadState(.downloadSuccess)
-        completion(.success(newConfig, HeliumFetchMetrics(
-            numConfigAttempts: numConfigAttempts,
-            numBundleAttempts: numBundleAttempts,
-            numBundles: numBundles,
-            numBundlesFromCache: numBundlesFromCache,
-            bundleFailCount: bundleFailCount,
-            configDownloadTimeMS: configDownloadTimeMS,
-            bundleDownloadTimeMS: bundleDownloadTimeMS,
-            localizedPriceTimeMS: localizedPriceTimeMS,
-            localizedPriceSuccess: !localizedPriceMap.isEmpty,
-            uncachedBundleSizeKB: uncachedBundleSizeKB
-        )))
+        completion(.success(newConfig, metrics))
     }
     
     private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
@@ -621,9 +647,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return Array(Set(allProductIds))
     }
     
-    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async {
+    @discardableResult
+    func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
         let productIds = getAllProductIds(config: config)
         await buildLocalizedPriceMap(productIds)
+        var allFound = false
+        _localizedPriceMap.withValue { map in
+            allFound = productIds.allSatisfy { map.keys.contains($0) }
+        }
+        return allFound
     }
     
     func buildLocalizedPriceMap(_ productIds: [String]) async {
