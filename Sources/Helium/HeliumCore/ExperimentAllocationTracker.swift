@@ -244,6 +244,15 @@ class ExperimentAllocationTracker {
         var result: [String: [String: Any]] = [:]
         for allocation in storedAllocations.values {
             guard let experimentId = allocation.experimentId else { continue }
+            
+            // If duplicate experimentId, prefer entry with experimentVersionId
+            if let existing = result[experimentId],
+               let existingVersion = existing["experimentVersionId"] as? String,
+               !existingVersion.isEmpty,
+               (allocation.experimentVersionId ?? "").isEmpty {
+                continue
+            }
+            
             result[experimentId] = [
                 "allocationId": allocation.allocationId ?? "",
                 "enrolledAt": allocation.enrolledAt?.timeIntervalSince1970 ?? 0,
