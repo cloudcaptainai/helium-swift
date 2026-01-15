@@ -16,6 +16,7 @@ actor HeliumTransactionManager {
     private var syncedTransactionIds: [UInt64: Date] = [:]
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
+    private var periodicSyncTask: Task<Void, Never>?
     
     private init() {
         syncedTransactionIds = loadSyncedIds()
@@ -29,6 +30,23 @@ actor HeliumTransactionManager {
 
         startTransactionListener()
         await loadAndSyncTransactionHistory()
+        startPeriodicSync()
+    }
+    
+    // Loop through all transactions periodically because Transaction.updates is not guaranteed
+    // to run for purchases directly from the app. This is especially important for purchases
+    // not made through Helium.
+    private func startPeriodicSync() {
+        periodicSyncTask = Task {
+            while true {
+                do {
+                    try await Task.sleep(nanoseconds: 1_800_000_000_000) // 30 min
+                } catch {
+                    break
+                }
+                await loadAndSyncTransactionHistory()
+            }
+        }
     }
     
     // MARK: - Transaction Listening
@@ -42,6 +60,14 @@ actor HeliumTransactionManager {
                 await processTransaction(transaction)
             }
         }
+    }
+    
+    // Ensure we track a recent purchase
+    func updateAfterPurchase(transaction: Transaction?) async {
+        guard let transaction else {
+            return
+        }
+        await processTransaction(transaction)
     }
     
     // MARK: - Transaction History
@@ -142,10 +168,17 @@ class TransactionSyncClient {
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
-        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? ""
+        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
+            let rawCountryCode: String
+            if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
+                rawCountryCode = transaction.storefront.countryCode
+            } else {
+                rawCountryCode = transaction.storefrontCountryCode
+            }
+            let storeCountryCode = convertAlpha3ToAlpha2(rawCountryCode) ?? rawCountryCode
             var properties: [String: Any] = [
                 "canonicalTransactionId": transaction.id,
                 "originalTransactionId": transaction.originalID,
@@ -156,10 +189,14 @@ class TransactionSyncClient {
                 "appBundleId": transaction.appBundleID,
                 "productId": transaction.productID,
                 "purchasedQuantity": transaction.purchasedQuantity,
-                "storefrontCountryCode": transaction.storefrontCountryCode,
+                "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "timestamp": timestamp
             ]
+            
+            if #available(iOS 16.0, *) {
+                properties["environment"] = transaction.environment.rawValue
+            }
             
             if let appAccountToken = transaction.appAccountToken {
                 properties["appAccountToken"] = appAccountToken.uuidString
