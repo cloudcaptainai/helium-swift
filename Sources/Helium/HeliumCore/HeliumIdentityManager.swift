@@ -137,3 +137,43 @@ class AppStoreCountryHelper {
         return cachedCountryCode3
     }
 }
+
+/// Configuration for SDK identification, used by wrapper SDKs (React Native, Flutter) to identify themselves.
+public class HeliumSdkConfig {
+    public static let shared = HeliumSdkConfig()
+    
+    // Private storage for wrapper SDK info
+    @HeliumAtomic
+    private var wrapperSdk: String?
+    @HeliumAtomic
+    private var wrapperSdkVersion: String?
+    
+    /// Called by wrapper SDKs (React Native, Flutter) before Helium.initialize()
+    /// - Parameters:
+    ///   - sdk: The wrapper SDK identifier (e.g., "react-native", "flutter")
+    ///   - version: The wrapper SDK version
+    public func setWrapperSdkInfo(sdk: String, version: String) {
+        self.wrapperSdk = sdk
+        self.wrapperSdkVersion = version
+    }
+    
+    /// The platform identifier, always "ios" for this SDK
+    var heliumPlatform: String {
+        return "ios"
+    }
+    
+    /// The SDK identifier - wrapper SDK name or "ios" for native
+    var heliumSdk: String {
+        return wrapperSdk ?? "ios"
+    }
+    
+    /// The native SDK version, always the Swift SDK version
+    var heliumSdkVersion: String {
+        return BuildConstants.version
+    }
+    
+    /// The SDK version - wrapper SDK version or native SDK version
+    var heliumWrapperSdkVersion: String {
+        return wrapperSdkVersion ?? BuildConstants.version
+    }
+}
