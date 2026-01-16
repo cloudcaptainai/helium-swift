@@ -150,6 +150,7 @@ public class HeliumSdkConfig {
     
     // Private storage for initialization config
     private(set) var purchaseDelegate: String = "unknown"
+    // Note that this is not logged anywhere at the moment.
     private(set) var customAPIEndpoint: String?
     
     /// Called by wrapper SDKs (React Native, Flutter) before Helium.initialize()
