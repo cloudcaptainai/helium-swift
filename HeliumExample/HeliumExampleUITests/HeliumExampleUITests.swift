@@ -51,15 +51,8 @@ final class HeliumExampleUITests: XCTestCase {
         XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
         sleep(2) // Buffer for WebView to finish rendering
         
-        // This will match any button containing "claim" or "start" anywhere in the text
-        let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
-        var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
-        if !subscribeButton.waitForExistence(timeout: 10) {
-            subscribeButton = webView.descendants(matching: .any).matching(flexiblePredicate).firstMatch
-            let _ = subscribeButton.waitForExistence(timeout: 10)
-        }
-        
-        XCTAssertTrue(subscribeButton.exists, "No subscribe/purchase button found.")
+        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
+        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
         
         subscribeButton.tap()
         
@@ -85,75 +78,43 @@ final class HeliumExampleUITests: XCTestCase {
         sleep(2) // Buffer for WebView to finish rendering
         
         // Ensure webview properly displays
-        let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
-        var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
-        if !subscribeButton.waitForExistence(timeout: 10) {
-            subscribeButton = webView.descendants(matching: .any).matching(flexiblePredicate).firstMatch
-            let _ = subscribeButton.waitForExistence(timeout: 10)
-        }
-        
-        XCTAssertTrue(subscribeButton.exists, "No subscribe/purchase button found.")
+        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
+        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
         
         // Try to close the paywall
-        // First attempt: tap top-left where close button might be
-        let topLeftClose = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.08))
-        topLeftClose.tap()
-        
-        //then top-right
         let topRightClose = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.08))
         topRightClose.tap()
+        
+        // Ensure proper dismissal
+        XCTAssert(webView.waitForNonExistence(timeout: 10), "Not properly dismissed after purchase.")
+    }
+    
+    // take this out for now -- GitHub actions has lots of issues with it
+    @MainActor
+    func testLoadingStateThenPaywall() throws {
+        let app = makeApp()
+        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
+        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
+        app.launch()
+        sleep(2) // Let CI simulator stabilize
 
-        // Check if webview was dismissed
-        if !webView.waitForNonExistence(timeout: 2) {
-            // If still visible, look for a dismissal button with text
-            let dismissPredicate = NSPredicate(format: "label CONTAINS[c] 'no thank' OR label CONTAINS[c] 'cancel' OR label CONTAINS[c] 'no, thank' OR label CONTAINS[c] 'close' OR label CONTAINS[c] 'dismiss' OR label CONTAINS[c] 'later'")
-            let dismissButton = webView.descendants(matching: .any).matching(dismissPredicate).firstMatch
-            
-            if dismissButton.waitForExistence(timeout: 3) {
-                dismissButton.tap()
-            } else {
-                // If no button found, try tapping top-left again as fallback
-                topLeftClose.tap()
-            }
-        }
+        // Paywall loading state should automatically be opened and then show content once paywalls download
+        
+        // Wait for the webview to load
+        let webView = app.webViews.firstMatch
+        XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
+        sleep(2) // Buffer for WebView to finish rendering
+
+        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
+        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
+        
+        subscribeButton.tap()
+        
+        let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
+        XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
         
         // Ensure proper dismissal
         XCTAssert(webView.waitForNonExistence(timeout: 5), "Not properly dismissed after purchase.")
     }
-    
-    // take this out for now -- GitHub actions has lots of issues with it
-//    @MainActor
-//    func testLoadingStateThenPaywall() throws {
-//        let app = makeApp()
-//        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
-//        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
-//        app.launch()
-//        sleep(2) // Let CI simulator stabilize
-//
-//        // Paywall loading state should automatically be opened and then show content once paywalls download
-//        
-//        // Wait for the webview to load
-//        let webView = app.webViews.firstMatch
-//        XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
-//        sleep(2) // Buffer for WebView to finish rendering
-//
-//        // This will match any button containing "claim" or "start" anywhere in the text
-//        let flexiblePredicate = NSPredicate(format: "label CONTAINS[c] 'claim' OR label CONTAINS[c] 'start' OR label CONTAINS[c] 'subscribe' OR label CONTAINS[c] 'continue'")
-//        var subscribeButton = webView.buttons.matching(flexiblePredicate).firstMatch
-//        if !subscribeButton.waitForExistence(timeout: 5) {
-//            subscribeButton = webView.buttons["btn-subscribe-main"]
-//            let _ = subscribeButton.waitForExistence(timeout: 5)
-//        }
-//        
-//        XCTAssertTrue(subscribeButton.exists)
-//        
-//        subscribeButton.tap()
-//        
-//        let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
-//        XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
-//        
-//        // Ensure proper dismissal
-//        XCTAssert(webView.waitForNonExistence(timeout: 5), "Not properly dismissed after purchase.")
-//    }
     
 }
