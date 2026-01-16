@@ -168,6 +168,7 @@ class TransactionSyncClient {
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
+        // Note that organizationId may not be filled depending on when this is called
         let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
         let timestamp = formatAsTimestamp(date: Date())
         
@@ -193,6 +194,10 @@ class TransactionSyncClient {
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "timestamp": timestamp
             ]
+            
+            if let subscriptionGroupID = transaction.subscriptionGroupID {
+                properties["subscriptionGroupId"] = subscriptionGroupID
+            }
             
             if #available(iOS 16.0, *) {
                 properties["environment"] = transaction.environment.rawValue
