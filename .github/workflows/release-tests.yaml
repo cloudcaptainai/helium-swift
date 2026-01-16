@@ -6,6 +6,9 @@ on:
     paths: ['**/BuildConstants.swift']
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   extract-version:
     runs-on: ubuntu-latest
