@@ -14,6 +14,8 @@ import StoreKit
 /// in-app purchases & subscriptions. Do not use if you don't plan on configuring your purchases with RevenueCat.
 open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
     
+    public var delegateType: String { "h_revenuecat" }
+    
     public let entitlementId: String?
     private var offerings: Offerings?
     private(set) var productMappings: [String: StoreProduct] = [:]

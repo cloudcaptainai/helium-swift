@@ -39,6 +39,7 @@ struct CodableApplicationInfo: Codable {
     var heliumSdk: String
     var heliumSdkVersion: String
     var heliumWrapperSdkVersion: String
+    var purchaseDelegate: String
     var environment: String
     var firstInstallTimestamp: String?
 }
@@ -86,6 +87,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
         heliumSdk: HeliumSdkConfig.shared.heliumSdk,
         heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
         heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
+        purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
         environment: AppReceiptsHelper.shared.getEnvironment(),
         firstInstallTimestamp: firstInstallTime
     )
@@ -159,6 +161,8 @@ public struct CodableUserContext: Codable {
             "heliumSdk": self.applicationInfo.heliumSdk,
             "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
             "heliumWrapperSdkVersion": self.applicationInfo.heliumWrapperSdkVersion,
+            "purchaseDelegate": self.applicationInfo.purchaseDelegate,
+            "environment": self.applicationInfo.environment,
             "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? ""
         ]
         
