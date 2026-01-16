@@ -1,4 +1,5 @@
 import Foundation
+import StoreKit
 
 public class HeliumIdentityManager {
     // MARK: - Singleton
@@ -8,7 +9,6 @@ public class HeliumIdentityManager {
             shared.heliumUserTraits = HeliumUserTraits([:])
         }
         shared.heliumInitializeId = UUID().uuidString
-        shared.clearPaywallSessionId()
     }
     private init() {
         self.heliumSessionId = UUID().uuidString
@@ -20,7 +20,6 @@ public class HeliumIdentityManager {
     private let heliumSessionId: String
     private(set) var heliumInitializeId: String
     private var heliumUserTraits: HeliumUserTraits
-    private var heliumPaywallSessionId: String?
     
     private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
     private(set) var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
@@ -54,18 +53,6 @@ public class HeliumIdentityManager {
     
     public func setCustomUserTraits(traits: HeliumUserTraits) {
         self.heliumUserTraits = traits;
-    }
-    
-    func setPaywallSessionId() {
-        self.heliumPaywallSessionId = UUID().uuidString;
-    }
-    
-    func clearPaywallSessionId() {
-        self.heliumPaywallSessionId = nil
-    }
-    
-    func getPaywallSessionId() -> String? {
-        return self.heliumPaywallSessionId;
     }
     
     /// Creates or retrieves the Helium persistent ID
@@ -113,17 +100,55 @@ public class HeliumIdentityManager {
     }
 }
 
+class AppStoreCountryHelper {
+    static let shared = AppStoreCountryHelper()
+    
+    @HeliumAtomic private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
+    @HeliumAtomic private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
+    private var fetchTask: Task<String?, Never>?
+    
+    private init() {
+        fetchTask = Task { await self.performFetch() }
+    }
+    
+    private func performFetch() async -> String? {
+        if let alpha3 = await Storefront.current?.countryCode {
+            cachedCountryCode3 = alpha3
+            cachedCountryCode2 = convertAlpha3ToAlpha2(alpha3)
+        }
+        return cachedCountryCode2
+    }
+    
+    /// Awaits the fetch task and returns the 2-char alpha-2 country code
+    /// - Returns: The 2-char country code (e.g., "US", "GB"), or nil if unavailable
+    func fetchStoreCountryCode() async -> String? {
+        return await fetchTask?.value
+    }
+    
+    /// Returns the cached 2-char store country code synchronously
+    /// - Returns: The cached alpha-2 country code, or nil if fetch not yet complete
+    func getStoreCountryCode() -> String? {
+        return cachedCountryCode2
+    }
+    
+    /// Returns the cached 3-char store country code synchronously
+    /// - Returns: The cached alpha-3 country code, or nil if fetch not yet complete
+    func getStoreCountryCode3() -> String? {
+        return cachedCountryCode3
+    }
+}
+
 /// Configuration for SDK identification, used by wrapper SDKs (React Native, Flutter) to identify themselves.
 public class HeliumSdkConfig {
     public static let shared = HeliumSdkConfig()
     private init() {}
-
+    
     // Private storage for wrapper SDK info
     @HeliumAtomic
     private var wrapperSdk: String?
     @HeliumAtomic
     private var wrapperSdkVersion: String?
-
+    
     /// Called by wrapper SDKs (React Native, Flutter) before Helium.initialize()
     /// - Parameters:
     ///   - sdk: The wrapper SDK identifier (e.g., "react-native", "flutter")
@@ -132,22 +157,22 @@ public class HeliumSdkConfig {
         self.wrapperSdk = sdk
         self.wrapperSdkVersion = version
     }
-
+    
     /// The platform identifier, always "ios" for this SDK
     var heliumPlatform: String {
         return "ios"
     }
-
+    
     /// The SDK identifier - wrapper SDK name or "ios" for native
     var heliumSdk: String {
         return wrapperSdk ?? "ios"
     }
-
+    
     /// The SDK version - wrapper SDK version or native SDK version
     var heliumSdkVersion: String {
         return wrapperSdkVersion ?? BuildConstants.version
     }
-
+    
     /// The native SDK version, always the Swift SDK version
     var heliumNativeSdkVersion: String {
         return BuildConstants.version

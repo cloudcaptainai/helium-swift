@@ -43,19 +43,21 @@ class HeliumPaywallPresenter {
             }
             
             let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-            guard let contentView = upsellViewResult.view else {
+            guard let viewAndSession = upsellViewResult.viewAndSession else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
-                    )
+                    ),
+                    paywallSession: nil
                 )
                 return
             }
-            presentPaywall(trigger: trigger, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
+            let contentView = viewAndSession.view
+            presentPaywall(trigger: trigger, paywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController)
         }
     }
     
@@ -70,7 +72,8 @@ class HeliumPaywallPresenter {
                     error: "A paywall is already being presented.",
                     paywallUnavailableReason: .alreadyPresented,
                     loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
-                )
+                ),
+                paywallSession: nil
             )
             return
         }
@@ -101,9 +104,12 @@ class HeliumPaywallPresenter {
             // Get background config from fallback bundle if available
             let fallbackBgConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
             
+            // Note that this paywall session will get replaced once paywall is succesfully loaded.
+            let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil, fallbackType: .notFallback)
+            
             // Show loading state with trigger-specific or default loading view
             let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
+            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -139,25 +145,26 @@ class HeliumPaywallPresenter {
         }
         
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger)
-        guard let upsellView = upsellViewResult.view else {
+        guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
                         triggerName: trigger,
-                        paywallName: upsellViewResult.templateName ?? "unknown",
+                        paywallName: "",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
                         loadtimeTakenMS: loadTimeTakenMS,
                         loadingBudgetMS: loadingBudgetMS,
                         newWindowCreated: loadingPaywall.customWindow != nil
-                    )
+                    ),
+                    paywallSession: loadingPaywall.paywallSession
                 )
             }
             return
         }
-        loadingPaywall.updateContent(upsellView, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
+        loadingPaywall.updateContent(viewAndSession.view, newPaywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isLoading: false)
         
         // Dispatch the official open event
         dispatchOpenEvent(paywallVC: loadingPaywall)
@@ -264,8 +271,8 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
-        let modalVC = HeliumViewController(trigger: trigger, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
+    private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
         var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
@@ -289,7 +296,8 @@ class HeliumPaywallPresenter {
                     error: "No root view controller found",
                     paywallUnavailableReason: .noRootController,
                     loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
-                )
+                ),
+                paywallSession: paywallSession
             )
             return
         }
@@ -360,12 +368,6 @@ class HeliumPaywallPresenter {
     }
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
-        // Fire user allocation event if this is the first time showing this trigger
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: paywallVC.trigger,
-            isFallback: paywallVC.isFallback
-        )
-        
         dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
     }
     
@@ -377,14 +379,21 @@ class HeliumPaywallPresenter {
         if paywallVC.isLoading {
             return // don't fire an event in this case
         }
+        
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
-        let paywallInfo = !isFallback ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : "unknown"
+        let paywallInfo = paywallVC.paywallSession.paywallInfoWithBackups
+        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : ""
         let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
         
         let event: HeliumEvent
         if openEvent {
+            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+                trigger: paywallVC.trigger,
+                isFallback: paywallVC.isFallback,
+                paywallSession: paywallVC.paywallSession
+            )
+            
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             
@@ -404,7 +413,7 @@ class HeliumPaywallPresenter {
                 secondTry: paywallVC.isSecondTry
             )
         }
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallVC.paywallSession)
     }
     
     private func dispatchCloseForAll(paywallVCs: [HeliumViewController]) {

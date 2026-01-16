@@ -77,21 +77,17 @@ public extension HeliumPaywallDelegate {
 }
 
 
-public class HeliumPaywallDelegateWrapper {
+class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
         shared.delegate = nil
-        shared.analytics = nil
-        shared.isAnalyticsEnabled = true
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
     }
     
     private var delegate: HeliumPaywallDelegate?
-    private var analytics: Analytics?
-    private var isAnalyticsEnabled: Bool = true
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
@@ -119,23 +115,7 @@ public class HeliumPaywallDelegateWrapper {
         self.customPaywallTraits = [:]
         self.dontShowIfAlreadyEntitled = false
     }
-    
-    func setAnalytics(_ analytics: Analytics) {
-        self.analytics = analytics
-    }
-    
-    func getAnalytics() -> Analytics? {
-        return analytics;
-    }
 
-    public func setIsAnalyticsEnabled(shouldEnable: Bool) {
-        isAnalyticsEnabled = shouldEnable;
-    }
-    
-    public func getIsAnalyticsEnabled() -> Bool {
-        return isAnalyticsEnabled;
-    }
-    
     public func getCustomVariableValues() -> [String: Any?] {
         if !customPaywallTraits.isEmpty {
             return customPaywallTraits
@@ -144,17 +124,17 @@ public class HeliumPaywallDelegateWrapper {
         return delegate?.getCustomVariableValues() ?? [:]
     }
     
-    public func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String) async -> HeliumPaywallTransactionStatus? {
+    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
         StoreKit1Listener.ensureListening()
         
         let transactionStatus = await delegate?.makePurchase(productId: productKey);
         switch transactionStatus {
         case .cancelled:
-            self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         case .failed(let error):
-            self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error))
+            self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: TransactionIdPair? = nil
@@ -172,6 +152,8 @@ public class HeliumPaywallDelegateWrapper {
             Task {
                 await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
                 
+                await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
+                
                 // update localized products (and offer eligibility) after purchase
                 await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
             }
@@ -182,24 +164,24 @@ public class HeliumPaywallDelegateWrapper {
             #endif
             
             let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
-            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS))
+            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
         case .pending:
-            self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         default:
             break
         }
         return transactionStatus;
     }
     
-    public func restorePurchases(triggerName: String, paywallTemplateName: String) async -> Bool {
+    func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
         if (delegate == nil) {
             return false;
         }
         let result = await delegate!.restorePurchases();
         if (result) {
-            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
-            self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName))
+            self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
             if Helium.restorePurchaseConfig.showHeliumDialog {
                 Task { @MainActor in
                     let alert = UIAlertController(
@@ -224,7 +206,7 @@ public class HeliumPaywallDelegateWrapper {
     
     
     /// Fire a v2 typed event - main entry point for all SDK events
-    public func fireEvent(_ event: HeliumEvent) {
+    func fireEvent(_ event: HeliumEvent, paywallSession: PaywallSession?) {
         Task { @MainActor in
             // First, call the event service if configured
             eventService?.handleEvent(event)
@@ -244,58 +226,42 @@ public class HeliumPaywallDelegateWrapper {
         // Then convert to legacy format and handle internally (analytics, etc)
         // AND call the legacy delegate method for backward compatibility
         let legacyEvent = event.toLegacyEvent()
-        onHeliumPaywallEvent(event: legacyEvent)
+        onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
     }
     
     /// Legacy event handler - handles analytics and calls delegate
-    public func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
+    func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-        
-        var analyticsForEvent = analytics
-        
-        if analytics == nil, let fallbackBundleConfig {
-            let neededWriteKey = fallbackBundleConfig.segmentBrowserWriteKey
-
-            // Get or create Analytics instance for the fallback configuration
-            let configuration = SegmentConfiguration(writeKey: neededWriteKey)
-                .apiHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .cdnHost(fallbackBundleConfig.segmentAnalyticsEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            analyticsForEvent = Analytics.getOrCreateAnalytics(configuration: configuration)
-            analyticsForEvent?.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            );
-            // Store this Analytics instance for future use
-            HeliumPaywallDelegateWrapper.shared.setAnalytics(analyticsForEvent!)
-        }
-        
-        if case .paywallOpen = event {
-            HeliumIdentityManager.shared.setPaywallSessionId()
-        } else if case .paywallClose = event {
-            HeliumIdentityManager.shared.clearPaywallSessionId()
-        }
+        let analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
         
         do {
             // Call the legacy delegate method for backward compatibility
             delegate?.onHeliumPaywallEvent(event: event);
-            if (isAnalyticsEnabled && analyticsForEvent != nil) {
+            if let analyticsForEvent {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
-                var paywallInfo: HeliumPaywallInfo? = nil;
-                var experimentInfo: ExperimentInfo? = nil;
-                var isFallback = false;
-                if let triggerName = event.getTriggerIfExists() {
+                var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
+                var experimentInfo: ExperimentInfo? = nil
+                var isFallback: Bool? = nil
+                if let paywallSession {
+                    isFallback = paywallSession.fallbackType != .notFallback
+                }
+                if let triggerName = (event.getTriggerIfExists() ?? paywallSession?.trigger) {
                     experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
                     modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
-                    paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName);
                     experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName);
-                    if paywallInfo == nil {
-                        isFallback = true;
-                    } else {
-                        let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
-                        isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
+                    
+                    if paywallInfo == nil && paywallSession == nil {
+                        paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
+                    }
+                    if isFallback == nil {
+                        // Old isFallback determination. This can likely be removed at some point.
+                        if paywallInfo == nil {
+                            isFallback = true
+                        } else {
+                            let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
+                            isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
+                        }
                     }
                 }
                 
@@ -314,7 +280,7 @@ public class HeliumPaywallDelegateWrapper {
                     heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                     heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                     heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
-                    heliumPaywallSessionId: HeliumIdentityManager.shared.getPaywallSessionId(),
+                    heliumPaywallSessionId: paywallSession?.sessionId,
                     appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                     appTransactionId: HeliumIdentityManager.shared.appTransactionID,
                     revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
@@ -325,14 +291,22 @@ public class HeliumPaywallDelegateWrapper {
                     experimentInfo: experimentInfo
                 );
                 
-                analyticsForEvent?.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                analyticsForEvent.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                
+                // Flush immediately for critical events to minimize event loss
+                switch event {
+                case .paywallOpen, .paywallClose, .subscriptionSucceeded:
+                    HeliumAnalyticsManager.shared.flush()
+                default:
+                    break
+                }
             }
         } catch {
             print("Delegate action failed.");
         }
     }
     
-    public func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?) {
+    func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?, paywallSession: PaywallSession? = nil) {
         if isOpen {
             let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
             fireEvent(PaywallOpenEvent(
@@ -340,12 +314,12 @@ public class HeliumPaywallDelegateWrapper {
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
                 viewType: viewTypeEnum,
                 paywallUnavailableReason: fallbackReason
-            ))
+            ), paywallSession: paywallSession)
         } else {
             fireEvent(PaywallCloseEvent(
                 triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
                 paywallName: HELIUM_FALLBACK_PAYWALL_NAME
-            ))
+            ), paywallSession: paywallSession)
         }
     }
     
