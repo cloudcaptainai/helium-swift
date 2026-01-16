@@ -1,4 +1,5 @@
-name: Release CI - Trigger Tests
+name: Release CI - Test and Create Release
+
 on:
   push:
     branches: [main]
@@ -16,22 +17,18 @@ jobs:
         id: get_version
         run: |
           VERSION=$(grep -o 'version = "[^"]*"' Sources/Helium/HeliumCore/BuildConstants.swift | cut -d'"' -f2)
-          echo "version extracted! $VERSION"
+          echo "Version extracted: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-  trigger-tests:
+  run-ui-tests:
     needs: extract-version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger test app workflow
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.DEMO_PAT }}
-          repository: cloudcaptainai/helium-demo
-          event-type: run-sdk-tests
-          client-payload: '{"branch": "main", "sha": "${{ github.sha }}", "version": "${{ needs.extract-version.outputs.version }}", "should_release": true}'
-          
-      - name: Wait for test results
-        run: |
-          echo "Tests have been triggered in helium-demo repository"
-          echo "If successful, the create-release workflow will kickoff to create the release."
+    uses: ./.github/workflows/run-tests.yml
+    secrets: inherit
+
+  create-release:
+    needs: [extract-version, run-ui-tests]
+    uses: ./.github/workflows/create-release.yaml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      sha: ${{ github.sha }}
+    secrets: inherit

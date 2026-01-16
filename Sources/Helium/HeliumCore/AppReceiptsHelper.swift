@@ -20,6 +20,9 @@ class AppReceiptsHelper {
     private var appTransactionEnvironment: Environment? = nil
     private var setupCompleted: Bool = false
     
+    private var appFirstInstallTime: Date? = nil
+    private let firstInstallTimeKey = "heliumFirstInstallTime"
+    
     func setUp() {
         if setupCompleted {
             return
@@ -51,6 +54,15 @@ class AppReceiptsHelper {
                     default:
                         break
                     }
+                    
+                    // Extract first install time from originalPurchaseDate
+                    appFirstInstallTime = appTransaction.originalPurchaseDate
+                    // Only persist to UserDefaults for production
+                    if appTransaction.environment == .production {
+                        let formatter = ISO8601DateFormatter()
+                        UserDefaults.standard.set(formatter.string(from: appTransaction.originalPurchaseDate), forKey: firstInstallTimeKey)
+                    }
+                    
 #if compiler(>=6.2)
                     HeliumIdentityManager.shared.appTransactionID = appTransaction.appTransactionID
 #endif
@@ -82,4 +94,28 @@ class AppReceiptsHelper {
 #endif
     }
     
+    func getFirstInstallTime() -> Date? {
+        // Return cached value if available (from AppTransaction)
+        if let appFirstInstallTime {
+            return appFirstInstallTime
+        }
+        // Check UserDefaults for persisted production value
+        if let timestamp = UserDefaults.standard.string(forKey: firstInstallTimeKey) {
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: timestamp) {
+                return date
+            }
+        }
+        // Backup: documents directory creation date
+        return getDocumentsDirectoryCreationDate()
+    }
+    
+    private func getDocumentsDirectoryCreationDate() -> Date? {
+        guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let attributes = try? FileManager.default.attributesOfItem(atPath: documentsURL.path)
+        return attributes?[.creationDate] as? Date
+    }
+
 }

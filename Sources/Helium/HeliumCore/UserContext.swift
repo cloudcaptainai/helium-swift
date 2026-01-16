@@ -18,6 +18,7 @@ struct CodableLocale: Codable {
     var currentTimeZoneName: String?
     var decimalSeparator: String?
     var usesMetricSystem: Bool
+    var storeCountryCode: String?  // 2-letter alpha-2 code
 }
 
 struct CodableScreenInfo: Codable {
@@ -34,13 +35,14 @@ struct CodableApplicationInfo: Codable {
     var build: String?
     var completeAppVersion: String?
     var appDisplayName: String?
-    var heliumNativeSdkVersion: String
-    var heliumSdkVersion: String
+    var platform: String
     var heliumSdk: String
-    var heliumPlatform: String
+    var heliumSdkVersion: String
+    var heliumWrapperSdkVersion: String
     var purchaseDelegate: String
     var customAPIEndpoint: String?
     var environment: String
+    var firstInstallTimestamp: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -72,18 +74,24 @@ func createApplicationInfo() -> CodableApplicationInfo {
         appDisplayName = nil;
     }
     
+    var firstInstallTime: String? = nil
+    if let installDate = AppReceiptsHelper.shared.getFirstInstallTime() {
+        firstInstallTime = formatAsTimestamp(date: installDate)
+    }
+    
     return CodableApplicationInfo(
         version: version,
         build: build,
         completeAppVersion: completeAppVersion,
         appDisplayName: appDisplayName,
-        heliumNativeSdkVersion: HeliumSdkConfig.shared.heliumNativeSdkVersion,
-        heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
+        platform: HeliumSdkConfig.shared.heliumPlatform,
         heliumSdk: HeliumSdkConfig.shared.heliumSdk,
-        heliumPlatform: HeliumSdkConfig.shared.heliumPlatform,
+        heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
+        heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
         customAPIEndpoint: HeliumSdkConfig.shared.customAPIEndpoint,
-        environment: AppReceiptsHelper.shared.getEnvironment()
+        environment: AppReceiptsHelper.shared.getEnvironment(),
+        firstInstallTimestamp: firstInstallTime
     )
 }
 
@@ -99,63 +107,79 @@ public struct CodableUserContext: Codable {
     var organizationID: String?
     var appTransactionId: String?
     
-    public func asParams() -> [String: Any] {
+    public func buildRequestPayload() -> [String: Any] {
+        let localeDict: [String: Any] = [
+            "currentCountry": self.locale.currentCountry ?? "",
+            "currentCurrency": self.locale.currentCurrency ?? "",
+            "currentCurrencySymbol": self.locale.currentCurrencySymbol ?? "",
+            "preferredLanguages": self.locale.preferredLanguages ?? [],
+            "currentLanguage": self.locale.currentLanguage ?? "",
+            "currentTimeZone": self.locale.currentTimeZone?.identifier ?? "",
+            "currentTimeZoneName": self.locale.currentTimeZoneName ?? "",
+            "decimalSeparator": self.locale.decimalSeparator ?? "",
+            "usesMetricSystem": self.locale.usesMetricSystem,
+            "storeCountryCode": self.locale.storeCountryCode ?? "",
+            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
+        ]
+        
+        let nativeBoundsDict: [String: Any] = [
+            "x": self.screenInfo.nativeBounds.origin.x,
+            "y": self.screenInfo.nativeBounds.origin.y,
+            "width": self.screenInfo.nativeBounds.size.width,
+            "height": self.screenInfo.nativeBounds.size.height
+        ]
+        
+        let boundsDict: [String: Any] = [
+            "x": self.screenInfo.bounds.origin.x,
+            "y": self.screenInfo.bounds.origin.y,
+            "width": self.screenInfo.bounds.size.width,
+            "height": self.screenInfo.bounds.size.height
+        ]
+        
+        let screenInfoDict: [String: Any] = [
+            "brightness": self.screenInfo.brightness,
+            "nativeBounds": nativeBoundsDict,
+            "nativeScale": self.screenInfo.nativeScale,
+            "bounds": boundsDict,
+            "scale": self.screenInfo.scale,
+            "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
+        ]
+        
+        let deviceInfoDict: [String: Any] = [
+            "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier ?? "",
+            "orientation": self.deviceInfo.orientation,
+            "systemName": self.deviceInfo.systemName,
+            "systemVersion": self.deviceInfo.systemVersion,
+            "deviceModel": self.deviceInfo.deviceModel,
+            "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
+        ]
+        
+        let applicationInfoDict: [String: Any] = [
+            "version": self.applicationInfo.version ?? "",
+            "build": self.applicationInfo.build ?? "",
+            "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
+            "appDisplayName": self.applicationInfo.appDisplayName ?? "",
+            "platform": self.applicationInfo.platform,
+            "heliumSdk": self.applicationInfo.heliumSdk,
+            "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
+            "heliumWrapperSdkVersion": self.applicationInfo.heliumWrapperSdkVersion,
+            "purchaseDelegate": self.applicationInfo.purchaseDelegate,
+            "customAPIEndpoint": self.applicationInfo.customAPIEndpoint ?? "",
+            "environment": self.applicationInfo.environment,
+            "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? ""
+        ]
+        
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
-            "locale": [
-                "currentCountry": self.locale.currentCountry as Any,
-                "currentCurrency": self.locale.currentCurrency as Any,
-                "currentCurrencySymbol": self.locale.currentCurrencySymbol as Any,
-                "preferredLanguages": self.locale.preferredLanguages as Any,
-                "currentLanguage": self.locale.currentLanguage as Any,
-                "currentTimeZone": self.locale.currentTimeZone?.identifier as Any,
-                "currentTimeZoneName": self.locale.currentTimeZoneName as Any,
-                "decimalSeparator": self.locale.decimalSeparator as Any,
-                "usesMetricSystem": self.locale.usesMetricSystem
-            ],
-            "screenInfo": [
-                "brightness": self.screenInfo.brightness,
-                "nativeBounds": [
-                    "x": self.screenInfo.nativeBounds.origin.x,
-                    "y": self.screenInfo.nativeBounds.origin.y,
-                    "width": self.screenInfo.nativeBounds.size.width,
-                    "height": self.screenInfo.nativeBounds.size.height
-                ],
-                "nativeScale": self.screenInfo.nativeScale,
-                "bounds": [
-                    "x": self.screenInfo.bounds.origin.x,
-                    "y": self.screenInfo.bounds.origin.y,
-                    "width": self.screenInfo.bounds.size.width,
-                    "height": self.screenInfo.bounds.size.height
-                ],
-                "scale": self.screenInfo.scale,
-                "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
-            ],
-            "deviceInfo": [
-                "currentDeviceIdentifier": self.deviceInfo.currentDeviceIdentifier as Any,
-                "orientation": self.deviceInfo.orientation,
-                "systemName": self.deviceInfo.systemName,
-                "systemVersion": self.deviceInfo.systemVersion,
-                "deviceModel": self.deviceInfo.deviceModel,
-                "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
-            ],
-            "applicationInfo": [
-                "version": self.applicationInfo.version as Any,
-                "build": self.applicationInfo.build as Any,
-                "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
-                "appDisplayName": self.applicationInfo.appDisplayName as Any,
-                "heliumNativeSdkVersion": self.applicationInfo.heliumNativeSdkVersion,
-                "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
-                "heliumSdk": self.applicationInfo.heliumSdk,
-                "heliumPlatform": self.applicationInfo.heliumPlatform,
-                "purchaseDelegate": self.applicationInfo.purchaseDelegate,
-                "customAPIEndpoint": self.applicationInfo.customAPIEndpoint as Any,
-                "environment": self.applicationInfo.environment
-            ],
+            "locale": localeDict,
+            "screenInfo": screenInfoDict,
+            "deviceInfo": deviceInfoDict,
+            "applicationInfo": applicationInfoDict,
+            "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
@@ -171,7 +195,8 @@ public struct CodableUserContext: Codable {
             currentTimeZone: TimeZone.current,
             currentTimeZoneName: TimeZone.current.identifier,
             decimalSeparator: Locale.current.decimalSeparator,
-            usesMetricSystem: Locale.current.usesMetricSystem
+            usesMetricSystem: Locale.current.usesMetricSystem,
+            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode()
         )
 
         let screenInfo = CodableScreenInfo(

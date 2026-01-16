@@ -1,32 +1,117 @@
-name: Branch CI Testing
+name: UI Tests
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
+  workflow_call:  # Allow other workflows to call this
   workflow_dispatch:
 
 jobs:
-  prepare-testing:
-    runs-on: ubuntu-latest
-    outputs:
-      branch_ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-      commit_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  ui-tests:
+    runs-on: warp-macos-26-arm64-6x
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    env:
+      HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
+      HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
+      SIMULATOR_NAME: iPhone 16
     steps:
       - uses: actions/checkout@v4
 
-  trigger-test-app:
-    needs: prepare-testing
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger test app workflow
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.DEMO_PAT }}
-          repository: cloudcaptainai/helium-demo
-          event-type: run-sdk-tests
-          client-payload: '{"branch": "${{ needs.prepare-testing.outputs.branch_ref }}", "sha": "${{ needs.prepare-testing.outputs.commit_sha }}", "should_release": false}'
-          
-      - name: Wait for test results
+      - name: Verify secrets are available
         run: |
-          echo "Tests have been triggered in helium-demo repository"
-          echo "Check helium-demo Actions tab for results, or wait for status to be updated on this commit"
+          echo "=== Checking secrets ==="
+          if [ -n "$HELIUM_API_KEY" ]; then
+            echo "✅ HELIUM_API_KEY is set (length: ${#HELIUM_API_KEY})"
+          else
+            echo "❌ HELIUM_API_KEY is NOT set or empty"
+          fi
+          if [ -n "$HELIUM_TRIGGER_KEY" ]; then
+            echo "✅ HELIUM_TRIGGER_KEY is set (length: ${#HELIUM_TRIGGER_KEY})"
+          else
+            echo "❌ HELIUM_TRIGGER_KEY is NOT set or empty"
+          fi
+
+      - name: Check Xcode version and available simulators
+        run: |
+          xcodebuild -version
+          echo "=== Available iOS Simulators ==="
+          xcrun simctl list devices available | grep -E "iPhone"
+
+      - name: Pre-boot simulator
+        run: |
+          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+          echo "Simulator ready"
+
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -project HeliumExample/HeliumExample.xcodeproj \
+            -scheme "CI HeliumExample" \
+            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
+            HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            -allowProvisioningUpdates
+
+      - name: Run UI tests with retry logic
+        run: |
+          run_tests() {
+            xcodebuild test-without-building \
+              -project HeliumExample/HeliumExample.xcodeproj \
+              -scheme "CI HeliumExample" \
+              -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+              -only-testing:HeliumExampleUITests \
+              -disable-concurrent-destination-testing \
+              HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
+              HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO
+          }
+
+          # Retry logic with 1 attempt/s
+          for attempt in {1..1}; do
+            echo "Test attempt $attempt of 1..."
+
+            if run_tests; then
+              echo "✅ Tests passed on attempt $attempt"
+              exit 0
+            else
+              echo "❌ Tests failed on attempt $attempt"
+
+              if [ $attempt -eq 1 ]; then
+                echo "All test attempts failed"
+                exit 1
+              else
+                echo "Retrying in 10 seconds..."
+                sleep 10
+              fi
+            fi
+          done
+
+      - name: Collect test results and logs
+        if: always()
+        run: |
+          echo "=== Test Results Summary ==="
+          find ~/Library/Developer/Xcode/DerivedData -name "*.xcresult" -type d | head -5
+
+          LATEST_RESULT=$(find ~/Library/Developer/Xcode/DerivedData -name "*.xcresult" -type d | sort -t/ -k9 -r | head -1)
+
+          if [ -n "$LATEST_RESULT" ]; then
+            echo "Latest test result: $LATEST_RESULT"
+
+            if command -v xcrun >/dev/null 2>&1; then
+              echo "=== Test Summary ==="
+              xcrun xcresulttool get test-results summary --path "$LATEST_RESULT" || echo "Could not extract test summary"
+            fi
+          fi
+
+      - name: Upload xcresult bundle
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-xcresult
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/**.xcresult
+          retention-days: 3
