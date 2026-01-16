@@ -32,6 +32,25 @@ public class Helium {
     public static let shared = Helium()
     public static let restorePurchaseConfig = RestorePurchaseConfig()
     
+    // MARK: - Logging
+
+    /// Sets the Helium SDK log level.
+    ///
+    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
+    public static func setLogLevel(_ level: HeliumLogLevel) {
+        HeliumLog.setLogLevel(level)
+    }
+
+    /// Returns the current Helium SDK log level.
+    public static func getLogLevel() -> HeliumLogLevel {
+        HeliumLog.getLogLevel()
+    }
+
+    /// Instance convenience for setting the Helium SDK log level.
+    public func setLogLevel(_ level: HeliumLogLevel) {
+        HeliumLog.setLogLevel(level)
+    }
+    
     public func presentUpsell(
         trigger: String,
         from viewController: UIViewController? = nil,

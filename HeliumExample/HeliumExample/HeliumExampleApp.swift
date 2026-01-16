@@ -37,6 +37,8 @@ struct HeliumExampleApp: App {
             fallbackConfig: fallbackConfig
         )
         
+        Helium.setLogLevel(.debug)
+        
         // For UI tests:
         if let loadStateTestTrigger {
             Helium.shared.presentUpsell(trigger: loadStateTestTrigger)
