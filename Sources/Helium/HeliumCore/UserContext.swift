@@ -35,12 +35,12 @@ struct CodableApplicationInfo: Codable {
     var build: String?
     var completeAppVersion: String?
     var appDisplayName: String?
-    var heliumNativeSdkVersion: String
-    var heliumSdkVersion: String
+    var platform: String
     var heliumSdk: String
-    var heliumPlatform: String
+    var heliumSdkVersion: String
+    var heliumWrapperSdkVersion: String
     var environment: String
-    var firstInstallTime: String?
+    var firstInstallTimestamp: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -82,12 +82,12 @@ func createApplicationInfo() -> CodableApplicationInfo {
         build: build,
         completeAppVersion: completeAppVersion,
         appDisplayName: appDisplayName,
-        heliumNativeSdkVersion: HeliumSdkConfig.shared.heliumNativeSdkVersion,
-        heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
+        platform: HeliumSdkConfig.shared.heliumPlatform,
         heliumSdk: HeliumSdkConfig.shared.heliumSdk,
-        heliumPlatform: HeliumSdkConfig.shared.heliumPlatform,
+        heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
+        heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         environment: AppReceiptsHelper.shared.getEnvironment(),
-        firstInstallTime: firstInstallTime
+        firstInstallTimestamp: firstInstallTime
     )
 }
 
@@ -151,14 +151,15 @@ public struct CodableUserContext: Codable {
         ]
         
         let applicationInfoDict: [String: Any] = [
-            "version": self.applicationInfo.version as Any,
-            "build": self.applicationInfo.build as Any,
-            "completeAppVersion": self.applicationInfo.completeAppVersion as Any,
-            "appDisplayName": self.applicationInfo.appDisplayName as Any,
-            "heliumNativeSdkVersion": self.applicationInfo.heliumNativeSdkVersion,
-            "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
+            "version": self.applicationInfo.version ?? "",
+            "build": self.applicationInfo.build ?? "",
+            "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
+            "appDisplayName": self.applicationInfo.appDisplayName ?? "",
+            "platform": self.applicationInfo.platform,
             "heliumSdk": self.applicationInfo.heliumSdk,
-            "heliumPlatform": self.applicationInfo.heliumPlatform,
+            "heliumSdkVersion": self.applicationInfo.heliumSdkVersion,
+            "heliumWrapperSdkVersion": self.applicationInfo.heliumWrapperSdkVersion,
+            "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? ""
         ]
         
         return [
