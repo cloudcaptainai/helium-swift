@@ -135,6 +135,8 @@ public class HeliumFetchedConfigManager {
         shared.localizedPriceMap = [:]
     }
     
+    private init() {}
+    
     private var fetchTask: Task<Void, Never>?
     
     @HeliumAtomic private var _downloadStatus: HeliumFetchedConfigStatus = .notDownloadedYet
