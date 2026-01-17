@@ -48,6 +48,7 @@ class HeliumAnalyticsManager {
             guard let analytics else { return }
             let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
             let userContext = HeliumIdentityManager.shared.getUserContext()
+            HeliumLog.log(.debug, category: .events, "Identifying user", metadata: ["userId": resolvedUserId])
             analytics.identify(userId: resolvedUserId, traits: userContext)
         }
     }
@@ -71,11 +72,13 @@ class HeliumAnalyticsManager {
         let result = queue.sync { () -> Analytics in
             let configurationChanged = currentWriteKey != writeKey
             let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
-            
+
             if let existingAnalytics = analytics, !shouldCreateNew {
+                HeliumLog.log(.trace, category: .events, "Reusing existing analytics instance")
                 return existingAnalytics
             }
-            
+
+            HeliumLog.log(.debug, category: .events, "Setting up new analytics instance", metadata: ["endpoint": endpoint])
             let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
             let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
             self.analytics = newAnalytics

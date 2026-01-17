@@ -24,6 +24,7 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
+        HeliumLog.log(.debug, category: .core, "Logging initialize event to analytics")
         let configuration = SegmentConfiguration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
             .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
             .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
@@ -35,7 +36,7 @@ public class HeliumController {
             userId: HeliumIdentityManager.shared.getUserId(),
             traits: HeliumIdentityManager.shared.getUserContext()
         );
-        
+
         initialAnalytics.track(name: "helium_initializeCalled", properties: [
             "timestamp": formatAsTimestamp(date: Date()),
             "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
@@ -57,10 +58,15 @@ public class HeliumController {
     
     func downloadConfig() {
         let apiEndpointOrDefault = customAPIEndpoint ?? DEFAULT_API_ENDPOINT
+        HeliumLog.log(.info, category: .network, "Starting config download", metadata: ["endpoint": apiEndpointOrDefault])
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
             case .success(let fetchedConfig, let metrics):
+                HeliumLog.log(.info, category: .network, "Config download succeeded", metadata: [
+                    "numBundles": String(metrics.numBundles ?? 0),
+                    "totalTimeMS": String(metrics.totalTimeMS ?? 0)
+                ])
                 HeliumAnalyticsManager.shared.getOrSetupAnalytics(
                     writeKey: fetchedConfig.segmentBrowserWriteKey,
                     endpoint: fetchedConfig.segmentAnalyticsEndpoint,
@@ -90,6 +96,10 @@ public class HeliumController {
                     )
                 }
             case .failure(let errorMessage, let metrics):
+                HeliumLog.log(.error, category: .network, "Config download failed", metadata: [
+                    "error": errorMessage,
+                    "numAttempts": String(metrics.numConfigAttempts)
+                ])
                 HeliumAnalyticsManager.shared.getOrSetupAnalytics(
                     writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,
                     endpoint: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT

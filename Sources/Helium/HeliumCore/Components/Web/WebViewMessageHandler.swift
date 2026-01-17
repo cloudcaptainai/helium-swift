@@ -32,9 +32,11 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
               let type = dict["type"] as? String,
               let messageId = dict["messageId"] as? String,
               let data = dict["data"] as? [String: Any] else {
+            HeliumLog.log(.warn, category: .ui, "Invalid WebView message format received")
             replyHandler(nil, "Invalid message format")
             return
         }
+        HeliumLog.log(.trace, category: .ui, "WebView message received", metadata: ["type": type])
         
         // Helper function that matches JS expected format
         let respond = { (responseData: [String: Any]) in
@@ -178,7 +180,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
 extension WebViewMessageHandler: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        print("WebView did commit navigation")
+        HeliumLog.log(.trace, category: .ui, "WebView did commit navigation")
     }
     
     private func shouldOpenExternally(url: URL) -> Bool {
@@ -201,11 +203,12 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     }
     
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        HeliumLog.log(.debug, category: .ui, "WebView finished loading")
         NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
     }
-    
+
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
-        print("[Helium] WebView failed to load \(error)")
+        HeliumLog.log(.error, category: .ui, "WebView failed to load", metadata: ["error": error.localizedDescription])
         NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
     }
     
