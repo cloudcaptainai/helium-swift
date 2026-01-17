@@ -237,12 +237,10 @@ class HeliumPaywallDelegateWrapper {
     /// Legacy event handler - handles analytics and calls delegate
     func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-        let analyticsForEvent = HeliumAnalyticsManager.shared.getAnalytics()
         
         do {
             // Call the legacy delegate method for backward compatibility
             delegate?.onHeliumPaywallEvent(event: event);
-            if let analyticsForEvent {
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
@@ -296,7 +294,11 @@ class HeliumPaywallDelegateWrapper {
                     experimentInfo: experimentInfo
                 );
                 
-                analyticsForEvent.track(name: "helium_" + event.caseString(), properties: eventForLogging);
+                // Track event - will queue if analytics not yet set up
+                let eventName = "helium_" + event.caseString()
+                HeliumAnalyticsManager.shared.trackEvent { analytics in
+                    analytics.track(name: eventName, properties: eventForLogging)
+                }
                 
                 // Flush immediately for critical events to minimize event loss
                 switch event {
@@ -305,7 +307,6 @@ class HeliumPaywallDelegateWrapper {
                 default:
                     break
                 }
-            }
         } catch {
             print("Delegate action failed.");
         }

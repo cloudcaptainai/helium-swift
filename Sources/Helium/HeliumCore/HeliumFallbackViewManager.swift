@@ -62,7 +62,7 @@ public class HeliumFallbackViewManager {
                 }
                 
                 if let config = loadedConfig {
-                    HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                    HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,
                         endpoint: config.segmentAnalyticsEndpoint
                     )
