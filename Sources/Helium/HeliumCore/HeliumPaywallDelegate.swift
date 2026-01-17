@@ -74,7 +74,6 @@ class HeliumPaywallDelegateWrapper {
         shared.dontShowIfAlreadyEntitled = false
     }
     
-    private let analyticsEventQueue = DispatchQueue(label: "com.helium.analyticsEventQueue")
     private var delegate: HeliumPaywallDelegate?
     
     private var eventService: PaywallEventHandlers?
@@ -105,11 +104,7 @@ class HeliumPaywallDelegateWrapper {
     }
 
     public func getCustomVariableValues() -> [String: Any?] {
-        if !customPaywallTraits.isEmpty {
-            return customPaywallTraits
-        }
-        // then look at deprecated delegate method
-        return delegate?.getCustomVariableValues() ?? [:]
+        return customPaywallTraits
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
@@ -211,88 +206,7 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
-        analyticsEventQueue.async { [weak self] in
-            // Then convert to legacy format and handle internally (analytics, etc)
-            // AND call the legacy delegate method for backward compatibility
-            let legacyEvent = event.toLegacyEvent()
-            self?.onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
-        }
-    }
-    
-    /// Legacy event handler - handles analytics and calls delegate
-    func onHeliumPaywallEvent(event: HeliumPaywallEvent, paywallSession: PaywallSession?) {
-        let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-        
-        do {
-                var experimentID: String? = nil;
-                var modelID: String? = nil;
-                var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
-                var experimentInfo: ExperimentInfo? = nil
-                var isFallback: Bool? = nil
-                if let paywallSession {
-                    isFallback = paywallSession.fallbackType != .notFallback
-                }
-                if let triggerName = (event.getTriggerIfExists() ?? paywallSession?.trigger) {
-                    experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName);
-                    modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName);
-                    experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName);
-                    
-                    if paywallInfo == nil && paywallSession == nil {
-                        paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
-                    }
-                    if isFallback == nil {
-                        // Old isFallback determination. This can likely be removed at some point.
-                        if paywallInfo == nil {
-                            isFallback = true
-                        } else {
-                            let eventPaywallTemplateName = event.getPaywallTemplateNameIfExists() ?? ""
-                            isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
-                        }
-                    }
-                }
-                
-                let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
-                let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
-                let eventForLogging = HeliumPaywallLoggedEvent(
-                    heliumEvent: event,
-                    fetchedConfigId: fetchedConfigId,
-                    timestamp: formatAsTimestamp(date: Date()),
-                    contextTraits: HeliumIdentityManager.shared.getUserContext(skipDeviceCapacity: true),
-                    experimentID: experimentID,
-                    modelID: modelID,
-                    paywallID: paywallInfo?.paywallID,
-                    paywallUUID: paywallInfo?.paywallUUID,
-                    organizationID: organizationID,
-                    heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
-                    heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
-                    heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
-                    heliumPaywallSessionId: paywallSession?.sessionId,
-                    appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
-                    appTransactionId: HeliumIdentityManager.shared.appTransactionID,
-                    revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
-                    isFallback: isFallback,
-                    downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
-                    additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
-                    additionalPaywallFields: paywallInfo?.additionalPaywallFields,
-                    experimentInfo: experimentInfo
-                );
-                
-                // Track event - will queue if analytics not yet set up
-                let eventName = "helium_" + event.caseString()
-                HeliumAnalyticsManager.shared.trackEvent { analytics in
-                    analytics.track(name: eventName, properties: eventForLogging)
-                }
-                
-                // Flush immediately for critical events to minimize event loss
-                switch event {
-                case .paywallOpen, .paywallClose, .subscriptionSucceeded:
-                    HeliumAnalyticsManager.shared.flush()
-                default:
-                    break
-                }
-        } catch {
-            print("Delegate action failed.");
-        }
+        HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
     }
     
     func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?, paywallSession: PaywallSession? = nil) {
