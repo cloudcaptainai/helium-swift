@@ -56,7 +56,7 @@ class HeliumAnalyticsManager {
     }
     
     /// Dispatches all pending track operations to analytics. Called after analytics is set up.
-    /// Must be called within queue.sync/async.
+    /// Must be called within queue.async.
     private func dispatchPendingTracks() {
         guard let analytics else { return }
         for trackClosure in pendingTracks {

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftUI
 
 public class HeliumController {
     let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
@@ -62,13 +61,6 @@ public class HeliumController {
                     ),
                     paywallSession: nil
                 )
-                
-                Task { @MainActor in
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("HeliumConfigDownloadComplete"),
-                        object: nil
-                    )
-                }
             case .failure(let errorMessage, let metrics):
                 HeliumAnalyticsManager.shared.setUpAnalytics(
                     writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,

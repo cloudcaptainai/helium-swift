@@ -228,10 +228,12 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
-        // Then convert to legacy format and handle internally (analytics, etc)
-        // AND call the legacy delegate method for backward compatibility
-        let legacyEvent = event.toLegacyEvent()
-        onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
+        Task {
+            // Then convert to legacy format and handle internally (analytics, etc)
+            // AND call the legacy delegate method for backward compatibility
+            let legacyEvent = event.toLegacyEvent()
+            onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
+        }
     }
     
     /// Legacy event handler - handles analytics and calls delegate
