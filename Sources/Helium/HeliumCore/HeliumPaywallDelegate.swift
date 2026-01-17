@@ -25,10 +25,6 @@ public protocol HeliumPaywallDelegate: AnyObject {
     
     func restorePurchases() async -> Bool
     
-    /// Legacy event handler - deprecated in favor of onPaywallEvent
-    @available(*, deprecated, message: "Use onPaywallEvent(_:) instead for typed events")
-    func onHeliumPaywallEvent(event: HeliumPaywallEvent)
-    
     /// Called when any paywall-related event occurs
     /// - Parameter event: The specific event that occurred. Cast to concrete types for access to event-specific properties.
     /// - Note: Common event types include:
@@ -50,20 +46,12 @@ public protocol HeliumPaywallDelegate: AnyObject {
     /// }
     /// ```
     func onPaywallEvent(_ event: HeliumEvent)
-    
-    @available(*, deprecated, message: "Use customPaywallTraits parameter on presentation methods instead")
-    func getCustomVariableValues() -> [String: Any?]
 }
 
 // Extension to provide default implementation
 public extension HeliumPaywallDelegate {
     var delegateType: String { "custom" }
 
-    /// Default implementation for legacy events - does nothing
-    func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        // Default implementation does nothing
-    }
-    
     /// Default implementation for v2 typed events - does nothing
     func onPaywallEvent(_ event: HeliumEvent) {
         // Default implementation does nothing
@@ -72,12 +60,6 @@ public extension HeliumPaywallDelegate {
     func restorePurchases() async -> Bool {
         // Default implementation is a noop
         return false;
-    }
-    
-    @available(*, deprecated, message: "Use customPaywallTraits parameter on presentation methods instead")
-    func getCustomVariableValues() -> [String: Any?] {
-        // Default implementation returns empty dictionary
-        return [:];
     }
 }
 
@@ -242,8 +224,6 @@ class HeliumPaywallDelegateWrapper {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
         do {
-            // Call the legacy delegate method for backward compatibility
-            delegate?.onHeliumPaywallEvent(event: event);
                 var experimentID: String? = nil;
                 var modelID: String? = nil;
                 var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
