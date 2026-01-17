@@ -92,6 +92,7 @@ class HeliumPaywallDelegateWrapper {
         shared.dontShowIfAlreadyEntitled = false
     }
     
+    private let analyticsEventQueue = DispatchQueue(label: "com.helium.analyticsEventQueue")
     private var delegate: HeliumPaywallDelegate?
     
     private var eventService: PaywallEventHandlers?
@@ -228,11 +229,11 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
-        Task {
+        analyticsEventQueue.async { [weak self] in
             // Then convert to legacy format and handle internally (analytics, etc)
             // AND call the legacy delegate method for backward compatibility
             let legacyEvent = event.toLegacyEvent()
-            onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
+            self?.onHeliumPaywallEvent(event: legacyEvent, paywallSession: paywallSession)
         }
     }
     
