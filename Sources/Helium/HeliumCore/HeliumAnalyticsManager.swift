@@ -65,14 +65,18 @@ class HeliumAnalyticsManager {
         pendingTracks.removeAll()
     }
     
+    private func performIdentify(on analytics: Analytics, userId: String? = nil) {
+        let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
+        let userContext = HeliumIdentityManager.shared.getUserContext()
+        analytics.identify(userId: resolvedUserId, traits: userContext)
+    }
+    
     /// Identifies the current user with the analytics instance.
     /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
     func identify(userId: String? = nil) {
         queue.async { [weak self] in
             guard let self, let analytics else { return }
-            let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
-            let userContext = HeliumIdentityManager.shared.getUserContext()
-            analytics.identify(userId: resolvedUserId, traits: userContext)
+            performIdentify(on: analytics, userId: userId)
         }
     }
     
@@ -105,8 +109,8 @@ class HeliumAnalyticsManager {
             let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
             self.analytics = newAnalytics
             self.currentWriteKey = writeKey
+            performIdentify(on: newAnalytics)
             dispatchPendingTracks()
-            identify()
         }
     }
 
