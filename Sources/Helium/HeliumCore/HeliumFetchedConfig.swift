@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 import WebKit
 import Network
 
@@ -629,8 +628,15 @@ public class HeliumFetchedConfigManager {
         metrics: HeliumFetchMetrics,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
-        updateDownloadState(.downloadSuccess)
         completion(.success(newConfig, metrics))
+        updateDownloadState(.downloadSuccess)
+        
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                object: nil
+            )
+        }
     }
     
     private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
