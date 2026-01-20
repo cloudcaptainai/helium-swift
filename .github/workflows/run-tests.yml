@@ -37,11 +37,12 @@ jobs:
           echo "=== Available iOS Simulators ==="
           xcrun simctl list devices available | grep -E "iPhone"
 
-      - name: Pre-boot simulator
-        run: |
-          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
-          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
-          echo "Simulator ready"
+#add back preboot if seeing simulator issues
+#      - name: Pre-boot simulator
+#        run: |
+#          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
+#          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+#          echo "Simulator ready"
 
       - name: Build for testing
         run: |
