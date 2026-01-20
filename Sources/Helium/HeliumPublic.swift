@@ -734,14 +734,7 @@ public class HeliumConfig {
     
     public static let defaultLoadingBudget: TimeInterval = 7.0
     
-    public var purchaseDelegate: HeliumPaywallDelegate {
-        get {
-            HeliumPaywallDelegateWrapper.shared.getDelegate()
-        }
-        set {
-            HeliumPaywallDelegateWrapper.shared.setDelegate(newValue)
-        }
-    }
+    public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
     
     public var customFallbacksURL: URL? = nil
     
