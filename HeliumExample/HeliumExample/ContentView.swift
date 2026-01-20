@@ -16,7 +16,9 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 30) {
             Button("show paywall") {
-                Helium.shared.presentUpsell(trigger: AppConfig.triggerKey)
+                Helium.shared.presentPaywall(trigger: AppConfig.triggerKey) { reason in
+                    print("[Helium] show paywall - Could not show paywall. \(reason)")
+                }
             }
             .accessibilityIdentifier("presentPaywall")
             

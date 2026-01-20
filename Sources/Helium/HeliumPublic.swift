@@ -15,6 +15,30 @@ struct PaywallViewAndSession {
     let paywallSession: PaywallSession
 }
 
+public struct PaywallPresentationConfig {
+    // View controller to present from. Defaults to current top view controller
+    var presentFromViewController: UIViewController? = nil
+    // Custom traits to send to the paywall
+    var customPaywallTraits: [String: Any]? = nil
+    // Don't show paywall if user is entitled to a product in paywall
+    var dontShowIfAlreadyEntitled: Bool = true
+    // How long to allow loading state before switching to fallback logic.
+    // Use zero or negative value to disable loading state.
+    var loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    
+    public init(
+        presentFromViewController: UIViewController? = nil,
+        customPaywallTraits: [String: Any]? = nil,
+        dontShowIfAlreadyEntitled: Bool = true,
+        loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    ) {
+        self.presentFromViewController = presentFromViewController
+        self.customPaywallTraits = customPaywallTraits
+        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.loadingBudget = loadingBudget
+    }
+}
+
 public class Helium {
     var controller: HeliumController?
     private var initialized: Bool = false;
@@ -32,12 +56,12 @@ public class Helium {
     public static let identify = HeliumIdentify()
     public static let config = HeliumConfig()
     
-    public func presentUpsell(
+    public func presentPaywall(
         trigger: String,
-        from viewController: UIViewController? = nil,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
-        customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false
+        onEntitled: (() -> Void)? = nil,
+        onPaywallNotShown: (PaywallNotShownReason) -> Void
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -46,11 +70,11 @@ public class Helium {
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits,
-            dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
+            customPaywallTraits: config.customPaywallTraits,
+            dontShowIfAlreadyEntitled: config.dontShowIfAlreadyEntitled ?? true
         )
         
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, config: config)
     }
     
     func skipPaywallIfNeeded(trigger: String) -> Bool {
@@ -565,7 +589,9 @@ public class Helium {
         // hide any existing upsells
         hideAllUpsells()
         
-        presentUpsell(trigger: trigger)
+        presentPaywall(trigger: trigger) { reason in
+            print("[Helium] handleDeepLink - Could not show paywall. \(reason)")
+        }
         return true
     }
     

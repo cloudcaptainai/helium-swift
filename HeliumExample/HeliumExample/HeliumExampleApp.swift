@@ -37,7 +37,9 @@ struct HeliumExampleApp: App {
         
         // For UI tests:
         if let loadStateTestTrigger {
-            Helium.shared.presentUpsell(trigger: loadStateTestTrigger)
+            Helium.shared.presentPaywall(trigger: loadStateTestTrigger) { reason in
+                print("[Helium] loadStateTestTrigger - Could not show paywall. \(reason)")
+            }
         }
     }
     
