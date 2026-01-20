@@ -595,7 +595,7 @@ public class Helium {
         // hide any existing upsells
         hideAllUpsells()
         
-        presentPaywall(trigger: trigger) { reason in
+        presentPaywall(trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false)) { reason in
             print("[Helium] handleDeepLink - Could not show paywall. \(reason)")
         }
         return true
