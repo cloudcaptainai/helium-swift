@@ -18,14 +18,12 @@ struct PaywallViewAndSession {
 public class Helium {
     var controller: HeliumController?
     private var initialized: Bool = false;
-    var fallbackConfig: HeliumFallbackConfig?  // Set during initialize
     
     private(set) var lightDarkModeOverride: HeliumLightDarkMode = .system
     
     private func reset() {
         initialized = false
         controller = nil
-        fallbackConfig = nil
         lightDarkModeOverride = .system
     }
     
@@ -72,10 +70,6 @@ public class Helium {
             return true
         }
         return false
-    }
-    
-    public func loadingStateEnabledFor(trigger: String) -> Bool {
-        return fallbackConfig?.useLoadingState(for: trigger) ?? false
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -673,8 +667,6 @@ public class Helium {
         
         HeliumEventListeners.shared.removeAllListeners()
         
-        Helium.config.reset()
-        
         Helium.shared.reset()
         
         // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
@@ -739,10 +731,7 @@ public class HeliumIdentify {
 
 public class HeliumConfig {
     
-    func reset() {
-        customFallbacksURL = nil
-        customAPIEndpoint = nil
-    }
+    public static let defaultLoadingBudget: TimeInterval = 7.0
     
     public var purchaseDelegate: HeliumPaywallDelegate {
         get {
@@ -756,6 +745,20 @@ public class HeliumConfig {
     public var customFallbacksURL: URL? = nil
     
     public var customAPIEndpoint: String? = nil
+    
+    /// Maximum time (in seconds) to show the loading state before displaying fallback.
+    /// After this timeout, even if the paywall is still downloading, a fallback will be shown if available.
+    /// A value of 0 or less will disable the loading state.
+    public var defaultLoadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    
+    /// Custom loading view to display while fetching paywall configuration.
+    /// If nil, a default shimmer animation will be shown.
+    /// Default: nil (uses default shimmer)
+    public var defaultLoadingView: AnyView? = nil
+    
+    var defaultLoadingStateEnabled: Bool {
+        defaultLoadingBudget > 0
+    }
     
 }
 

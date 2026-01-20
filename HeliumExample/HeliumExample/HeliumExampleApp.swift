@@ -19,16 +19,15 @@ struct HeliumExampleApp: App {
         // If you are copying this example code, BE SURE TO DOWNLOAD AND ADJUST THIS CODE TO
         // POINT TO THE CORRECT FILE.
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
-        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(
-            fallbackBundleURL!,
-            loadingBudget: loadStateTestTrigger != nil ? 35 : HeliumFallbackConfig.defaultLoadingBudget
-        )
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE") {
             Helium.config.purchaseDelegate = MockPaywallDelegate()
         }
         Helium.config.customFallbacksURL = fallbackBundleURL
+        if loadStateTestTrigger != nil {
+            Helium.config.defaultLoadingBudget = 35
+        }
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
 

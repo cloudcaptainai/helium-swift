@@ -85,13 +85,9 @@ class HeliumPaywallPresenter {
                 return
             }
             
-            // Get fallback configuration
-            let fallbackConfig = Helium.shared.fallbackConfig
-            
-            // Get trigger-specific loading configuration
-            let useLoading = fallbackConfig?.useLoadingState(for: trigger) ?? true
-            let loadingBudget = fallbackConfig?.loadingBudget(for: trigger) ?? HeliumFallbackConfig.defaultLoadingBudget
-            let triggerLoadingView = fallbackConfig?.loadingView(for: trigger)
+            let useLoading = Helium.config.defaultLoadingStateEnabled
+            let loadingBudget = Helium.config.defaultLoadingBudget
+            let customLoadingView = Helium.config.defaultLoadingView
             
             let downloadStatus = Helium.shared.getDownloadStatus()
             let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
@@ -108,7 +104,7 @@ class HeliumPaywallPresenter {
             let paywallSession = PaywallSession(trigger: trigger, paywallInfo: nil, fallbackType: .notFallback)
             
             // Show loading state with trigger-specific or default loading view
-            let loadingView = triggerLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
+            let loadingView = customLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
             presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true)
             
             // Schedule timeout with trigger-specific budget
@@ -181,11 +177,7 @@ class HeliumPaywallPresenter {
     }
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64? {
-        let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger)
-        if let loadingBudget {
-            return UInt64(loadingBudget * 1000)
-        }
-        return nil
+        return UInt64(Helium.config.defaultLoadingBudget * 1000)
     }
     
     private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
