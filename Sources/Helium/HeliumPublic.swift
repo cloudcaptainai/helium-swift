@@ -692,6 +692,7 @@ public class HeliumIdentify {
         }
         set {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
+            HeliumAnalyticsManager.shared.identify(userId: userId)
         }
     }
     

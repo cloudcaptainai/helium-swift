@@ -137,8 +137,7 @@ class HeliumAnalyticsManager {
     
     private func performIdentify(on analytics: Analytics, userId: String? = nil) {
         let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
-        let userContext = HeliumIdentityManager.shared.getUserContext()
-        analytics.identify(userId: resolvedUserId, traits: userContext)
+        analytics.identify(userId: resolvedUserId)
     }
     
     /// Identifies the current user with the analytics instance.
@@ -198,8 +197,7 @@ class HeliumAnalyticsManager {
             let initAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
             
             initAnalytics.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
+                userId: HeliumIdentityManager.shared.getUserId()
             )
             
             initAnalytics.track(name: "helium_initializeCalled", properties: [
