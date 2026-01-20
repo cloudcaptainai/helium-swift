@@ -64,6 +64,7 @@ public class Helium {
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
+            onPaywallNotShown(.targetingHoldout)
             return
         }
         
@@ -214,7 +215,9 @@ public class Helium {
         if upsellView != nil {
             // Configure presentation context (always set both to ensure proper reset)
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-                paywallPresentationConfig: PaywallPresentationConfig(),
+                paywallPresentationConfig: PaywallPresentationConfig(
+                    customPaywallTraits: customPaywallTraits
+                ),
                 eventService: eventHandlers,
                 onEntitledHandler: nil,
                 onPaywallNotShown: { _ in }
