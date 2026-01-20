@@ -69,9 +69,9 @@ public class Helium {
         
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            paywallPresentationConfig: config,
             eventService: eventHandlers,
-            customPaywallTraits: config.customPaywallTraits,
-            dontShowIfAlreadyEntitled: config.dontShowIfAlreadyEntitled ?? true
+            onEntitledHandler: onEntitled
         )
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, config: config)
@@ -213,8 +213,9 @@ public class Helium {
         if upsellView != nil {
             // Configure presentation context (always set both to ensure proper reset)
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+                paywallPresentationConfig: PaywallPresentationConfig(),
                 eventService: eventHandlers,
-                customPaywallTraits: customPaywallTraits
+                onEntitledHandler: nil
             )
         }
         
@@ -782,10 +783,6 @@ public class HeliumConfig {
     /// If nil, a default shimmer animation will be shown.
     /// Default: nil (uses default shimmer)
     public var defaultLoadingView: AnyView? = nil
-    
-    var defaultLoadingStateEnabled: Bool {
-        defaultLoadingBudget > 0
-    }
     
 }
 

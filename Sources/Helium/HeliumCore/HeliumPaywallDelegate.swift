@@ -69,16 +69,14 @@ class HeliumPaywallDelegateWrapper {
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
         shared.delegate = StoreKitDelegate()
-        shared.eventService = nil
-        shared.customPaywallTraits = [:]
-        shared.dontShowIfAlreadyEntitled = false
+        shared.clearPresentationContext()
     }
     
     private var delegate: HeliumPaywallDelegate = StoreKitDelegate()
     
+    private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
     private var eventService: PaywallEventHandlers?
-    private var customPaywallTraits: [String: Any] = [:]
-    private(set) var dontShowIfAlreadyEntitled: Bool = false
+    private(set) var onEntitledHander: (() -> Void)? = nil
     
     func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
@@ -89,25 +87,25 @@ class HeliumPaywallDelegateWrapper {
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
     public func configurePresentationContext(
+        paywallPresentationConfig: PaywallPresentationConfig,
         eventService: PaywallEventHandlers?,
-        customPaywallTraits: [String: Any]?,
-        dontShowIfAlreadyEntitled: Bool = false
+        onEntitledHandler: (() -> Void)?
     ) {
         // Always set both, even if nil, to ensure proper reset
+        self.paywallPresentationConfig = paywallPresentationConfig
         self.eventService = eventService
-        self.customPaywallTraits = customPaywallTraits ?? [:]
-        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.onEntitledHander = onEntitledHandler
     }
     
     /// Clear both event service and custom traits after paywall closes
     private func clearPresentationContext() {
+        self.paywallPresentationConfig = nil
         self.eventService = nil
-        self.customPaywallTraits = [:]
-        self.dontShowIfAlreadyEntitled = false
+        self.onEntitledHander = nil
     }
 
-    public func getCustomVariableValues() -> [String: Any?] {
-        return customPaywallTraits
+    public func getCustomVariableValues() -> [String: Any] {
+        return paywallPresentationConfig?.customPaywallTraits ?? [:]
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
