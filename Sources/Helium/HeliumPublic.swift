@@ -724,8 +724,8 @@ public class HeliumIdentify {
     public func addUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.addToCustomUserTraits(traits)
     }
-    public func getUserTraits() -> HeliumUserTraits {
-        HeliumIdentityManager.shared.getUserTraits()
+    public func getUserTraits() -> [String : Any] {
+        HeliumIdentityManager.shared.getUserTraits().dictionaryRepresentation
     }
     
 }

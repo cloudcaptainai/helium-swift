@@ -70,8 +70,8 @@ public class HeliumIdentityManager {
         heliumUserTraits.merge(additionalTraits)
     }
     
-    func getUserTraits() -> [String : Any] {
-        return heliumUserTraits.dictionaryRepresentation
+    func getUserTraits() -> HeliumUserTraits {
+        return heliumUserTraits
     }
     
     /// Creates or retrieves the Helium persistent ID
