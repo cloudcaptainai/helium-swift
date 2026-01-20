@@ -22,13 +22,6 @@ public class HeliumController {
         HeliumAnalyticsManager.shared.logInitializeEvent()
     }
     
-    func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
-        if let traits {
-            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits)
-        }
-        HeliumAnalyticsManager.shared.identify(userId: userId)
-    }
-    
     func downloadConfig() {
         let apiEndpointOrDefault = Helium.config.customAPIEndpoint ?? DEFAULT_API_ENDPOINT
 

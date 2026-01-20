@@ -25,16 +25,15 @@ struct HeliumExampleApp: App {
         )
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
-        let delegate: HeliumPaywallDelegate? = ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE")
-            ? MockPaywallDelegate()
-            : nil
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE") {
+            Helium.config.purchaseDelegate = MockPaywallDelegate()
+        }
+        Helium.config.customFallbacksURL = fallbackBundleURL
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
 
         Helium.shared.initialize(
-            apiKey: AppConfig.apiKey,
-            heliumPaywallDelegate: delegate,
-            fallbackConfig: fallbackConfig
+            apiKey: AppConfig.apiKey
         )
         
         // For UI tests:

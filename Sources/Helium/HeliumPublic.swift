@@ -498,12 +498,6 @@ public class Helium {
         return false;
     }
     
-    public func overrideUserId(newUserId: String, traits: HeliumUserTraits? = nil) {
-        HeliumIdentityManager.shared.setCustomUserId(newUserId);
-        // Make sure to re-identify the user if we've already set analytics.
-        self.controller?.identifyUser(userId: newUserId, traits: traits);
-    }
-    
     /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
     public func addHeliumEventListener(_ listener: HeliumEventListener) {
         HeliumEventListeners.shared.addListener(listener)

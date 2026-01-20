@@ -113,7 +113,7 @@ class HeliumPaywallDelegateWrapper {
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
         StoreKit1Listener.ensureListening()
         
-        let transactionStatus = await delegate?.makePurchase(productId: productKey);
+        let transactionStatus = await delegate.makePurchase(productId: productKey)
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
@@ -163,7 +163,7 @@ class HeliumPaywallDelegateWrapper {
         if (delegate == nil) {
             return false;
         }
-        let result = await delegate!.restorePurchases();
+        let result = await delegate.restorePurchases()
         if (result) {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
@@ -198,7 +198,7 @@ class HeliumPaywallDelegateWrapper {
             eventService?.handleEvent(event)
             
             // Then fire the new typed event to delegate
-            delegate?.onPaywallEvent(event)
+            delegate.onPaywallEvent(event)
             
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
