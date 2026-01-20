@@ -6,15 +6,11 @@
 //
 
 import Foundation
-import SwiftUI
 
 public class HeliumController {
     let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
-    
-    let INITIALIZATION_BROWSER_WRITE_KEY = "dIPnOYdPFgAabYaURULtIHAxbofvIIAD:GV9TlMOuPgt989LaumjVTJofZ8vipJXb";
-    let INITIALIZATION_ANALYTICS_ENDPOINT = "cm7mjur1o00003p6r7lio27sb.d.jitsu.com";
     
     var apiKey: String
     var customAPIEndpoint: String?
@@ -25,24 +21,7 @@ public class HeliumController {
     
     public func logInitializeEvent() {
         HeliumLog.log(.debug, category: .core, "Logging initialize event to analytics")
-        let configuration = SegmentConfiguration(writeKey: self.INITIALIZATION_BROWSER_WRITE_KEY)
-            .apiHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
-            .cdnHost(self.INITIALIZATION_ANALYTICS_ENDPOINT)
-            .trackApplicationLifecycleEvents(false)
-            .flushInterval(10)
-        let initialAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-
-        initialAnalytics.identify(
-            userId: HeliumIdentityManager.shared.getUserId(),
-            traits: HeliumIdentityManager.shared.getUserContext()
-        );
-
-        initialAnalytics.track(name: "helium_initializeCalled", properties: [
-            "timestamp": formatAsTimestamp(date: Date()),
-            "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
-            "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId(),
-            "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
-        ]);
+        HeliumAnalyticsManager.shared.logInitializeEvent()
     }
     
     func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
@@ -62,17 +41,17 @@ public class HeliumController {
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
-            case .success(let fetchedConfig, let metrics):
+            case let .success(fetchedConfig, metrics):
                 HeliumLog.log(.info, category: .network, "Config download succeeded", metadata: [
                     "numBundles": String(metrics.numBundles ?? 0),
-                    "totalTimeMS": String(metrics.totalTimeMS ?? 0)
+                    "totalTimeMS": String(metrics.totalTimeMS ?? 0),
                 ])
-                HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                HeliumAnalyticsManager.shared.setUpAnalytics(
                     writeKey: fetchedConfig.segmentBrowserWriteKey,
                     endpoint: fetchedConfig.segmentAnalyticsEndpoint,
                     overrideIfNewConfiguration: true
                 )
-                
+
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadSuccessEvent(
                         downloadTimeTakenMS: metrics.configDownloadTimeMS,
@@ -88,23 +67,16 @@ public class HeliumController {
                     ),
                     paywallSession: nil
                 )
-                
-                Task { @MainActor in
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("HeliumConfigDownloadComplete"),
-                        object: nil
-                    )
-                }
-            case .failure(let errorMessage, let metrics):
+            case let .failure(errorMessage, metrics):
                 HeliumLog.log(.error, category: .network, "Config download failed", metadata: [
                     "error": errorMessage,
-                    "numAttempts": String(metrics.numConfigAttempts)
+                    "numAttempts": String(metrics.numConfigAttempts),
                 ])
-                HeliumAnalyticsManager.shared.getOrSetupAnalytics(
+                HeliumAnalyticsManager.shared.setUpAnalytics(
                     writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,
                     endpoint: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT
                 )
-                
+
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
                         error: errorMessage,

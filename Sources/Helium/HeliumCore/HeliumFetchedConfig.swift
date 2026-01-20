@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 import WebKit
 import Network
 
@@ -122,32 +121,29 @@ func fetchEndpoint(
     return (decodedResponse, json)
 }
 
-public class HeliumFetchedConfigManager: ObservableObject {
+public class HeliumFetchedConfigManager {
     public static let shared = HeliumFetchedConfigManager()
     static func reset() {
         shared.fetchTask?.cancel()
         shared.fetchTask = nil
-        Task { @MainActor in
-            shared.downloadStatus = .notDownloadedYet
-            shared.downloadStep = .config
-        }
+        shared._downloadStatus = .notDownloadedYet
+        shared.downloadStep = .config
         shared.fetchedConfig = nil
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
     }
     
+    private init() {}
+    
     private var fetchTask: Task<Void, Never>?
     
-    @Published public var downloadStatus: HeliumFetchedConfigStatus
+    @HeliumAtomic private var _downloadStatus: HeliumFetchedConfigStatus = .notDownloadedYet
+    public var downloadStatus: HeliumFetchedConfigStatus { _downloadStatus }
     private(set) var downloadStep: PaywallsDownloadStep = .config
     
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 5 // roughly 19 seconds of delays in between attempts
-    
-    private init() {
-        downloadStatus = .notDownloadedYet
-    }
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
@@ -166,7 +162,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
         HeliumLog.log(.debug, category: .config, "fetchConfig starting")
         let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
-            await updateDownloadState(.inProgress)
+            updateDownloadState(.inProgress)
             downloadStep = .config
 
             // Try to ensure App Store country code is available. It should not take longer
@@ -233,7 +229,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     ])
                     let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                     let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
-                    await self.updateDownloadState(.downloadFailure)
+                    updateDownloadState(.downloadFailure)
                     completion(.failure(
                         errorMessage: "Reached max retries for config.",
                         HeliumFetchMetrics(
@@ -326,7 +322,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
-                    await self.updateDownloadState(.downloadFailure)
+                    updateDownloadState(.downloadFailure)
                     completion(.failure(
                         errorMessage: "Failed to fetch bundles for \(bundlesResult.triggersWithNoBundle.count) trigger(s)",
                         HeliumFetchMetrics(
@@ -387,7 +383,7 @@ public class HeliumFetchedConfigManager: ObservableObject {
                     "error": error.localizedDescription,
                     "attempts": String(attemptCounter)
                 ])
-                await self.updateDownloadState(.downloadFailure)
+                updateDownloadState(.downloadFailure)
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
@@ -657,8 +653,15 @@ public class HeliumFetchedConfigManager: ObservableObject {
         metrics: HeliumFetchMetrics,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
-        await updateDownloadState(.downloadSuccess)
         completion(.success(newConfig, metrics))
+        updateDownloadState(.downloadSuccess)
+        
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: NSNotification.Name("HeliumConfigDownloadComplete"),
+                object: nil
+            )
+        }
     }
     
     private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
@@ -717,9 +720,9 @@ public class HeliumFetchedConfigManager: ObservableObject {
         return localizedPriceMap.filter { productIDs.contains($0.key) }
     }
     
-    @MainActor private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
+    private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
         guard !Task.isCancelled else { return }
-        self.downloadStatus = status
+        _downloadStatus = status
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
