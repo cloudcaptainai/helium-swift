@@ -31,6 +31,7 @@ public class Helium {
     
     public static let shared = Helium()
     public static let restorePurchaseConfig = RestorePurchaseConfig()
+    public static let identify = HeliumIdentify()
     
     public func presentUpsell(
         trigger: String,
@@ -441,73 +442,19 @@ public class Helium {
         return allExperiments
     }
     
-    /// Initializes the Helium paywall system with configuration options.
-    ///
-    /// This method sets up the Helium SDK with your API key and configuration. It supports both the modern
-    /// `fallbackConfig` approach and deprecated individual fallback parameters for backward compatibility.
-    ///
-    /// ## Fallback Configuration (Required)
-    /// **Important:** You MUST provide at least one fallback mechanism, using EITHER:
-    /// - `fallbackConfig` (recommended) - Modern approach with loading states
-    /// - OR deprecated parameters (`fallbackPaywall`, `fallbackBundleURL`, `fallbackPaywallPerTrigger`)
-    /// 
-    /// Initialization will fail with a precondition if no fallback is provided.
-    ///
-    /// ### Modern Approach (Recommended):
-    /// ```swift
-    /// Helium.shared.initialize(
-    ///     apiKey: "your-api-key",
-    ///     heliumPaywallDelegate: myDelegate,
-    ///     fallbackConfig: .withFallbackBundle(
-    ///         Bundle.main.url(forResource: "fallback-bundle", withExtension: "json")!,
-    ///         loadingBudget: 3.0
-    ///     )
-    /// )
-    /// ```
-    ///
-    /// ### Loading States
-    /// When using `fallbackConfig`, you can control loading behavior:
-    /// - `useLoadingState`: Show a loading view while fetching paywalls (default: true)
-    /// - `loadingBudget`: Maximum seconds to show loading before fallback (default: 2.0)
-    /// - `loadingView`: Custom loading view or nil for default shimmer animation
-    ///
-    /// ### Fallback Priority
-    /// When paywalls cannot be fetched, fallbacks are shown in this order:
-    /// 1. **Fallback bundle** - If trigger exists in bundle JSON
-    /// 2. **Per-trigger fallback views** - From `fallbackPerTrigger` dictionary
-    /// 3. **Global fallback view** - From `fallbackView`
+    /// Initializes the Helium paywall system.
+    /// - Set up user identification using Helium.identify, ideally before calling initialize().
+    /// - Adjust Helium configuration using Helium.config, ideally before calling initialize().
+    /// - Initialize as early as possible in your app’s lifecycle
+    /// - Latest docs at https://docs.tryhelium.com/sdk/quickstart-ios
     ///
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
-    ///   - heliumPaywallDelegate: Delegate for paywall events and purchases. Defaults to StoreKitDelegate if nil
-    ///   - fallbackPaywall: **Deprecated** - Use `fallbackConfig` instead. Global fallback view
-    ///   - fallbackConfig: **Recommended** - Comprehensive fallback and loading configuration
-    ///   - triggers: Optional array of trigger names to prefetch
-    ///   - customUserId: Override the auto-generated user ID
-    ///   - customAPIEndpoint: Custom API endpoint for development/testing
-    ///   - customUserTraits: User attributes for targeting and personalization
-    ///   - appAttributionToken: Custom appAccountToken for StoreKit purchases
-    ///   - revenueCatAppUserId: User ID for RevenueCat integration
     ///   - fallbackBundleURL: **Deprecated** - Use `fallbackConfig` instead
-    ///   - fallbackPaywallPerTrigger: **Deprecated** - Use `fallbackConfig` instead
-    ///
-    /// - Note: Deprecated parameters disable loading states for backward compatibility
-    /// - Warning: Mixing `fallbackConfig` with deprecated parameters causes a fatal error
     ///
     @available(iOS 15.0, *)
     public func initialize(
-        apiKey: String,
-        heliumPaywallDelegate: HeliumPaywallDelegate? = nil,
-        fallbackPaywall: (any View)? = nil,
-        fallbackConfig: HeliumFallbackConfig? = nil,
-        triggers: [String]? = nil,
-        customUserId: String? = nil,
-        customAPIEndpoint: String? = nil,
-        customUserTraits: HeliumUserTraits? = nil,
-        appAttributionToken: UUID? = nil,
-        revenueCatAppUserId: String? = nil,
-        fallbackBundleURL: URL? = nil,
-        fallbackPaywallPerTrigger: [String: any View]? = nil
+        apiKey: String
     ) {
         if initialized {
             return
@@ -568,23 +515,6 @@ public class Helium {
             - fallbackPaywallPerTrigger (deprecated): Trigger-specific fallback views
             """
         )
-        
-        if (customUserId != nil) {
-            self.overrideUserId(newUserId: customUserId!);
-        }
-        if (customUserTraits != nil) {
-            HeliumIdentityManager.shared.setCustomUserTraits(traits: customUserTraits!);
-        }
-        
-        if let appAttributionToken {
-            HeliumIdentityManager.shared.setCustomAppAttributionToken(appAttributionToken)
-        } else {
-            HeliumIdentityManager.shared.setDefaultAppAttributionToken()
-        }
-        
-        if let revenueCatAppUserId {
-            HeliumIdentityManager.shared.setRevenueCatAppUserId(revenueCatAppUserId)
-        }
         
         AppReceiptsHelper.shared.setUp()
         
@@ -656,18 +586,6 @@ public class Helium {
         HeliumIdentityManager.shared.setCustomUserId(newUserId);
         // Make sure to re-identify the user if we've already set analytics.
         self.controller?.identifyUser(userId: newUserId, traits: traits);
-    }
-    
-    /// If you need to set a custom appAccountToken for your StoreKit purchases, make sure you keep this value in sync, either in Helium.shared.initialize or with this method.
-    /// This helps Helium provide more accurate dashboard metrics.
-    public func setAppAttributionToken(_ token: UUID) {
-        HeliumIdentityManager.shared.setCustomAppAttributionToken(token)
-    }
-    
-    /// If using RevenueCat for purchases, let Helium know the latest RevenueCat appUserId value for more accurate metrics.
-    /// Note - You DO NOT have to set this if using Helium's RevenueCatPurchaseDelegate.
-    public func setRevenueCatAppUserId(_ rcAppUserId: String) {
-        HeliumIdentityManager.shared.setRevenueCatAppUserId(rcAppUserId)
     }
     
     /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
@@ -848,6 +766,61 @@ public class Helium {
         Helium.shared.reset()
         
         // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
+    }
+    
+}
+
+/// Configuration object for user identification settings.
+/// Set properties on `Helium.identify` before calling `Helium.shared.initialize()`.
+///
+/// Example:
+/// ```swift
+/// Helium.identify.userId = "user-123"
+/// Helium.identify.setUserTraits(HeliumUserTraits(["plan": "premium"]))
+/// Helium.shared.initialize(apiKey: "your-api-key")
+/// ```
+public class HeliumIdentify {
+    
+    /// Custom user ID to identify this user.
+    public var userId: String {
+        get {
+            HeliumIdentityManager.shared.getUserId()
+        }
+        set {
+            HeliumIdentityManager.shared.setCustomUserId(newValue)
+        }
+    }
+    
+    /// Custom appAccountToken for StoreKit purchases. If not set, Helium will generate one.
+    /// Only need to set if you use this value in App Store Server Notifications or your app makes non-Helium purchases with StoreKit.
+    public var appAccountToken: UUID {
+        get {
+            HeliumIdentityManager.shared.appAttributionToken
+        }
+        set {
+            HeliumIdentityManager.shared.setCustomAppAttributionToken(newValue)
+        }
+    }
+    
+    /// RevenueCat app user ID -- set this if you use RevenueCat along with Helium.
+    public var revenueCatAppUserId: String? {
+        get {
+            HeliumIdentityManager.shared.revenueCatAppUserId
+        }
+        set {
+            HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
+        }
+    }
+    
+    /// Custom user traits for targeting and analytics.
+    public func setUserTraits(_ traits: HeliumUserTraits) {
+        HeliumIdentityManager.shared.setCustomUserTraits(traits)
+    }
+    public func addUserTraits(_ traits: HeliumUserTraits) {
+        HeliumIdentityManager.shared.addToCustomUserTraits(traits)
+    }
+    public func getUserTraits() -> HeliumUserTraits? {
+        HeliumIdentityManager.shared.getUserTraits()
     }
     
 }

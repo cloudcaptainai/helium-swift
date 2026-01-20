@@ -21,8 +21,19 @@ public class HeliumIdentityManager {
     private(set) var heliumInitializeId: String
     private var heliumUserTraits: HeliumUserTraits
     
-    private(set) var appAttributionToken: UUID = UUID() // Used to connect StoreKit purchase events with Helium paywall events
-    private(set) var revenueCatAppUserId: String? = nil // Used to connect RevenueCat purchase events with Helium paywall events
+    // Used to connect StoreKit purchase events
+    var appAttributionToken: UUID {
+        if let customAppAttributionToken {
+            return customAppAttributionToken
+        }
+        if let persistentIdAsUUID = UUID(uuidString: getHeliumPersistentId()) {
+            return persistentIdAsUUID
+        }
+        return UUID()
+    }
+    private var customAppAttributionToken: UUID? = nil
+    // Used to connect RevenueCat purchase events
+    var revenueCatAppUserId: String? = nil
     
     var appTransactionID: String? = nil
     
@@ -51,8 +62,16 @@ public class HeliumIdentityManager {
         UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
     }
     
-    public func setCustomUserTraits(traits: HeliumUserTraits) {
-        self.heliumUserTraits = traits;
+    func setCustomUserTraits(_ traits: HeliumUserTraits) {
+        heliumUserTraits = traits
+    }
+    
+    func addToCustomUserTraits(_ additionalTraits: HeliumUserTraits) {
+        heliumUserTraits.merge(additionalTraits)
+    }
+    
+    func getUserTraits() -> HeliumUserTraits {
+        return heliumUserTraits
     }
     
     /// Creates or retrieves the Helium persistent ID
@@ -73,16 +92,11 @@ public class HeliumIdentityManager {
         return heliumSessionId
     }
     
-    func setDefaultAppAttributionToken() {
-        if let persistentIdUUID = UUID(uuidString: getHeliumPersistentId()) { // this should always be successful
-            appAttributionToken = persistentIdUUID
-        }
-    }
     func setCustomAppAttributionToken(_ token: UUID) {
-        appAttributionToken = token
+        customAppAttributionToken = token
     }
     
-    func setRevenueCatAppUserId(_ rcAppUserId: String) {
+    func setRevenueCatAppUserId(_ rcAppUserId: String?) {
         revenueCatAppUserId = rcAppUserId
     }
     
