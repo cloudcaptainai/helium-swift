@@ -66,16 +66,14 @@ public class HeliumFallbackViewManager {
                     print("[Helium] No bundles found in fallback bundle file.")
                 }
                 
-                Task {
-                    await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
-                }
-                
                 if let config = loadedConfig {
                     HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,
                         endpoint: config.segmentAnalyticsEndpoint
                     )
                 }
+                
+                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
             } catch {
                 print("[Helium] ‼️⚠️‼️ Failed to load fallback bundle: \(error)")
             }

@@ -34,6 +34,7 @@ class HeliumPaywallPresenter {
             if skipIt == true {
                 print("[Helium] Did not show paywall, user already has entitlement.")
                 HeliumPaywallDelegateWrapper.shared.onEntitledHander?()
+                HeliumPaywallDelegateWrapper.shared.onPaywallNotShown?(.alreadyEntitled)
                 return true
             }
         }

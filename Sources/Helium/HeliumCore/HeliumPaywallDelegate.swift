@@ -77,6 +77,7 @@ class HeliumPaywallDelegateWrapper {
     private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
     private var eventService: PaywallEventHandlers?
     private(set) var onEntitledHander: (() -> Void)? = nil
+    private(set) var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     
     func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
@@ -89,12 +90,14 @@ class HeliumPaywallDelegateWrapper {
     public func configurePresentationContext(
         paywallPresentationConfig: PaywallPresentationConfig,
         eventService: PaywallEventHandlers?,
-        onEntitledHandler: (() -> Void)?
+        onEntitledHandler: (() -> Void)?,
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         // Always set both, even if nil, to ensure proper reset
         self.paywallPresentationConfig = paywallPresentationConfig
         self.eventService = eventService
         self.onEntitledHander = onEntitledHandler
+        self.onPaywallNotShown = onPaywallNotShown
     }
     
     /// Clear both event service and custom traits after paywall closes
@@ -102,6 +105,7 @@ class HeliumPaywallDelegateWrapper {
         self.paywallPresentationConfig = nil
         self.eventService = nil
         self.onEntitledHander = nil
+        self.onPaywallNotShown = nil
     }
 
     public func getCustomVariableValues() -> [String: Any] {
@@ -200,6 +204,12 @@ class HeliumPaywallDelegateWrapper {
             
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
+            
+            if let openFailEvent = event as? PaywallOpenFailedEvent {
+                onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
+            } else if let skipEvent = event as? PaywallSkippedEvent {
+                onPaywallNotShown?(.targetingHoldout)
+            }
             
             // Clear presentation context (event service and custom traits) on close events
             if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {

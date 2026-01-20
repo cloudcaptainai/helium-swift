@@ -61,7 +61,7 @@ public class Helium {
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
         onEntitled: (() -> Void)? = nil,
-        onPaywallNotShown: (PaywallNotShownReason) -> Void
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         if skipPaywallIfNeeded(trigger: trigger) {
             return
@@ -71,7 +71,8 @@ public class Helium {
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
             paywallPresentationConfig: config,
             eventService: eventHandlers,
-            onEntitledHandler: onEntitled
+            onEntitledHandler: onEntitled,
+            onPaywallNotShown: onPaywallNotShown
         )
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, config: config)
