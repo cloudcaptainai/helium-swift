@@ -13,7 +13,7 @@ jobs:
     env:
       HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
       HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
-      SIMULATOR_NAME: iPhone 16
+      SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
 
@@ -21,12 +21,12 @@ jobs:
         run: |
           echo "=== Checking secrets ==="
           if [ -n "$HELIUM_API_KEY" ]; then
-            echo "✅ HELIUM_API_KEY is set (length: ${#HELIUM_API_KEY})"
+            echo "✅ HELIUM_API_KEY is set"
           else
             echo "❌ HELIUM_API_KEY is NOT set or empty"
           fi
           if [ -n "$HELIUM_TRIGGER_KEY" ]; then
-            echo "✅ HELIUM_TRIGGER_KEY is set (length: ${#HELIUM_TRIGGER_KEY})"
+            echo "✅ HELIUM_TRIGGER_KEY is set"
           else
             echo "❌ HELIUM_TRIGGER_KEY is NOT set or empty"
           fi
