@@ -11,7 +11,6 @@ public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
     public static let shared = HeliumFallbackViewManager()
     static func reset() {
-        shared.fallbackBundleURL = nil
         shared.loadedConfig = nil
         shared.loadedConfigJSON = nil
         shared.triggerToFallbackView = [:]
@@ -23,7 +22,8 @@ public class HeliumFallbackViewManager {
     }
     
     // **MARK: - Properties**
-    private var fallbackBundleURL: URL? = nil
+    private let defaultFallbacksName = "helium-fallbacks"
+    
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
     
@@ -31,15 +31,24 @@ public class HeliumFallbackViewManager {
     private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
-    public func setFallbackBundleURL(_ fallbackBundleURL: URL) {
-        self.fallbackBundleURL = fallbackBundleURL
-        // Give immediate feedback if assets are not accessible & avoid trying to use later.
-        // This is synchronous but very fast (typically < 1 ms).
-        if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
-            print("[Helium] Fallback bundle URL not accessible.")
-        } else {
-            print("[Helium] Fallback bundle URL provided.")
+    public func setUpFallbackBundle() {
+        var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
+        if let customURL = Helium.config.customFallbacksURL {
+            // This is synchronous but very fast (typically < 1 ms).
+            if !FileManager.default.fileExists(atPath: customURL.path) {
+                print("[Helium] ⚠️⚠️ Custom fallbacks URL not accessible. URL: \(customURL.absoluteString)")
+            } else {
+                fallbackBundleURL = customURL
+                print("[Helium] ✅ Custom fallbacks URL found. URL: \(customURL.absoluteString)")
+            }
         }
+        
+        guard let fallbackBundleURL, FileManager.default.fileExists(atPath: fallbackBundleURL.path) else {
+            print("[Helium] ‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
+            return
+        }
+        print("[Helium] ✅ Fallback bundle URL provided! 🎉 Remember to update it with the latest paywalls! https://docs.tryhelium.com/guides/fallback-bundle")
+        
         Task {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
@@ -68,7 +77,7 @@ public class HeliumFallbackViewManager {
                     )
                 }
             } catch {
-                print("[Helium] Failed to load fallback bundle: \(error)")
+                print("[Helium] ‼️⚠️‼️ Failed to load fallback bundle: \(error)")
             }
         }
     }

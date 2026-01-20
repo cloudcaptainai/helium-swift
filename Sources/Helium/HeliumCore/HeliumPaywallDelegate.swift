@@ -68,20 +68,23 @@ class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
-        shared.delegate = nil
+        shared.delegate = StoreKitDelegate()
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
     }
     
-    private var delegate: HeliumPaywallDelegate?
+    private var delegate: HeliumPaywallDelegate = StoreKitDelegate()
     
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
     private(set) var dontShowIfAlreadyEntitled: Bool = false
     
-    public func setDelegate(_ delegate: HeliumPaywallDelegate) {
+    func setDelegate(_ delegate: HeliumPaywallDelegate) {
         self.delegate = delegate
+    }
+    func getDelegate() -> HeliumPaywallDelegate {
+        return delegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation

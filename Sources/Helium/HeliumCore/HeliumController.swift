@@ -13,7 +13,6 @@ public class HeliumController {
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
     var apiKey: String
-    var customAPIEndpoint: String?
     
     public init(apiKey: String) {
         self.apiKey = apiKey
@@ -30,12 +29,8 @@ public class HeliumController {
         HeliumAnalyticsManager.shared.identify(userId: userId)
     }
     
-    public func setCustomAPIEndpoint(endpoint: String?) {
-        customAPIEndpoint = endpoint
-    }
-    
     func downloadConfig() {
-        let apiEndpointOrDefault = customAPIEndpoint ?? DEFAULT_API_ENDPOINT
+        let apiEndpointOrDefault = Helium.config.customAPIEndpoint ?? DEFAULT_API_ENDPOINT
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
