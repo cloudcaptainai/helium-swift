@@ -216,7 +216,8 @@ public class Helium {
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
                 paywallPresentationConfig: PaywallPresentationConfig(),
                 eventService: eventHandlers,
-                onEntitledHandler: nil
+                onEntitledHandler: nil,
+                onPaywallNotShown: { _ in }
             )
         }
         
