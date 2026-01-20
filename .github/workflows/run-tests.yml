@@ -8,12 +8,12 @@ on:
 
 jobs:
   ui-tests:
-    runs-on: macos-latest
+    runs-on: warp-macos-26-arm64-6x
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     env:
       HELIUM_API_KEY: ${{ secrets.HELIUM_API_KEY }}
       HELIUM_TRIGGER_KEY: ${{ secrets.HELIUM_TRIGGER_KEY }}
-      SIMULATOR_NAME: iPhone 16
+      SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
 
@@ -21,12 +21,12 @@ jobs:
         run: |
           echo "=== Checking secrets ==="
           if [ -n "$HELIUM_API_KEY" ]; then
-            echo "✅ HELIUM_API_KEY is set (length: ${#HELIUM_API_KEY})"
+            echo "✅ HELIUM_API_KEY is set"
           else
             echo "❌ HELIUM_API_KEY is NOT set or empty"
           fi
           if [ -n "$HELIUM_TRIGGER_KEY" ]; then
-            echo "✅ HELIUM_TRIGGER_KEY is set (length: ${#HELIUM_TRIGGER_KEY})"
+            echo "✅ HELIUM_TRIGGER_KEY is set"
           else
             echo "❌ HELIUM_TRIGGER_KEY is NOT set or empty"
           fi
@@ -37,11 +37,12 @@ jobs:
           echo "=== Available iOS Simulators ==="
           xcrun simctl list devices available | grep -E "iPhone"
 
-      - name: Pre-boot simulator
-        run: |
-          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
-          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
-          echo "Simulator ready"
+#add back preboot if seeing simulator issues
+#      - name: Pre-boot simulator
+#        run: |
+#          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
+#          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+#          echo "Simulator ready"
 
       - name: Build for testing
         run: |
