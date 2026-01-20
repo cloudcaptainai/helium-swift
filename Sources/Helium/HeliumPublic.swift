@@ -692,7 +692,7 @@ public class HeliumIdentify {
         }
         set {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
-            HeliumAnalyticsManager.shared.identify(userId: userId)
+            HeliumAnalyticsManager.shared.identify(userId: newValue)
         }
     }
     
@@ -724,7 +724,7 @@ public class HeliumIdentify {
     public func addUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.addToCustomUserTraits(traits)
     }
-    public func getUserTraits() -> HeliumUserTraits? {
+    public func getUserTraits() -> HeliumUserTraits {
         HeliumIdentityManager.shared.getUserTraits()
     }
     

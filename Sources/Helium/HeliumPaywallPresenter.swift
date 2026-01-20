@@ -176,7 +176,7 @@ class HeliumPaywallPresenter {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
     
-    private func loadingBudgetUInt64(trigger: String) -> UInt64? {
+    private func loadingBudgetUInt64(trigger: String) -> UInt64 {
         return UInt64(Helium.config.defaultLoadingBudget * 1000)
     }
     
