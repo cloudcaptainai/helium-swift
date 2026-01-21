@@ -122,16 +122,17 @@ struct HeliumOSLogSink: HeliumLogSink {
         line: UInt
     ) {
         let logger = Logger(subsystem: subsystem, category: category.rawValue)
+        let prefixedMessage = "[Helium] \(message)"
 
         // Build a lightweight, single-line message. (Structured metadata can be added later.)
         if metadata.isEmpty {
-            logger.log(level: map(level), "\(message, privacy: .public)")
+            logger.log(level: map(level), "\(prefixedMessage, privacy: .public)")
         } else {
             let meta = metadata
                 .map { "\($0.key)=\($0.value)" }
                 .sorted()
                 .joined(separator: " ")
-            logger.log(level: map(level), "\(message, privacy: .public) \(meta, privacy: .private)")
+            logger.log(level: map(level), "\(prefixedMessage, privacy: .public) \(meta, privacy: .private)")
         }
     }
 
