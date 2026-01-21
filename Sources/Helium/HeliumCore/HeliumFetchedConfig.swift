@@ -626,7 +626,7 @@ public class HeliumFetchedConfigManager {
         guard (200...299).contains(statusCode) else {
             // Treat specific client errors as permanent failures (non-retryable)
             // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
-            HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error \(statusCode)", metadata: ["url": urlString])
+            HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error", metadata: ["statusCode": String(statusCode), "url": urlString])
             if statusCode == 403 {
                 throw BundleFetchError.permanentFailure(.bundleFetch403)
             } else if statusCode == 404 {
