@@ -112,7 +112,7 @@ public class HeliumActionsDelegate: ObservableObject {
     }
     
     public func dismiss(dispatchEvent: Bool) {
-        HeliumLog.log(.debug, category: .ui, "Dismiss action triggered", metadata: ["trigger": trigger, "dispatchEvent": String(dispatchEvent)])
+        HeliumLogger.log(.debug, category: .ui, "Dismiss action triggered", metadata: ["trigger": trigger, "dispatchEvent": String(dispatchEvent)])
         if (!isLoading) {
             if dispatchEvent {
                 let event = PaywallDismissedEvent(
@@ -189,7 +189,7 @@ public class HeliumActionsDelegate: ObservableObject {
     }
     
     public func makePurchase() async -> HeliumPaywallTransactionStatus {
-        HeliumLog.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
+        HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
         let pressedEvent = PurchasePressedEvent(
             productId: selectedProductId,
@@ -215,14 +215,14 @@ public class HeliumActionsDelegate: ObservableObject {
     
     @MainActor
     public func restorePurchases() async -> Bool {
-        HeliumLog.log(.info, category: .core, "restorePurchases called", metadata: ["trigger": trigger])
+        HeliumLogger.log(.info, category: .core, "restorePurchases called", metadata: ["trigger": trigger])
         isLoading = true;
         let status = await HeliumPaywallDelegateWrapper.shared.restorePurchases(
             triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession
         )
         defer { isLoading = false; }
 
-        HeliumLog.log(.debug, category: .core, "restorePurchases result", metadata: ["success": String(status)])
+        HeliumLogger.log(.debug, category: .core, "restorePurchases result", metadata: ["success": String(status)])
         return status;
     }
     
@@ -270,7 +270,7 @@ public class HeliumActionsDelegate: ObservableObject {
     }
     
     public func onCustomAction(actionName: String, params: [String: Any]) {
-        HeliumLog.log(.debug, category: .ui, "Custom action triggered", metadata: ["actionName": actionName, "trigger": trigger])
+        HeliumLogger.log(.debug, category: .ui, "Custom action triggered", metadata: ["actionName": actionName, "trigger": trigger])
         if (!isLoading) {
             let event = CustomPaywallActionEvent(
                 actionName: actionName,

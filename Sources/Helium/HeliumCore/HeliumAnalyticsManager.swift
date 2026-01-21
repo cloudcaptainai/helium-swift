@@ -146,7 +146,7 @@ class HeliumAnalyticsManager {
     func identify(userId: String? = nil) {
         queue.async { [weak self] in
             guard let self, let analytics else { return }
-            HeliumLog.log(.debug, category: .events, "Identifying user", metadata: ["userId": userId ?? "Unknown userId"])
+            HeliumLogger.log(.debug, category: .events, "Identifying user", metadata: ["userId": userId ?? "Unknown userId"])
             performIdentify(on: analytics, userId: userId)
         }
     }
@@ -173,11 +173,11 @@ class HeliumAnalyticsManager {
             let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
 
             if analytics != nil && !shouldCreateNew {
-                HeliumLog.log(.trace, category: .events, "Reusing existing analytics instance")
+                HeliumLogger.log(.trace, category: .events, "Reusing existing analytics instance")
                 return // Already set up
             }
 
-            HeliumLog.log(.debug, category: .events, "Setting up new analytics instance", metadata: ["endpoint": endpoint])
+            HeliumLogger.log(.debug, category: .events, "Setting up new analytics instance", metadata: ["endpoint": endpoint])
             let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
             let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
             analytics = newAnalytics

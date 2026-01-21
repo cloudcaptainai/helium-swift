@@ -39,7 +39,7 @@ enum HeliumLogCategory: String, Sendable {
 ///
 /// - Note: This file sets up the logger + log level controls. It does not emit any logs
 ///   by itself. Call sites will be added separately.
-enum HeliumLog {
+enum HeliumLogger {
 
     /// Default level is conservative; integrators can turn this up.
     @HeliumAtomic private static var level: HeliumLogLevel = .error

@@ -156,10 +156,10 @@ public class HeliumFetchedConfigManager {
         completion: @escaping (HeliumFetchResult) -> Void
     ) {
         if downloadStatus == .inProgress {
-            HeliumLog.log(.debug, category: .config, "Config download already in progress, skipping new request")
+            HeliumLogger.log(.debug, category: .config, "Config download already in progress, skipping new request")
             return
         }
-        HeliumLog.log(.debug, category: .config, "Starting download of paywalls")
+        HeliumLogger.log(.debug, category: .config, "Starting download of paywalls")
         let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
             updateDownloadState(.inProgress)
@@ -209,7 +209,7 @@ public class HeliumFetchedConfigManager {
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
                 if attemptCounter < maxAttempts {
                     let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                    HeliumLog.log(.warn, category: .network, "Config fetch failed (no data), retrying", metadata: [
+                    HeliumLogger.log(.warn, category: .network, "Config fetch failed (no data), retrying", metadata: [
                         "attempt": String(attemptCounter),
                         "delaySeconds": String(delaySeconds)
                     ])
@@ -224,7 +224,7 @@ public class HeliumFetchedConfigManager {
                         completion: completion
                     )
                 } else {
-                    HeliumLog.log(.error, category: .network, "Config fetch reached max retries", metadata: [
+                    HeliumLogger.log(.error, category: .network, "Config fetch reached max retries", metadata: [
                         "maxAttempts": String(maxAttempts)
                     ])
                     let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
@@ -243,7 +243,7 @@ public class HeliumFetchedConfigManager {
                 }
                 return
             }
-            HeliumLog.log(.debug, category: .config, "Config data received successfully")
+            HeliumLogger.log(.debug, category: .config, "Config data received successfully")
             let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
             
             // Update the fetched config
@@ -361,7 +361,7 @@ public class HeliumFetchedConfigManager {
             // Retry on network/fetch failure
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                HeliumLog.log(.warn, category: .network, "Config fetch error, retrying", metadata: [
+                HeliumLogger.log(.warn, category: .network, "Config fetch error, retrying", metadata: [
                     "attempt": String(attemptCounter),
                     "error": error.localizedDescription,
                     "delaySeconds": String(delaySeconds)
@@ -379,7 +379,7 @@ public class HeliumFetchedConfigManager {
                     completion: completion
                 )
             } else {
-                HeliumLog.log(.error, category: .network, "Config fetch failed after all retries", metadata: [
+                HeliumLogger.log(.error, category: .network, "Config fetch failed after all retries", metadata: [
                     "error": error.localizedDescription,
                     "attempts": String(attemptCounter)
                 ])
@@ -451,7 +451,7 @@ public class HeliumFetchedConfigManager {
                 
                 // Validate URL before processing - skip silently if invalid (don't fail entire download)
                 guard isValidURL(bundleUrl) else {
-                    HeliumLog.log(.warn, category: .network, "Invalid URL format for trigger", metadata: ["trigger": trigger, "url": bundleUrl])
+                    HeliumLogger.log(.warn, category: .network, "Invalid URL format for trigger", metadata: ["trigger": trigger, "url": bundleUrl])
                     triggersWithSkippedBundle.append((trigger, .bundleFetchInvalidUrlDetected))
                     continue
                 }
@@ -501,10 +501,10 @@ public class HeliumFetchedConfigManager {
             let missingTriggers = result.bundleUrlsFailedToFetched.flatMap {
                 bundleUrlToTriggersMap[$0] ?? []
             }
-            HeliumLog.log(.warn, category: .network, "Failed to fetch some bundles", metadata: ["triggers": missingTriggers.joined(separator: ", ")])
+            HeliumLogger.log(.warn, category: .network, "Failed to fetch some bundles", metadata: ["triggers": missingTriggers.joined(separator: ", ")])
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                HeliumLog.log(.debug, category: .network, "Bundles fetch incomplete, retrying", metadata: [
+                HeliumLogger.log(.debug, category: .network, "Bundles fetch incomplete, retrying", metadata: [
                     "attempt": String(attemptCounter),
                     "delaySeconds": String(delaySeconds)
                 ])
@@ -561,17 +561,17 @@ public class HeliumFetchedConfigManager {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
-                        HeliumLog.log(.trace, category: .network, "Bundle fetched successfully", metadata: ["url": url])
+                        HeliumLogger.log(.trace, category: .network, "Bundle fetched successfully", metadata: ["url": url])
                         return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false, failureReason: nil)
                     } catch {
                         if case let BundleFetchError.permanentFailure(reason) = error {
-                            HeliumLog.log(.error, category: .network, "Permanent bundle fetch failure", metadata: [
+                            HeliumLogger.log(.error, category: .network, "Permanent bundle fetch failure", metadata: [
                                 "triggers": triggers.joined(separator: ", "),
                                 "reason": reason.rawValue
                             ])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason)
                         } else {
-                            HeliumLog.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url])
+                            HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil)
                         }
                     }
@@ -626,7 +626,7 @@ public class HeliumFetchedConfigManager {
         guard (200...299).contains(statusCode) else {
             // Treat specific client errors as permanent failures (non-retryable)
             // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
-            HeliumLog.log(.error, category: .network, "Non-retryable HTTP error \(statusCode)", metadata: ["url": urlString])
+            HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error \(statusCode)", metadata: ["url": urlString])
             if statusCode == 403 {
                 throw BundleFetchError.permanentFailure(.bundleFetch403)
             } else if statusCode == 404 {
@@ -635,7 +635,7 @@ public class HeliumFetchedConfigManager {
                 throw BundleFetchError.permanentFailure(.bundleFetch410)
             }
             // All other errors (5xx server errors, etc.) are retryable
-            HeliumLog.log(.warn, category: .network, "HTTP error, will retry", metadata: ["statusCode": String(statusCode), "url": urlString])
+            HeliumLogger.log(.warn, category: .network, "HTTP error, will retry", metadata: ["statusCode": String(statusCode), "url": urlString])
             throw URLError(.badServerResponse)
         }
 

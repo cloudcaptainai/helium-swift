@@ -20,7 +20,7 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
-        HeliumLog.log(.debug, category: .core, "Logging initialize event to analytics")
+        HeliumLogger.log(.debug, category: .core, "Logging initialize event to analytics")
         HeliumAnalyticsManager.shared.logInitializeEvent()
     }
     
@@ -37,12 +37,12 @@ public class HeliumController {
     
     func downloadConfig() {
         let apiEndpointOrDefault = customAPIEndpoint ?? DEFAULT_API_ENDPOINT
-        HeliumLog.log(.info, category: .network, "Starting config download", metadata: ["endpoint": apiEndpointOrDefault])
+        HeliumLogger.log(.info, category: .network, "Starting config download", metadata: ["endpoint": apiEndpointOrDefault])
 
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
             case let .success(fetchedConfig, metrics):
-                HeliumLog.log(.info, category: .network, "Config download succeeded", metadata: [
+                HeliumLogger.log(.info, category: .network, "Config download succeeded", metadata: [
                     "numBundles": String(metrics.numBundles ?? 0),
                     "totalTimeMS": String(metrics.totalTimeMS ?? 0),
                 ])
@@ -68,7 +68,7 @@ public class HeliumController {
                     paywallSession: nil
                 )
             case let .failure(errorMessage, metrics):
-                HeliumLog.log(.error, category: .network, "Config download failed", metadata: [
+                HeliumLogger.log(.error, category: .network, "Config download failed", metadata: [
                     "error": errorMessage,
                     "numAttempts": String(metrics.numConfigAttempts),
                 ])

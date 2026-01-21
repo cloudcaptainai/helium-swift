@@ -36,9 +36,9 @@ public class HeliumFallbackViewManager {
         // Give immediate feedback if assets are not accessible & avoid trying to use later.
         // This is synchronous but very fast (typically < 1 ms).
         if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
-            HeliumLog.log(.warn, category: .fallback, "Fallback bundle URL not accessible", metadata: ["path": fallbackBundleURL.path])
+            HeliumLogger.log(.warn, category: .fallback, "Fallback bundle URL not accessible", metadata: ["path": fallbackBundleURL.path])
         } else {
-            HeliumLog.log(.info, category: .fallback, "Fallback bundle URL provided", metadata: ["path": fallbackBundleURL.path])
+            HeliumLogger.log(.info, category: .fallback, "Fallback bundle URL provided", metadata: ["path": fallbackBundleURL.path])
         }
         Task {
             do {
@@ -52,9 +52,9 @@ public class HeliumFallbackViewManager {
 
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    HeliumLog.log(.info, category: .fallback, "Successfully loaded paywalls from fallback bundle", metadata: ["bundleCount": String(bundles.count)])
+                    HeliumLogger.log(.info, category: .fallback, "Successfully loaded paywalls from fallback bundle", metadata: ["bundleCount": String(bundles.count)])
                 } else {
-                    HeliumLog.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
+                    HeliumLogger.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
                 }
 
                 Task {
@@ -68,7 +68,7 @@ public class HeliumFallbackViewManager {
                     )
                 }
             } catch {
-                HeliumLog.log(.error, category: .fallback, "Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
+                HeliumLogger.log(.error, category: .fallback, "Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
             }
         }
     }
