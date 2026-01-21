@@ -156,9 +156,10 @@ public class HeliumFetchedConfigManager {
         completion: @escaping (HeliumFetchResult) -> Void
     ) {
         if downloadStatus == .inProgress {
-            print("[Helium] Config download already in progress. Skipping new request.")
+            HeliumLogger.log(.debug, category: .config, "Config download already in progress, skipping new request")
             return
         }
+        HeliumLogger.log(.debug, category: .config, "Starting download of paywalls")
         let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
             updateDownloadState(.inProgress)
@@ -208,7 +209,10 @@ public class HeliumFetchedConfigManager {
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
                 if attemptCounter < maxAttempts {
                     let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                    print("[Helium] Fetch failed on attempt \(attemptCounter) (no data), retrying in \(delaySeconds) seconds...")
+                    HeliumLogger.log(.warn, category: .network, "Config fetch failed (no data), retrying", metadata: [
+                        "attempt": String(attemptCounter),
+                        "delaySeconds": String(delaySeconds)
+                    ])
                     try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                     await fetchConfigWithRetry(
                         endpoint: endpoint,
@@ -220,6 +224,9 @@ public class HeliumFetchedConfigManager {
                         completion: completion
                     )
                 } else {
+                    HeliumLogger.log(.error, category: .network, "Config fetch reached max retries", metadata: [
+                        "maxAttempts": String(maxAttempts)
+                    ])
                     let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                     let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                     updateDownloadState(.downloadFailure)
@@ -236,6 +243,7 @@ public class HeliumFetchedConfigManager {
                 }
                 return
             }
+            HeliumLogger.log(.debug, category: .config, "Config data received successfully")
             let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
             
             // Update the fetched config
@@ -353,7 +361,11 @@ public class HeliumFetchedConfigManager {
             // Retry on network/fetch failure
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                print("[Helium] Fetch failed on attempt \(attemptCounter), retrying in \(delaySeconds) seconds...")
+                HeliumLogger.log(.warn, category: .network, "Config fetch error, retrying", metadata: [
+                    "attempt": String(attemptCounter),
+                    "error": error.localizedDescription,
+                    "delaySeconds": String(delaySeconds)
+                ])
                 
                 try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                 
@@ -367,6 +379,10 @@ public class HeliumFetchedConfigManager {
                     completion: completion
                 )
             } else {
+                HeliumLogger.log(.error, category: .network, "Config fetch failed after all retries", metadata: [
+                    "error": error.localizedDescription,
+                    "attempts": String(attemptCounter)
+                ])
                 updateDownloadState(.downloadFailure)
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
@@ -435,7 +451,7 @@ public class HeliumFetchedConfigManager {
                 
                 // Validate URL before processing - skip silently if invalid (don't fail entire download)
                 guard isValidURL(bundleUrl) else {
-                    print("[Helium] Invalid URL format for trigger \(trigger): \(bundleUrl)")
+                    HeliumLogger.log(.warn, category: .network, "Invalid URL format for trigger", metadata: ["trigger": trigger, "url": bundleUrl])
                     triggersWithSkippedBundle.append((trigger, .bundleFetchInvalidUrlDetected))
                     continue
                 }
@@ -485,10 +501,13 @@ public class HeliumFetchedConfigManager {
             let missingTriggers = result.bundleUrlsFailedToFetched.flatMap {
                 bundleUrlToTriggersMap[$0] ?? []
             }
-            print("[Helium] Failed to fetch bundles for triggers \(missingTriggers)")
+            HeliumLogger.log(.warn, category: .network, "Failed to fetch some bundles", metadata: ["triggers": missingTriggers.joined(separator: ", ")])
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
-                print("[Helium] Bundles fetch incomplete on attempt \(attemptCounter), retrying in \(delaySeconds) seconds...")
+                HeliumLogger.log(.debug, category: .network, "Bundles fetch incomplete, retrying", metadata: [
+                    "attempt": String(attemptCounter),
+                    "delaySeconds": String(delaySeconds)
+                ])
                 
                 try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
                 
@@ -542,12 +561,17 @@ public class HeliumFetchedConfigManager {
                 group.addTask {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
+                        HeliumLogger.log(.trace, category: .network, "Bundle fetched successfully", metadata: ["url": url])
                         return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false, failureReason: nil)
                     } catch {
                         if case let BundleFetchError.permanentFailure(reason) = error {
-                            print("[Helium] Permanent failure for triggers \(triggers): \(reason.rawValue)")
+                            HeliumLogger.log(.error, category: .network, "Permanent bundle fetch failure", metadata: [
+                                "triggers": triggers.joined(separator: ", "),
+                                "reason": reason.rawValue
+                            ])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason)
                         } else {
+                            HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil)
                         }
                     }
@@ -603,16 +627,17 @@ public class HeliumFetchedConfigManager {
             // Treat specific client errors as permanent failures (non-retryable)
             // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
             if statusCode == 403 {
-                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error", metadata: ["statusCode": String(statusCode), "url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch403)
             } else if statusCode == 404 {
-                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error", metadata: ["statusCode": String(statusCode), "url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch404)
             } else if statusCode == 410 {
-                print("[Helium] Non-retryable HTTP error \(statusCode) for URL: \(urlString)")
+                HeliumLogger.log(.error, category: .network, "Non-retryable HTTP error", metadata: ["statusCode": String(statusCode), "url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch410)
             }
             // All other errors (5xx server errors, etc.) are retryable
+            HeliumLogger.log(.warn, category: .network, "HTTP error, will retry", metadata: ["statusCode": String(statusCode), "url": urlString])
             throw URLError(.badServerResponse)
         }
 

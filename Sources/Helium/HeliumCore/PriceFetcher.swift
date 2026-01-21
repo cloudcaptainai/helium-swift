@@ -178,9 +178,13 @@ public class PriceFetcher {
         for skus: [String],
         maxAttempts: Int = 3
     ) async -> [Product] {
+        HeliumLogger.log(.debug, category: .network, "Fetching products", metadata: ["skuCount": String(skus.count)])
         for attempt in 1...maxAttempts {
             if attempt > 1 {
-                print("[Helium] Retrying product localization lookup... (attempt \(attempt) of \(maxAttempts))")
+                HeliumLogger.log(.debug, category: .network, "Retrying product localization lookup", metadata: [
+                    "attempt": String(attempt),
+                    "maxAttempts": String(maxAttempts)
+                ])
             }
             do {
                 var timeoutNanoseconds: UInt64 = 10_000_000_000
@@ -207,14 +211,16 @@ public class PriceFetcher {
                     return []
                 }
             } catch {
+                HeliumLogger.log(.debug, category: .network, "Product fetch attempt failed", metadata: ["attempt": String(attempt)])
                 // Don't delay after the last attempt
                 if attempt < maxAttempts {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
         }
-        
+
         // If all attempts failed, return empty array (price localization will not work)
+        HeliumLogger.log(.warn, category: .network, "Product fetch failed after all retries", metadata: ["skuCount": String(skus.count)])
         return []
     }
     

@@ -36,31 +36,31 @@ public class HeliumFallbackViewManager {
         // Give immediate feedback if assets are not accessible & avoid trying to use later.
         // This is synchronous but very fast (typically < 1 ms).
         if !FileManager.default.fileExists(atPath: fallbackBundleURL.path) {
-            print("[Helium] Fallback bundle URL not accessible.")
+            HeliumLogger.log(.warn, category: .fallback, "Fallback bundle URL not accessible", metadata: ["path": fallbackBundleURL.path])
         } else {
-            print("[Helium] Fallback bundle URL provided.")
+            HeliumLogger.log(.info, category: .fallback, "Fallback bundle URL provided", metadata: ["path": fallbackBundleURL.path])
         }
         Task {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-                
+
                 loadedConfig = decodedConfig
                 if let json = try? JSON(data: data) {
                     loadedConfigJSON = json
                 }
-                
+
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file.")
+                    HeliumLogger.log(.info, category: .fallback, "Successfully loaded paywalls from fallback bundle", metadata: ["bundleCount": String(bundles.count)])
                 } else {
-                    print("[Helium] No bundles found in fallback bundle file.")
+                    HeliumLogger.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
                 }
-                
+
                 Task {
                     await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
                 }
-                
+
                 if let config = loadedConfig {
                     HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,
@@ -68,7 +68,7 @@ public class HeliumFallbackViewManager {
                     )
                 }
             } catch {
-                print("[Helium] Failed to load fallback bundle: \(error)")
+                HeliumLogger.log(.error, category: .fallback, "Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
             }
         }
     }
