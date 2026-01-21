@@ -46,11 +46,6 @@ public class Helium {
         HeliumLog.getLogLevel()
     }
 
-    /// Instance convenience for setting the Helium SDK log level.
-    public func setLogLevel(_ level: HeliumLogLevel) {
-        HeliumLog.setLogLevel(level)
-    }
-    
     public func presentUpsell(
         trigger: String,
         from viewController: UIViewController? = nil,

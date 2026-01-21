@@ -40,6 +40,7 @@ class HeliumAssetManager {
         }
 
         let value = Self.bundleDir.appendingPathComponent("\(bundleId).html").path
+        HeliumLog.log(.trace, category: .core, "Reading from value", metadata: ["value": value])
         return value;
     }
     

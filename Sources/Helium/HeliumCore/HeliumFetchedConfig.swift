@@ -159,7 +159,7 @@ public class HeliumFetchedConfigManager {
             HeliumLog.log(.debug, category: .config, "Config download already in progress, skipping new request")
             return
         }
-        HeliumLog.log(.debug, category: .config, "fetchConfig starting")
+        HeliumLog.log(.debug, category: .config, "Starting download of paywalls")
         let initializeStartTime = DispatchTime.now()
         fetchTask = Task {
             updateDownloadState(.inProgress)
@@ -626,14 +626,12 @@ public class HeliumFetchedConfigManager {
         guard (200...299).contains(statusCode) else {
             // Treat specific client errors as permanent failures (non-retryable)
             // 403 = Forbidden, 404 = Not Found, 410 = Gone (permanently deleted)
+            HeliumLog.log(.error, category: .network, "Non-retryable HTTP error \(statusCode)", metadata: ["url": urlString])
             if statusCode == 403 {
-                HeliumLog.log(.error, category: .network, "Non-retryable HTTP 403 error", metadata: ["url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch403)
             } else if statusCode == 404 {
-                HeliumLog.log(.error, category: .network, "Non-retryable HTTP 404 error", metadata: ["url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch404)
             } else if statusCode == 410 {
-                HeliumLog.log(.error, category: .network, "Non-retryable HTTP 410 error", metadata: ["url": urlString])
                 throw BundleFetchError.permanentFailure(.bundleFetch410)
             }
             // All other errors (5xx server errors, etc.) are retryable

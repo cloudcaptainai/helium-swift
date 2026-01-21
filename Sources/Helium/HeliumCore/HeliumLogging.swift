@@ -131,7 +131,7 @@ struct HeliumOSLogSink: HeliumLogSink {
                 .map { "\($0.key)=\($0.value)" }
                 .sorted()
                 .joined(separator: " ")
-            logger.log(level: map(level), "\(message, privacy: .public) \(meta, privacy: .public)")
+            logger.log(level: map(level), "\(message, privacy: .public) \(meta, privacy: .private)")
         }
     }
 
