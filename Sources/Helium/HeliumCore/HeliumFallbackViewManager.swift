@@ -116,7 +116,11 @@ public class HeliumFallbackViewManager {
         return loadedConfig?.triggerToPaywalls[trigger] ?? loadedConfig?.triggerToPaywalls[defaultFallbackTrigger]
     }
     func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"] ?? loadedConfigJSON?["triggerToPaywalls"][defaultFallbackTrigger]["resolvedConfig"]
+        if let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"],
+           json.exists() {
+            return json
+        }
+        return loadedConfigJSON?["triggerToPaywalls"][defaultFallbackTrigger]["resolvedConfig"]
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
