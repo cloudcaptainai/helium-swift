@@ -47,7 +47,7 @@ public class HeliumFallbackViewManager {
             print("[Helium] ‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
             return
         }
-        print("[Helium] ✅ Fallback bundle URL provided! 🎉 Remember to update it with the latest paywalls! https://docs.tryhelium.com/guides/fallback-bundle")
+        print("[Helium] ✅ Fallbacks URL provided! 🎉 Remember to keep your fallbacks updated! https://docs.tryhelium.com/guides/fallback-bundle")
         
         Task {
             do {
@@ -61,7 +61,14 @@ public class HeliumFallbackViewManager {
                 
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file.")
+                    let generatedAtDisplay = formatDateForDisplay(decodedConfig.generatedAt)
+                    print("[Helium] Successfully loaded paywalls from fallback bundle file that was generated at \(generatedAtDisplay)")
+                    
+                    if let date = parseISODate(decodedConfig.generatedAt),
+                       let daysAgo = Calendar.current.dateComponents([.day], from: date, to: Date()).day,
+                       daysAgo > 30 {
+                        print("[Helium] ⚠️ Your fallbacks were generated \(daysAgo) days ago! Consider updating them.")
+                    }
                 } else {
                     print("[Helium] No bundles found in fallback bundle file.")
                 }
@@ -135,4 +142,26 @@ public class HeliumFallbackViewManager {
         return nil
     }
     
+}
+
+// MARK: - Date Helpers
+
+private func parseISODate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    // Try without fractional seconds first, then with
+    if let date = formatter.date(from: dateString) {
+        return date
+    }
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: dateString)
+}
+
+private func formatDateForDisplay(_ dateString: String?) -> String {
+    guard let date = parseISODate(dateString) else { return "unknown" }
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
 }
