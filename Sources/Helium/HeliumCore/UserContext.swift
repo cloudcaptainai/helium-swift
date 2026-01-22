@@ -108,12 +108,6 @@ public struct CodableUserContext: Codable {
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
     var additionalParams: HeliumUserTraits
-    var heliumSessionId: String?
-    var heliumInitializeId: String?
-    var heliumPersistentId: String?
-    var userId: String?
-    var organizationID: String?
-    var appTransactionId: String?
     
     public func buildRequestPayload() -> [String: Any] {
         let localeDict: [String: Any] = [
