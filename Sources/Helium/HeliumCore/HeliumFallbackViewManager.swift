@@ -112,15 +112,23 @@ public class HeliumFallbackViewManager {
         return nil
     }
     
-    func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
-        return loadedConfig?.triggerToPaywalls[trigger] ?? loadedConfig?.triggerToPaywalls[defaultFallbackTrigger]
-    }
-    func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        if let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"],
+    /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig
+    private func resolvedTrigger(for trigger: String) -> String {
+        // Check if trigger exists in config AND has valid resolvedConfig JSON
+        if loadedConfig?.triggerToPaywalls[trigger] != nil,
+           let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"],
            json.exists() {
-            return json
+            return trigger
         }
-        return loadedConfigJSON?["triggerToPaywalls"][defaultFallbackTrigger]["resolvedConfig"]
+        return defaultFallbackTrigger
+    }
+    
+    func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
+        return loadedConfig?.triggerToPaywalls[resolvedTrigger(for: trigger)]
+    }
+    
+    func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
+        return loadedConfigJSON?["triggerToPaywalls"][resolvedTrigger(for: trigger)]["resolvedConfig"]
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
