@@ -23,6 +23,7 @@ public class HeliumFallbackViewManager {
     
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
+    private let defaultFallbackTrigger = "hlm_ios_default_flbk"
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
@@ -111,11 +112,11 @@ public class HeliumFallbackViewManager {
         return nil
     }
     
-    public func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
-        return loadedConfig?.triggerToPaywalls[trigger]
+    func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
+        return loadedConfig?.triggerToPaywalls[trigger] ?? loadedConfig?.triggerToPaywalls[defaultFallbackTrigger]
     }
     func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
+        return loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"] ?? loadedConfigJSON?["triggerToPaywalls"][defaultFallbackTrigger]["resolvedConfig"]
     }
     
     public func getConfig() -> HeliumFetchedConfig? {

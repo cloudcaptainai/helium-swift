@@ -307,6 +307,7 @@ public class Helium {
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
            let filePath = fallbackPaywallInfo.localBundlePath {
+            let resolvedConfig = HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
             do {
                 let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle)
                 let fallbackBundleView = try AnyView(
@@ -315,7 +316,7 @@ public class Helium {
                         fallbackReason: fallbackReason,
                         filePath: filePath,
                         backupFilePath: nil,
-                        resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                        resolvedConfig: resolvedConfig
                     )
                 )
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
