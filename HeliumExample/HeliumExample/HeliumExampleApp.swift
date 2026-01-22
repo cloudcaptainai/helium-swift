@@ -30,14 +30,14 @@ struct HeliumExampleApp: App {
             : nil
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
+        
+        Helium.setLogLevel(.debug)
 
         Helium.shared.initialize(
             apiKey: AppConfig.apiKey,
             heliumPaywallDelegate: delegate,
             fallbackConfig: fallbackConfig
         )
-        
-        Helium.setLogLevel(.debug)
         
         // For UI tests:
         if let loadStateTestTrigger {

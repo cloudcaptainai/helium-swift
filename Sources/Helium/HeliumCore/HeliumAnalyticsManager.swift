@@ -170,13 +170,22 @@ class HeliumAnalyticsManager {
             guard let self else { return }
             
             let configurationChanged = currentWriteKey != writeKey
-            let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
-
+            var shouldCreateNew = overrideIfNewConfiguration && configurationChanged
+            
+            // Init config has LEAST precedence - always override
+            let isCurrentlyUsingInitConfig = currentWriteKey == initializationWriteKey
+            if isCurrentlyUsingInitConfig && configurationChanged {
+                shouldCreateNew = true
+            }
+            
             if analytics != nil && !shouldCreateNew {
                 HeliumLogger.log(.trace, category: .events, "Reusing existing analytics instance")
                 return // Already set up
             }
 
+            // Flush pending events before switching to new instance
+            analytics?.flush()
+            
             HeliumLogger.log(.debug, category: .events, "Setting up new analytics instance", metadata: ["endpoint": endpoint])
             let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
             let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
@@ -188,30 +197,12 @@ class HeliumAnalyticsManager {
     }
 
     /// Logs the initialize event to a dedicated analytics endpoint.
-    /// Runs in a separate Task to avoid blocking core analytics operations.
     func logInitializeEvent() {
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-            
-            let configuration = SegmentConfiguration(writeKey: initializationWriteKey)
-                .apiHost(initializationEndpoint)
-                .cdnHost(initializationEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            let initAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-            
-            initAnalytics.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            )
-            
-            initAnalytics.track(name: "helium_initializeCalled", properties: [
-                "timestamp": formatAsTimestamp(date: Date()),
-                "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
-                "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId(),
-                "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId
-            ])
-        }
+        // Set up analytics with init endpoint (lowest precedence - will be overridden by real config)
+        setUpAnalytics(writeKey: initializationWriteKey, endpoint: initializationEndpoint)
+        
+        // Route through standard event pipeline for rich context data
+        trackPaywallEvent(InitializeCalledEvent(), paywallSession: nil)
     }
     
 }
