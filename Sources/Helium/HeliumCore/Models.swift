@@ -279,7 +279,7 @@ public enum HeliumPaywallEvent: Codable {
 
         switch self {
         case .initializeCalled:
-            break;
+            try container.encode("initializeCalled", forKey: .type)
         case .ctaPressed(let ctaName, let triggerName, let paywallTemplateName):
             try container.encode("ctaPressed", forKey: .type)
             try container.encode(ctaName, forKey: .ctaName)
