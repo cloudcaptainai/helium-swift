@@ -60,14 +60,12 @@ class HeliumAnalyticsManager {
     ///   - event: The event to track
     ///   - paywallSession: Optional paywall session for context
     ///   - destination: Which analytics endpoint to send to (defaults to .standard)
-    ///   - targetQueue: Queue to dispatch on (defaults to queue for .standard, initQueue for .initialize)
     func trackPaywallEvent(
         _ event: HeliumEvent,
         paywallSession: PaywallSession?,
-        destination: AnalyticsDestination = .standard,
-        targetQueue: DispatchQueue? = nil
+        destination: AnalyticsDestination = .standard
     ) {
-        let dispatchQueue = targetQueue ?? (destination == .initialize ? initQueue : queue)
+        let dispatchQueue = destination == .initialize ? initQueue : queue
         dispatchQueue.async { [weak self] in
             guard let self else { return }
             
@@ -222,7 +220,7 @@ class HeliumAnalyticsManager {
             
             // Set up dedicated init analytics instance (separate from standard analytics)
             if initAnalytics == nil {
-                HeliumLogger.log(.debug, category: .events, "Setting up init analytics instance")
+                HeliumLogger.log(.debug, category: .events, "Setting up initializeCalled analytics instance")
                 let configuration = createConfiguration(writeKey: initializationWriteKey, endpoint: initializationEndpoint)
                 let newInitAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
                 initAnalytics = newInitAnalytics
@@ -231,7 +229,7 @@ class HeliumAnalyticsManager {
         }
 
         // Route through standard event pipeline for rich context data
-        trackPaywallEvent(InitializeCalledEvent(), paywallSession: nil, destination: .initialize, targetQueue: initQueue)
+        trackPaywallEvent(InitializeCalledEvent(), paywallSession: nil, destination: .initialize)
     }
     
 }
