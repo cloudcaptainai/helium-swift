@@ -49,9 +49,6 @@ class HeliumAnalyticsManager {
         queue.async { [weak self] in
             self?.analytics?.flush()
         }
-        initQueue.async { [weak self] in
-            self?.initAnalytics?.flush()
-        }
     }
     
     /// Tracks a paywall event, building the logged event and sending to analytics.
