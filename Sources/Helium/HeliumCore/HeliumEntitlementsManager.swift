@@ -28,16 +28,103 @@ actor HeliumEntitlementsManager {
         
         var lastTransactionsLoadedTime: Date?
         
+        /// Product IDs from persisted data, used before real transactions are loaded
+        var persistedProductIDs: Set<String> = []
+        
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
             guard let lastSyncTime = lastTransactionsLoadedTime else { return true }
             return Date().timeIntervalSince(lastSyncTime) > resetInterval
         }
     }
     
+    // MARK: - Persistence Constants
+    
+    private let entitlementsUserDefaultsKey = "heliumPersistedEntitlements"
+    private let entitlementsFileName = "helium_entitlements.json"
     private var cache = EntitlementsCache()
     private var updateListenerTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     
+    // MARK: - Persistence
+    
+    /// File URL for entitlements storage.
+    private nonisolated var entitlementsFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Helium", isDirectory: true)
+            .appendingPathComponent(entitlementsFileName)
+    }
+    
+    /// Loads persisted entitlements from storage
+    private func loadPersistedEntitlements() {
+        // Try UserDefaults first
+        if let data = UserDefaults.standard.data(forKey: entitlementsUserDefaultsKey),
+           let decoded = try? JSONDecoder().decode(PersistedEntitlementsData.self, from: data) {
+            applyPersistedData(decoded)
+            return
+        }
+
+        // Fallback to file
+        if let fileURL = entitlementsFileURL,
+           let data = try? Data(contentsOf: fileURL),
+           let decoded = try? JSONDecoder().decode(PersistedEntitlementsData.self, from: data) {
+            applyPersistedData(decoded)
+        }
+    }
+
+    /// Applies persisted data to the cache
+    private func applyPersistedData(_ data: PersistedEntitlementsData) {
+        // Filter to only valid-looking entitlements
+        let validEntitlements = data.entitlements.filter { $0.appearsValid() }
+        cache.persistedProductIDs = Set(validEntitlements.map { $0.productID })
+        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(validEntitlements.count) persisted entitlements")
+    }
+
+    /// Persists current entitlements to storage
+    private func saveEntitlements() {
+        let entitlements = cache.transactions.map { PersistedEntitlement(from: $0) }
+        let data = PersistedEntitlementsData(entitlements: entitlements, savedAt: Date())
+
+        guard let encoded = try? JSONEncoder().encode(data) else {
+            HeliumLogger.log(.warn, category: .entitlements, "Failed to encode entitlements for persistence")
+            return
+        }
+
+        // Save to UserDefaults
+        UserDefaults.standard.set(encoded, forKey: entitlementsUserDefaultsKey)
+
+        // Also save to file as backup (async)
+        Task.detached { [weak self, encoded] in
+            await self?.saveEntitlementsToFile(encoded)
+        }
+
+        HeliumLogger.log(.debug, category: .entitlements, "Persisted \(entitlements.count) entitlements")
+    }
+
+    /// Saves encoded data to file
+    private nonisolated func saveEntitlementsToFile(_ data: Data) async {
+        guard let fileURL = entitlementsFileURL else { return }
+
+        do {
+            let directory = fileURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            HeliumLogger.log(.warn, category: .entitlements, "Failed to persist entitlements to file", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    /// Clears persisted entitlements
+    private func clearPersistedEntitlements() {
+        UserDefaults.standard.removeObject(forKey: entitlementsUserDefaultsKey)
+
+        if let fileURL = entitlementsFileURL {
+            Task.detached {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+    }
+
     deinit {
         updateListenerTask?.cancel()
         debounceTask?.cancel()
@@ -71,6 +158,8 @@ actor HeliumEntitlementsManager {
     public func configure() async {
         guard !isConfigured else { return }
         isConfigured = true
+        // Load persisted entitlements first for immediate availability
+        loadPersistedEntitlements()
         startTransactionListener()
         await loadEntitlementsIfNeeded()
     }
@@ -96,6 +185,12 @@ actor HeliumEntitlementsManager {
         
         cache.transactions = transactions
         cache.lastTransactionsLoadedTime = Date()
+
+        // Clear persisted product IDs since we now have real transactions
+        cache.persistedProductIDs.removeAll()
+
+        // Persist the updated entitlements
+        saveEntitlements()
     }
     
     private func getCachedEntitlements() async -> [Transaction] {
@@ -148,14 +243,29 @@ actor HeliumEntitlementsManager {
     
     func hasAnyEntitlement() async -> Bool {
         let entitlements = await getCachedEntitlements()
-        return !entitlements.isEmpty
+        if !entitlements.isEmpty { return true }
+        // Fallback to persisted data if no transactions loaded
+        return !cache.persistedProductIDs.isEmpty
     }
     
     func purchasedProductIds() async -> [String] {
         let entitlements = await getCachedEntitlements()
-        return entitlements.map { $0.productID }
+        var productIds = entitlements.map { $0.productID }
+        // Include persisted product IDs not already in the list
+        for persistedId in cache.persistedProductIDs {
+            if !productIds.contains(persistedId) {
+                productIds.append(persistedId)
+            }
+        }
+        return productIds
     }
-    
+
+    /// Returns persisted product IDs synchronously for immediate availability.
+    /// This is useful before transactions have been loaded from StoreKit.
+    func getPersistedProductIds() -> Set<String> {
+        cache.persistedProductIDs
+    }
+
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
         let entitlements = await getCachedEntitlements()
         
@@ -186,6 +296,10 @@ actor HeliumEntitlementsManager {
             if transaction.productID == productId {
                 return true
             }
+        }
+        // Check persisted data as fallback
+        if cache.persistedProductIDs.contains(productId) {
+            return true
         }
         return await hasActiveSubscriptionFor(productId: productId)
     }
@@ -226,6 +340,7 @@ actor HeliumEntitlementsManager {
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
         cache = EntitlementsCache()
+        clearPersistedEntitlements()
     }
     
     func updateAfterPurchase(productID: String, transaction: Transaction?) async {
@@ -236,6 +351,8 @@ actor HeliumEntitlementsManager {
             if let transaction {
                 if !cache.transactions.contains(where: { $0.productID == productID }) {
                     cache.transactions.append(transaction)
+                    // Persist the updated entitlements
+                    saveEntitlements()
                 }
             } else {
                 cache.lastTransactionsLoadedTime = nil
@@ -265,7 +382,7 @@ actor HeliumEntitlementsManager {
         guard let statusList = try? await product.subscription?.status else {
             return nil
         }
-        var latestStatus: Product.SubscriptionInfo.Status? = nil
+        var latestStatus: Product.SubscriptionInfo.Status?
         for statusOption in statusList {
             if isSubscriptionStateActive(statusOption.state) {
                 if latestStatus == nil {
