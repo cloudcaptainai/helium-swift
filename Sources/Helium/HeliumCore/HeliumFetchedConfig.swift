@@ -669,7 +669,7 @@ public class HeliumFetchedConfigManager {
         var allProductIds: [String] = []
         if let config {
             for paywall in config.triggerToPaywalls.values {
-                allProductIds.append(contentsOf: paywall.productsOffered)
+                allProductIds.append(contentsOf: paywall.productIds)
             }
         }
         return Array(Set(allProductIds))
@@ -771,7 +771,7 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
-        return fetchedConfig?.triggerToPaywalls[trigger]?.productsOffered;
+        return fetchedConfig?.triggerToPaywalls[trigger]?.productIds
     }
     
     public func getFetchedTriggerNames() -> [String] {

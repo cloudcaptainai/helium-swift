@@ -88,8 +88,8 @@ public class HeliumActionsDelegate: ObservableObject {
         self.paywallInfo = paywallInfo
         self.paywallSession = paywallSession
         self.selectedProductId = "";
-        if (!paywallInfo.productsOffered.isEmpty) {
-            self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
+        if !paywallInfo.productIds.isEmpty {
+            self.selectedProductId = paywallInfo.productIds[0] ?? ""
         }
     }
     

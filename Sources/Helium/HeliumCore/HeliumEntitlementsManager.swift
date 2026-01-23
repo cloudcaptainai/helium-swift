@@ -115,7 +115,7 @@ actor HeliumEntitlementsManager {
         
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         
-        let productIds = paywallInfo?.productsOffered ?? []
+        let productIds = paywallInfo?.productIds ?? []
         
         // Just see if any of the paywall products are purchased/active
         if !considerAssociatedSubscriptions {
