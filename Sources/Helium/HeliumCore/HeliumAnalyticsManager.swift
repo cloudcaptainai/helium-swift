@@ -30,93 +30,16 @@ class HeliumAnalyticsManager {
         )
     }
     
-    // MARK: - App Lifecycle
-    
     @objc private func handleResignActive() {
         flush()
     }
     
-    // MARK: - Setup
-    
-    /// Sets up analytics asynchronously and dispatches any pending events.
-    /// Also performs identify call with current user context.
-    /// - Parameter overrideIfNewConfiguration: If true and the writeKey differs from the
-    ///   existing configuration, creates a new analytics instance instead of reusing the existing one.
-    func setUpAnalytics(writeKey: String, endpoint: String, overrideIfNewConfiguration: Bool = false) {
+    /// Flushes pending analytics events to the network.
+    func flush() {
         queue.async { [weak self] in
-            guard let self else { return }
-            
-            let configurationChanged = currentWriteKey != writeKey
-            let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
-            
-            if analytics != nil && !shouldCreateNew {
-                return // Already set up
-            }
-            
-            let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
-            let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-            analytics = newAnalytics
-            currentWriteKey = writeKey
-            performIdentify(on: newAnalytics)
-            dispatchPendingTracks()
+            self?.analytics?.flush()
         }
     }
-    
-    /// Creates a SegmentConfiguration with standard settings
-    private func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
-        return SegmentConfiguration(writeKey: writeKey)
-            .apiHost(endpoint)
-            .cdnHost(endpoint)
-            .trackApplicationLifecycleEvents(false)
-            .flushAt(10)
-            .flushInterval(10)
-    }
-    
-    /// Logs the initialize event to a dedicated analytics endpoint.
-    /// Runs in a separate Task to avoid blocking core analytics operations.
-    func logInitializeEvent() {
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-            
-            let configuration = SegmentConfiguration(writeKey: initializationWriteKey)
-                .apiHost(initializationEndpoint)
-                .cdnHost(initializationEndpoint)
-                .trackApplicationLifecycleEvents(false)
-                .flushInterval(10)
-            let initAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
-            
-            initAnalytics.identify(
-                userId: HeliumIdentityManager.shared.getUserId(),
-                traits: HeliumIdentityManager.shared.getUserContext()
-            )
-            
-            initAnalytics.track(name: "helium_initializeCalled", properties: [
-                "timestamp": formatAsTimestamp(date: Date()),
-                "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
-                "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId(),
-                "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId
-            ])
-        }
-    }
-    
-    // MARK: - Identity
-    
-    /// Identifies the current user with the analytics instance.
-    /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
-    func identify(userId: String? = nil) {
-        queue.async { [weak self] in
-            guard let self, let analytics else { return }
-            performIdentify(on: analytics, userId: userId)
-        }
-    }
-    
-    private func performIdentify(on analytics: Analytics, userId: String? = nil) {
-        let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
-        let userContext = HeliumIdentityManager.shared.getUserContext()
-        analytics.identify(userId: resolvedUserId, traits: userContext)
-    }
-    
-    // MARK: - Event Tracking
     
     /// Tracks a paywall event, building the logged event and sending to analytics.
     /// Handles conversion to legacy format, event enrichment, and flushing for critical events.
@@ -212,10 +135,79 @@ class HeliumAnalyticsManager {
         pendingTracks.removeAll()
     }
     
-    /// Flushes pending analytics events to the network.
-    func flush() {
+    private func performIdentify(on analytics: Analytics, userId: String? = nil) {
+        let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId()
+        let userContext = HeliumIdentityManager.shared.getUserContext()
+        analytics.identify(userId: resolvedUserId, traits: userContext)
+    }
+    
+    /// Identifies the current user with the analytics instance.
+    /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
+    func identify(userId: String? = nil) {
         queue.async { [weak self] in
-            self?.analytics?.flush()
+            guard let self, let analytics else { return }
+            performIdentify(on: analytics, userId: userId)
+        }
+    }
+    
+    /// Creates a SegmentConfiguration with standard settings
+    private func createConfiguration(writeKey: String, endpoint: String) -> SegmentConfiguration {
+        return SegmentConfiguration(writeKey: writeKey)
+            .apiHost(endpoint)
+            .cdnHost(endpoint)
+            .trackApplicationLifecycleEvents(false)
+            .flushAt(10)
+            .flushInterval(10)
+    }
+    
+    /// Sets up analytics asynchronously and dispatches any pending events.
+    /// Also performs identify call with current user context.
+    /// - Parameter overrideIfNewConfiguration: If true and the writeKey differs from the
+    ///   existing configuration, creates a new analytics instance instead of reusing the existing one.
+    func setUpAnalytics(writeKey: String, endpoint: String, overrideIfNewConfiguration: Bool = false) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            
+            let configurationChanged = currentWriteKey != writeKey
+            let shouldCreateNew = overrideIfNewConfiguration && configurationChanged
+            
+            if analytics != nil && !shouldCreateNew {
+                return // Already set up
+            }
+            
+            let configuration = createConfiguration(writeKey: writeKey, endpoint: endpoint)
+            let newAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
+            analytics = newAnalytics
+            currentWriteKey = writeKey
+            performIdentify(on: newAnalytics)
+            dispatchPendingTracks()
+        }
+    }
+
+    /// Logs the initialize event to a dedicated analytics endpoint.
+    /// Runs in a separate Task to avoid blocking core analytics operations.
+    func logInitializeEvent() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            
+            let configuration = SegmentConfiguration(writeKey: initializationWriteKey)
+                .apiHost(initializationEndpoint)
+                .cdnHost(initializationEndpoint)
+                .trackApplicationLifecycleEvents(false)
+                .flushInterval(10)
+            let initAnalytics = Analytics.getOrCreateAnalytics(configuration: configuration)
+            
+            initAnalytics.identify(
+                userId: HeliumIdentityManager.shared.getUserId(),
+                traits: HeliumIdentityManager.shared.getUserContext()
+            )
+            
+            initAnalytics.track(name: "helium_initializeCalled", properties: [
+                "timestamp": formatAsTimestamp(date: Date()),
+                "heliumPersistentID": HeliumIdentityManager.shared.getHeliumPersistentId(),
+                "heliumSessionID": HeliumIdentityManager.shared.getHeliumSessionId(),
+                "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId
+            ])
         }
     }
     
