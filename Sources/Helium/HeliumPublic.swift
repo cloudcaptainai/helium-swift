@@ -748,7 +748,7 @@ public class HeliumConfig {
     /// Sets the light/dark mode override for Helium paywalls.
     /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
     /// - Note: .system respects the device's current appearance setting (default)
-    var lightDarkModeOverride: HeliumLightDarkMode = .system
+    public var lightDarkModeOverride: HeliumLightDarkMode = .system
     
     /// Sets the Helium SDK log level.
     ///
