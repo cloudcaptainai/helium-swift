@@ -19,12 +19,9 @@ public class Helium {
     var controller: HeliumController?
     private var initialized: Bool = false;
     
-    private(set) var lightDarkModeOverride: HeliumLightDarkMode = .system
-    
     private func reset() {
-        initialized = false
         controller = nil
-        lightDarkModeOverride = .system
+        initialized = false
     }
     
     public static let shared = Helium()
@@ -321,18 +318,6 @@ public class Helium {
         return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: result, paywallSession: fallbackViewPaywallSession), fallbackReason: fallbackReason)
     }
     
-    public func getHeliumUserId() -> String? {
-        if (self.controller == nil) {
-            return nil;
-        }
-        return HeliumIdentityManager.shared.getUserId();
-    }
-    
-    fileprivate func getHeliumUserIdAsAppAccountToken() -> UUID? {
-        guard let heliumUserId = getHeliumUserId() else { return nil }
-        return UUID(uuidString: heliumUserId)
-    }
-    
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
         if !paywallsLoaded() {
             return nil
@@ -489,11 +474,12 @@ public class Helium {
             customAPIEndpoint: Helium.config.customAPIEndpoint
         )
         
-        self.controller = HeliumController(
+        let fetchController = HeliumController(
             apiKey: apiKey
         )
-        self.controller?.logInitializeEvent()
-        self.controller?.downloadConfig()
+        self.controller = fetchController
+        fetchController.logInitializeEvent()
+        fetchController.downloadConfig()
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
@@ -528,13 +514,6 @@ public class Helium {
     /// Remove all Helium event listeners.
     public func removeAllHeliumEventListeners() {
         HeliumEventListeners.shared.removeAllListeners()
-    }
-    
-    /// Sets the light/dark mode override for Helium paywalls.
-    /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
-    /// - Note: .system respects the device's current appearance setting (default)
-    public func setLightDarkModeOverride(_ mode: HeliumLightDarkMode) {
-        lightDarkModeOverride = mode
     }
     
     /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
@@ -727,7 +706,7 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.appAttributionToken
         }
         set {
-            HeliumIdentityManager.shared.setCustomAppAttributionToken(newValue)
+            HeliumIdentityManager.shared.setCustomAppAccountToken(newValue)
         }
     }
     
@@ -737,7 +716,9 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.revenueCatAppUserId
         }
         set {
-            HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
+            if let newValue {
+                HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
+            }
         }
     }
     
@@ -777,6 +758,11 @@ public class HeliumConfig {
     var defaultLoadingStateEnabled: Bool {
         defaultLoadingBudget > 0
     }
+    
+    /// Sets the light/dark mode override for Helium paywalls.
+    /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
+    /// - Note: .system respects the device's current appearance setting (default)
+    var lightDarkModeOverride: HeliumLightDarkMode = .system
     
 }
 
