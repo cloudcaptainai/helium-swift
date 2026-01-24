@@ -19,15 +19,21 @@ public class HeliumController {
     }
     
     public func logInitializeEvent() {
+        HeliumLogger.log(.debug, category: .core, "Logging initialize event to analytics")
         HeliumAnalyticsManager.shared.logInitializeEvent()
     }
     
     func downloadConfig() {
         let apiEndpointOrDefault = Helium.config.customAPIEndpoint ?? DEFAULT_API_ENDPOINT
-
+        HeliumLogger.log(.info, category: .network, "Starting config download", metadata: ["endpoint": apiEndpointOrDefault])
+        
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
-            case .success(let fetchedConfig, let metrics):
+            case let .success(fetchedConfig, metrics):
+                HeliumLogger.log(.info, category: .network, "Config download succeeded", metadata: [
+                    "numBundles": String(metrics.numBundles ?? 0),
+                    "totalTimeMS": String(metrics.totalTimeMS ?? 0),
+                ])
                 HeliumAnalyticsManager.shared.setUpAnalytics(
                     writeKey: fetchedConfig.segmentBrowserWriteKey,
                     endpoint: fetchedConfig.segmentAnalyticsEndpoint,
@@ -49,7 +55,11 @@ public class HeliumController {
                     ),
                     paywallSession: nil
                 )
-            case .failure(let errorMessage, let metrics):
+            case let .failure(errorMessage, metrics):
+                HeliumLogger.log(.error, category: .network, "Config download failed", metadata: [
+                    "error": errorMessage,
+                    "numAttempts": String(metrics.numConfigAttempts),
+                ])
                 HeliumAnalyticsManager.shared.setUpAnalytics(
                     writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,
                     endpoint: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT

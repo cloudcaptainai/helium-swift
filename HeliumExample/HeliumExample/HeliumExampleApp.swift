@@ -30,6 +30,8 @@ struct HeliumExampleApp: App {
         }
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
+        
+        Helium.setLogLevel(.debug)
 
         Helium.shared.initialize(
             apiKey: AppConfig.apiKey
