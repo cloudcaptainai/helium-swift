@@ -28,7 +28,7 @@ struct CodableScreenInfo: Codable {
     var nativeScale: Float
     var boundsWidth: Int
     var boundsHeight: Int
-    var scale: Float
+    var scale: Int
     var isDarkModeEnabled: Bool
 }
 
@@ -96,7 +96,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
         heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
         heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
-        environment: AppReceiptsHelper.shared.getEnvironment(),
+        environment: AppReceiptsHelper.shared.getEnvironment().uppercased(),
         latestInstallTimestamp: latestInstallTime,
         firstInstallTimestamp: firstInstallTime
     )
@@ -219,7 +219,7 @@ public struct CodableUserContext: Codable {
                 UIScreen.main.bounds.width.toInt() ?? -1,
                 UIScreen.main.bounds.height.toInt() ?? -1,
             ),
-            scale: Float(UIScreen.main.scale),
+            scale: Int(UIScreen.main.scale),
             isDarkModeEnabled: UITraitCollection.current.userInterfaceStyle == .dark
         )
         
