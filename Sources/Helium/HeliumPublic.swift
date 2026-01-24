@@ -29,20 +29,6 @@ public class Helium {
     public static let identify = HeliumIdentify()
     public static let config = HeliumConfig()
     
-    // MARK: - Logging
-
-    /// Sets the Helium SDK log level.
-    ///
-    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
-    public static func setLogLevel(_ level: HeliumLogLevel) {
-        HeliumLogger.setLogLevel(level)
-    }
-
-    /// Returns the current Helium SDK log level.
-    public static func getLogLevel() -> HeliumLogLevel {
-        HeliumLogger.getLogLevel()
-    }
-
     public func presentUpsell(
         trigger: String,
         from viewController: UIViewController? = nil,
@@ -763,6 +749,19 @@ public class HeliumConfig {
     /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
     /// - Note: .system respects the device's current appearance setting (default)
     var lightDarkModeOverride: HeliumLightDarkMode = .system
+    
+    /// Sets the Helium SDK log level.
+    ///
+    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
+    ///
+    public var logLevel: HeliumLogLevel {
+        get {
+            HeliumLogger.getLogLevel()
+        }
+        set {
+            HeliumLogger.setLogLevel(newValue)
+        }
+    }
     
 }
 
