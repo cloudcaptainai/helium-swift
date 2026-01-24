@@ -812,8 +812,8 @@ public struct PurchasePendingEvent: ProductEvent {
 // MARK: - System Events
 
 /// Event fired at the beginning of Helium.shared.initialize() method
-/// - Note: Marks the start of SDK initialization process
-public struct InitializeStartEvent: HeliumEvent {
+/// - Note: Marks the start of SDK initialization process. Currently NOT dispatched to Helium event listeners.
+public struct InitializeCalledEvent: HeliumEvent {
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
@@ -822,7 +822,7 @@ public struct InitializeStartEvent: HeliumEvent {
         self.timestamp = timestamp
     }
     
-    public var eventName: String { "initializeStart" }
+    public var eventName: String { "initializeCalled" }
     
     public func toDictionary() -> [String: Any] {
         return [
@@ -832,7 +832,7 @@ public struct InitializeStartEvent: HeliumEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .initializeStart
+        return .initializeCalled
     }
 }
 

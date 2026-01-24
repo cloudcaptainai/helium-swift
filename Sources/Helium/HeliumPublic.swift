@@ -32,6 +32,20 @@ public class Helium {
     public static let shared = Helium()
     public static let restorePurchaseConfig = RestorePurchaseConfig()
     
+    // MARK: - Logging
+
+    /// Sets the Helium SDK log level.
+    ///
+    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
+    public static func setLogLevel(_ level: HeliumLogLevel) {
+        HeliumLogger.setLogLevel(level)
+    }
+
+    /// Returns the current Helium SDK log level.
+    public static func getLogLevel() -> HeliumLogLevel {
+        HeliumLogger.getLogLevel()
+    }
+
     public func presentUpsell(
         trigger: String,
         from viewController: UIViewController? = nil,
@@ -39,7 +53,9 @@ public class Helium {
         customPaywallTraits: [String: Any]? = nil,
         dontShowIfAlreadyEntitled: Bool = false
     ) {
+        HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
         if skipPaywallIfNeeded(trigger: trigger) {
+            HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
             return
         }
         
@@ -180,11 +196,11 @@ public class Helium {
         ExperimentAllocationTracker.shared.reset()
         
         HeliumEventListeners.shared.removeAllListeners()
-        
+
         // Reset initialization state to allow re-initialization
         reset()
-                
-        print("[Helium] All cached state cleared and SDK reset. You must call initialize() before using Helium again.")
+
+        HeliumLogger.log(.info, category: .core, "All cached state cleared and SDK reset. Call initialize() before using Helium again.")
     }
     
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
@@ -202,8 +218,9 @@ public class Helium {
     }
     
     func upsellViewResultFor(trigger: String) -> PaywallViewResult {
+        HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
         if !initialized {
-            print("[Helium] Helium.shared.initialize() needs to be called before presenting a paywall. Please visit docs.tryhelium.com or message founders@tryhelium.com to get set up!")
+            HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
             return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
         }
         
@@ -222,6 +239,7 @@ public class Helium {
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
+                    HeliumLogger.log(.warn, category: .ui, "No local bundle path for trigger", metadata: ["trigger": trigger])
                     return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .couldNotFindBundleUrl)
                 }
                 let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
@@ -235,9 +253,10 @@ public class Helium {
                     backupFilePath: backupFilePath,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
+                HeliumLogger.log(.debug, category: .ui, "Created paywall view for trigger", metadata: ["trigger": trigger])
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: paywallView, paywallSession: paywallSession), fallbackReason: nil)
             } catch {
-                print("[Helium] Failed to create Helium view wrapper: \(error). Falling back.")
+                HeliumLogger.log(.error, category: .ui, "Failed to create Helium view wrapper: \(error). Falling back.", metadata: ["trigger": trigger])
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .invalidResolvedConfig)
             }
             
@@ -265,6 +284,7 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason) -> PaywallViewResult {
+        HeliumLogger.log(.info, category: .fallback, "Using fallback view", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
         var result: AnyView?
         
         let fallbackViewPaywallSession = PaywallSession(trigger: trigger, paywallInfo: paywallInfo, fallbackType: .fallbackView)
@@ -509,7 +529,9 @@ public class Helium {
         fallbackBundleURL: URL? = nil,
         fallbackPaywallPerTrigger: [String: any View]? = nil
     ) {
+        HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
         if initialized {
+            HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
             return
         }
         initialized = true
@@ -635,12 +657,13 @@ public class Helium {
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
-            
+
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
         }
+        HeliumLogger.log(.info, category: .core, "Helium initialization complete, config download started")
     }
-    
+
     func isInitialized() -> Bool {
         return initialized
     }
@@ -706,43 +729,44 @@ public class Helium {
         
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let queryItems = components.queryItems else {
-            print("[Helium] handleDeepLink - Invalid test URL format: \(url)")
+            HeliumLogger.log(.warn, category: .core, "handleDeepLink - Invalid test URL format", metadata: ["url": url.absoluteString])
             return false
         }
-        
+
         var triggerValue = queryItems.first(where: { $0.name == "trigger" })?.value
         let paywallUUID = queryItems.first(where: { $0.name == "puid" })?.value
-        
+
         if triggerValue == nil && paywallUUID == nil {
-            print("[Helium] handleDeepLink - Test URL needs 'trigger' or 'puid': \(url)")
+            HeliumLogger.log(.warn, category: .core, "handleDeepLink - Test URL needs 'trigger' or 'puid'", metadata: ["url": url.absoluteString])
             return false
         }
-        
+
         // Do not show fallbacks... check to see if the needed bundle is available
         if !paywallsLoaded() {
-            print("[Helium] handleDeepLink - Helium has not successfully completed initialization.")
+            HeliumLogger.log(.warn, category: .core, "handleDeepLink - Helium has not completed initialization")
             return false
         }
-        
+
         if let paywallUUID, triggerValue == nil {
             triggerValue = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(paywallUUID)
             if triggerValue == nil {
-                print("[Helium] handleDeepLink - Could not find trigger for provided paywall UUID: \(paywallUUID).")
+                HeliumLogger.log(.warn, category: .core, "handleDeepLink - Could not find trigger for paywall UUID", metadata: ["uuid": paywallUUID])
             }
         }
-        
+
         guard let trigger = triggerValue else {
             return false
         }
-        
+
         if getPaywallInfo(trigger: trigger) == nil {
-            print("[Helium] handleDeepLink - Bundle is not available for this trigger.")
+            HeliumLogger.log(.warn, category: .core, "handleDeepLink - Bundle not available for trigger", metadata: ["trigger": trigger])
             return false
         }
         
         // hide any existing upsells
         hideAllUpsells()
-        
+
+        HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
         presentUpsell(trigger: trigger)
         return true
     }
