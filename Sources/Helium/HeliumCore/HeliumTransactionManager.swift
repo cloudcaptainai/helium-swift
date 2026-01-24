@@ -204,6 +204,7 @@ class TransactionSyncClient {
             }
             
             if let appAccountToken = transaction.appAccountToken {
+                properties["appAttributionToken"] = appAccountToken.uuidString
                 properties["appAccountToken"] = appAccountToken.uuidString
             }
             

@@ -212,6 +212,11 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
     }
     
+    public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
+        HeliumLogger.log(.error, category: .ui, "WebView provisional navigation failed", metadata: ["error": error.localizedDescription])
+        NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
+    }
+    
 }
 
 // Add notification name
