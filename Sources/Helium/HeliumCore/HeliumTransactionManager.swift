@@ -195,7 +195,7 @@ class TransactionSyncClient {
                 "purchasedQuantity": transaction.purchasedQuantity,
                 "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
-                "platform": "ios",
+                "platform": HeliumSdkConfig.shared.heliumPlatform,
                 "timestamp": timestamp
             ]
             
