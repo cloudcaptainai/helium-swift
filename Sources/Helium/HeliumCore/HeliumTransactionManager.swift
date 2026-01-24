@@ -173,6 +173,9 @@ class TransactionSyncClient {
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
+            if transaction.ownershipType == .familyShared {
+                continue // only include purchases by this user
+            }
             let rawCountryCode: String
             if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
                 rawCountryCode = transaction.storefront.countryCode
@@ -192,6 +195,7 @@ class TransactionSyncClient {
                 "purchasedQuantity": transaction.purchasedQuantity,
                 "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
+                "platform": HeliumSdkConfig.shared.heliumPlatform,
                 "timestamp": timestamp
             ]
             
@@ -200,7 +204,7 @@ class TransactionSyncClient {
             }
             
             if #available(iOS 16.0, *) {
-                properties["environment"] = transaction.environment.rawValue
+                properties["environment"] = transaction.environment.rawValue.uppercased()
             }
             
             if let appAccountToken = transaction.appAccountToken {
