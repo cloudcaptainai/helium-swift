@@ -23,9 +23,11 @@ struct CodableLocale: Codable {
 
 struct CodableScreenInfo: Codable {
     var brightness: Float
-    var nativeBounds: CGRect
+    var nativeBoundsWidth: Int
+    var nativeBoundsHeight: Int
     var nativeScale: Float
-    var bounds: CGRect
+    var boundsWidth: Int
+    var boundsHeight: Int
     var scale: Float
     var isDarkModeEnabled: Bool
 }
@@ -41,6 +43,7 @@ struct CodableApplicationInfo: Codable {
     var heliumWrapperSdkVersion: String
     var purchaseDelegate: String
     var environment: String
+    var latestInstallTimestamp: String?
     var firstInstallTimestamp: String?
 }
 
@@ -73,6 +76,11 @@ func createApplicationInfo() -> CodableApplicationInfo {
         appDisplayName = nil;
     }
     
+    var latestInstallTime: String? = nil
+    if let latestInstallDate = AppReceiptsHelper.shared.getDocumentsDirectoryCreationDate() {
+        latestInstallTime = formatAsTimestamp(date: latestInstallDate)
+    }
+    
     var firstInstallTime: String? = nil
     if let installDate = AppReceiptsHelper.shared.getFirstInstallTime() {
         firstInstallTime = formatAsTimestamp(date: installDate)
@@ -89,6 +97,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
         heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
         environment: AppReceiptsHelper.shared.getEnvironment(),
+        latestInstallTimestamp: latestInstallTime,
         firstInstallTimestamp: firstInstallTime
     )
 }
@@ -99,11 +108,6 @@ public struct CodableUserContext: Codable {
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
     var additionalParams: HeliumUserTraits
-    var heliumSessionId: String?
-    var heliumInitializeId: String?
-    var heliumPersistentId: String?
-    var organizationID: String?
-    var appTransactionId: String?
     
     public func buildRequestPayload() -> [String: Any] {
         let localeDict: [String: Any] = [
@@ -121,24 +125,28 @@ public struct CodableUserContext: Codable {
         ]
         
         let nativeBoundsDict: [String: Any] = [
-            "x": self.screenInfo.nativeBounds.origin.x,
-            "y": self.screenInfo.nativeBounds.origin.y,
-            "width": self.screenInfo.nativeBounds.size.width,
-            "height": self.screenInfo.nativeBounds.size.height
+            "x": 0,
+            "y": 0,
+            "width": self.screenInfo.nativeBoundsWidth,
+            "height": self.screenInfo.nativeBoundsHeight
         ]
         
         let boundsDict: [String: Any] = [
-            "x": self.screenInfo.bounds.origin.x,
-            "y": self.screenInfo.bounds.origin.y,
-            "width": self.screenInfo.bounds.size.width,
-            "height": self.screenInfo.bounds.size.height
+            "x": 0,
+            "y": 0,
+            "width": self.screenInfo.boundsWidth,
+            "height": self.screenInfo.boundsHeight
         ]
         
         let screenInfoDict: [String: Any] = [
             "brightness": self.screenInfo.brightness,
             "nativeBounds": nativeBoundsDict,
+            "nativeBoundsWidth": self.screenInfo.nativeBoundsWidth,
+            "nativeBoundsHeight": self.screenInfo.nativeBoundsHeight,
             "nativeScale": self.screenInfo.nativeScale,
             "bounds": boundsDict,
+            "boundsWidth": self.screenInfo.boundsWidth,
+            "boundsHeight": self.screenInfo.boundsHeight,
             "scale": self.screenInfo.scale,
             "isDarkModeEnabled": self.screenInfo.isDarkModeEnabled
         ]
@@ -163,6 +171,7 @@ public struct CodableUserContext: Codable {
             "heliumWrapperSdkVersion": self.applicationInfo.heliumWrapperSdkVersion,
             "purchaseDelegate": self.applicationInfo.purchaseDelegate,
             "environment": self.applicationInfo.environment,
+            "latestInstallTimestamp": self.applicationInfo.latestInstallTimestamp ?? "",
             "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? ""
         ]
         
@@ -170,6 +179,7 @@ public struct CodableUserContext: Codable {
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
+            "userId": HeliumIdentityManager.shared.getUserId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": localeDict,
@@ -198,9 +208,17 @@ public struct CodableUserContext: Codable {
 
         let screenInfo = CodableScreenInfo(
             brightness: Float(UIScreen.main.brightness),
-            nativeBounds: UIScreen.main.nativeBounds,
+            nativeBoundsWidth: UIScreen.main.nativeBounds.width.toInt() ?? -1,
+            nativeBoundsHeight: UIScreen.main.nativeBounds.height.toInt() ?? -1,
             nativeScale: Float(UIScreen.main.nativeScale),
-            bounds: UIScreen.main.bounds,
+            boundsWidth: min(
+                UIScreen.main.bounds.width.toInt() ?? -1,
+                UIScreen.main.bounds.height.toInt() ?? -1,
+            ),
+            boundsHeight: max(
+                UIScreen.main.bounds.width.toInt() ?? -1,
+                UIScreen.main.bounds.height.toInt() ?? -1,
+            ),
             scale: Float(UIScreen.main.scale),
             isDarkModeEnabled: UITraitCollection.current.userInterfaceStyle == .dark
         )
@@ -231,5 +249,15 @@ public struct CodableUserContext: Codable {
 extension Bundle {
     var displayName: String? {
         return object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+    }
+}
+
+extension CGFloat {
+    func toInt() -> Int? {
+        if self >= CGFloat(Int.min) && self <= CGFloat(Int.max) {
+            return Int(self)
+        } else {
+            return nil
+        }
     }
 }

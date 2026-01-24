@@ -21,6 +21,7 @@ class AppReceiptsHelper {
     private var setupCompleted: Bool = false
     
     private var appFirstInstallTime: Date? = nil
+    private var latestInstallTime: Date? = nil
     private let firstInstallTimeKey = "heliumFirstInstallTime"
     
     func setUp() {
@@ -110,12 +111,16 @@ class AppReceiptsHelper {
         return getDocumentsDirectoryCreationDate()
     }
     
-    private func getDocumentsDirectoryCreationDate() -> Date? {
+    func getDocumentsDirectoryCreationDate() -> Date? {
+        if let latestInstallTime {
+            return latestInstallTime
+        }
         guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return nil
         }
         let attributes = try? FileManager.default.attributesOfItem(atPath: documentsURL.path)
-        return attributes?[.creationDate] as? Date
+        latestInstallTime = attributes?[.creationDate] as? Date
+        return latestInstallTime
     }
 
 }

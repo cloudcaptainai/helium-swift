@@ -90,6 +90,7 @@ class HeliumAnalyticsManager {
                 paywallUUID: paywallInfo?.paywallUUID,
                 organizationID: organizationID,
                 heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
+                userId: HeliumIdentityManager.shared.getUserId(),
                 heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                 heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
                 heliumPaywallSessionId: paywallSession?.sessionId,
