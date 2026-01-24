@@ -36,7 +36,7 @@ public struct DynamicWebView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     private var effectiveColorScheme: ColorScheme {
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light: return .light
         case .dark: return .dark
         case .system: return colorScheme // fall back to environment
@@ -485,7 +485,7 @@ class WebViewManager {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
         
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light:
             webView.overrideUserInterfaceStyle = .light
         case .dark:

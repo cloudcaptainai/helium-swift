@@ -68,20 +68,17 @@ class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
-        shared.delegate = nil
         shared.eventService = nil
         shared.customPaywallTraits = [:]
         shared.dontShowIfAlreadyEntitled = false
     }
     
-    private var delegate: HeliumPaywallDelegate?
-    
     private var eventService: PaywallEventHandlers?
     private var customPaywallTraits: [String: Any] = [:]
     private(set) var dontShowIfAlreadyEntitled: Bool = false
     
-    public func setDelegate(_ delegate: HeliumPaywallDelegate) {
-        self.delegate = delegate
+    private var delegate: HeliumPaywallDelegate {
+        return Helium.config.purchaseDelegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
@@ -110,7 +107,7 @@ class HeliumPaywallDelegateWrapper {
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
         StoreKit1Listener.ensureListening()
         
-        let transactionStatus = await delegate?.makePurchase(productId: productKey);
+        let transactionStatus = await delegate.makePurchase(productId: productKey)
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
@@ -157,11 +154,8 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
-        if (delegate == nil) {
-            return false;
-        }
-        let result = await delegate!.restorePurchases();
-        if (result) {
+        let result = await delegate.restorePurchases()
+        if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
             self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
@@ -195,7 +189,7 @@ class HeliumPaywallDelegateWrapper {
             eventService?.handleEvent(event)
             
             // Then fire the new typed event to delegate
-            delegate?.onPaywallEvent(event)
+            delegate.onPaywallEvent(event)
             
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
