@@ -36,10 +36,10 @@ public class HeliumFallbackViewManager {
         if let customURL = Helium.config.customFallbacksURL {
             // This is synchronous but very fast (typically < 1 ms).
             if !FileManager.default.fileExists(atPath: customURL.path) {
-                print("[Helium] ⚠️⚠️ Custom fallbacks URL not accessible. URL: \(customURL.absoluteString)")
+                HeliumLogger.log(.warn, category: .fallback, "⚠️⚠️ Custom fallbacks URL not accessible", metadata: ["path": customURL.absoluteString])
             } else {
                 fallbackBundleURL = customURL
-                print("[Helium] ✅ Custom fallbacks URL found. URL: \(customURL.absoluteString)")
+                HeliumLogger.log(.warn, category: .fallback, "✅ Custom fallbacks URL found. URL: \(customURL.absoluteString)", metadata: ["path": customURL.absoluteString])
             }
         }
         
@@ -53,17 +53,17 @@ public class HeliumFallbackViewManager {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-                
+
                 loadedConfig = decodedConfig
                 if let json = try? JSON(data: data) {
                     loadedConfigJSON = json
                 }
-                
+
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file.")
+                    HeliumLogger.log(.info, category: .fallback, "Successfully loaded paywalls from fallback bundle", metadata: ["bundleCount": String(bundles.count)])
                 } else {
-                    print("[Helium] No bundles found in fallback bundle file.")
+                    HeliumLogger.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
                 }
                 
                 if let config = loadedConfig {
@@ -75,7 +75,7 @@ public class HeliumFallbackViewManager {
                 
                 await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
             } catch {
-                print("[Helium] ‼️⚠️‼️ Failed to load fallback bundle: \(error)")
+                HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
             }
         }
     }

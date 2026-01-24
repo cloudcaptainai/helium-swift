@@ -68,22 +68,16 @@ class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
-        shared.delegate = StoreKitDelegate()
         shared.clearPresentationContext()
     }
-    
-    private var delegate: HeliumPaywallDelegate = StoreKitDelegate()
     
     private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
     private var eventService: PaywallEventHandlers?
     private(set) var onEntitledHander: (() -> Void)? = nil
     private(set) var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     
-    func setDelegate(_ delegate: HeliumPaywallDelegate) {
-        self.delegate = delegate
-    }
-    func getDelegate() -> HeliumPaywallDelegate {
-        return delegate
+    private var delegate: HeliumPaywallDelegate {
+        return Helium.config.purchaseDelegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
@@ -162,11 +156,8 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
-        if (delegate == nil) {
-            return false;
-        }
         let result = await delegate.restorePurchases()
-        if (result) {
+        if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
             self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)

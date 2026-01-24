@@ -32,7 +32,7 @@ class HeliumPaywallPresenter {
         if presentationConfig.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
-                print("[Helium] Did not show paywall, user already has entitlement.")
+                HeliumLogger.log(.info, category: .ui, "Paywall skipped - user already entitled", metadata: ["trigger": trigger])
                 HeliumPaywallDelegateWrapper.shared.onEntitledHander?()
                 HeliumPaywallDelegateWrapper.shared.onPaywallNotShown?(.alreadyEntitled)
                 return true
@@ -67,9 +67,10 @@ class HeliumPaywallPresenter {
     }
     
     func presentUpsellWithLoadingBudget(trigger: String, config: PaywallPresentationConfig) {
+        HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
         if !paywallsDisplayed.isEmpty {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
-            print("[Helium] A paywall is already being presented.")
+            HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
@@ -182,7 +183,7 @@ class HeliumPaywallPresenter {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
     
-    private func loadingBudgetUInt64(trigger: String) -> UInt64? {
+    private func loadingBudgetUInt64(trigger: String) -> UInt64 {
         return UInt64(Helium.config.defaultLoadingBudget * 1000)
     }
     
@@ -270,6 +271,12 @@ class HeliumPaywallPresenter {
     
     @MainActor
     private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false) {
+        HeliumLogger.log(.debug, category: .ui, "Presenting paywall", metadata: [
+            "trigger": trigger,
+            "isLoading": String(isLoading),
+            "isSecondTry": String(isSecondTry),
+            "isFallback": String(fallbackReason != nil)
+        ])
         let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
@@ -287,6 +294,7 @@ class HeliumPaywallPresenter {
         
         guard let presenter else {
             // Failed to find a view controller to present on - this should never happen
+            HeliumLogger.log(.error, category: .ui, "No root view controller found to present paywall", metadata: ["trigger": trigger])
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
@@ -325,8 +333,10 @@ class HeliumPaywallPresenter {
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
         guard let currentPaywall = paywallsDisplayed.popLast(),
               currentPaywall.presentingViewController != nil else {
+            HeliumLogger.log(.debug, category: .ui, "hideUpsell called but no paywall to hide")
             return false
         }
+        HeliumLogger.log(.info, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
         Task { @MainActor in
             currentPaywall.dismiss(animated: animated) { [weak self] in
                 if let overrideCloseEvent {
