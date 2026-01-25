@@ -3,7 +3,6 @@
 //  Helium
 //
 
-import Foundation
 import SwiftUI
 
 /// A SwiftUI view that displays Helium paywalls.
@@ -25,6 +24,13 @@ import SwiftUI
 /// ```
 @available(iOS 15.0, *)
 public struct HeliumPaywallView<FallbackView: View>: View {
+    
+    /// Tracks which phase of loading we're in (config download vs entitlement check)
+    private enum LoadingPhase {
+        case waitingForConfig
+        case checkingEntitlement
+    }
+    
     let trigger: String
     let loadingView: (() -> AnyView)?
     let fallbackView: (PaywallNotShownReason) -> FallbackView
@@ -34,6 +40,8 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     @State private var state: HeliumPaywallViewState
     @State private var didConfigureContext = false
     @State private var loadingBudgetExpired = false
+    @State private var loadingPhase: LoadingPhase = .waitingForConfig
+    @State private var isEntitled: Bool? = nil
     
     /// Creates a new paywall view for the specified trigger with default loading view
     ///
@@ -100,7 +108,9 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .loading = state, !loadingBudgetExpired {
-                state = resolvePaywallState(for: trigger)
+                Task {
+                    await resolveStateAfterConfigReady()
+                }
             }
         }
         .task(id: state) {
@@ -111,9 +121,9 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             
             try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
             
-            // After timeout, re-resolve state
+            // After timeout, re-resolve state with whatever info we have
             loadingBudgetExpired = true
-            state = resolvePaywallState(for: trigger, allowLoadingState: false)
+            state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false)
         }
     }
     
@@ -140,6 +150,20 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         )
         
         didConfigureContext = true
+    }
+    
+    /// Called after config download completes to check entitlement and resolve final state
+    private func resolveStateAfterConfigReady() async {
+        let dontShowIfAlreadyEntitled = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.dontShowIfAlreadyEntitled ?? true
+        
+        // Check entitlement if needed
+        if dontShowIfAlreadyEntitled {
+            loadingPhase = .checkingEntitlement
+            isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+        }
+        
+        // Now resolve with full info
+        state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
     }
     
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {
@@ -192,6 +216,7 @@ enum HeliumPaywallViewState: Equatable {
 /// Returns the current state of a paywall for the trigger
 fileprivate func resolvePaywallState(
     for trigger: String,
+    isEntitled: Bool? = nil,
     allowLoadingState: Bool = true
 ) -> HeliumPaywallViewState {
     if allowLoadingState && shouldShowLoadingState(for: trigger) {
@@ -209,9 +234,16 @@ fileprivate func resolvePaywallState(
         return .fallback(.targetingHoldout)
     }
     
+    // Check entitlement - if we need it but don't have it yet, keep loading
     let dontShowIfAlreadyEntitled = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.dontShowIfAlreadyEntitled ?? true
     if dontShowIfAlreadyEntitled {
-        return .fallback(.alreadyEntitled)
+        if isEntitled == nil && allowLoadingState {
+            // Entitlement check hasn't completed yet, keep loading
+            return .loading
+        }
+        if isEntitled == true {
+            return .fallback(.alreadyEntitled)
+        }
     }
     
     if let reason = result.fallbackReason {
