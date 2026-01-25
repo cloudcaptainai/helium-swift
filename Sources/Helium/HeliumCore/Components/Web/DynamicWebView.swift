@@ -283,7 +283,10 @@ public struct DynamicWebView: View {
             paywallUnavailableReason: .webviewRenderFail
         )
         if presentationState.viewType == .presented {
-            HeliumPaywallPresenter.shared.hideUpsell {
+            let didHide = HeliumPaywallPresenter.shared.hideUpsell {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
+            }
+            if !didHide {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
             }
         } else {

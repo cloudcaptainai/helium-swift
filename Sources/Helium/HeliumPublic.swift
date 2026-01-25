@@ -299,7 +299,6 @@ public class Helium {
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason) -> PaywallViewResult {
         HeliumLogger.log(.info, category: .fallback, "Looking for fallback", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
-        var result: AnyView?
         
         let fallbackViewPaywallSession = PaywallSession(trigger: trigger, paywallInfo: paywallInfo, fallbackType: .fallbackView)
         
@@ -318,12 +317,11 @@ public class Helium {
                     )
                 )
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
-            } catch {}
+            } catch {
+                HeliumLogger.log(.warn, category: .fallback, "Failed to create fallback view", metadata: ["trigger": trigger, "error": "\(error)"])
+            }
         }
-        guard let result else {
-            return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
-        }
-        return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: result, paywallSession: fallbackViewPaywallSession), fallbackReason: fallbackReason)
+        return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
     }
     
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {

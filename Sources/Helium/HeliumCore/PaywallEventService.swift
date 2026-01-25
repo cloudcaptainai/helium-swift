@@ -117,6 +117,7 @@ extension PaywallEventHandlers {
     
     /// Set handler for when a paywall fails to open
     /// - Note: Track paywall presentation failures. Useful for debugging and monitoring.
+    @available(*, deprecated, message: "Use onPaywallNotShown instead.")
     public func onOpenFailed(_ handler: @escaping (PaywallOpenFailedEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onOpenFailed = handler
