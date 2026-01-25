@@ -108,7 +108,8 @@ public struct HeliumFetchedConfig: Codable {
     var organizationID: String?
     var fetchedConfigID: UUID
     var additionalFields: JSON?
-    var bundles: [String: String]?;
+    var bundles: [String: String]?
+    var generatedAt: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for

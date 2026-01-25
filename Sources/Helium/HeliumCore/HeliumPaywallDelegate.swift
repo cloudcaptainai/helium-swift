@@ -208,6 +208,8 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
+        HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)")
+        
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
     }
     
