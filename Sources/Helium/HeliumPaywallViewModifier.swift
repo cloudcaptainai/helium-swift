@@ -34,14 +34,14 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
                 config: config,
                 eventHandlers: eventHandlers,
                 loadingView: loadingView,
-                fallbackView: fallbackView
+                whenPaywallNotShown: fallbackView
             )
         } else {
             HeliumPaywall(
                 trigger: trigger,
                 config: config,
                 eventHandlers: eventHandlers,
-                fallbackView: fallbackView
+                whenPaywallNotShown: fallbackView
             )
         }
     }
