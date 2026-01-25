@@ -90,32 +90,31 @@ final class HeliumExampleUITests: XCTestCase {
         XCTAssert(webView.waitForNonExistence(timeout: 10), "Not properly dismissed after purchase.")
     }
     
-    // take this out for now -- GitHub actions has lots of issues with it
-//    @MainActor
-//    func testLoadingStateThenPaywall() throws {
-//        let app = makeApp()
-//        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
-//        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
-//        app.launch()
-//        sleep(2) // Let CI simulator stabilize
-//
-//        // Paywall loading state should automatically be opened and then show content once paywalls download
-//        
-//        // Wait for the webview to load
-//        let webView = app.webViews.firstMatch
-//        XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
-//        sleep(2) // Buffer for WebView to finish rendering
-//
-//        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
-//        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
-//        
-//        subscribeButton.tap()
-//        
-//        let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
-//        XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
-//        
-//        // Ensure proper dismissal
-//        XCTAssert(webView.waitForNonExistence(timeout: 5), "Not properly dismissed after purchase.")
-//    }
+    @MainActor
+    func testLoadingStateThenPaywall() throws {
+        let app = makeApp()
+        let trigger = ProcessInfo.processInfo.environment["HELIUM_TRIGGER_KEY"] ?? "ci_annual_monthly"
+        app.launchEnvironment["LOAD_STATE_TEST_TRIGGER"] = trigger
+        app.launch()
+        sleep(2) // Let CI simulator stabilize
+
+        // Paywall loading state should automatically be opened and then show content once paywalls download
+        
+        // Wait for the webview to load
+        let webView = app.webViews.firstMatch
+        XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
+        sleep(2) // Buffer for WebView to finish rendering
+
+        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
+        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
+        
+        subscribeButton.tap()
+        
+        let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
+        XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
+        
+        // Ensure proper dismissal
+        XCTAssert(webView.waitForNonExistence(timeout: 5), "Not properly dismissed after purchase.")
+    }
     
 }

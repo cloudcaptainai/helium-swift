@@ -30,7 +30,7 @@ class HeliumEventListeners {
             
             // Check if listener already exists
             guard !listeners.contains(where: { $0.value === listener }) else {
-                print("[Helium] Attempted to add the same event listener multiple times. Ignoring.")
+                HeliumLogger.log(.warn, category: .events, "Attempted to add the same event listener multiple times. Ignoring.")
                 return
             }
             

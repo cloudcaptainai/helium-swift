@@ -37,41 +37,41 @@ public class HeliumFallbackViewManager {
         if let customURL = Helium.config.customFallbacksURL {
             // This is synchronous but very fast (typically < 1 ms).
             if !FileManager.default.fileExists(atPath: customURL.path) {
-                print("[Helium] ⚠️⚠️ Custom fallbacks URL not accessible. URL: \(customURL.absoluteString)")
+                HeliumLogger.log(.warn, category: .fallback, "⚠️⚠️ Custom fallbacks URL not accessible", metadata: ["path": customURL.absoluteString])
             } else {
                 fallbackBundleURL = customURL
-                print("[Helium] ✅ Custom fallbacks URL found. URL: \(customURL.absoluteString)")
+                HeliumLogger.log(.warn, category: .fallback, "✅ Custom fallbacks URL found. URL: \(customURL.absoluteString)", metadata: ["path": customURL.absoluteString])
             }
         }
         
         guard let fallbackBundleURL, FileManager.default.fileExists(atPath: fallbackBundleURL.path) else {
-            print("[Helium] ‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
+            HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
             return
         }
-        print("[Helium] ✅ Fallbacks URL provided! 🎉 Remember to keep your fallbacks updated! https://docs.tryhelium.com/guides/fallback-bundle")
+        HeliumLogger.log(.info, category: .fallback, "✅ ✅ Fallbacks URL provided! 🎉 Remember to keep your fallbacks updated! https://docs.tryhelium.com/guides/fallback-bundle")
         
         Task {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
-                
+
                 loadedConfig = decodedConfig
                 if let json = try? JSON(data: data) {
                     loadedConfigJSON = json
                 }
-                
+
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     let generatedAtDisplay = formatDateForDisplay(decodedConfig.generatedAt)
-                    print("[Helium] Successfully loaded paywalls from fallback bundle file that was generated at \(generatedAtDisplay)")
+                    HeliumLogger.log(.info, category: .fallback, "Successfully loaded paywalls from fallback bundle file that was generated at \(generatedAtDisplay)")
                     
                     if let date = parseISODate(decodedConfig.generatedAt),
                        let daysAgo = Calendar.current.dateComponents([.day], from: date, to: Date()).day,
                        daysAgo > 30 {
-                        print("[Helium] ⚠️ Your fallbacks were generated \(daysAgo) days ago! Consider updating them.")
+                        HeliumLogger.log(.info, category: .fallback, "⚠️ Your fallbacks were generated \(daysAgo) days ago! Consider updating them.")
                     }
                 } else {
-                    print("[Helium] No bundles found in fallback bundle file.")
+                    HeliumLogger.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
                 }
                 
                 if let config = loadedConfig {
@@ -83,7 +83,7 @@ public class HeliumFallbackViewManager {
                 
                 await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
             } catch {
-                print("[Helium] ‼️⚠️‼️ Failed to load fallback bundle: \(error)")
+                HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
             }
         }
     }

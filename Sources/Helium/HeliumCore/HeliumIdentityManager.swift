@@ -23,15 +23,16 @@ public class HeliumIdentityManager {
     
     // Used to connect StoreKit purchase events
     var appAttributionToken: UUID {
-        if let customAppAttributionToken {
-            return customAppAttributionToken
+        if let customAppAccountToken {
+            return customAppAccountToken
         }
         if let persistentIdAsUUID = UUID(uuidString: getHeliumPersistentId()) {
             return persistentIdAsUUID
         }
+        // Persistent ID is always UUID -- not expected to get here
         return UUID()
     }
-    private var customAppAttributionToken: UUID? = nil
+    private var customAppAccountToken: UUID? = nil
     // Used to connect RevenueCat purchase events
     var revenueCatAppUserId: String? = nil
     
@@ -92,11 +93,11 @@ public class HeliumIdentityManager {
         return heliumSessionId
     }
     
-    func setCustomAppAttributionToken(_ token: UUID) {
-        customAppAttributionToken = token
+    func setCustomAppAccountToken(_ token: UUID) {
+        customAppAccountToken = token
     }
     
-    func setRevenueCatAppUserId(_ rcAppUserId: String?) {
+    func setRevenueCatAppUserId(_ rcAppUserId: String) {
         revenueCatAppUserId = rcAppUserId
     }
     

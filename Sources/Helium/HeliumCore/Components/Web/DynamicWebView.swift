@@ -36,7 +36,7 @@ public struct DynamicWebView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     private var effectiveColorScheme: ColorScheme {
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light: return .light
         case .dark: return .dark
         case .system: return colorScheme // fall back to environment
@@ -152,7 +152,7 @@ public struct DynamicWebView: View {
         if webView != nil {
             return
         }
-        print("[Helium] WebView loading html - \(fileLoadAttempt)")
+        HeliumLogger.log(.trace, category: .ui, "WebView loading html - \(fileLoadAttempt)")
         
         guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
             webViewLoadFail(reason: "NoBackupFilePath")
@@ -225,7 +225,7 @@ public struct DynamicWebView: View {
                     heliumViewController: presentationState.heliumViewController
                 )
                 guard let preparedWebView else {
-                    print("Failed to retrieve preparedWebView!")
+                    HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
                     webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
                     return
                 }
@@ -269,7 +269,7 @@ public struct DynamicWebView: View {
     }
     
     private func webViewLoadFail(reason: String) {
-        print("[Helium] WebView failed to load - \(reason)")
+        HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
         switch fileLoadAttempt {
         case .initialLoad:
             advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
@@ -485,7 +485,7 @@ class WebViewManager {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
         
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light:
             webView.overrideUserInterfaceStyle = .light
         case .dark:
@@ -514,7 +514,7 @@ class WebViewManager {
         let startTime = Date()
         
         preloadFilePath(filePath)
-        print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
+        HeliumLogger.log(.trace, category: .ui, "WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
     }
     
     fileprivate func preloadFilePath(_ filePath: String) {

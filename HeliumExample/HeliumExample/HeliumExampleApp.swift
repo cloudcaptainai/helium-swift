@@ -30,6 +30,8 @@ struct HeliumExampleApp: App {
         }
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
+        
+        Helium.config.logLevel = .debug
 
         Helium.shared.initialize(
             apiKey: AppConfig.apiKey
@@ -38,7 +40,7 @@ struct HeliumExampleApp: App {
         // For UI tests:
         if let loadStateTestTrigger {
             Helium.shared.presentPaywall(trigger: loadStateTestTrigger) { reason in
-                print("[Helium] loadStateTestTrigger - Could not show paywall. \(reason)")
+                print("[Helium Example] loadStateTestTrigger - Could not show paywall. \(reason)")
             }
         }
     }

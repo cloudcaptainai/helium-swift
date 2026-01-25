@@ -35,12 +35,12 @@ class HeliumAssetManager {
     
     func localPathForURL(bundleURL: String) -> String? {
         guard let bundleId = getBundleIdFromURL(bundleURL) else {
-            print("couldnt get from url \(bundleURL)");
+            HeliumLogger.log(.warn, category: .core, "Could not get bundle ID from URL", metadata: ["url": bundleURL])
             return nil
         }
-        
+
         let value = Self.bundleDir.appendingPathComponent("\(bundleId).html").path
-//        print("Reading from \(value)");
+        HeliumLogger.log(.trace, category: .core, "Reading from value", metadata: ["value": value])
         return value;
     }
     
@@ -84,14 +84,14 @@ class HeliumAssetManager {
                 if !bundleWasAlreadyCached {
                     totalBytesOfUncachedBundles += data.count
                 }
-                print("[Helium] Writing to \(localURL)")
+                HeliumLogger.log(.trace, category: .core, "Writing bundle", metadata: ["bundleId": bundleId])
                 do {
                     try data.write(to: localURL)
                 } catch {
-                    print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+                    HeliumLogger.log(.error, category: .core, "Failed to write paywall bundle", metadata: ["bundleId": bundleId, "error": error.localizedDescription])
                 }
             } else {
-                print("[Helium] Failed to write paywall bundle with id \(bundleId)")
+                HeliumLogger.log(.error, category: .core, "Failed to encode paywall bundle content", metadata: ["bundleId": bundleId])
             }
             
             Task {

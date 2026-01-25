@@ -242,7 +242,7 @@ public struct ExperimentInfo: Codable {
                let jsonString = String(data: jsonData, encoding: .utf8) {
                 try container.encode(jsonString, forKey: .audienceData)
             } else {
-                print("[Helium] Failed to encode audienceData for experiment info")
+                HeliumLogger.log(.error, category: .core, "Failed to encode audienceData for experiment info")
             }
         }
         
