@@ -104,7 +104,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             // Only start timeout if currently in loading state
             guard case .loading = state else { return }
             
-            let loadingBudget = Helium.shared.fallbackConfig?.loadingBudget(for: trigger) ?? HeliumFallbackConfig.defaultLoadingBudget
+            let loadingBudget = Helium.config.defaultLoadingBudget
             
             try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
             
@@ -118,7 +118,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     private var resolvedLoadingView: some View {
         if let userLoadingView = loadingView {
             userLoadingView()
-        } else if let configLoadingView = Helium.shared.fallbackConfig?.loadingView(for: trigger) {
+        } else if let configLoadingView = Helium.config.defaultLoadingView {
             configLoadingView
         } else {
             let backgroundConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
@@ -130,8 +130,10 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         guard !didConfigureContext else { return }
         
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            paywallPresentationConfig: PaywallPresentationConfig(),
             eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits
+            onEntitledHandler: nil,
+            onPaywallNotShown: { _ in }
         )
         
         didConfigureContext = true
@@ -174,9 +176,20 @@ fileprivate func resolvePaywallState(
     
     let result = Helium.shared.upsellViewResultFor(trigger: trigger)
     
-    if let view = result.view {
+    if let view = result.viewAndSession?.view {
         return .ready(view)
     }
+    
+    HeliumPaywallDelegateWrapper.shared.fireEvent(
+        PaywallOpenFailedEvent(
+            triggerName: trigger,
+            paywallName: "",
+            error: "No paywall for trigger available to embedded view.",
+            paywallUnavailableReason: result.fallbackReason,
+            loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
+        ),
+        paywallSession: nil
+    )
     
     if let reason = result.fallbackReason {
         return .fallback(.error(unavailableReason: reason))
@@ -188,7 +201,7 @@ fileprivate func resolvePaywallState(
 /// Determines if loading state should be shown by checking actual download status
 fileprivate func shouldShowLoadingState(for trigger: String) -> Bool {
     // Check if loading is enabled for this trigger
-    let useLoadingState = Helium.shared.fallbackConfig?.useLoadingState(for: trigger) ?? true
+    let useLoadingState = Helium.config.defaultLoadingBudget > 0
     if !useLoadingState {
         return false
     }
@@ -199,4 +212,9 @@ fileprivate func shouldShowLoadingState(for trigger: String) -> Bool {
     (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
     
     return heliumDownloadsIncoming
+}
+
+fileprivate func loadingBudgetUInt64(trigger: String) -> UInt64 {
+    let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+    return UInt64(loadingBudgetInSeconds * 1000)
 }

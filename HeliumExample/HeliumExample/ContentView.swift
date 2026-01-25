@@ -26,7 +26,19 @@ struct ContentView: View {
                 showModifierPaywall = true
             }
             .accessibilityIdentifier("showPaywallViaModifier")
-            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey)
+            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey) { reason in
+                Text("no show! \(reason.description)")
+            }
+            
+            Button("show via embedded") {
+                showEmbeddedPaywall = true
+            }
+            .accessibilityIdentifier("showPaywallEmbedded")
+            .fullScreenCover(isPresented: $showEmbeddedPaywall) {
+                HeliumPaywallView(trigger: AppConfig.triggerKey) { reason in
+                    Text("no show embedded! \(reason.description)")
+                }
+            }
         }
         .padding()
     }
