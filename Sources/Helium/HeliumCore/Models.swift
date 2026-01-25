@@ -100,12 +100,6 @@ public struct CanShowPaywallResult {
     public let paywallUnavailableReason: PaywallUnavailableReason?
 }
 
-struct PaywallVersionMetadata: Codable {
-    var versionNumber: Int?
-    var versionId: String?
-    var lastPublishedAt: String?
-}
-
 public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
     var segmentBrowserWriteKey: String
@@ -116,7 +110,6 @@ public struct HeliumFetchedConfig: Codable {
     var additionalFields: JSON?
     var bundles: [String: String]?
     var generatedAt: String?
-    var paywallMetadata: [String: PaywallVersionMetadata]?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for

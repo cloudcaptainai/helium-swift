@@ -503,7 +503,6 @@ public class Helium {
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
         }
-        HeliumLogger.log(.info, category: .core, "Helium initialization complete, config download started")
     }
 
     func isInitialized() -> Bool {
