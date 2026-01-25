@@ -225,7 +225,7 @@ public struct DynamicWebView: View {
                     heliumViewController: presentationState.heliumViewController
                 )
                 guard let preparedWebView else {
-                    print("Failed to retrieve preparedWebView!")
+                    HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
                     webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
                     return
                 }
@@ -514,7 +514,7 @@ class WebViewManager {
         let startTime = Date()
         
         preloadFilePath(filePath)
-        print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
+        HeliumLogger.log(.trace, category: .ui, "WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
     }
     
     fileprivate func preloadFilePath(_ filePath: String) {
