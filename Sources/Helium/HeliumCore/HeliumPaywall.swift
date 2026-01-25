@@ -106,14 +106,13 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             }
         }
         .task(id: state) {
-            // Only start timeout if currently in loading state
-            guard state.isLoading else { return }
-            
+            // Handle state-specific async work
             if case .checkingEntitlement = state {
                 await resolveStateAfterConfigReady()
-                return
             }
-            
+        }
+        .task {
+            // Independent timeout covering all loading phases
             let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
             do {
                 try await Task.sleep(nanoseconds: loadingBudgetMS * 1_000_000)
@@ -123,7 +122,9 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             
             // After timeout, re-resolve state with whatever info we have
             loadingBudgetExpired = true
-            state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false)
+            if state.isLoading {
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false)
+            }
         }
     }
     
@@ -203,14 +204,14 @@ enum HeliumPaywallViewState: Equatable {
     case checkingEntitlement
     case ready(PaywallViewAndSession)
     case noShow(PaywallNotShownReason)
-
+    
     var isLoading: Bool {
         switch self {
         case .waitingForPaywallsDownload, .checkingEntitlement: return true
         case .ready, .noShow: return false
         }
     }
-
+    
     static func == (lhs: HeliumPaywallViewState, rhs: HeliumPaywallViewState) -> Bool {
         switch (lhs, rhs) {
         case (.waitingForPaywallsDownload, .waitingForPaywallsDownload):
