@@ -81,20 +81,24 @@ public class Helium {
     func skipPaywallIfNeeded(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
-            // Fire allocation event even when paywall is skipped
-            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-                trigger: trigger,
-                isFallback: false,
-                paywallSession: nil
-            )
-            
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallSkippedEvent(triggerName: trigger),
-                paywallSession: nil
-            )
+            handlePaywallSkip(trigger: trigger)
             return true
         }
         return false
+    }
+    
+    func handlePaywallSkip(trigger: String) {
+        // Fire allocation event even when paywall is skipped
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: false,
+            paywallSession: nil
+        )
+        
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallSkippedEvent(triggerName: trigger),
+            paywallSession: nil
+        )
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {

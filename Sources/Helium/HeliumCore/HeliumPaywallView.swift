@@ -29,9 +29,10 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     let loadingView: (() -> AnyView)?
     let fallbackView: (PaywallNotShownReason) -> FallbackView
     let eventHandlers: PaywallEventHandlers?
-    let customPaywallTraits: [String: Any]?
+    let config: PaywallPresentationConfig
     
     @State private var state: HeliumPaywallViewState
+    @State private var paywallSession: PaywallSession?
     @State private var didConfigureContext = false
     @State private var loadingBudgetExpired = false
     
@@ -39,20 +40,20 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     ///
     /// - Parameters:
     ///   - trigger: The trigger name to display a paywall for
+    ///   - config: Additional configuration options
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
-    ///   - customPaywallTraits: Optional custom traits for paywall personalization
     ///   - fallbackView: View to show when paywall is unavailable or skipped due to targeting
     public init(
         trigger: String,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
-        customPaywallTraits: [String: Any]? = nil,
         @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) {
         self.trigger = trigger
         self.loadingView = nil
         self.fallbackView = fallbackView
         self.eventHandlers = eventHandlers
-        self.customPaywallTraits = customPaywallTraits
+        self.config = config
         
         self._state = State(initialValue: resolvePaywallState(for: trigger))
     }
@@ -61,14 +62,14 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     ///
     /// - Parameters:
     ///   - trigger: The trigger name to display a paywall for
+    ///   - config: Additional configuration options
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
-    ///   - customPaywallTraits: Optional custom traits for paywall personalization
     ///   - loadingView: Custom view to show while paywall is loading
     ///   - fallbackView: View to show when paywall is unavailable or skipped due to targeting
     public init<LoadingView: View>(
         trigger: String,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
-        customPaywallTraits: [String: Any]? = nil,
         @ViewBuilder loadingView: @escaping () -> LoadingView,
         @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
     ) {
@@ -76,7 +77,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         self.loadingView = { AnyView(loadingView()) }
         self.fallbackView = fallbackView
         self.eventHandlers = eventHandlers
-        self.customPaywallTraits = customPaywallTraits
+        self.config = config
         
         self._state = State(initialValue: resolvePaywallState(for: trigger))
     }
@@ -86,10 +87,13 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             switch state {
             case .loading:
                 resolvedLoadingView
-            case .ready(let paywallView):
-                paywallView
+            case .ready(let paywallViewAndSession):
+                paywallViewAndSession.view
             case .fallback(let reason):
                 fallbackView(reason)
+                    .onAppear {
+                        onPaywallUnavailable(reason: reason)
+                    }
             }
         }
         .onAppear {
@@ -130,13 +134,33 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         guard !didConfigureContext else { return }
         
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
-            paywallPresentationConfig: PaywallPresentationConfig(),
+            paywallPresentationConfig: config,
             eventService: eventHandlers,
             onEntitledHandler: nil,
             onPaywallNotShown: { _ in }
         )
         
         didConfigureContext = true
+    }
+    
+    private func onPaywallUnavailable(reason: PaywallNotShownReason) {
+        switch reason {
+        case .alreadyEntitled:
+            // nothing for now
+        case .targetingHoldout:
+            Helium.shared.handlePaywallSkip(trigger: trigger)
+        case .error(unavailableReason: let unavailableReason):
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: "",
+                    error: "Paywall failed to show in embedded view.",
+                    paywallUnavailableReason: unavailableReason,
+                    loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
+                ),
+                paywallSession: paywallSession
+            )
+        }
     }
 }
 
@@ -145,7 +169,7 @@ enum HeliumPaywallViewState: Equatable {
     /// Paywall is currently loading (config/bundles/products fetching)
     case loading
     /// Paywall is ready to display
-    case ready(AnyView)
+    case ready(PaywallViewAndSession)
     /// Paywall is not shown for the given reason
     case fallback(PaywallNotShownReason)
     
@@ -176,20 +200,19 @@ fileprivate func resolvePaywallState(
     
     let result = Helium.shared.upsellViewResultFor(trigger: trigger)
     
-    if let view = result.viewAndSession?.view {
-        return .ready(view)
+    if let viewAndSession = result.viewAndSession {
+        return .ready(viewAndSession)
     }
     
-    HeliumPaywallDelegateWrapper.shared.fireEvent(
-        PaywallOpenFailedEvent(
-            triggerName: trigger,
-            paywallName: "",
-            error: "No paywall for trigger available to embedded view.",
-            paywallUnavailableReason: result.fallbackReason,
-            loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
-        ),
-        paywallSession: nil
-    )
+    let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+    if paywallInfo?.shouldShow == false {
+        return .fallback(.targetingHoldout)
+    }
+    
+    let dontShowIfAlreadyEntitled = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.dontShowIfAlreadyEntitled ?? true
+    if dontShowIfAlreadyEntitled {
+        return .fallback(.alreadyEntitled)
+    }
     
     if let reason = result.fallbackReason {
         return .fallback(.error(unavailableReason: reason))
