@@ -116,9 +116,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             // Only start timeout if currently in loading state
             guard case .loading = state else { return }
             
-            let loadingBudget = Helium.config.defaultLoadingBudget
-            
-            try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
+            let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
+            try? await Task.sleep(nanoseconds: loadingBudgetMS * 1_000_000)
             
             // After timeout, re-resolve state with whatever info we have
             loadingBudgetExpired = true
