@@ -213,21 +213,4 @@ class HeliumPaywallDelegateWrapper {
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
     }
     
-    func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?, paywallSession: PaywallSession? = nil) {
-        if isOpen {
-            let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
-            fireEvent(PaywallOpenEvent(
-                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
-                viewType: viewTypeEnum,
-                paywallUnavailableReason: fallbackReason
-            ), paywallSession: paywallSession)
-        } else {
-            fireEvent(PaywallCloseEvent(
-                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallName: HELIUM_FALLBACK_PAYWALL_NAME
-            ), paywallSession: paywallSession)
-        }
-    }
-    
 }

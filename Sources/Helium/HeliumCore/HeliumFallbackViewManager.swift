@@ -13,12 +13,6 @@ public class HeliumFallbackViewManager {
     static func reset() {
         shared.loadedConfig = nil
         shared.loadedConfigJSON = nil
-        shared.triggerToFallbackView = [:]
-        shared.defaultFallback = nil
-    }
-    
-    private init() {
-        self.triggerToFallbackView = [:]
     }
     
     // **MARK: - Properties**
@@ -28,9 +22,6 @@ public class HeliumFallbackViewManager {
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
-    
-    private var triggerToFallbackView: [String: AnyView]
-    private var defaultFallback: AnyView?
     
     // **MARK: - Public Methods**
     public func setUpFallbackBundle() {
@@ -88,30 +79,6 @@ public class HeliumFallbackViewManager {
                 HeliumLogger.log(.error, category: .fallback, "👷 Failed to load fallbacks file ‼️⚠️‼️", metadata: ["error": error.localizedDescription])
             }
         }
-    }
-    
-    public func setTriggerToFallback(toSet: [String: AnyView]) {
-        self.triggerToFallbackView = toSet
-    }
-    
-    public func setDefaultFallback(fallbackView: AnyView) {
-        self.defaultFallback = fallbackView
-    }
-    
-    public func getDefaultFallback() -> AnyView? {
-        return defaultFallback
-    }
-    
-    
-    public func getFallbackForTrigger(trigger: String) -> AnyView? {
-        if let fallbackView = triggerToFallbackView[trigger] {
-            return fallbackView
-        }
-        // Safe handling of optional defaultFallback
-        if let defaultFallback = defaultFallback {
-            return defaultFallback
-        }
-        return nil
     }
     
     /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig

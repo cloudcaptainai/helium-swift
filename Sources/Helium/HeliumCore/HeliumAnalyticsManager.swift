@@ -163,7 +163,7 @@ class HeliumAnalyticsManager {
                         isFallback = true
                     } else {
                         let eventPaywallTemplateName = legacyEvent.getPaywallTemplateNameIfExists() ?? ""
-                        isFallback = eventPaywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || paywallInfo?.paywallTemplateName == HELIUM_FALLBACK_PAYWALL_NAME || eventPaywallTemplateName.starts(with: "fallback_")
+                        isFallback = eventPaywallTemplateName.starts(with: "fallback_")
                     }
                 }
             }

@@ -146,7 +146,15 @@ public struct HeliumPaywallView<FallbackView: View>: View {
             paywallPresentationConfig: config,
             eventService: eventHandlers,
             onEntitledHandler: nil,
-            onPaywallNotShown: { _ in }
+            onPaywallNotShown: { reason in
+                // Handle rare post-ready web render fail case
+                guard case .ready = state else { return }
+                if case .error(let unavailableReason) = reason {
+                    if unavailableReason == .webviewRenderFail {
+                        state = .fallback(.error(unavailableReason: unavailableReason))
+                    }
+                }
+            }
         )
         
         didConfigureContext = true

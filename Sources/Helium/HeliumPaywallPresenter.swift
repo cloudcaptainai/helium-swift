@@ -392,8 +392,7 @@ class HeliumPaywallPresenter {
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
         let paywallInfo = paywallVC.paywallSession.paywallInfoWithBackups
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : ""
-        let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
+        let templateName = paywallInfo?.paywallTemplateName ?? ""
         
         let event: HeliumEvent
         if openEvent {
