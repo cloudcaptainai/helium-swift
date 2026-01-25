@@ -73,7 +73,7 @@ class HeliumPaywallDelegateWrapper {
     
     private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
     private var eventService: PaywallEventHandlers?
-    private(set) var onEntitledHander: (() -> Void)? = nil
+    private(set) var onEntitledHandler: (() -> Void)? = nil
     private(set) var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     
     private var delegate: HeliumPaywallDelegate {
@@ -90,7 +90,7 @@ class HeliumPaywallDelegateWrapper {
         // Always set both, even if nil, to ensure proper reset
         self.paywallPresentationConfig = paywallPresentationConfig
         self.eventService = eventService
-        self.onEntitledHander = onEntitledHandler
+        self.onEntitledHandler = onEntitledHandler
         self.onPaywallNotShown = onPaywallNotShown
     }
     
@@ -98,7 +98,7 @@ class HeliumPaywallDelegateWrapper {
     func clearPresentationContext() {
         self.paywallPresentationConfig = nil
         self.eventService = nil
-        self.onEntitledHander = nil
+        self.onEntitledHandler = nil
         self.onPaywallNotShown = nil
     }
 
@@ -198,7 +198,7 @@ class HeliumPaywallDelegateWrapper {
             
             if let openFailEvent = event as? PaywallOpenFailedEvent {
                 onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
-            } else if let skipEvent = event as? PaywallSkippedEvent {
+            } else if event is PaywallSkippedEvent {
                 onPaywallNotShown?(.targetingHoldout)
             }
             
