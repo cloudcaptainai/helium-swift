@@ -29,7 +29,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
     @ViewBuilder
     private func createPaywallView() -> some View {
         if let loadingView {
-            HeliumPaywallView(
+            HeliumPaywall(
                 trigger: trigger,
                 config: config,
                 eventHandlers: eventHandlers,
@@ -37,7 +37,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
                 fallbackView: fallbackView
             )
         } else {
-            HeliumPaywallView(
+            HeliumPaywall(
                 trigger: trigger,
                 config: config,
                 eventHandlers: eventHandlers,

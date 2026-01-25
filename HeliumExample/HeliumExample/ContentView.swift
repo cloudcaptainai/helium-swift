@@ -35,7 +35,7 @@ struct ContentView: View {
             }
             .accessibilityIdentifier("showPaywallEmbedded")
             .fullScreenCover(isPresented: $showEmbeddedPaywall) {
-                HeliumPaywallView(trigger: AppConfig.triggerKey) { reason in
+                HeliumPaywall(trigger: AppConfig.triggerKey) { reason in
                     Text("no show embedded! \(reason.description)")
                 }
             }
