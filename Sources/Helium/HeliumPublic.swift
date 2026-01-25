@@ -61,6 +61,8 @@ public class Helium {
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
+        // Ensure presentation context cleared
+        HeliumPaywallDelegateWrapper.shared.clearPresentationContext()
         if skipPaywallIfNeeded(trigger: trigger) {
             onPaywallNotShown(.targetingHoldout)
             HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])

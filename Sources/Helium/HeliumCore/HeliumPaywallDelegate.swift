@@ -81,7 +81,7 @@ class HeliumPaywallDelegateWrapper {
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(
+    func configurePresentationContext(
         paywallPresentationConfig: PaywallPresentationConfig,
         eventService: PaywallEventHandlers?,
         onEntitledHandler: (() -> Void)?,
@@ -95,7 +95,7 @@ class HeliumPaywallDelegateWrapper {
     }
     
     /// Clear both event service and custom traits after paywall closes
-    private func clearPresentationContext() {
+    func clearPresentationContext() {
         self.paywallPresentationConfig = nil
         self.eventService = nil
         self.onEntitledHander = nil
