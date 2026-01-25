@@ -12,8 +12,8 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
     @StateObject private var presentationState: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .triggered)
     @Binding var isPresented: Bool
     let trigger: String
+    let config: PaywallPresentationConfig
     let eventHandlers: PaywallEventHandlers?
-    let customPaywallTraits: [String: Any]?
     let loadingView: (() -> LoadingView)?
     let fallbackView: (PaywallNotShownReason) -> FallbackView
     
@@ -31,16 +31,16 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
         if let loadingView {
             HeliumPaywallView(
                 trigger: trigger,
+                config: config,
                 eventHandlers: eventHandlers,
-                customPaywallTraits: customPaywallTraits,
                 loadingView: loadingView,
                 fallbackView: fallbackView
             )
         } else {
             HeliumPaywallView(
                 trigger: trigger,
+                config: config,
                 eventHandlers: eventHandlers,
-                customPaywallTraits: customPaywallTraits,
                 fallbackView: fallbackView
             )
         }
@@ -53,16 +53,16 @@ public extension View {
       func triggerUpsell<LoadingView: View, FallbackView: View>(
           isPresented: Binding<Bool>,
           trigger: String,
+          config: PaywallPresentationConfig = PaywallPresentationConfig(),
           eventHandlers: PaywallEventHandlers? = nil,
-          customPaywallTraits: [String: Any]? = nil,
           @ViewBuilder loadingView: @escaping () -> LoadingView,
           @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
       ) -> some View {
           self.modifier(DynamicPaywallModifier(
                isPresented: isPresented,
                trigger: trigger,
+               config: config,
                eventHandlers: eventHandlers,
-               customPaywallTraits: customPaywallTraits,
                loadingView: loadingView,
                fallbackView: fallbackView
            ))
@@ -72,15 +72,15 @@ public extension View {
        func triggerUpsell<FallbackView: View>(
            isPresented: Binding<Bool>,
            trigger: String,
+           config: PaywallPresentationConfig = PaywallPresentationConfig(),
            eventHandlers: PaywallEventHandlers? = nil,
-           customPaywallTraits: [String: Any]? = nil,
            @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
        ) -> some View {
            self.modifier(DynamicPaywallModifier(
                isPresented: isPresented,
                trigger: trigger,
+               config: config,
                eventHandlers: eventHandlers,
-               customPaywallTraits: customPaywallTraits,
                loadingView: nil as (() -> EmptyView)?,
                fallbackView: fallbackView
            ))

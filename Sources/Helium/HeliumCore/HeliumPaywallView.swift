@@ -32,7 +32,6 @@ public struct HeliumPaywallView<FallbackView: View>: View {
     let config: PaywallPresentationConfig
     
     @State private var state: HeliumPaywallViewState
-    @State private var paywallSession: PaywallSession?
     @State private var didConfigureContext = false
     @State private var loadingBudgetExpired = false
     
@@ -147,6 +146,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
         switch reason {
         case .alreadyEntitled:
             // nothing for now
+            break
         case .targetingHoldout:
             Helium.shared.handlePaywallSkip(trigger: trigger)
         case .error(unavailableReason: let unavailableReason):
@@ -158,7 +158,7 @@ public struct HeliumPaywallView<FallbackView: View>: View {
                     paywallUnavailableReason: unavailableReason,
                     loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
                 ),
-                paywallSession: paywallSession
+                paywallSession: nil
             )
         }
     }
