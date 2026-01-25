@@ -24,6 +24,7 @@ public class HeliumFallbackViewManager {
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
     private let defaultFallbackTrigger = "hlm_ios_default_flbk"
+    static let invalidDateString = "unknown"
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
@@ -37,18 +38,17 @@ public class HeliumFallbackViewManager {
         if let customURL = Helium.config.customFallbacksURL {
             // This is synchronous but very fast (typically < 1 ms).
             if !FileManager.default.fileExists(atPath: customURL.path) {
-                HeliumLogger.log(.error, category: .fallback, "⚠️⚠️ Custom fallbacks URL not accessible", metadata: ["name": customURL.lastPathComponent, "path": customURL.absoluteString])
+                HeliumLogger.log(.error, category: .fallback, "👷 Custom fallbacks URL not accessible ⚠️", metadata: ["name": customURL.lastPathComponent, "path": customURL.absoluteString])
             } else {
                 fallbackBundleURL = customURL
-                HeliumLogger.log(.info, category: .fallback, "✅ Custom fallbacks URL found.", metadata: ["name": customURL.lastPathComponent, "path": customURL.absoluteString])
+                HeliumLogger.log(.info, category: .fallback, "👷 Custom fallbacks URL found", metadata: ["name": customURL.lastPathComponent])
             }
         }
         
         guard let fallbackBundleURL, FileManager.default.fileExists(atPath: fallbackBundleURL.path) else {
-            HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
+            HeliumLogger.log(.error, category: .fallback, "👷 Fallbacks file not accessible! ‼️⚠️‼️ See docs at https://docs.tryhelium.com/guides/fallback-bundle")
             return
         }
-        HeliumLogger.log(.info, category: .fallback, "🎉 Fallbacks URL provided! Remember to keep your fallbacks updated! https://docs.tryhelium.com/guides/fallback-bundle")
         
         Task {
             do {
@@ -63,15 +63,17 @@ public class HeliumFallbackViewManager {
                 if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     let generatedAtDisplay = formatDateForDisplay(decodedConfig.generatedAt)
-                    HeliumLogger.log(.info, category: .fallback, "✅ Successfully loaded paywalls from fallbacks file!", metadata: ["name": fallbackBundleURL.lastPathComponent, "generated at": generatedAtDisplay])
+                    HeliumLogger.log(.info, category: .fallback, "👷 Successfully loaded paywalls from fallbacks file! 🎉", metadata: ["name": fallbackBundleURL.lastPathComponent, "generated at": generatedAtDisplay])
                     
                     if let date = parseISODate(decodedConfig.generatedAt),
                        let daysAgo = Calendar.current.dateComponents([.day], from: date, to: Date()).day,
                        daysAgo > 30 {
-                        HeliumLogger.log(.warn, category: .fallback, "⚠️ Your fallbacks were generated \(daysAgo) days ago! Consider updating them.")
+                        HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks were generated \(daysAgo) days ago! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
+                    } else if generatedAtDisplay == HeliumFallbackViewManager.invalidDateString {
+                        HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     }
                 } else {
-                    HeliumLogger.log(.error, category: .fallback, "No bundles found in fallbacks file")
+                    HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
                 
                 if let config = loadedConfig {
@@ -83,7 +85,7 @@ public class HeliumFallbackViewManager {
                 
                 await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
             } catch {
-                HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Failed to load fallbacks file", metadata: ["error": error.localizedDescription])
+                HeliumLogger.log(.error, category: .fallback, "👷 Failed to load fallbacks file ‼️⚠️‼️", metadata: ["error": error.localizedDescription])
             }
         }
     }
@@ -172,7 +174,7 @@ private func parseISODate(_ dateString: String?) -> Date? {
 }
 
 private func formatDateForDisplay(_ dateString: String?) -> String {
-    guard let date = parseISODate(dateString) else { return "unknown" }
+    guard let date = parseISODate(dateString) else { return HeliumFallbackViewManager.invalidDateString }
     let formatter = DateFormatter()
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
