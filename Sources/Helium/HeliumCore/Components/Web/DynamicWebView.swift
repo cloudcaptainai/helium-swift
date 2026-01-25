@@ -152,7 +152,7 @@ public struct DynamicWebView: View {
         if webView != nil {
             return
         }
-        print("[Helium] WebView loading html - \(fileLoadAttempt)")
+        HeliumLogger.log(.trace, category: .ui, "WebView loading html - \(fileLoadAttempt)")
         
         guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
             webViewLoadFail(reason: "NoBackupFilePath")
@@ -269,7 +269,7 @@ public struct DynamicWebView: View {
     }
     
     private func webViewLoadFail(reason: String) {
-        print("[Helium] WebView failed to load - \(reason)")
+        HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
         switch fileLoadAttempt {
         case .initialLoad:
             advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
