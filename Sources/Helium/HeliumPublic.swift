@@ -208,6 +208,7 @@ public class Helium {
         HeliumLogger.log(.info, category: .core, "All cached state cleared and SDK reset. Call initialize() before using Helium again.")
     }
     
+    @available(*, deprecated, message: "Use HeliumPaywallView directly instead")
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
         let upsellView = upsellViewResultFor(trigger: trigger).viewAndSession?.view
         
