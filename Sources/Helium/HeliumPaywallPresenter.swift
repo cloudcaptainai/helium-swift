@@ -26,10 +26,15 @@ class HeliumPaywallPresenter {
     }
     
     private func paywallEntitlementsCheck(trigger: String) async -> Bool {
-        if HeliumPaywallDelegateWrapper.shared.dontShowIfAlreadyEntitled {
+        guard let presentationConfig = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig else {
+            return false
+        }
+        if presentationConfig.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall skipped - user already entitled", metadata: ["trigger": trigger])
+                HeliumPaywallDelegateWrapper.shared.onEntitledHandler?()
+                HeliumPaywallDelegateWrapper.shared.onPaywallNotShown?(.alreadyEntitled)
                 return true
             }
         }
@@ -61,7 +66,7 @@ class HeliumPaywallPresenter {
         }
     }
     
-    func presentUpsellWithLoadingBudget(trigger: String, from viewController: UIViewController? = nil) {
+    func presentUpsellWithLoadingBudget(trigger: String, config: PaywallPresentationConfig) {
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
         if !paywallsDisplayed.isEmpty {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
@@ -80,14 +85,15 @@ class HeliumPaywallPresenter {
         }
         
         Task { @MainActor in
+            let viewController = config.presentFromViewController
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, from: viewController)
                 return
             }
             
-            let useLoading = Helium.config.defaultLoadingStateEnabled
-            let loadingBudget = Helium.config.defaultLoadingBudget
+            let loadingBudget = config.loadingBudget
+            let useLoading = loadingBudget > 0
             let customLoadingView = Helium.config.defaultLoadingView
             
             let downloadStatus = Helium.shared.getDownloadStatus()
@@ -178,7 +184,8 @@ class HeliumPaywallPresenter {
     }
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64 {
-        return UInt64(Helium.config.defaultLoadingBudget * 1000)
+        let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+        return UInt64(loadingBudgetInSeconds * 1000)
     }
     
     private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {

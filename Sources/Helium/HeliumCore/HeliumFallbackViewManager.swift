@@ -44,10 +44,10 @@ public class HeliumFallbackViewManager {
         }
         
         guard let fallbackBundleURL, FileManager.default.fileExists(atPath: fallbackBundleURL.path) else {
-            print("[Helium] ‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
+            HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Fallbacks URL not accessible! See docs at https://docs.tryhelium.com/guides/fallback-bundle")
             return
         }
-        print("[Helium] ✅ Fallback bundle URL provided! 🎉 Remember to update it with the latest paywalls! https://docs.tryhelium.com/guides/fallback-bundle")
+        HeliumLogger.log(.info, category: .fallback, "✅ Fallback bundle URL provided! Remember to update it with the latest paywalls! https://docs.tryhelium.com/guides/fallback-bundle")
         
         Task {
             do {
@@ -65,17 +65,15 @@ public class HeliumFallbackViewManager {
                 } else {
                     HeliumLogger.log(.warn, category: .fallback, "No bundles found in fallback bundle file")
                 }
-
-                Task {
-                    await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
-                }
-
+                
                 if let config = loadedConfig {
                     HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,
                         endpoint: config.segmentAnalyticsEndpoint
                     )
                 }
+                
+                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
             } catch {
                 HeliumLogger.log(.error, category: .fallback, "‼️⚠️‼️ Failed to load fallback bundle", metadata: ["error": error.localizedDescription])
             }

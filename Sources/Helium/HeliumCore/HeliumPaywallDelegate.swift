@@ -68,40 +68,42 @@ class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     static func reset() {
-        shared.eventService = nil
-        shared.customPaywallTraits = [:]
-        shared.dontShowIfAlreadyEntitled = false
+        shared.clearPresentationContext()
     }
     
+    private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
     private var eventService: PaywallEventHandlers?
-    private var customPaywallTraits: [String: Any] = [:]
-    private(set) var dontShowIfAlreadyEntitled: Bool = false
+    private(set) var onEntitledHandler: (() -> Void)? = nil
+    private(set) var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
     }
     
     /// Consolidated method to set both event service and custom traits for a paywall presentation
-    public func configurePresentationContext(
+    func configurePresentationContext(
+        paywallPresentationConfig: PaywallPresentationConfig,
         eventService: PaywallEventHandlers?,
-        customPaywallTraits: [String: Any]?,
-        dontShowIfAlreadyEntitled: Bool = false
+        onEntitledHandler: (() -> Void)?,
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         // Always set both, even if nil, to ensure proper reset
+        self.paywallPresentationConfig = paywallPresentationConfig
         self.eventService = eventService
-        self.customPaywallTraits = customPaywallTraits ?? [:]
-        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.onEntitledHandler = onEntitledHandler
+        self.onPaywallNotShown = onPaywallNotShown
     }
     
     /// Clear both event service and custom traits after paywall closes
-    private func clearPresentationContext() {
+    func clearPresentationContext() {
+        self.paywallPresentationConfig = nil
         self.eventService = nil
-        self.customPaywallTraits = [:]
-        self.dontShowIfAlreadyEntitled = false
+        self.onEntitledHandler = nil
+        self.onPaywallNotShown = nil
     }
 
-    public func getCustomVariableValues() -> [String: Any?] {
-        return customPaywallTraits
+    public func getCustomVariableValues() -> [String: Any] {
+        return paywallPresentationConfig?.customPaywallTraits ?? [:]
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
@@ -193,6 +195,12 @@ class HeliumPaywallDelegateWrapper {
             
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
+            
+            if let openFailEvent = event as? PaywallOpenFailedEvent {
+                onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
+            } else if event is PaywallSkippedEvent {
+                onPaywallNotShown?(.targetingHoldout)
+            }
             
             // Clear presentation context (event service and custom traits) on close events
             if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {

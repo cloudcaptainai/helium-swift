@@ -15,6 +15,30 @@ struct PaywallViewAndSession {
     let paywallSession: PaywallSession
 }
 
+public struct PaywallPresentationConfig {
+    // View controller to present from. Defaults to current top view controller
+    var presentFromViewController: UIViewController? = nil
+    // Custom traits to send to the paywall
+    var customPaywallTraits: [String: Any]? = nil
+    // Don't show paywall if user is entitled to a product in paywall
+    var dontShowIfAlreadyEntitled: Bool = true
+    // How long to allow loading state before switching to fallback logic.
+    // Use zero or negative value to disable loading state.
+    var loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    
+    public init(
+        presentFromViewController: UIViewController? = nil,
+        customPaywallTraits: [String: Any]? = nil,
+        dontShowIfAlreadyEntitled: Bool = true,
+        loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    ) {
+        self.presentFromViewController = presentFromViewController
+        self.customPaywallTraits = customPaywallTraits
+        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.loadingBudget = loadingBudget
+    }
+}
+
 public class Helium {
     var controller: HeliumController?
     private var initialized: Bool = false;
@@ -29,27 +53,29 @@ public class Helium {
     public static let identify = HeliumIdentify()
     public static let config = HeliumConfig()
     
-    public func presentUpsell(
+    public func presentPaywall(
         trigger: String,
-        from viewController: UIViewController? = nil,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
-        customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false
+        onEntitled: (() -> Void)? = nil,
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
         if skipPaywallIfNeeded(trigger: trigger) {
+            onPaywallNotShown(.targetingHoldout)
             HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
             return
         }
         
         // Configure presentation context (always set both to ensure proper reset)
         HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            paywallPresentationConfig: config,
             eventService: eventHandlers,
-            customPaywallTraits: customPaywallTraits,
-            dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled
+            onEntitledHandler: onEntitled,
+            onPaywallNotShown: onPaywallNotShown
         )
         
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, from: viewController)
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, config: config)
     }
     
     func skipPaywallIfNeeded(trigger: String) -> Bool {
@@ -188,8 +214,12 @@ public class Helium {
         if upsellView != nil {
             // Configure presentation context (always set both to ensure proper reset)
             HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+                paywallPresentationConfig: PaywallPresentationConfig(
+                    customPaywallTraits: customPaywallTraits
+                ),
                 eventService: eventHandlers,
-                customPaywallTraits: customPaywallTraits
+                onEntitledHandler: nil,
+                onPaywallNotShown: { _ in }
             )
         }
         
@@ -552,9 +582,11 @@ public class Helium {
         
         // hide any existing upsells
         hideAllUpsells()
-
+        
         HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
-        presentUpsell(trigger: trigger)
+        presentPaywall(trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false)) { reason in
+            HeliumLogger.log(.info, category: .core, "handleDeepLink - Could not show paywall", metadata: ["reason": reason.description])
+        }
         return true
     }
     
@@ -740,10 +772,6 @@ public class HeliumConfig {
     /// If nil, a default shimmer animation will be shown.
     /// Default: nil (uses default shimmer)
     public var defaultLoadingView: AnyView? = nil
-    
-    var defaultLoadingStateEnabled: Bool {
-        defaultLoadingBudget > 0
-    }
     
     /// Sets the light/dark mode override for Helium paywalls.
     /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)

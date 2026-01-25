@@ -136,7 +136,7 @@ actor HeliumTransactionManager {
         }
         
         guard let data = try? JSONEncoder().encode(syncedTransactionIds) else {
-            print("[Helium] Failed to persist synced transaction IDs")
+            HeliumLogger.log(.warn, category: .core, "Failed to persist synced transaction IDs")
             return
         }
         UserDefaults.standard.set(data, forKey: syncedTransactionIdsKey)

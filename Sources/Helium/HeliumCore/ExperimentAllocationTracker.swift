@@ -72,7 +72,7 @@ class ExperimentAllocationTracker {
     /// Persists allocations to UserDefaults and file (as backup)
     private func saveStoredAllocations() {
         guard let encoded = try? JSONEncoder().encode(storedAllocations) else {
-            print("[Helium] Failed to persist experiment allocations")
+            HeliumLogger.log(.error, category: .core, "Failed to persist experiment allocations")
             return
         }
         
@@ -99,10 +99,10 @@ class ExperimentAllocationTracker {
                 
                 let elapsed = Date().timeIntervalSince(startTime)
                 if elapsed > 2.0 {
-                    print("[Helium] Allocation file save was slow: \(String(format: "%.2f", elapsed))s")
+                    HeliumLogger.log(.warn, category: .core, "Allocation file save was slow: \(String(format: "%.2f", elapsed))s")
                 }
             } catch {
-                print("[Helium] Failed to persist allocations to file: \(error.localizedDescription)")
+                HeliumLogger.log(.error, category: .core, "Failed to persist allocations to file: \(error.localizedDescription)")
             }
         }
     }
