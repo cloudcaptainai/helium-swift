@@ -25,12 +25,15 @@ actor HeliumEntitlementsManager {
     private struct EntitlementsCache {
         var transactions: [Transaction] = []
         var subscriptionStatuses: [String: SubscriptionStatusCache] = [:] // productID is key
-        
+
         var lastTransactionsLoadedTime: Date?
 
         /// Entitlements from persisted data, used before real transactions are loaded
         var persistedEntitlements: [PersistedEntitlement] = []
-        
+
+        /// Cached entitlement status per trigger, persisted for use before paywalls load
+        var entitledForTrigger: [String: Bool] = [:]
+
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
             guard let lastSyncTime = lastTransactionsLoadedTime else { return true }
             return Date().timeIntervalSince(lastSyncTime) > resetInterval
@@ -68,7 +71,8 @@ actor HeliumEntitlementsManager {
     private func applyPersistedData(_ data: PersistedEntitlementsData) {
         // Filter to only valid, non-consumable entitlements
         cache.persistedEntitlements = data.entitlements.filter { $0.appearsValid() && !$0.isConsumable }
-        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements")
+        cache.entitledForTrigger = data.entitledForTrigger
+        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements, \(cache.entitledForTrigger.count) trigger entitlements")
     }
 
     /// Persists current entitlements to file storage
@@ -79,7 +83,10 @@ actor HeliumEntitlementsManager {
         let entitlements = cache.transactions
             .filter { $0.productType != .consumable }
             .map { PersistedEntitlement(from: $0) }
-        let data = PersistedEntitlementsData(entitlements: entitlements)
+        let data = PersistedEntitlementsData(
+            entitlements: entitlements,
+            entitledForTrigger: cache.entitledForTrigger
+        )
 
         guard let encoded = try? JSONEncoder().encode(data) else {
             HeliumLogger.log(.warn, category: .entitlements, "Failed to encode entitlements for persistence")
@@ -199,28 +206,39 @@ actor HeliumEntitlementsManager {
         trigger: String,
         considerAssociatedSubscriptions: Bool
     ) async -> Bool? {
+        // If paywalls haven't loaded yet, use persisted trigger entitlement if available
         if !Helium.shared.paywallsLoaded() {
-            return nil
+            return cache.entitledForTrigger[trigger]
         }
-        
+
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        
+
         let productIds = paywallInfo?.productsOffered ?? []
-        
+
+        var result: Bool
+
         // Just see if any of the paywall products are purchased/active
         if !considerAssociatedSubscriptions {
-            return await purchasedProductIds().contains { productIds.contains($0) }
-        }
-        
-        // Otherwise check products and associated subscription groups
-        for productId in productIds {
-            let entitled = await hasActiveEntitlementFor(productId: productId)
-            if entitled {
-                return true
+            result = await purchasedProductIds().contains { productIds.contains($0) }
+        } else {
+            // Otherwise check products and associated subscription groups
+            result = false
+            for productId in productIds {
+                let entitled = await hasActiveEntitlementFor(productId: productId)
+                if entitled {
+                    result = true
+                    break
+                }
             }
         }
-        
-        return false
+
+        // Cache and persist the result for this trigger
+        if cache.entitledForTrigger[trigger] != result {
+            cache.entitledForTrigger[trigger] = result
+            saveEntitlements()
+        }
+
+        return result
     }
     
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
