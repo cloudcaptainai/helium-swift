@@ -1,5 +1,5 @@
 //
-//  HeliumPaywallView.swift
+//  HeliumPaywall.swift
 //  Helium
 //
 
@@ -10,12 +10,12 @@ import SwiftUI
 /// ## Example Usage
 /// ```swift
 /// // Minimal - uses default loading view
-/// HeliumPaywallView(trigger: "onboarding") { reason in
+/// HeliumPaywall(trigger: "onboarding") { reason in
 ///     Text("Paywall not shown: \(reason.rawValue)")
 /// }
 ///
 /// // With custom loading view
-/// HeliumPaywallView(
+/// HeliumPaywall(
 ///     trigger: "onboarding",
 ///     loadingView: { ProgressView() }
 /// ) { reason in
@@ -41,7 +41,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     ///   - trigger: The trigger name to display a paywall for
     ///   - config: Additional configuration options
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
-    ///   - fallbackView: View to show when paywall is unavailable or skipped due to targeting
+    ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting
     public init(
         trigger: String,
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
