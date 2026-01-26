@@ -12,17 +12,11 @@ struct PersistedEntitlement: Codable {
     let productType: String // "autoRenewable", "nonRenewable", "consumable", "nonConsumable"
     let subscriptionGroupID: String?
     let expirationDate: Date?
-    let purchaseDate: Date
-    let originalPurchaseDate: Date
-    let persistedAt: Date
 
     init(from transaction: Transaction) {
         productID = transaction.productID
         subscriptionGroupID = transaction.subscriptionGroupID
         expirationDate = transaction.expirationDate
-        purchaseDate = transaction.purchaseDate
-        originalPurchaseDate = transaction.originalPurchaseDate
-        persistedAt = Date()
 
         switch transaction.productType {
         case .autoRenewable:
@@ -48,10 +42,21 @@ struct PersistedEntitlement: Codable {
         // No expiration = lifetime purchase or non-expiring entitlement
         return true
     }
+
+    var isAutoRenewable: Bool {
+        productType == "autoRenewable"
+    }
+
+    var isNonRenewable: Bool {
+        productType == "nonRenewable"
+    }
+
+    var isSubscription: Bool {
+        isAutoRenewable || isNonRenewable
+    }
 }
 
 /// Container for persisted entitlements data
 struct PersistedEntitlementsData: Codable {
     let entitlements: [PersistedEntitlement]
-    let savedAt: Date
 }
