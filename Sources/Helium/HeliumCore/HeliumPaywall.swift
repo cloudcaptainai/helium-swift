@@ -54,7 +54,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.eventHandlers = eventHandlers
         self.config = config
         
-        self._state = State(initialValue: resolvePaywallState(for: trigger))
+        self._state = State(initialValue: resolvePaywallState(for: trigger, config: config))
     }
     
     /// Creates a new paywall view for the specified trigger with custom loading view
@@ -78,7 +78,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.eventHandlers = eventHandlers
         self.config = config
         
-        self._state = State(initialValue: resolvePaywallState(for: trigger))
+        self._state = State(initialValue: resolvePaywallState(for: trigger, config: config))
     }
     
     public var body: some View {
@@ -100,19 +100,21 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config)
             }
         }
         .task(id: state) {
             // Handle state-specific async work
             if case .checkingEntitlement = state {
                 isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
+                // Check if task was cancelled (e.g. by loading budget timeout)
+                guard !Task.isCancelled else { return }
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config)
             }
         }
         .task {
             // Independent timeout covering all loading phases
-            let loadingBudgetMS = loadingBudgetUInt64(trigger: trigger)
+            let loadingBudgetMS = loadingBudgetUInt64(config: config)
             do {
                 try await Task.sleep(nanoseconds: loadingBudgetMS * 1_000_000)
             } catch {
@@ -122,7 +124,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             // After timeout, re-resolve state with whatever info we have
             loadingBudgetExpired = true
             if state.isLoading {
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false)
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false, config: config)
             }
         }
     }
@@ -177,7 +179,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     paywallName: "",
                     error: "Paywall failed to show in embedded view.",
                     paywallUnavailableReason: unavailableReason,
-                    loadingBudgetMS: loadingBudgetUInt64(trigger: trigger)
+                    loadingBudgetMS: loadingBudgetUInt64(config: config)
                 ),
                 paywallSession: nil
             )
@@ -221,9 +223,10 @@ enum HeliumPaywallViewState: Equatable {
 fileprivate func resolvePaywallState(
     for trigger: String,
     isEntitled: Bool? = nil,
-    allowLoadingState: Bool = true
+    allowLoadingState: Bool = true,
+    config: PaywallPresentationConfig
 ) -> HeliumPaywallViewState {
-    if allowLoadingState && shouldShowLoadingState(for: trigger) {
+    if allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
         return .waitingForPaywallsDownload
     }
     
@@ -256,9 +259,9 @@ fileprivate func resolvePaywallState(
 }
 
 /// Determines if loading state should be shown by checking actual download status
-private func shouldShowLoadingState(for trigger: String) -> Bool {
-    // Check if loading is enabled for this trigger
-    let useLoadingState = loadingBudgetUInt64(trigger: trigger) > 0
+private func shouldShowLoadingState(for trigger: String, config: PaywallPresentationConfig) -> Bool {
+    let loadingBudget = loadingBudgetUInt64(config: config)
+    let useLoadingState = loadingBudget > 0
     if !useLoadingState {
         return false
     }
@@ -271,8 +274,8 @@ private func shouldShowLoadingState(for trigger: String) -> Bool {
     return heliumDownloadsIncoming
 }
 
-private func loadingBudgetUInt64(trigger: String) -> UInt64 {
-    let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
+    let loadingBudgetInSeconds = config.loadingBudget ?? Helium.config.defaultLoadingBudget
     guard loadingBudgetInSeconds > 0 else { return 0 }
     return UInt64(loadingBudgetInSeconds * 1000)
 }
