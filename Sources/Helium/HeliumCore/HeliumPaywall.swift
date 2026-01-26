@@ -100,15 +100,14 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
-                Task {
-                    await resolveStateAfterConfigReady()
-                }
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
             }
         }
         .task(id: state) {
             // Handle state-specific async work
             if case .checkingEntitlement = state {
-                await resolveStateAfterConfigReady()
+                isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
             }
         }
         .task {
@@ -159,18 +158,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         )
         
         didConfigureContext = true
-    }
-    
-    /// Called after config download completes to check entitlement and resolve final state
-    private func resolveStateAfterConfigReady() async {
-        let dontShowIfAlreadyEntitled = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.dontShowIfAlreadyEntitled ?? true
-        
-        if dontShowIfAlreadyEntitled {
-            state = .checkingEntitlement
-            isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
-        }
-        
-        state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired)
     }
     
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {
@@ -286,5 +273,6 @@ private func shouldShowLoadingState(for trigger: String) -> Bool {
 
 private func loadingBudgetUInt64(trigger: String) -> UInt64 {
     let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+    guard loadingBudgetInSeconds > 0 else { return 0 }
     return UInt64(loadingBudgetInSeconds * 1000)
 }

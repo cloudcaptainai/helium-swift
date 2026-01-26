@@ -185,6 +185,7 @@ class HeliumPaywallPresenter {
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64 {
         let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+        guard loadingBudgetInSeconds > 0 else { return 0 }
         return UInt64(loadingBudgetInSeconds * 1000)
     }
     
