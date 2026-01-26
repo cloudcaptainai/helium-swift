@@ -31,6 +31,27 @@ enum PaywallPresentationStyle: String, Codable {
 }
 
 public struct HeliumPaywallInfo: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case paywallID
+        case paywallUUID
+        case paywallTemplateName
+        case productsOffered
+        case productsOfferedIOS
+        case resolvedConfig
+        case shouldShow
+        case fallbackPaywallName
+        case experimentID
+        case modelID
+        case forceShowFallback
+        case secondChance
+        case secondChancePaywall
+        case resolvedConfigJSON
+        case experimentInfo
+        case additionalPaywallFields
+        case presentationStyle
+    }
+    
     init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
         self.paywallID = paywallID
         self.paywallUUID = paywallUUID;
@@ -44,6 +65,53 @@ public struct HeliumPaywallInfo: Codable {
         self.resolvedConfigJSON = resolvedConfigJSON;
         self.forceShowFallback = forceShowFallback;
         self.presentationStyle = presentationStyle
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        paywallID = try container.decode(Int.self, forKey: .paywallID)
+        paywallUUID = try container.decodeIfPresent(String.self, forKey: .paywallUUID)
+        paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
+        
+        // Prefer productsOfferedIOS, fall back to productsOffered
+        productsOffered = try container.decodeIfPresent([String].self, forKey: .productsOfferedIOS)
+            ?? container.decodeIfPresent([String].self, forKey: .productsOffered)
+            ?? []
+        
+        resolvedConfig = try container.decode(AnyCodable.self, forKey: .resolvedConfig)
+        shouldShow = try container.decodeIfPresent(Bool.self, forKey: .shouldShow)
+        fallbackPaywallName = try container.decodeIfPresent(String.self, forKey: .fallbackPaywallName)
+        experimentID = try container.decodeIfPresent(String.self, forKey: .experimentID)
+        modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
+        forceShowFallback = try container.decodeIfPresent(Bool.self, forKey: .forceShowFallback)
+        secondChance = try container.decodeIfPresent(Bool.self, forKey: .secondChance)
+        secondChancePaywall = try container.decodeIfPresent(AnyCodable.self, forKey: .secondChancePaywall)
+        resolvedConfigJSON = try container.decodeIfPresent(JSON.self, forKey: .resolvedConfigJSON)
+        experimentInfo = try container.decodeIfPresent(JSON.self, forKey: .experimentInfo)
+        additionalPaywallFields = try container.decodeIfPresent(JSON.self, forKey: .additionalPaywallFields)
+        presentationStyle = try container.decodeIfPresent(PaywallPresentationStyle.self, forKey: .presentationStyle)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(paywallID, forKey: .paywallID)
+        try container.encodeIfPresent(paywallUUID, forKey: .paywallUUID)
+        try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
+        try container.encode(productsOffered, forKey: .productsOffered)
+        try container.encode(resolvedConfig, forKey: .resolvedConfig)
+        try container.encodeIfPresent(shouldShow, forKey: .shouldShow)
+        try container.encodeIfPresent(fallbackPaywallName, forKey: .fallbackPaywallName)
+        try container.encodeIfPresent(experimentID, forKey: .experimentID)
+        try container.encodeIfPresent(modelID, forKey: .modelID)
+        try container.encodeIfPresent(forceShowFallback, forKey: .forceShowFallback)
+        try container.encodeIfPresent(secondChance, forKey: .secondChance)
+        try container.encodeIfPresent(secondChancePaywall, forKey: .secondChancePaywall)
+        try container.encodeIfPresent(resolvedConfigJSON, forKey: .resolvedConfigJSON)
+        try container.encodeIfPresent(experimentInfo, forKey: .experimentInfo)
+        try container.encodeIfPresent(additionalPaywallFields, forKey: .additionalPaywallFields)
+        try container.encodeIfPresent(presentationStyle, forKey: .presentationStyle)
     }
     
     var paywallID: Int
