@@ -67,7 +67,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
     }
     
     open func restorePurchases() async -> Bool {
-        return await Helium.shared.hasAnyEntitlement()
+        return await Helium.entitlements.hasAnyEntitlement()
     }
     
     open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {

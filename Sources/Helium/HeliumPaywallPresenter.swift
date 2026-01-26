@@ -30,7 +30,7 @@ class HeliumPaywallPresenter {
             return false
         }
         if presentationConfig.dontShowIfAlreadyEntitled {
-            let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+            let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 HeliumPaywallDelegateWrapper.shared.onEntitledHandler?()
