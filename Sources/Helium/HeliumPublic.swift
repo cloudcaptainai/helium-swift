@@ -537,7 +537,7 @@ public class HeliumConfig {
     
     /// Sets the Helium SDK log level.
     ///
-    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
+    /// Defaults to `.info` if DEBUG otherwise `.error`
     ///
     public var logLevel: HeliumLogLevel {
         get {
@@ -548,12 +548,18 @@ public class HeliumConfig {
         }
     }
     
+    /// Adjust the default loading budget for paywalls. If reached, a fallback will be shown if available otherwise onPaywallNotShown/whenPaywallNotShown will be called.
     public static let defaultLoadingBudget: TimeInterval = 7.0
     
+    /// Adjust to RevenueCatDelegate() if using RevenueCat or if you want to handle your own purchase logic, create a custom implementation. You can also subclass
+    /// StoreKitDelegate or RevenueCatDelegate for custom implementations.
     public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
     
+    /// By default, Helium will look for a file named "helium-fallbacks.json". Override by setting this.
+    /// See https://docs.tryhelium.com/guides/fallback-bundle
     public var customFallbacksURL: URL? = nil
     
+    /// Set a custom Helium API endpoint to use. Only set this if told to do so by Helium.
     public var customAPIEndpoint: String? = nil
     
     /// Maximum time (in seconds) to show the loading state before displaying fallback.
@@ -571,6 +577,7 @@ public class HeliumConfig {
     /// - Note: .system respects the device's current appearance setting (default)
     public var lightDarkModeOverride: HeliumLightDarkMode = .system
     
+    /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
     
 }
