@@ -92,7 +92,7 @@ class HeliumPaywallPresenter {
                 return
             }
             
-            let loadingBudget = config.constrainedLoadingBudget
+            let loadingBudget = config.safeLoadingBudgetInSeconds
             let useLoading = config.useLoadingState
             let customLoadingView = Helium.config.defaultLoadingView
             
@@ -184,7 +184,7 @@ class HeliumPaywallPresenter {
     }
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64 {
-        let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.constrainedLoadingBudget ?? Helium.config.defaultLoadingBudget
+        let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.safeLoadingBudgetInSeconds ?? Helium.config.defaultLoadingBudget
         guard loadingBudgetInSeconds > 0 else { return 0 }
         return UInt64(loadingBudgetInSeconds * 1000)
     }

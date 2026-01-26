@@ -274,7 +274,7 @@ private func shouldShowLoadingState(for trigger: String, config: PaywallPresenta
 }
 
 private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
-    let loadingBudgetInSeconds = config.constrainedLoadingBudget
+    let loadingBudgetInSeconds = config.safeLoadingBudgetInSeconds
     guard loadingBudgetInSeconds > 0 else { return 0 }
     return UInt64(loadingBudgetInSeconds * 1000)
 }

@@ -47,7 +47,7 @@ public struct PaywallPresentationConfig {
         return loadingBudget ?? Helium.config.defaultLoadingBudget
     }
     
-    var constrainedLoadingBudget: TimeInterval {
+    var safeLoadingBudgetInSeconds: TimeInterval {
         max(1, min(20, effectiveLoadingBudget))
     }
 }
