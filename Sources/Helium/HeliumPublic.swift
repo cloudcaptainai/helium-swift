@@ -48,6 +48,8 @@ public struct PaywallPresentationConfig {
 }
 
 public class Helium {
+    init() {}
+    
     var controller: HeliumController?
     private var initialized: Bool = false;
     
@@ -57,7 +59,6 @@ public class Helium {
     }
     
     public static let shared = Helium()
-    public static let restorePurchaseConfig = RestorePurchaseConfig()
     public static let identify = HeliumIdentify()
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
@@ -459,8 +460,6 @@ public class Helium {
             ExperimentAllocationTracker.shared.reset()
         }
         
-        restorePurchaseConfig.reset()
-        
         HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
         
         HeliumEventListeners.shared.removeAllListeners()
@@ -483,7 +482,7 @@ public class Helium {
 /// ```
 public class HeliumIdentify {
     
-    fileprivate init() {}
+    init() {}
     
     /// Custom user ID to identify this user.
     public var userId: String {
@@ -534,7 +533,20 @@ public class HeliumIdentify {
 
 public class HeliumConfig {
     
-    fileprivate init() {}
+    init() {}
+    
+    /// Sets the Helium SDK log level.
+    ///
+    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
+    ///
+    public var logLevel: HeliumLogLevel {
+        get {
+            HeliumLogger.getLogLevel()
+        }
+        set {
+            HeliumLogger.setLogLevel(newValue)
+        }
+    }
     
     public static let defaultLoadingBudget: TimeInterval = 7.0
     
@@ -559,23 +571,12 @@ public class HeliumConfig {
     /// - Note: .system respects the device's current appearance setting (default)
     public var lightDarkModeOverride: HeliumLightDarkMode = .system
     
-    /// Sets the Helium SDK log level.
-    ///
-    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
-    ///
-    public var logLevel: HeliumLogLevel {
-        get {
-            HeliumLogger.getLogLevel()
-        }
-        set {
-            HeliumLogger.setLogLevel(newValue)
-        }
-    }
+    public let restorePurchasesDialog = RestorePurchaseConfig()
     
 }
 
 public class HeliumExperiments {
-    fileprivate init() {}
+    init() {}
     
     /// Get experiment allocation info for a specific trigger
     ///
@@ -584,7 +585,7 @@ public class HeliumExperiments {
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let experimentInfo = Helium.shared.getExperimentInfoForTrigger("onboarding") {
+    /// if let experimentInfo = Helium.experiments.infoForTrigger("onboarding") {
     ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
     ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
     /// }
@@ -605,7 +606,7 @@ public class HeliumExperiments {
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let activeExperiments = Helium.shared.enrolledExperiments() {
+    /// if let activeExperiments = Helium.experiments.enrolled() {
     ///     for experiment in activeExperiments {
     ///         print("Active: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
     ///         print("Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
@@ -645,7 +646,7 @@ public class HeliumExperiments {
     ///
     /// ## Example Usage
     /// ```swift
-    /// if let allExperiments = Helium.shared.allExperiments() {
+    /// if let allExperiments = Helium.experiments.all() {
     ///     for experiment in allExperiments {
     ///         print("\(experiment.trigger): \(experiment.enrollmentStatus)")
     ///         if experiment.enrollmentStatus == .activeEnrollment {
@@ -683,7 +684,7 @@ public class HeliumExperiments {
 }
 
 public class HeliumEntitlements {
-    fileprivate init() {}
+    init() {}
     
     /// Checks if the user has an active entitlement for any product attached to the paywall that will show for provided trigger.
     /// - Parameter trigger: Trigger that would be used to show the paywall.

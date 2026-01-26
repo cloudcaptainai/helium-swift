@@ -6,6 +6,8 @@
 //
 
 public class RestorePurchaseConfig {
+    init() {}
+    
     // Default values
     private static let defaultShowHeliumDialog = true
     private static let defaultRestoreFailedTitle = "Restore Failed"
