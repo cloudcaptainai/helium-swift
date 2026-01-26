@@ -30,7 +30,7 @@ class HeliumPaywallPresenter {
             return false
         }
         if presentationConfig.dontShowIfAlreadyEntitled {
-            let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+            let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 HeliumPaywallDelegateWrapper.shared.onEntitledHandler?()
@@ -92,8 +92,8 @@ class HeliumPaywallPresenter {
                 return
             }
             
-            let loadingBudget = config.loadingBudget
-            let useLoading = loadingBudget > 0
+            let loadingBudget = config.safeLoadingBudgetInSeconds
+            let useLoading = config.useLoadingState
             let customLoadingView = Helium.config.defaultLoadingView
             
             let downloadStatus = Helium.shared.getDownloadStatus()
@@ -184,7 +184,7 @@ class HeliumPaywallPresenter {
     }
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64 {
-        let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+        let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.safeLoadingBudgetInSeconds ?? Helium.config.defaultLoadingBudget
         guard loadingBudgetInSeconds > 0 else { return 0 }
         return UInt64(loadingBudgetInSeconds * 1000)
     }

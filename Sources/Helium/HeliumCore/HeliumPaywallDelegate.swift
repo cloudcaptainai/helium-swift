@@ -161,17 +161,17 @@ class HeliumPaywallDelegateWrapper {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
             self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            if Helium.restorePurchaseConfig.showHeliumDialog {
+            if Helium.config.restorePurchasesDialog.showHeliumDialog {
                 Task { @MainActor in
                     let alert = UIAlertController(
-                        title: Helium.restorePurchaseConfig.restoreFailedTitle,
-                        message: Helium.restorePurchaseConfig.restoreFailedMessage,
+                        title: Helium.config.restorePurchasesDialog.restoreFailedTitle,
+                        message: Helium.config.restorePurchasesDialog.restoreFailedMessage,
                         preferredStyle: .alert
                     )
                     
                     // Add a single OK button
                     alert.addAction(UIAlertAction(
-                        title: Helium.restorePurchaseConfig.restoreFailedCloseButtonText,
+                        title: Helium.config.restorePurchasesDialog.restoreFailedCloseButtonText,
                         style: .default
                     ))
                     

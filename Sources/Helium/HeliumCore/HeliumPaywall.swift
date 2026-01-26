@@ -106,7 +106,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         .task(id: state) {
             // Handle state-specific async work
             if case .checkingEntitlement = state {
-                isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+                isEntitled = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
                 // Check if task was cancelled (e.g. by loading budget timeout)
                 guard !Task.isCancelled else { return }
                 state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config)
@@ -261,8 +261,7 @@ fileprivate func resolvePaywallState(
 /// Determines if loading state should be shown by checking actual download status
 private func shouldShowLoadingState(for trigger: String, config: PaywallPresentationConfig) -> Bool {
     let loadingBudget = loadingBudgetUInt64(config: config)
-    let useLoadingState = loadingBudget > 0
-    if !useLoadingState {
+    if !config.useLoadingState {
         return false
     }
     
@@ -275,7 +274,7 @@ private func shouldShowLoadingState(for trigger: String, config: PaywallPresenta
 }
 
 private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
-    let loadingBudgetInSeconds = config.loadingBudget ?? Helium.config.defaultLoadingBudget
+    let loadingBudgetInSeconds = config.safeLoadingBudgetInSeconds
     guard loadingBudgetInSeconds > 0 else { return 0 }
     return UInt64(loadingBudgetInSeconds * 1000)
 }

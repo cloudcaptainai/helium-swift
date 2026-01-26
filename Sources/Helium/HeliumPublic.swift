@@ -24,22 +24,37 @@ public struct PaywallPresentationConfig {
     var dontShowIfAlreadyEntitled: Bool = true
     // How long to allow loading state before switching to fallback logic.
     // Use zero or negative value to disable loading state.
-    var loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    // If not set, Helium.config.defaultLoadingBudget will be used.
+    var loadingBudget: TimeInterval? = nil
     
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
         dontShowIfAlreadyEntitled: Bool = true,
-        loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+        loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
         self.customPaywallTraits = customPaywallTraits
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
         self.loadingBudget = loadingBudget
     }
+    
+    var useLoadingState: Bool {
+        effectiveLoadingBudget > 0
+    }
+    
+    var effectiveLoadingBudget: TimeInterval {
+        return loadingBudget ?? Helium.config.defaultLoadingBudget
+    }
+    
+    var safeLoadingBudgetInSeconds: TimeInterval {
+        max(1, min(20, effectiveLoadingBudget))
+    }
 }
 
 public class Helium {
+    init() {}
+    
     var controller: HeliumController?
     private var initialized: Bool = false;
     
@@ -49,9 +64,10 @@ public class Helium {
     }
     
     public static let shared = Helium()
-    public static let restorePurchaseConfig = RestorePurchaseConfig()
     public static let identify = HeliumIdentify()
     public static let config = HeliumConfig()
+    public static let experiments = HeliumExperiments()
+    public static let entitlements = HeliumEntitlements()
     
     public func presentPaywall(
         trigger: String,
@@ -111,48 +127,6 @@ public class Helium {
     
     public func hideAllUpsells() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
-    }
-    
-    /// Returns experiment allocation info for all configured triggers
-    /// 
-    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if:
-    ///   - Helium hasn't been initialized
-    ///   - Config hasn't been fetched
-    ///   - No triggers have experiments
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// // Get all experiment info
-    /// if let allExperiments = Helium.shared.getHeliumExperimentInfo() {
-    ///     for (trigger, info) in allExperiments {
-    ///         print("Trigger: \(trigger)")
-    ///         print("Experiment: \(info.experimentName ?? "unknown")")
-    ///         print("Variant: \(info.chosenVariantDetails?.allocationIndex ?? 0)")
-    ///     }
-    /// }
-    ///
-    /// // Get specific trigger's experiment info
-    /// if let onboardingInfo = Helium.shared.getHeliumExperimentInfo()?["onboarding"] {
-    ///     print("Onboarding variant: \(onboardingInfo.chosenVariantDetails?.allocationIndex ?? 0)")
-    /// }
-    /// ```
-    ///
-    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
-    public func getHeliumExperimentInfo() -> [String: ExperimentInfo]? {
-        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
-            return nil
-        }
-        
-        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        var experimentInfoMap: [String: ExperimentInfo] = [:]
-        
-        for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger) {
-                experimentInfoMap[trigger] = experimentInfo
-            }
-        }
-        
-        return experimentInfoMap
     }
     
     /// Clears all cached Helium state and allows safe re-initialization.
@@ -344,110 +318,6 @@ public class Helium {
         )
     }
     
-    /// Get experiment allocation info for a specific trigger
-    /// 
-    /// - Parameter trigger: The trigger name to get experiment info for
-    /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// if let experimentInfo = Helium.shared.getExperimentInfoForTrigger("onboarding") {
-    ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
-    ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
-    /// }
-    /// ```
-    ///
-    /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
-    public func getExperimentInfoForTrigger(_ trigger: String) -> ExperimentInfo? {
-        return HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: trigger)
-    }
-    
-    /// Get all experiments this user has already been enrolled in, for which the experiment is running.
-    ///
-    /// Returns experiments that:
-    /// - User has hit the trigger and been allocated
-    /// - Experiment is currently running
-    ///
-    /// - Returns: Array of ExperimentInfo for active enrollments, or nil if there was an issue (e.g., SDK not initialized)
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// if let activeExperiments = Helium.shared.enrolledExperiments() {
-    ///     for experiment in activeExperiments {
-    ///         print("Active: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
-    ///         print("Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
-    ///         print("Variant: \(experiment.chosenVariantDetails?.allocationName ?? "unknown")")
-    ///     }
-    /// }
-    /// ```
-    /// - SeeAlso: `allExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func enrolledExperiments() -> [ExperimentInfo]? {
-        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
-            return nil
-        }
-        
-        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        var activeExperiments: [ExperimentInfo] = []
-        
-        for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger),
-               experimentInfo.enrollmentStatus == .activeEnrollment {
-                if experimentInfo.enrolledTrigger == trigger {
-                    // favor experiment with trigger where actually enrolled
-                    // although technically they should be the same exact experiment data
-                    activeExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
-                }
-                if !activeExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
-                    activeExperiments.append(experimentInfo)
-                }
-            }
-        }
-        
-        return activeExperiments
-    }
-    
-    /// Get all experiment info for this user (both predicted and active enrollments).
-    ///
-    /// - Returns: Array of all ExperimentInfo (predicted + active), or nil if there was an issue (e.g., SDK not initialized)
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// if let allExperiments = Helium.shared.allExperiments() {
-    ///     for experiment in allExperiments {
-    ///         print("\(experiment.trigger): \(experiment.enrollmentStatus)")
-    ///         if experiment.enrollmentStatus == .activeEnrollment {
-    ///             print("  Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// - SeeAlso: `enrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func allExperiments() -> [ExperimentInfo]? {
-        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
-            return nil
-        }
-        
-        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        var allExperiments: [ExperimentInfo] = []
-        
-        for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger),
-               experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
-                if experimentInfo.enrolledTrigger == trigger {
-                    // favor experiment with trigger where actually enrolled
-                    // although technically they should be the same exact experiment data
-                    allExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
-                }
-                if !allExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
-                    allExperiments.append(experimentInfo)
-                }
-            }
-        }
-        
-        return allExperiments
-    }
-    
     /// Initializes the Helium paywall system.
     /// - Set up user identification using Helium.identify, ideally before calling initialize().
     /// - Adjust Helium configuration using Helium.config, ideally before calling initialize().
@@ -579,7 +449,251 @@ public class Helium {
         return true
     }
     
-    // MARK: - Entitlements / Subscription Status
+    /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
+    public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
+        HeliumPaywallPresenter.shared.hideAllUpsells()
+        
+        HeliumPaywallDelegateWrapper.reset()
+        
+        // Clear fetched configuration from memory
+        HeliumFetchedConfigManager.reset()
+        
+        // Completely reset all fallback configurations
+        HeliumFallbackViewManager.reset()
+        
+        if clearExperimentAllocations {
+            ExperimentAllocationTracker.shared.reset()
+        }
+        
+        HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+        
+        HeliumEventListeners.shared.removeAllListeners()
+        
+        Helium.shared.reset()
+        
+        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
+    }
+    
+}
+
+/// Configuration object for user identification settings.
+/// Set properties on `Helium.identify` before calling `Helium.shared.initialize()`.
+///
+/// Example:
+/// ```swift
+/// Helium.identify.userId = "user-123"
+/// Helium.identify.setUserTraits(HeliumUserTraits(["plan": "premium"]))
+/// Helium.shared.initialize(apiKey: "your-api-key")
+/// ```
+public class HeliumIdentify {
+    
+    init() {}
+    
+    /// Custom user ID to identify this user.
+    public var userId: String {
+        get {
+            HeliumIdentityManager.shared.getUserId()
+        }
+        set {
+            HeliumIdentityManager.shared.setCustomUserId(newValue)
+            HeliumAnalyticsManager.shared.identify(userId: newValue)
+        }
+    }
+    
+    /// Custom appAccountToken for StoreKit purchases. If not set, Helium will generate one.
+    /// Only need to set if you use this value in App Store Server Notifications or your app makes non-Helium purchases with StoreKit.
+    public var appAccountToken: UUID {
+        get {
+            HeliumIdentityManager.shared.appAttributionToken
+        }
+        set {
+            HeliumIdentityManager.shared.setCustomAppAccountToken(newValue)
+        }
+    }
+    
+    /// RevenueCat app user ID -- set this if you use RevenueCat along with Helium.
+    public var revenueCatAppUserId: String? {
+        get {
+            HeliumIdentityManager.shared.revenueCatAppUserId
+        }
+        set {
+            if let newValue {
+                HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
+            }
+        }
+    }
+    
+    /// Custom user traits for targeting and analytics.
+    public func setUserTraits(_ traits: HeliumUserTraits) {
+        HeliumIdentityManager.shared.setCustomUserTraits(traits)
+    }
+    public func addUserTraits(_ traits: HeliumUserTraits) {
+        HeliumIdentityManager.shared.addToCustomUserTraits(traits)
+    }
+    public func getUserTraits() -> [String : Any] {
+        HeliumIdentityManager.shared.getUserTraits().dictionaryRepresentation
+    }
+    
+}
+
+public class HeliumConfig {
+    
+    init() {}
+    
+    /// Sets the Helium SDK log level.
+    ///
+    /// Defaults to `.info` if DEBUG otherwise `.error`
+    ///
+    public var logLevel: HeliumLogLevel {
+        get {
+            HeliumLogger.getLogLevel()
+        }
+        set {
+            HeliumLogger.setLogLevel(newValue)
+        }
+    }
+    
+    /// Adjust to RevenueCatDelegate() if using RevenueCat or if you want to handle your own purchase logic, create a custom implementation. You can also subclass
+    /// StoreKitDelegate or RevenueCatDelegate for custom implementations.
+    public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
+    
+    /// By default, Helium will look for a file named "helium-fallbacks.json". Override by setting this.
+    /// See https://docs.tryhelium.com/guides/fallback-bundle
+    public var customFallbacksURL: URL? = nil
+    
+    /// Set a custom Helium API endpoint to use. Only set this if told to do so by Helium.
+    public var customAPIEndpoint: String? = nil
+    
+    /// Maximum time (in seconds) to show the loading state before displaying fallback.
+    /// After this timeout, even if the paywall is still downloading, a fallback will be shown if available.
+    /// A value of 0 or less will disable the loading state.
+    public var defaultLoadingBudget: TimeInterval = 7.0
+    
+    /// Custom loading view to display while fetching paywall configuration.
+    /// If nil, a default shimmer animation will be shown.
+    /// Default: nil (uses default shimmer)
+    public var defaultLoadingView: AnyView? = nil
+    
+    /// Sets the light/dark mode override for Helium paywalls.
+    /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
+    /// - Note: .system respects the device's current appearance setting (default)
+    public var lightDarkModeOverride: HeliumLightDarkMode = .system
+    
+    /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
+    public let restorePurchasesDialog = RestorePurchaseConfig()
+    
+}
+
+public class HeliumExperiments {
+    init() {}
+    
+    /// Get experiment allocation info for a specific trigger
+    ///
+    /// - Parameter trigger: The trigger name to get experiment info for
+    /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let experimentInfo = Helium.experiments.infoForTrigger("onboarding") {
+    ///     print("Experiment: \(experimentInfo.experimentName ?? "unknown")")
+    ///     print("Variant: \(experimentInfo.chosenVariantDetails?.allocationIndex ?? 0)")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
+    public func infoForTrigger(_ trigger: String) -> ExperimentInfo? {
+        return HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: trigger)
+    }
+    
+    /// Get all experiments this user has already been enrolled in, for which the experiment is running.
+    ///
+    /// Returns experiments that:
+    /// - User has hit the trigger and been allocated
+    /// - Experiment is currently running
+    ///
+    /// - Returns: Array of ExperimentInfo for active enrollments, or nil if there was an issue (e.g., SDK not initialized)
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let activeExperiments = Helium.experiments.enrolled() {
+    ///     for experiment in activeExperiments {
+    ///         print("Active: \(experiment.trigger) - \(experiment.experimentName ?? "unknown")")
+    ///         print("Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
+    ///         print("Variant: \(experiment.chosenVariantDetails?.allocationName ?? "unknown")")
+    ///     }
+    /// }
+    /// ```
+    /// - SeeAlso: `allExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func enrolled() -> [ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var activeExperiments: [ExperimentInfo] = []
+        
+        for trigger in triggers {
+            if let experimentInfo = infoForTrigger(trigger),
+               experimentInfo.enrollmentStatus == .activeEnrollment {
+                if experimentInfo.enrolledTrigger == trigger {
+                    // favor experiment with trigger where actually enrolled
+                    // although technically they should be the same exact experiment data
+                    activeExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
+                }
+                if !activeExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
+                    activeExperiments.append(experimentInfo)
+                }
+            }
+        }
+        
+        return activeExperiments
+    }
+    
+    /// Get all experiment info for this user (both predicted and active enrollments).
+    ///
+    /// - Returns: Array of all ExperimentInfo (predicted + active), or nil if there was an issue (e.g., SDK not initialized)
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// if let allExperiments = Helium.experiments.all() {
+    ///     for experiment in allExperiments {
+    ///         print("\(experiment.trigger): \(experiment.enrollmentStatus)")
+    ///         if experiment.enrollmentStatus == .activeEnrollment {
+    ///             print("  Enrolled at: \(experiment.enrolledAt?.description ?? "unknown")")
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: `enrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
+    public func all() -> [ExperimentInfo]? {
+        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
+            return nil
+        }
+        
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        var allExperiments: [ExperimentInfo] = []
+        
+        for trigger in triggers {
+            if let experimentInfo = infoForTrigger(trigger),
+               experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
+                if experimentInfo.enrolledTrigger == trigger {
+                    // favor experiment with trigger where actually enrolled
+                    // although technically they should be the same exact experiment data
+                    allExperiments.removeAll { $0.experimentId == experimentInfo.experimentId }
+                }
+                if !allExperiments.contains(where: { $0.experimentId == experimentInfo.experimentId }) {
+                    allExperiments.append(experimentInfo)
+                }
+            }
+        }
+        
+        return allExperiments
+    }
+}
+
+public class HeliumEntitlements {
+    init() {}
     
     /// Checks if the user has an active entitlement for any product attached to the paywall that will show for provided trigger.
     /// - Parameter trigger: Trigger that would be used to show the paywall.
@@ -602,7 +716,7 @@ public class Helium {
     /// Checks if the user has any entitlement (any non-consumable purchase or subscription).
     /// - Returns: `true` if the user has at least one entitlement, `false` otherwise
     /// - Note: This method does not include consumable purchases
-    public func hasAnyEntitlement() async -> Bool {
+    public func hasAny() async -> Bool {
         return await HeliumEntitlementsManager.shared.hasAnyEntitlement()
     }
     
@@ -654,132 +768,6 @@ public class Helium {
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
-    
-    /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
-    public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
-        HeliumPaywallPresenter.shared.hideAllUpsells()
-        
-        HeliumPaywallDelegateWrapper.reset()
-        
-        // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.reset()
-        
-        // Completely reset all fallback configurations
-        HeliumFallbackViewManager.reset()
-        
-        if clearExperimentAllocations {
-            ExperimentAllocationTracker.shared.reset()
-        }
-        
-        restorePurchaseConfig.reset()
-        
-        HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
-        
-        HeliumEventListeners.shared.removeAllListeners()
-        
-        Helium.shared.reset()
-        
-        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
-    }
-    
-}
-
-/// Configuration object for user identification settings.
-/// Set properties on `Helium.identify` before calling `Helium.shared.initialize()`.
-///
-/// Example:
-/// ```swift
-/// Helium.identify.userId = "user-123"
-/// Helium.identify.setUserTraits(HeliumUserTraits(["plan": "premium"]))
-/// Helium.shared.initialize(apiKey: "your-api-key")
-/// ```
-public class HeliumIdentify {
-    
-    /// Custom user ID to identify this user.
-    public var userId: String {
-        get {
-            HeliumIdentityManager.shared.getUserId()
-        }
-        set {
-            HeliumIdentityManager.shared.setCustomUserId(newValue)
-            HeliumAnalyticsManager.shared.identify(userId: newValue)
-        }
-    }
-    
-    /// Custom appAccountToken for StoreKit purchases. If not set, Helium will generate one.
-    /// Only need to set if you use this value in App Store Server Notifications or your app makes non-Helium purchases with StoreKit.
-    public var appAccountToken: UUID {
-        get {
-            HeliumIdentityManager.shared.appAttributionToken
-        }
-        set {
-            HeliumIdentityManager.shared.setCustomAppAccountToken(newValue)
-        }
-    }
-    
-    /// RevenueCat app user ID -- set this if you use RevenueCat along with Helium.
-    public var revenueCatAppUserId: String? {
-        get {
-            HeliumIdentityManager.shared.revenueCatAppUserId
-        }
-        set {
-            if let newValue {
-                HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
-            }
-        }
-    }
-    
-    /// Custom user traits for targeting and analytics.
-    public func setUserTraits(_ traits: HeliumUserTraits) {
-        HeliumIdentityManager.shared.setCustomUserTraits(traits)
-    }
-    public func addUserTraits(_ traits: HeliumUserTraits) {
-        HeliumIdentityManager.shared.addToCustomUserTraits(traits)
-    }
-    public func getUserTraits() -> [String : Any] {
-        HeliumIdentityManager.shared.getUserTraits().dictionaryRepresentation
-    }
-    
-}
-
-public class HeliumConfig {
-    
-    public static let defaultLoadingBudget: TimeInterval = 7.0
-    
-    public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
-    
-    public var customFallbacksURL: URL? = nil
-    
-    public var customAPIEndpoint: String? = nil
-    
-    /// Maximum time (in seconds) to show the loading state before displaying fallback.
-    /// After this timeout, even if the paywall is still downloading, a fallback will be shown if available.
-    /// A value of 0 or less will disable the loading state.
-    public var defaultLoadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
-    
-    /// Custom loading view to display while fetching paywall configuration.
-    /// If nil, a default shimmer animation will be shown.
-    /// Default: nil (uses default shimmer)
-    public var defaultLoadingView: AnyView? = nil
-    
-    /// Sets the light/dark mode override for Helium paywalls.
-    /// - Parameter mode: The desired appearance mode (.light, .dark, or .system)
-    /// - Note: .system respects the device's current appearance setting (default)
-    public var lightDarkModeOverride: HeliumLightDarkMode = .system
-    
-    /// Sets the Helium SDK log level.
-    ///
-    /// Defaults to `.error`. Increase to `.info` / `.debug` while integrating.
-    ///
-    public var logLevel: HeliumLogLevel {
-        get {
-            HeliumLogger.getLogLevel()
-        }
-        set {
-            HeliumLogger.setLogLevel(newValue)
-        }
-    }
-    
 }
 
 @available(iOS 15.0, *)
