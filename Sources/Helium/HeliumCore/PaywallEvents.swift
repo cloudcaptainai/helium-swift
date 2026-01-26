@@ -51,7 +51,7 @@ extension PaywallContextEvent {
     ///
     /// - SeeAlso: `Helium.getExperimentInfoForTrigger(_:)`, `ExperimentInfo`
     public func getEventExperimentInfo() -> ExperimentInfo? {
-        return Helium.experiments.getExperimentInfoForTrigger(triggerName)
+        return Helium.experiments.infoForTrigger(triggerName)
     }
 }
 

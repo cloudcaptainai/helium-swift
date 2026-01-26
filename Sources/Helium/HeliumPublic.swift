@@ -591,7 +591,7 @@ public class HeliumExperiments {
     /// ```
     ///
     /// - SeeAlso: `ExperimentInfo`, `getHeliumExperimentInfo()`
-    public func getExperimentInfoForTrigger(_ trigger: String) -> ExperimentInfo? {
+    public func infoForTrigger(_ trigger: String) -> ExperimentInfo? {
         return HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: trigger)
     }
     
@@ -614,7 +614,7 @@ public class HeliumExperiments {
     /// }
     /// ```
     /// - SeeAlso: `allExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func enrolledExperiments() -> [ExperimentInfo]? {
+    public func enrolled() -> [ExperimentInfo]? {
         guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
             return nil
         }
@@ -623,7 +623,7 @@ public class HeliumExperiments {
         var activeExperiments: [ExperimentInfo] = []
         
         for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger),
+            if let experimentInfo = infoForTrigger(trigger),
                experimentInfo.enrollmentStatus == .activeEnrollment {
                 if experimentInfo.enrolledTrigger == trigger {
                     // favor experiment with trigger where actually enrolled
@@ -656,7 +656,7 @@ public class HeliumExperiments {
     /// ```
     ///
     /// - SeeAlso: `enrolledExperiments()`, `ExperimentInfo`, `ExperimentEnrollmentStatus`
-    public func allExperiments() -> [ExperimentInfo]? {
+    public func all() -> [ExperimentInfo]? {
         guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
             return nil
         }
@@ -665,7 +665,7 @@ public class HeliumExperiments {
         var allExperiments: [ExperimentInfo] = []
         
         for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger),
+            if let experimentInfo = infoForTrigger(trigger),
                experimentInfo.experimentId != nil && !experimentInfo.experimentId!.isEmpty {
                 if experimentInfo.enrolledTrigger == trigger {
                     // favor experiment with trigger where actually enrolled
@@ -679,48 +679,6 @@ public class HeliumExperiments {
         }
         
         return allExperiments
-    }
-    
-    /// Returns experiment allocation info for all configured triggers
-    ///
-    /// - Returns: Dictionary mapping trigger names to their experiment info, or nil if:
-    ///   - Helium hasn't been initialized
-    ///   - Config hasn't been fetched
-    ///   - No triggers have experiments
-    ///
-    /// ## Example Usage
-    /// ```swift
-    /// // Get all experiment info
-    /// if let allExperiments = Helium.shared.getHeliumExperimentInfo() {
-    ///     for (trigger, info) in allExperiments {
-    ///         print("Trigger: \(trigger)")
-    ///         print("Experiment: \(info.experimentName ?? "unknown")")
-    ///         print("Variant: \(info.chosenVariantDetails?.allocationIndex ?? 0)")
-    ///     }
-    /// }
-    ///
-    /// // Get specific trigger's experiment info
-    /// if let onboardingInfo = Helium.shared.getHeliumExperimentInfo()?["onboarding"] {
-    ///     print("Onboarding variant: \(onboardingInfo.chosenVariantDetails?.allocationIndex ?? 0)")
-    /// }
-    /// ```
-    ///
-    /// - SeeAlso: `ExperimentInfo`, `VariantDetails`, `HashDetails`
-    public func getHeliumExperimentInfo() -> [String: ExperimentInfo]? {
-        guard HeliumFetchedConfigManager.shared.getConfig() != nil else {
-            return nil
-        }
-        
-        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        var experimentInfoMap: [String: ExperimentInfo] = [:]
-        
-        for trigger in triggers {
-            if let experimentInfo = getExperimentInfoForTrigger(trigger) {
-                experimentInfoMap[trigger] = experimentInfo
-            }
-        }
-        
-        return experimentInfoMap
     }
 }
 
@@ -748,7 +706,7 @@ public class HeliumEntitlements {
     /// Checks if the user has any entitlement (any non-consumable purchase or subscription).
     /// - Returns: `true` if the user has at least one entitlement, `false` otherwise
     /// - Note: This method does not include consumable purchases
-    public func hasAnyEntitlement() async -> Bool {
+    public func hasAny() async -> Bool {
         return await HeliumEntitlementsManager.shared.hasAnyEntitlement()
     }
     
