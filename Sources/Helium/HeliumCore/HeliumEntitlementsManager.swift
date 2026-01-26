@@ -242,22 +242,21 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyEntitlement() async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil && !cache.persistedProductIDs.isEmpty {
+            return true
+        }
         let entitlements = await getCachedEntitlements()
-        if !entitlements.isEmpty { return true }
-        // Fallback to persisted data if no transactions loaded
-        return !cache.persistedProductIDs.isEmpty
+        return !entitlements.isEmpty
     }
     
     func purchasedProductIds() async -> [String] {
-        let entitlements = await getCachedEntitlements()
-        var productIds = entitlements.map { $0.productID }
-        // Include persisted product IDs not already in the list
-        for persistedId in cache.persistedProductIDs {
-            if !productIds.contains(persistedId) {
-                productIds.append(persistedId)
-            }
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil && !cache.persistedProductIDs.isEmpty {
+            return Array(cache.persistedProductIDs)
         }
-        return productIds
+        let entitlements = await getCachedEntitlements()
+        return entitlements.map { $0.productID }
     }
 
     /// Returns persisted product IDs synchronously for immediate availability.
@@ -291,15 +290,15 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveEntitlementFor(productId: String) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil && cache.persistedProductIDs.contains(productId) {
+            return true
+        }
         let entitlements = await getCachedEntitlements()
         for transaction in entitlements {
             if transaction.productID == productId {
                 return true
             }
-        }
-        // Check persisted data as fallback
-        if cache.persistedProductIDs.contains(productId) {
-            return true
         }
         return await hasActiveSubscriptionFor(productId: productId)
     }
