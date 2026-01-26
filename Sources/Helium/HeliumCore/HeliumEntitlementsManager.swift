@@ -66,14 +66,19 @@ actor HeliumEntitlementsManager {
 
     /// Applies persisted data to the cache
     private func applyPersistedData(_ data: PersistedEntitlementsData) {
-        // Filter to only valid-looking entitlements
-        cache.persistedEntitlements = data.entitlements.filter { $0.appearsValid() }
+        // Filter to only valid, non-consumable entitlements
+        cache.persistedEntitlements = data.entitlements.filter { $0.appearsValid() && !$0.isConsumable }
         HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements")
     }
 
     /// Persists current entitlements to file storage
     private func saveEntitlements() {
-        let entitlements = cache.transactions.map { PersistedEntitlement(from: $0) }
+        guard let fileURL = entitlementsFileURL else { return }
+
+        // Filter out consumables - they don't represent ongoing entitlements
+        let entitlements = cache.transactions
+            .filter { $0.productType != .consumable }
+            .map { PersistedEntitlement(from: $0) }
         let data = PersistedEntitlementsData(entitlements: entitlements)
 
         guard let encoded = try? JSONEncoder().encode(data) else {
@@ -81,21 +86,11 @@ actor HeliumEntitlementsManager {
             return
         }
 
-        Task.detached { [encoded] in
-            await self.saveEntitlementsToFile(encoded)
-        }
-
-        HeliumLogger.log(.debug, category: .entitlements, "Persisted \(entitlements.count) entitlements")
-    }
-
-    /// Saves encoded data to file
-    private func saveEntitlementsToFile(_ data: Data) {
-        guard let fileURL = entitlementsFileURL else { return }
-
         do {
             let directory = fileURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try data.write(to: fileURL, options: .atomic)
+            try encoded.write(to: fileURL, options: .atomic)
+            HeliumLogger.log(.debug, category: .entitlements, "Persisted \(entitlements.count) entitlements")
         } catch {
             HeliumLogger.log(.warn, category: .entitlements, "Failed to persist entitlements to file", metadata: ["error": error.localizedDescription])
         }
@@ -268,12 +263,6 @@ actor HeliumEntitlementsManager {
         }
         let entitlements = await getCachedEntitlements()
         return entitlements.map { $0.productID }
-    }
-
-    /// Returns persisted product IDs synchronously for immediate availability.
-    /// This is useful before transactions have been loaded from StoreKit.
-    func getPersistedProductIds() -> Set<String> {
-        Set(cache.persistedEntitlements.map { $0.productID })
     }
 
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {

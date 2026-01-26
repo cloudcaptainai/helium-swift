@@ -51,6 +51,10 @@ struct PersistedEntitlement: Codable {
         productType == "nonRenewable"
     }
 
+    var isConsumable: Bool {
+        productType == "consumable"
+    }
+
     var isSubscription: Bool {
         isAutoRenewable || isNonRenewable
     }
