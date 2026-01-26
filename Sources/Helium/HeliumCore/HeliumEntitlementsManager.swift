@@ -226,7 +226,7 @@ actor HeliumEntitlementsManager {
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
-            for persisted in cache.persistedEntitlements {
+            for persisted in cache.persistedEntitlements where persisted.appearsValid() {
                 if persisted.isAutoRenewable {
                     return true
                 } else if includeNonRenewing && persisted.isNonRenewable {
@@ -249,8 +249,10 @@ actor HeliumEntitlementsManager {
     
     func hasAnyEntitlement() async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
-        if cache.lastTransactionsLoadedTime == nil && !cache.persistedEntitlements.isEmpty {
-            return true
+        if cache.lastTransactionsLoadedTime == nil {
+            if cache.persistedEntitlements.contains(where: { $0.appearsValid() }) {
+                return true
+            }
         }
         let entitlements = await getCachedEntitlements()
         return !entitlements.isEmpty
@@ -258,8 +260,11 @@ actor HeliumEntitlementsManager {
     
     func purchasedProductIds() async -> [String] {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
-        if cache.lastTransactionsLoadedTime == nil && !cache.persistedEntitlements.isEmpty {
-            return cache.persistedEntitlements.map { $0.productID }
+        if cache.lastTransactionsLoadedTime == nil {
+            let validPersisted = cache.persistedEntitlements.filter { $0.appearsValid() }
+            if !validPersisted.isEmpty {
+                return validPersisted.map { $0.productID }
+            }
         }
         let entitlements = await getCachedEntitlements()
         return entitlements.map { $0.productID }
@@ -268,7 +273,7 @@ actor HeliumEntitlementsManager {
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
-            for persisted in cache.persistedEntitlements where persisted.isAutoRenewable {
+            for persisted in cache.persistedEntitlements where persisted.isAutoRenewable && persisted.appearsValid() {
                 if persisted.subscriptionGroupID == subscriptionGroupID {
                     return true
                 }
@@ -301,7 +306,7 @@ actor HeliumEntitlementsManager {
     func hasActiveEntitlementFor(productId: String) async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
-            if cache.persistedEntitlements.contains(where: { $0.productID == productId }) {
+            if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() }) {
                 return true
             }
         }
