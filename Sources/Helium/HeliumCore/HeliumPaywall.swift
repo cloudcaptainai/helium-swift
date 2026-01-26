@@ -258,7 +258,7 @@ fileprivate func resolvePaywallState(
 /// Determines if loading state should be shown by checking actual download status
 private func shouldShowLoadingState(for trigger: String) -> Bool {
     // Check if loading is enabled for this trigger
-    let useLoadingState = Helium.config.defaultLoadingBudget > 0
+    let useLoadingState = loadingBudgetUInt64(trigger: trigger) > 0
     if !useLoadingState {
         return false
     }
