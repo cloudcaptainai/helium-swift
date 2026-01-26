@@ -24,13 +24,14 @@ public struct PaywallPresentationConfig {
     var dontShowIfAlreadyEntitled: Bool = true
     // How long to allow loading state before switching to fallback logic.
     // Use zero or negative value to disable loading state.
-    var loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    // If not set, Helium.config.defaultLoadingBudget will be used.
+    var loadingBudget: TimeInterval? = nil
     
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
         dontShowIfAlreadyEntitled: Bool = true,
-        loadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+        loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
         self.customPaywallTraits = customPaywallTraits
@@ -39,11 +40,15 @@ public struct PaywallPresentationConfig {
     }
     
     var useLoadingState: Bool {
-        loadingBudget > 0
+        effectiveLoadingBudget > 0
+    }
+    
+    var effectiveLoadingBudget: TimeInterval {
+        return loadingBudget ?? Helium.config.defaultLoadingBudget
     }
     
     var constrainedLoadingBudget: TimeInterval {
-        max(1, min(15, loadingBudget))
+        max(1, min(20, effectiveLoadingBudget))
     }
 }
 
@@ -548,9 +553,6 @@ public class HeliumConfig {
         }
     }
     
-    /// Adjust the default loading budget for paywalls. If reached, a fallback will be shown if available otherwise onPaywallNotShown/whenPaywallNotShown will be called.
-    public static let defaultLoadingBudget: TimeInterval = 7.0
-    
     /// Adjust to RevenueCatDelegate() if using RevenueCat or if you want to handle your own purchase logic, create a custom implementation. You can also subclass
     /// StoreKitDelegate or RevenueCatDelegate for custom implementations.
     public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
@@ -565,7 +567,7 @@ public class HeliumConfig {
     /// Maximum time (in seconds) to show the loading state before displaying fallback.
     /// After this timeout, even if the paywall is still downloading, a fallback will be shown if available.
     /// A value of 0 or less will disable the loading state.
-    public var defaultLoadingBudget: TimeInterval = HeliumConfig.defaultLoadingBudget
+    public var defaultLoadingBudget: TimeInterval = 7.0
     
     /// Custom loading view to display while fetching paywall configuration.
     /// If nil, a default shimmer animation will be shown.
