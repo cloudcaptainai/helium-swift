@@ -1,0 +1,281 @@
+//
+//  HeliumPaywall.swift
+//  Helium
+//
+
+import SwiftUI
+
+/// A SwiftUI view that displays Helium paywalls.
+///
+/// ## Example Usage
+/// ```swift
+/// // Minimal - uses default loading view
+/// HeliumPaywall(trigger: "onboarding") { reason in
+///     Text("Paywall not shown: \(reason.rawValue)")
+/// }
+///
+/// // With custom loading view
+/// HeliumPaywall(
+///     trigger: "onboarding",
+///     loadingView: { ProgressView() }
+/// ) { reason in
+///     Text("Paywall not shown: \(reason.rawValue)")
+/// }
+/// ```
+public struct HeliumPaywall<PaywallNotShownView: View>: View {
+    
+    let trigger: String
+    let loadingView: (() -> AnyView)?
+    let paywallNotShownView: (PaywallNotShownReason) -> PaywallNotShownView
+    let eventHandlers: PaywallEventHandlers?
+    let config: PaywallPresentationConfig
+    
+    @State private var state: HeliumPaywallViewState
+    @State private var didConfigureContext = false
+    @State private var loadingBudgetExpired = false
+    @State private var isEntitled: Bool? = nil
+    
+    /// Creates a new paywall view for the specified trigger with default loading view
+    ///
+    /// - Parameters:
+    ///   - trigger: The trigger name to display a paywall for
+    ///   - config: Additional configuration options
+    ///   - eventHandlers: Optional event handlers for paywall lifecycle events
+    ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting
+    public init(
+        trigger: String,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
+        eventHandlers: PaywallEventHandlers? = nil,
+        @ViewBuilder whenPaywallNotShown: @escaping (PaywallNotShownReason) -> PaywallNotShownView
+    ) {
+        self.trigger = trigger
+        self.loadingView = nil
+        self.paywallNotShownView = whenPaywallNotShown
+        self.eventHandlers = eventHandlers
+        self.config = config
+        
+        self._state = State(initialValue: resolvePaywallState(for: trigger, config: config))
+    }
+    
+    /// Creates a new paywall view for the specified trigger with custom loading view
+    ///
+    /// - Parameters:
+    ///   - trigger: The trigger name to display a paywall for
+    ///   - config: Additional configuration options
+    ///   - eventHandlers: Optional event handlers for paywall lifecycle events
+    ///   - loadingView: Custom view to show while paywall is loading
+    ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting/already-entitled
+    public init<LoadingView: View>(
+        trigger: String,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
+        eventHandlers: PaywallEventHandlers? = nil,
+        @ViewBuilder loadingView: @escaping () -> LoadingView,
+        @ViewBuilder whenPaywallNotShown: @escaping (PaywallNotShownReason) -> PaywallNotShownView
+    ) {
+        self.trigger = trigger
+        self.loadingView = { AnyView(loadingView()) }
+        self.paywallNotShownView = whenPaywallNotShown
+        self.eventHandlers = eventHandlers
+        self.config = config
+        
+        self._state = State(initialValue: resolvePaywallState(for: trigger, config: config))
+    }
+    
+    public var body: some View {
+        Group {
+            switch state {
+            case .waitingForPaywallsDownload, .checkingEntitlement:
+                resolvedLoadingView
+            case .ready(let paywallViewAndSession):
+                paywallViewAndSession.view
+            case .noShow(let reason):
+                paywallNotShownView(reason)
+                    .onAppear {
+                        onPaywallUnavailable(reason: reason)
+                    }
+            }
+        }
+        .onAppear {
+            configureContextIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
+            if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config)
+            }
+        }
+        .task(id: state) {
+            // Handle state-specific async work
+            if case .checkingEntitlement = state {
+                isEntitled = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
+                // Check if task was cancelled (e.g. by loading budget timeout)
+                guard !Task.isCancelled else { return }
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config)
+            }
+        }
+        .task {
+            // Independent timeout covering all loading phases
+            let loadingBudgetMS = loadingBudgetUInt64(config: config)
+            do {
+                try await Task.sleep(nanoseconds: loadingBudgetMS * 1_000_000)
+            } catch {
+                return
+            }
+            
+            // After timeout, re-resolve state with whatever info we have
+            loadingBudgetExpired = true
+            if state.isLoading {
+                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false, config: config)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var resolvedLoadingView: some View {
+        if let userLoadingView = loadingView {
+            userLoadingView()
+        } else if let configLoadingView = Helium.config.defaultLoadingView {
+            configLoadingView
+        } else {
+            let backgroundConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
+            HeliumPaywallPresenter.shared.createDefaultLoadingView(backgroundConfig: backgroundConfig)
+        }
+    }
+    
+    private func configureContextIfNeeded() {
+        guard !didConfigureContext else { return }
+        
+        HeliumPaywallDelegateWrapper.shared.configurePresentationContext(
+            paywallPresentationConfig: config,
+            eventService: eventHandlers,
+            onEntitledHandler: nil,
+            onPaywallNotShown: { reason in
+                // Handle rare post-ready web render fail case
+                guard case .ready = state else { return }
+                if case .error(let unavailableReason) = reason {
+                    if unavailableReason == .webviewRenderFail {
+                        state = .noShow(.error(unavailableReason: unavailableReason))
+                    }
+                }
+            }
+        )
+        
+        didConfigureContext = true
+    }
+    
+    private func onPaywallUnavailable(reason: PaywallNotShownReason) {
+        switch reason {
+        case .alreadyEntitled:
+            // nothing for now
+            break
+        case .targetingHoldout:
+            Helium.shared.handlePaywallSkip(trigger: trigger)
+        case .error(unavailableReason: let unavailableReason):
+            if unavailableReason == .webviewRenderFail {
+                return
+            }
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: "",
+                    error: "Paywall failed to show in embedded view.",
+                    paywallUnavailableReason: unavailableReason,
+                    loadingBudgetMS: loadingBudgetUInt64(config: config)
+                ),
+                paywallSession: nil
+            )
+        }
+    }
+}
+
+/// Represents the current state of a paywall view
+enum HeliumPaywallViewState: Equatable {
+    case waitingForPaywallsDownload
+    case checkingEntitlement
+    case ready(PaywallViewAndSession)
+    case noShow(PaywallNotShownReason)
+    
+    var isLoading: Bool {
+        switch self {
+        case .waitingForPaywallsDownload, .checkingEntitlement: return true
+        case .ready, .noShow: return false
+        }
+    }
+    
+    static func == (lhs: HeliumPaywallViewState, rhs: HeliumPaywallViewState) -> Bool {
+        switch (lhs, rhs) {
+        case (.waitingForPaywallsDownload, .waitingForPaywallsDownload):
+            return true
+        case (.checkingEntitlement, .checkingEntitlement):
+            return true
+        case (.ready, .ready):
+            return true
+        case (.noShow(let lReason), .noShow(let rReason)):
+            return lReason == rReason
+        default:
+            return false
+        }
+    }
+}
+
+// MARK: - Helper Functions
+
+/// Returns the current state of a paywall for the trigger
+fileprivate func resolvePaywallState(
+    for trigger: String,
+    isEntitled: Bool? = nil,
+    allowLoadingState: Bool = true,
+    config: PaywallPresentationConfig
+) -> HeliumPaywallViewState {
+    if allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
+        return .waitingForPaywallsDownload
+    }
+    
+    let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+    if paywallInfo?.shouldShow == false {
+        return .noShow(.targetingHoldout)
+    }
+    
+    let dontShowIfAlreadyEntitled = config.dontShowIfAlreadyEntitled
+    if dontShowIfAlreadyEntitled {
+        if isEntitled == nil && allowLoadingState {
+            return .checkingEntitlement
+        }
+        if isEntitled == true {
+            return .noShow(.alreadyEntitled)
+        }
+    }
+    
+    let result = Helium.shared.upsellViewResultFor(trigger: trigger)
+
+    if let viewAndSession = result.viewAndSession {
+        return .ready(viewAndSession)
+    }
+    
+    if let reason = result.fallbackReason {
+        return .noShow(.error(unavailableReason: reason))
+    }
+    
+    return .noShow(.error(unavailableReason: nil))
+}
+
+/// Determines if loading state should be shown by checking actual download status
+private func shouldShowLoadingState(for trigger: String, config: PaywallPresentationConfig) -> Bool {
+    let loadingBudget = loadingBudgetUInt64(config: config)
+    let useLoadingState = loadingBudget > 0
+    if !useLoadingState {
+        return false
+    }
+    
+    // Check if downloads are in progress or pending
+    let downloadStatus = HeliumFetchedConfigManager.shared.downloadStatus
+    let heliumDownloadsIncoming = Helium.shared.isInitialized() &&
+    (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
+    
+    return heliumDownloadsIncoming
+}
+
+private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
+    let loadingBudgetInSeconds = config.loadingBudget ?? Helium.config.defaultLoadingBudget
+    guard loadingBudgetInSeconds > 0 else { return 0 }
+    return UInt64(loadingBudgetInSeconds * 1000)
+}

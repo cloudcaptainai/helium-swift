@@ -32,7 +32,7 @@ class HeliumPaywallPresenter {
         if presentationConfig.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.shared.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
-                HeliumLogger.log(.info, category: .ui, "Paywall skipped - user already entitled", metadata: ["trigger": trigger])
+                HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 HeliumPaywallDelegateWrapper.shared.onEntitledHandler?()
                 HeliumPaywallDelegateWrapper.shared.onPaywallNotShown?(.alreadyEntitled)
                 return true
@@ -185,10 +185,11 @@ class HeliumPaywallPresenter {
     
     private func loadingBudgetUInt64(trigger: String) -> UInt64 {
         let loadingBudgetInSeconds = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.loadingBudget ?? Helium.config.defaultLoadingBudget
+        guard loadingBudgetInSeconds > 0 else { return 0 }
         return UInt64(loadingBudgetInSeconds * 1000)
     }
     
-    private func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
+    func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
         // Use shimmer view to match the app open PR approach
         let defaultShimmerConfig = JSON([
             "layout": [
@@ -392,8 +393,7 @@ class HeliumPaywallPresenter {
         let trigger = paywallVC.trigger
         let isFallback = paywallVC.isFallback
         let paywallInfo = paywallVC.paywallSession.paywallInfoWithBackups
-        let templateBackupName = isFallback ? HELIUM_FALLBACK_PAYWALL_NAME : ""
-        let templateName = paywallInfo?.paywallTemplateName ?? templateBackupName
+        let templateName = paywallInfo?.paywallTemplateName ?? ""
         
         let event: HeliumEvent
         if openEvent {

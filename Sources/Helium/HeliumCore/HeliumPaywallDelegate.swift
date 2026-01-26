@@ -196,7 +196,7 @@ class HeliumPaywallDelegateWrapper {
             // Global event handlers
             HeliumEventListeners.shared.dispatchEvent(event)
             
-            if let openFailEvent = event as? PaywallOpenFailedEvent {
+            if let openFailEvent = event as? PaywallOpenFailedEvent, !openFailEvent.isSecondTry {
                 onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
             } else if event is PaywallSkippedEvent {
                 onPaywallNotShown?(.targetingHoldout)
@@ -211,23 +211,6 @@ class HeliumPaywallDelegateWrapper {
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)")
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
-    }
-    
-    func onFallbackOpenCloseEvent(trigger: String?, isOpen: Bool, viewType: String?, fallbackReason: PaywallUnavailableReason?, paywallSession: PaywallSession? = nil) {
-        if isOpen {
-            let viewTypeEnum = PaywallOpenViewType(rawValue: viewType ?? PaywallOpenViewType.embedded.rawValue) ?? .embedded
-            fireEvent(PaywallOpenEvent(
-                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
-                viewType: viewTypeEnum,
-                paywallUnavailableReason: fallbackReason
-            ), paywallSession: paywallSession)
-        } else {
-            fireEvent(PaywallCloseEvent(
-                triggerName: trigger ?? HELIUM_FALLBACK_TRIGGER_NAME,
-                paywallName: HELIUM_FALLBACK_PAYWALL_NAME
-            ), paywallSession: paywallSession)
-        }
     }
     
 }

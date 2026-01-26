@@ -81,20 +81,24 @@ public class Helium {
     func skipPaywallIfNeeded(trigger: String) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
-            // Fire allocation event even when paywall is skipped
-            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-                trigger: trigger,
-                isFallback: false,
-                paywallSession: nil
-            )
-            
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallSkippedEvent(triggerName: trigger),
-                paywallSession: nil
-            )
+            handlePaywallSkip(trigger: trigger)
             return true
         }
         return false
+    }
+    
+    func handlePaywallSkip(trigger: String) {
+        // Fire allocation event even when paywall is skipped
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: false,
+            paywallSession: nil
+        )
+        
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallSkippedEvent(triggerName: trigger),
+            paywallSession: nil
+        )
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -208,6 +212,7 @@ public class Helium {
         HeliumLogger.log(.info, category: .core, "All cached state cleared and SDK reset. Call initialize() before using Helium again.")
     }
     
+    @available(*, deprecated, message: "Use HeliumPaywall directly instead")
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
         let upsellView = upsellViewResultFor(trigger: trigger).viewAndSession?.view
         
@@ -293,19 +298,9 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason) -> PaywallViewResult {
-        HeliumLogger.log(.info, category: .fallback, "Using fallback view", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
-        var result: AnyView?
+        HeliumLogger.log(.info, category: .fallback, "Looking for fallback", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
         
         let fallbackViewPaywallSession = PaywallSession(trigger: trigger, paywallInfo: paywallInfo, fallbackType: .fallbackView)
-        let getFallbackViewForTrigger: () -> AnyView? = {
-            if let fallbackView = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: trigger) {
-                return AnyView(HeliumFallbackViewWrapper(trigger: trigger, paywallSession: fallbackViewPaywallSession, fallbackReason: fallbackReason) {
-                    fallbackView
-                })
-            } else {
-                return nil
-            }
-        }
         
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
@@ -323,15 +318,10 @@ public class Helium {
                 )
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
             } catch {
-                result = getFallbackViewForTrigger()
+                HeliumLogger.log(.warn, category: .fallback, "Failed to create fallback view", metadata: ["trigger": trigger, "error": "\(error)"])
             }
-        } else {
-            result = getFallbackViewForTrigger()
         }
-        guard let result else {
-            return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
-        }
-        return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: result, paywallSession: fallbackViewPaywallSession), fallbackReason: fallbackReason)
+        return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
     }
     
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
