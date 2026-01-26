@@ -235,7 +235,7 @@ fileprivate func resolvePaywallState(
         return .noShow(.targetingHoldout)
     }
     
-    let dontShowIfAlreadyEntitled = HeliumPaywallDelegateWrapper.shared.paywallPresentationConfig?.dontShowIfAlreadyEntitled ?? true
+    let dontShowIfAlreadyEntitled = config.dontShowIfAlreadyEntitled
     if dontShowIfAlreadyEntitled {
         if isEntitled == nil && allowLoadingState {
             return .checkingEntitlement
