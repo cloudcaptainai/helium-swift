@@ -37,6 +37,14 @@ public struct PaywallPresentationConfig {
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
         self.loadingBudget = loadingBudget
     }
+    
+    var useLoadingState: Bool {
+        loadingBudget > 0
+    }
+    
+    var constrainedLoadingBudget: TimeInterval {
+        max(1, min(15, loadingBudget))
+    }
 }
 
 public class Helium {
