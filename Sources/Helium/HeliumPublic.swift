@@ -442,8 +442,6 @@ public class Helium {
     public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
         HeliumPaywallPresenter.shared.hideAllUpsells()
         
-        HeliumPaywallDelegateWrapper.reset()
-        
         // Clear fetched configuration from memory
         HeliumFetchedConfigManager.reset()
         

@@ -67,9 +67,6 @@ public extension HeliumPaywallDelegate {
 class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
-    static func reset() {
-        // No longer needs to clear context - it lives on sessions
-    }
     
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
