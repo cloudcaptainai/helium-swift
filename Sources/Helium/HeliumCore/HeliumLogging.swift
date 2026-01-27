@@ -30,6 +30,7 @@ public enum HeliumLogCategory: String, Sendable {
     case events
     case config
     case fallback
+    case entitlements
 }
 
 // MARK: - Log Event & Listener Types
