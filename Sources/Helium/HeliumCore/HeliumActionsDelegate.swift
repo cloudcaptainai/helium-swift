@@ -255,6 +255,8 @@ public class HeliumActionsDelegate: ObservableObject {
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
             viewType: viewType,
+            loadTimeTakenMS: nil,
+            loadingBudgetMS: paywallSession.presentationContext.config.loadingBudgetForAnalyticsMS,
             paywallUnavailableReason: fallbackReason
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
