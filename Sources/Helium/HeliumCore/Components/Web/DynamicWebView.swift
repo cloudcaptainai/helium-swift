@@ -7,6 +7,10 @@ enum FileLoadAttempt {
     case backupLoad
 }
 
+extension Notification.Name {
+    static let heliumEmbeddedPaywallRenderFail = Notification.Name("heliumEmbeddedPaywallRenderFail")
+}
+
 public struct DynamicWebView: View {
     let bundleId: String?
     let filePath: String
@@ -157,9 +161,9 @@ public struct DynamicWebView: View {
         // Context and script injection timing
         do {
             let contextJSON = createHeliumContext(triggerName: triggerName)
-                        
-            let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
-
+            
+            let customContextValues = paywallSession?.presentationContext.getCustomVariableValues() ?? [:]
+            
             _ = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)
@@ -291,6 +295,14 @@ public struct DynamicWebView: View {
             }
         } else {
             HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
+            // Notify embedded SwiftUI views so they can update their state
+            if let sessionId = paywallSession?.sessionId {
+                NotificationCenter.default.post(
+                    name: .heliumEmbeddedPaywallRenderFail,
+                    object: nil,
+                    userInfo: ["sessionId": sessionId]
+                )
+            }
         }
     }
     

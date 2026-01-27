@@ -67,43 +67,9 @@ public extension HeliumPaywallDelegate {
 class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
-    static func reset() {
-        shared.clearPresentationContext()
-    }
-    
-    private(set) var paywallPresentationConfig: PaywallPresentationConfig? = nil
-    private var eventService: PaywallEventHandlers?
-    private(set) var onEntitledHandler: (() -> Void)? = nil
-    private(set) var onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
     
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
-    }
-    
-    /// Consolidated method to set both event service and custom traits for a paywall presentation
-    func configurePresentationContext(
-        paywallPresentationConfig: PaywallPresentationConfig,
-        eventService: PaywallEventHandlers?,
-        onEntitledHandler: (() -> Void)?,
-        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
-    ) {
-        // Always set both, even if nil, to ensure proper reset
-        self.paywallPresentationConfig = paywallPresentationConfig
-        self.eventService = eventService
-        self.onEntitledHandler = onEntitledHandler
-        self.onPaywallNotShown = onPaywallNotShown
-    }
-    
-    /// Clear both event service and custom traits after paywall closes
-    func clearPresentationContext() {
-        self.paywallPresentationConfig = nil
-        self.eventService = nil
-        self.onEntitledHandler = nil
-        self.onPaywallNotShown = nil
-    }
-
-    public func getCustomVariableValues() -> [String: Any] {
-        return paywallPresentationConfig?.customPaywallTraits ?? [:]
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
@@ -187,8 +153,10 @@ class HeliumPaywallDelegateWrapper {
     /// Fire a v2 typed event - main entry point for all SDK events
     func fireEvent(_ event: HeliumEvent, paywallSession: PaywallSession?) {
         Task { @MainActor in
-            // First, call the event service if configured
-            eventService?.handleEvent(event)
+            let context = paywallSession?.presentationContext
+            
+            // First, call the event service if configured (from session context)
+            context?.eventHandlers?.handleEvent(event)
             
             // Then fire the new typed event to delegate
             delegate.onPaywallEvent(event)
@@ -197,14 +165,7 @@ class HeliumPaywallDelegateWrapper {
             HeliumEventListeners.shared.dispatchEvent(event)
             
             if let openFailEvent = event as? PaywallOpenFailedEvent, !openFailEvent.isSecondTry {
-                onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
-            } else if event is PaywallSkippedEvent {
-                onPaywallNotShown?(.targetingHoldout)
-            }
-            
-            // Clear presentation context (event service and custom traits) on close events
-            if let closeEvent = event as? PaywallCloseEvent, !closeEvent.isSecondTry {
-                clearPresentationContext()
+                context?.onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
             }
         }
         
