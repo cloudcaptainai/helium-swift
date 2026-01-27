@@ -157,9 +157,9 @@ public struct DynamicWebView: View {
         // Context and script injection timing
         do {
             let contextJSON = createHeliumContext(triggerName: triggerName)
-                        
-            let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
-
+            
+            let customContextValues = paywallSession?.presentationContext?.getCustomVariableValues() ?? [:]
+            
             _ = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)

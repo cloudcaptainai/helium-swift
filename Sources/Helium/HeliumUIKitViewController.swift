@@ -52,17 +52,21 @@ class HeliumViewController: UIViewController {
     
     var paywallSession: PaywallSession // should only ever be modified in updateContent
     
+    /// Stores context for loading state transitions; copied to new session when loading completes
+    var presentationContext: PaywallPresentationContext?
+    
     var customWindow: UIWindow?
     
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     
-    init(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false) {
+    init(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext? = nil) {
         self.trigger = trigger
         self.paywallSession = paywallSession
         self.fallbackReason = fallbackReason
         self.isSecondTry = isSecondTry
         self.isLoading = isLoading
+        self.presentationContext = presentationContext
         self.contentView = AnyView(contentView
             .environment(\.paywallPresentationState, presentationState))
         if isLoading {
