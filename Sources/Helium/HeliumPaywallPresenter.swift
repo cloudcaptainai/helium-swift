@@ -52,7 +52,7 @@ class HeliumPaywallPresenter {
                         paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
-                        loadingBudgetMS: loadingBudgetUInt64(config: presentationContext.config)
+                        loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
                     ),
                     paywallSession: nil
                 )
@@ -75,7 +75,7 @@ class HeliumPaywallPresenter {
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "A paywall is already being presented.",
                     paywallUnavailableReason: .alreadyPresented,
-                    loadingBudgetMS: loadingBudgetUInt64(config: config)
+                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
                 ),
                 paywallSession: nil
             )
@@ -150,7 +150,7 @@ class HeliumPaywallPresenter {
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: context)
         guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
-            let loadingBudgetMS = loadingBudgetUInt64(config: context.config)
+            let loadingBudgetMS = context.config.loadingBudgetForAnalyticsMS
             hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
@@ -181,12 +181,6 @@ class HeliumPaywallPresenter {
             }
         }
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
-    }
-    
-    private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
-        let loadingBudgetInSeconds = config.safeLoadingBudgetInSeconds
-        guard loadingBudgetInSeconds > 0 else { return 0 }
-        return UInt64(loadingBudgetInSeconds * 1000)
     }
     
     func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
@@ -303,7 +297,7 @@ class HeliumPaywallPresenter {
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "No root view controller found",
                     paywallUnavailableReason: .noRootController,
-                    loadingBudgetMS: loadingBudgetUInt64(config: presentationContext.config)
+                    loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
                 ),
                 paywallSession: paywallSession
             )
@@ -403,7 +397,7 @@ class HeliumPaywallPresenter {
             )
             
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
-            let loadingBudgetMS = loadingBudgetUInt64(config: paywallVC.presentationContext.config)
+            let loadingBudgetMS = paywallVC.presentationContext.config.loadingBudgetForAnalyticsMS
             
             event = PaywallOpenEvent(
                 triggerName: trigger,

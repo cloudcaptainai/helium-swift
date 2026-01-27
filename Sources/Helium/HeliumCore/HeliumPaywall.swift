@@ -123,9 +123,12 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         .task {
             // Independent timeout covering all loading phases
-            let loadingBudgetMS = loadingBudgetUInt64(config: config)
+            guard config.useLoadingState else {
+                return
+            }
+            let loadingBudget = config.safeLoadingBudgetInSeconds
             do {
-                try await Task.sleep(nanoseconds: loadingBudgetMS * 1_000_000)
+                try await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
             } catch {
                 return
             }
@@ -167,7 +170,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     paywallName: "",
                     error: "Paywall failed to show in embedded view.",
                     paywallUnavailableReason: unavailableReason,
-                    loadingBudgetMS: loadingBudgetUInt64(config: config)
+                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
                 ),
                 paywallSession: nil
             )
@@ -235,7 +238,7 @@ fileprivate func resolvePaywallState(
     }
     
     let result = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
-
+    
     if let viewAndSession = result.viewAndSession {
         return .ready(viewAndSession)
     }
@@ -249,7 +252,6 @@ fileprivate func resolvePaywallState(
 
 /// Determines if loading state should be shown by checking actual download status
 private func shouldShowLoadingState(for trigger: String, config: PaywallPresentationConfig) -> Bool {
-    let loadingBudget = loadingBudgetUInt64(config: config)
     if !config.useLoadingState {
         return false
     }
@@ -260,10 +262,4 @@ private func shouldShowLoadingState(for trigger: String, config: PaywallPresenta
     (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
     
     return heliumDownloadsIncoming
-}
-
-private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
-    let loadingBudgetInSeconds = config.safeLoadingBudgetInSeconds
-    guard loadingBudgetInSeconds > 0 else { return 0 }
-    return UInt64(loadingBudgetInSeconds * 1000)
 }

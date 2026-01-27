@@ -43,12 +43,20 @@ public struct PaywallPresentationConfig {
         effectiveLoadingBudget > 0
     }
     
-    var effectiveLoadingBudget: TimeInterval {
+    private var effectiveLoadingBudget: TimeInterval {
         return loadingBudget ?? Helium.config.defaultLoadingBudget
     }
     
     var safeLoadingBudgetInSeconds: TimeInterval {
         max(1, min(20, effectiveLoadingBudget))
+    }
+    
+    var loadingBudgetForAnalyticsMS: UInt64 {
+        if !useLoadingState {
+            return 0
+        }
+        guard safeLoadingBudgetInSeconds > 0 else { return 0 }
+        return UInt64(safeLoadingBudgetInSeconds * 1000)
     }
 }
 
