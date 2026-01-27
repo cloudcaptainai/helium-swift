@@ -146,16 +146,19 @@ public class HeliumActionsDelegate: ObservableObject {
     }
     
     public func showSecondaryPaywall(uuid: String) {
-        if (!isLoading) {
+        if !isLoading {
+            // Re-use same presentation context as underlying paywall. Integrator can check
+            // isSecondTry to distinguish events.
+            let presentationContext = paywallSession.presentationContext
             let secondTryTrigger = "\(trigger)_second_try"
             // use explicit second try trigger if possible
             if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: presentationContext)
             } // otherwise look for a paywall that matches the uuid
             else if let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,

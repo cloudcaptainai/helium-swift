@@ -205,7 +205,7 @@ public class Helium {
         return upsellViewResultFor(trigger: trigger, presentationContext: presentationContext).viewAndSession?.view
     }
     
-    func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext? = nil) -> PaywallViewResult {
+    func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
         if !initialized {
             HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
@@ -270,7 +270,7 @@ public class Helium {
         }
     }
     
-    private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext? = nil) -> PaywallViewResult {
+    private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         HeliumLogger.log(.info, category: .fallback, "Looking for fallback", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
         
         // Check existing fallback mechanisms
@@ -306,7 +306,7 @@ public class Helium {
     }
     
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
-        let upsellResult = upsellViewResultFor(trigger: trigger)
+        let upsellResult = upsellViewResultFor(trigger: trigger, presentationContext: PaywallPresentationContext.empty)
         let canShow = upsellResult.viewAndSession?.view != nil
         return CanShowPaywallResult(
             canShow: canShow,

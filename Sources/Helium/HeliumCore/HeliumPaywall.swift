@@ -216,7 +216,7 @@ fileprivate func resolvePaywallState(
     isEntitled: Bool? = nil,
     allowLoadingState: Bool = true,
     config: PaywallPresentationConfig,
-    presentationContext: PaywallPresentationContext? = nil
+    presentationContext: PaywallPresentationContext
 ) -> HeliumPaywallViewState {
     if allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
         return .waitingForPaywallsDownload

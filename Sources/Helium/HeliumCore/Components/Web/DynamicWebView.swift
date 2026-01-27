@@ -158,7 +158,7 @@ public struct DynamicWebView: View {
         do {
             let contextJSON = createHeliumContext(triggerName: triggerName)
             
-            let customContextValues = paywallSession?.presentationContext?.getCustomVariableValues() ?? [:]
+            let customContextValues = paywallSession?.presentationContext.getCustomVariableValues() ?? [:]
             
             _ = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
