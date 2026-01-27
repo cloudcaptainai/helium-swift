@@ -25,10 +25,7 @@ class HeliumPaywallPresenter {
         }
     }
     
-    private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext?) async -> Bool {
-        guard let context else {
-            return false
-        }
+    private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
         if context.config.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
@@ -41,7 +38,7 @@ class HeliumPaywallPresenter {
         return false
     }
     
-    func presentUpsell(trigger: String, isSecondTry: Bool = false, from viewController: UIViewController? = nil, presentationContext: PaywallPresentationContext? = nil) {
+    func presentUpsell(trigger: String, isSecondTry: Bool = false, presentationContext: PaywallPresentationContext) {
         Task { @MainActor in
             if await paywallEntitlementsCheck(trigger: trigger, context: presentationContext) {
                 return
@@ -55,18 +52,19 @@ class HeliumPaywallPresenter {
                         paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
-                        loadingBudgetMS: loadingBudgetUInt64(config: presentationContext?.config)
+                        loadingBudgetMS: loadingBudgetUInt64(config: presentationContext.config)
                     ),
                     paywallSession: nil
                 )
                 return
             }
             let contentView = viewAndSession.view
-            presentPaywall(trigger: trigger, paywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, from: viewController, presentationContext: presentationContext)
+            presentPaywall(trigger: trigger, paywallSession: viewAndSession.paywallSession, fallbackReason: upsellViewResult.fallbackReason, isSecondTry: isSecondTry, contentView: contentView, presentationContext: presentationContext)
         }
     }
     
-    func presentUpsellWithLoadingBudget(trigger: String, config: PaywallPresentationConfig, presentationContext: PaywallPresentationContext) {
+    func presentUpsellWithLoadingBudget(trigger: String, presentationContext: PaywallPresentationContext) {
+        let config = presentationContext.config
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
         if !paywallsDisplayed.isEmpty {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
@@ -85,10 +83,9 @@ class HeliumPaywallPresenter {
         }
         
         Task { @MainActor in
-            let viewController = config.presentFromViewController
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
-                presentUpsell(trigger: trigger, from: viewController, presentationContext: presentationContext)
+                presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
             
@@ -100,7 +97,7 @@ class HeliumPaywallPresenter {
             let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
             // If loading state disabled for this trigger, show fallback immediately
             if !useLoading || !heliumDownloadsIncoming {
-                presentUpsell(trigger: trigger, from: viewController, presentationContext: presentationContext)
+                presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
             
@@ -112,7 +109,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = customLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, from: viewController, isLoading: true, presentationContext: presentationContext)
+            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, isLoading: true, presentationContext: presentationContext)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -153,7 +150,7 @@ class HeliumPaywallPresenter {
         let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: context)
         guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
-            let loadingBudgetMS = loadingBudgetUInt64(config: context?.config)
+            let loadingBudgetMS = loadingBudgetUInt64(config: context.config)
             hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
@@ -186,8 +183,8 @@ class HeliumPaywallPresenter {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
     
-    private func loadingBudgetUInt64(config: PaywallPresentationConfig?) -> UInt64 {
-        let loadingBudgetInSeconds = config?.safeLoadingBudgetInSeconds ?? Helium.config.defaultLoadingBudget
+    private func loadingBudgetUInt64(config: PaywallPresentationConfig) -> UInt64 {
+        let loadingBudgetInSeconds = config.safeLoadingBudgetInSeconds
         guard loadingBudgetInSeconds > 0 else { return 0 }
         return UInt64(loadingBudgetInSeconds * 1000)
     }
@@ -275,7 +272,7 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, from viewController: UIViewController? = nil, isLoading: Bool = false, presentationContext: PaywallPresentationContext? = nil) {
+    private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext) {
         HeliumLogger.log(.debug, category: .ui, "Presenting paywall", metadata: [
             "trigger": trigger,
             "isLoading": String(isLoading),
@@ -285,7 +282,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
         modalVC.modalPresentationStyle = .fullScreen
         
-        var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
+        var presenter = presentationContext.config.presentFromViewController ?? UIWindowHelper.findTopMostViewController()
         if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
             let newWindow = UIWindow(windowScene: windowScene)
             let containerVC = UIViewController()
@@ -306,7 +303,7 @@ class HeliumPaywallPresenter {
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "No root view controller found",
                     paywallUnavailableReason: .noRootController,
-                    loadingBudgetMS: loadingBudgetUInt64(config: presentationContext?.config)
+                    loadingBudgetMS: loadingBudgetUInt64(config: presentationContext.config)
                 ),
                 paywallSession: paywallSession
             )
@@ -406,7 +403,7 @@ class HeliumPaywallPresenter {
             )
             
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
-            let loadingBudgetMS = loadingBudgetUInt64(config: paywallVC.presentationContext?.config)
+            let loadingBudgetMS = loadingBudgetUInt64(config: paywallVC.presentationContext.config)
             
             event = PaywallOpenEvent(
                 triggerName: trigger,

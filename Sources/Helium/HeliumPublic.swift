@@ -90,7 +90,7 @@ public class Helium {
             onPaywallNotShown: onPaywallNotShown
         )
         
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, config: config, presentationContext: presentationContext)
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationContext: presentationContext)
     }
     
     func skipPaywallIfNeeded(trigger: String) -> Bool {
