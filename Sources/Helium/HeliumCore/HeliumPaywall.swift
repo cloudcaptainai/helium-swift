@@ -112,6 +112,14 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config, presentationContext: presentationContext)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .heliumEmbeddedPaywallRenderFail)) { notification in
+            guard case .ready(let paywallViewAndSession) = state,
+                  let notificationSessionId = notification.userInfo?["sessionId"] as? String,
+                  notificationSessionId == paywallViewAndSession.paywallSession.sessionId else {
+                return
+            }
+            state = .noShow(.error(unavailableReason: .webviewRenderFail))
+        }
         .task(id: state) {
             // Handle state-specific async work
             if case .checkingEntitlement = state {
