@@ -160,11 +160,12 @@ public class HeliumActionsDelegate: ObservableObject {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {
-                let event = PaywallOpenFailedEvent(
+                var event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
                     paywallName: "",
                     error: "Second try - no paywall found for trigger or uuid \(uuid).",
-                    paywallUnavailableReason: .secondTryNoMatch
+                    paywallUnavailableReason: .secondTryNoMatch,
+                    secondTry: true
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
             }

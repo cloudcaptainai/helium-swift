@@ -54,7 +54,8 @@ class HeliumPaywallPresenter {
                         paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
-                        loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
+                        loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS,
+                        secondTry: isSecondTry
                     ),
                     paywallSession: nil,
                     overridePresentationContext: presentationContext
