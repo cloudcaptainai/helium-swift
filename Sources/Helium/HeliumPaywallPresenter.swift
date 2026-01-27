@@ -56,6 +56,10 @@ class HeliumPaywallPresenter {
                     ),
                     paywallSession: nil
                 )
+                // This is a special case where no session yet but we want to make sure onPaywallNotShown is called
+                if !isSecondTry {
+                    presentationContext.onPaywallNotShown?(.error(unavailableReason: upsellViewResult.fallbackReason))
+                }
                 return
             }
             let contentView = viewAndSession.view
