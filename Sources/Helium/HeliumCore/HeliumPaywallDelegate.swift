@@ -151,9 +151,13 @@ class HeliumPaywallDelegateWrapper {
     
     
     /// Fire a v2 typed event - main entry point for all SDK events
-    func fireEvent(_ event: HeliumEvent, paywallSession: PaywallSession?) {
+    func fireEvent(
+        _ event: HeliumEvent,
+        paywallSession: PaywallSession?,
+        overridePresentationContext: PaywallPresentationContext? = nil
+    ) {
         Task { @MainActor in
-            let context = paywallSession?.presentationContext
+            let context = overridePresentationContext ?? paywallSession?.presentationContext
             
             // First, call the event service if configured (from session context)
             context?.eventHandlers?.handleEvent(event)

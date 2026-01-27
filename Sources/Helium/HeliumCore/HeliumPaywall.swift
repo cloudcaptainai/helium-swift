@@ -180,7 +180,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     paywallUnavailableReason: unavailableReason,
                     loadingBudgetMS: config.loadingBudgetForAnalyticsMS
                 ),
-                paywallSession: nil
+                paywallSession: nil,
+                overridePresentationContext: presentationContext
             )
         }
     }

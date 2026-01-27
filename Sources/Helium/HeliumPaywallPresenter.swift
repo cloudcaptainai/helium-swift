@@ -30,8 +30,10 @@ class HeliumPaywallPresenter {
             let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
-                context.onEntitledHandler?()
-                context.onPaywallNotShown?(.alreadyEntitled)
+                Task { @MainActor in
+                    context.onEntitledHandler?()
+                    context.onPaywallNotShown?(.alreadyEntitled)
+                }
                 return true
             }
         }
@@ -52,14 +54,12 @@ class HeliumPaywallPresenter {
                         paywallName: "",
                         error: "No paywall for trigger and no fallback available when present called.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
-                        loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
+                        loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS,
+                        secondTry: isSecondTry
                     ),
-                    paywallSession: nil
+                    paywallSession: nil,
+                    overridePresentationContext: presentationContext
                 )
-                // This is a special case where no session yet but we want to make sure onPaywallNotShown is called
-                if !isSecondTry {
-                    presentationContext.onPaywallNotShown?(.error(unavailableReason: upsellViewResult.fallbackReason))
-                }
                 return
             }
             let contentView = viewAndSession.view

@@ -252,6 +252,12 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
+    // Second try needs to be explicitly set for PaywallOpenFailedEvent
+    private let _secondTry: Bool
+    public var isSecondTry: Bool {
+        _secondTry
+    }
+    
     public init(
         triggerName: String,
         paywallName: String,
@@ -260,6 +266,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         loadtimeTakenMS: UInt64? = nil,
         loadingBudgetMS: UInt64? = nil,
         newWindowCreated: Bool? = nil,
+        secondTry: Bool = false,
         timestamp: Date = Date()
     ) {
         self.triggerName = triggerName
@@ -269,6 +276,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         self.loadTimeTakenMS = loadtimeTakenMS
         self.loadingBudgetMS = loadingBudgetMS
         self.newWindowCreated = newWindowCreated
+        self._secondTry = secondTry
         self.timestamp = timestamp
     }
     
