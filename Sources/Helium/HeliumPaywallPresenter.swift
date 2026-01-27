@@ -68,6 +68,8 @@ class HeliumPaywallPresenter {
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
         if !paywallsDisplayed.isEmpty {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
+            // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
+            // for the event because we don't want to call `onPaywallNotShown` for this.
             HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
@@ -137,7 +139,7 @@ class HeliumPaywallPresenter {
         // Get context from the loading paywall's stored context
         let context = loadingPaywall.presentationContext
         
-        if Helium.shared.skipPaywallIfNeeded(trigger: trigger) {
+        if Helium.shared.skipPaywallIfNeeded(trigger: trigger, presentationContext: context) {
             hideUpsell()
             return
         }

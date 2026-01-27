@@ -16,7 +16,7 @@ struct PaywallViewAndSession {
 }
 
 public struct PaywallPresentationConfig {
-    // View controller to present from. Defaults to current top view controller
+    // View controller to present from. Defaults to current top view controller. Ignored for HeliumPaywall embedded view.
     var presentFromViewController: UIViewController? = nil
     // Custom traits to send to the paywall
     var customPaywallTraits: [String: Any]? = nil
@@ -85,11 +85,6 @@ public class Helium {
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
-        if skipPaywallIfNeeded(trigger: trigger) {
-            onPaywallNotShown(.targetingHoldout)
-            HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
-            return
-        }
         
         let presentationContext = PaywallPresentationContext(
             config: config,
@@ -97,14 +92,19 @@ public class Helium {
             onEntitledHandler: onEntitled,
             onPaywallNotShown: onPaywallNotShown
         )
+        if skipPaywallIfNeeded(trigger: trigger, presentationContext: presentationContext) {
+            HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
+            return
+        }
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationContext: presentationContext)
     }
     
-    func skipPaywallIfNeeded(trigger: String) -> Bool {
+    func skipPaywallIfNeeded(trigger: String, presentationContext: PaywallPresentationContext) -> Bool {
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if paywallInfo?.shouldShow == false {
             handlePaywallSkip(trigger: trigger)
+            presentationContext.onPaywallNotShown?(.targetingHoldout)
             return true
         }
         return false

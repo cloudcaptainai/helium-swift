@@ -166,8 +166,6 @@ class HeliumPaywallDelegateWrapper {
             
             if let openFailEvent = event as? PaywallOpenFailedEvent, !openFailEvent.isSecondTry {
                 context?.onPaywallNotShown?(.error(unavailableReason: openFailEvent.paywallUnavailableReason))
-            } else if event is PaywallSkippedEvent {
-                context?.onPaywallNotShown?(.targetingHoldout)
             }
         }
         
