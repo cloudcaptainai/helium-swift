@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "HeliumRevenueCat",
             dependencies: [
-                .product(name: "Helium", package: "iOS-SDK"),
+                .product(name: "Helium", package: "helium-swift"),
                 .product(name: "RevenueCat", package: "purchases-ios-spm")
             ]
         )
