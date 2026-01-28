@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5F45BCB22F29AA6F00E67171 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = 5F45BCB12F29AA6F00E67171 /* Helium */; };
+		271266E72ECBF6A6005479C2 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = 271266E62ECBF6A6005479C2 /* Helium */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,7 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5F45BCB22F29AA6F00E67171 /* Helium in Frameworks */,
+				271266E72ECBF6A6005479C2 /* Helium in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,7 +95,7 @@
 			);
 			name = HeliumExample;
 			packageProductDependencies = (
-				5F45BCB12F29AA6F00E67171 /* Helium */,
+				271266E62ECBF6A6005479C2 /* Helium */,
 			);
 			productName = HeliumExample;
 			productReference = 271266D12ECBF5CA005479C2 /* HeliumExample.app */;
@@ -132,7 +132,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					271266D02ECBF5CA005479C2 = {
 						CreatedOnToolsVersion = 26.1.1;
@@ -153,7 +153,7 @@
 			mainGroup = 271266C82ECBF5CA005479C2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				5F45BCB02F29AA6F00E67171 /* XCLocalSwiftPackageReference "../../iOS-SDK" */,
+				271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference ".." */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 271266D22ECBF5CA005479C2 /* Products */;
@@ -268,7 +268,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -326,7 +325,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -473,14 +471,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		5F45BCB02F29AA6F00E67171 /* XCLocalSwiftPackageReference "../../iOS-SDK" */ = {
+		271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../iOS-SDK";
+			relativePath = ..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		5F45BCB12F29AA6F00E67171 /* Helium */ = {
+		271266E62ECBF6A6005479C2 /* Helium */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Helium;
 		};
