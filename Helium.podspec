@@ -23,7 +23,7 @@ Pod::Spec.new do |s|
   
   # RevenueCat subspec - adds RevenueCat integration
   s.subspec 'RevenueCat' do |rc|
-    rc.source_files = 'Sources/HeliumRevenueCat/**/*'
+    rc.source_files = 'HeliumRevenueCat/Sources/HeliumRevenueCat/**/*'
     rc.dependency 'Helium/Core'
     rc.dependency 'RevenueCat', '~> 5.0.0'
   end
