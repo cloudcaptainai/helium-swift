@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		271266E72ECBF6A6005479C2 /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = 271266E62ECBF6A6005479C2 /* Helium */; };
+		5FA102412F29A01F003BE4EF /* Helium in Frameworks */ = {isa = PBXBuildFile; productRef = 5FA102402F29A01F003BE4EF /* Helium */; };
+		5FA102442F29A0E7003BE4EF /* HeliumRevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 5FA102432F29A0E7003BE4EF /* HeliumRevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,7 +45,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5FA102412F29A01F003BE4EF /* Helium in Frameworks */,
 				271266E72ECBF6A6005479C2 /* Helium in Frameworks */,
+				5FA102442F29A0E7003BE4EF /* HeliumRevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +100,8 @@
 			name = HeliumExample;
 			packageProductDependencies = (
 				271266E62ECBF6A6005479C2 /* Helium */,
+				5FA102402F29A01F003BE4EF /* Helium */,
+				5FA102432F29A0E7003BE4EF /* HeliumRevenueCat */,
 			);
 			productName = HeliumExample;
 			productReference = 271266D12ECBF5CA005479C2 /* HeliumExample.app */;
@@ -153,7 +159,7 @@
 			mainGroup = 271266C82ECBF5CA005479C2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference ".." */,
+				5FA102422F29A0E7003BE4EF /* XCLocalSwiftPackageReference "../HeliumRevenueCat" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 271266D22ECBF5CA005479C2 /* Products */;
@@ -471,9 +477,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		271266E52ECBF6A6005479C2 /* XCLocalSwiftPackageReference ".." */ = {
+		5FA102422F29A0E7003BE4EF /* XCLocalSwiftPackageReference "../HeliumRevenueCat" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ..;
+			relativePath = ../HeliumRevenueCat;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -481,6 +487,14 @@
 		271266E62ECBF6A6005479C2 /* Helium */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Helium;
+		};
+		5FA102402F29A01F003BE4EF /* Helium */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Helium;
+		};
+		5FA102432F29A0E7003BE4EF /* HeliumRevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HeliumRevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
