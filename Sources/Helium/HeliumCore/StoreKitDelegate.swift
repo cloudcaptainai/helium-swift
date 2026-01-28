@@ -33,7 +33,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let product = try await ProductsCache.shared.getProduct(id: productId) else {
-                print("[Helium] StoreKitDelegate - makePurchase could not find product! \(productId)")
+                HeliumLogger.log(.error, category: .core, "StoreKitDelegate - makePurchase could not find product: \(productId)")
                 return .failed(StoreKitDelegateError.cannotFindProduct)
             }
             
@@ -61,13 +61,13 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
                case .userCancelled = storeKitError {
                 return .cancelled
             }
-            print("[Helium] StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
+            HeliumLogger.log(.error, category: .core, "StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
             return .failed(error)
         }
     }
     
     open func restorePurchases() async -> Bool {
-        return await Helium.shared.hasAnyEntitlement()
+        return await Helium.entitlements.hasAny()
     }
     
     open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {

@@ -51,7 +51,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         }
         
         // Keep this value as up-to-date as possible
-        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        Helium.identify.revenueCatAppUserId = Purchases.shared.appUserID
         
         if allowHeliumUserAttribute {
             Purchases.shared.attribution.setAttributes([
@@ -79,7 +79,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         // Keep this value as up-to-date as possible
-        Helium.shared.setRevenueCatAppUserId(Purchases.shared.appUserID)
+        Helium.identify.revenueCatAppUserId = Purchases.shared.appUserID
         if allowHeliumUserAttribute {
             if let appTransactionID = HeliumIdentityManager.shared.getAppTransactionID() {
                 Purchases.shared.attribution.setAttributes([

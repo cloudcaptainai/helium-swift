@@ -7,6 +7,10 @@ enum FileLoadAttempt {
     case backupLoad
 }
 
+extension Notification.Name {
+    static let heliumEmbeddedPaywallRenderFail = Notification.Name("heliumEmbeddedPaywallRenderFail")
+}
+
 public struct DynamicWebView: View {
     let bundleId: String?
     let filePath: String
@@ -25,18 +29,16 @@ public struct DynamicWebView: View {
     let showShimmer: Bool
     let shimmerConfig: JSON
     let showProgressView: Bool
-    var fallbackPaywall: AnyView?
     let shouldEnableScroll: Bool
     
     @State private var isContentLoaded = false
     @State private var webView: WKWebView? = nil
     @State private var viewLoadStartTime: Date?
-    @State private var shouldShowFallback = false
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
     private var effectiveColorScheme: ColorScheme {
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light: return .light
         case .dark: return .dark
         case .system: return colorScheme // fall back to environment
@@ -58,7 +60,6 @@ public struct DynamicWebView: View {
             backupBundleId = nil
         }
         
-        self.fallbackPaywall = HeliumFallbackViewManager.shared.getFallbackForTrigger(trigger: triggerName ?? "");
         self.actionsDelegate = actionsDelegate;
         
         self.triggerName = triggerName;
@@ -94,12 +95,7 @@ public struct DynamicWebView: View {
                    .ignoresSafeArea()
            }
            
-           if shouldShowFallback, let fallback = fallbackPaywall {
-               fallback
-                   .ignoresSafeArea()
-                   .frame(maxWidth: .infinity, maxHeight: .infinity)
-               
-           } else if let webView {
+           if let webView {
                WebViewRepresentable(webView: webView)
                    .padding(.horizontal, -1)
                    .ignoresSafeArea()
@@ -152,7 +148,7 @@ public struct DynamicWebView: View {
         if webView != nil {
             return
         }
-        print("[Helium] WebView loading html - \(fileLoadAttempt)")
+        HeliumLogger.log(.trace, category: .ui, "WebView loading html - \(fileLoadAttempt)")
         
         guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
             webViewLoadFail(reason: "NoBackupFilePath")
@@ -165,9 +161,9 @@ public struct DynamicWebView: View {
         // Context and script injection timing
         do {
             let contextJSON = createHeliumContext(triggerName: triggerName)
-                        
-            let customContextValues = HeliumPaywallDelegateWrapper.shared.getCustomVariableValues()
-
+            
+            let customContextValues = paywallSession?.presentationContext.getCustomVariableValues() ?? [:]
+            
             _ = Date()
             let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
             let customJSON = try JSON(data: customData)
@@ -225,7 +221,7 @@ public struct DynamicWebView: View {
                     heliumViewController: presentationState.heliumViewController
                 )
                 guard let preparedWebView else {
-                    print("Failed to retrieve preparedWebView!")
+                    HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
                     webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
                     return
                 }
@@ -269,7 +265,7 @@ public struct DynamicWebView: View {
     }
     
     private func webViewLoadFail(reason: String) {
-        print("[Helium] WebView failed to load - \(reason)")
+        HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
         switch fileLoadAttempt {
         case .initialLoad:
             advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
@@ -284,28 +280,28 @@ public struct DynamicWebView: View {
         }
         let trigger = triggerName ?? ""
         let paywallName = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallTemplateName ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.paywallTemplateName ?? "unknown"
-        if fallbackPaywall != nil {
-            shouldShowFallback = true
-            // technically not a "web" render but it's still useful to capture this data and not worthy of a new event
-            let event = PaywallWebViewRenderedEvent(
-                triggerName: trigger,
-                paywallName: HELIUM_FALLBACK_PAYWALL_NAME,
-                paywallUnavailableReason: .webviewRenderFail
-            )
-            HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
-        } else {
-            let openFailEvent = PaywallOpenFailedEvent(
-                triggerName: trigger,
-                paywallName: paywallName,
-                error: "WebView failed to load - \(reason)",
-                paywallUnavailableReason: .webviewRenderFail
-            )
-            if presentationState.viewType == .presented {
-                HeliumPaywallPresenter.shared.hideUpsell {
-                    HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
-                }
-            } else {
+        let openFailEvent = PaywallOpenFailedEvent(
+            triggerName: trigger,
+            paywallName: paywallName,
+            error: "WebView failed to load - \(reason)",
+            paywallUnavailableReason: .webviewRenderFail
+        )
+        if presentationState.viewType == .presented {
+            let didHide = HeliumPaywallPresenter.shared.hideUpsell {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
+            }
+            if !didHide {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
+            }
+        } else {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(openFailEvent, paywallSession: paywallSession)
+            // Notify embedded SwiftUI views so they can update their state
+            if let sessionId = paywallSession?.sessionId {
+                NotificationCenter.default.post(
+                    name: .heliumEmbeddedPaywallRenderFail,
+                    object: nil,
+                    userInfo: ["sessionId": sessionId]
+                )
             }
         }
     }
@@ -485,7 +481,7 @@ class WebViewManager {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
         
-        switch Helium.shared.lightDarkModeOverride {
+        switch Helium.config.lightDarkModeOverride {
         case .light:
             webView.overrideUserInterfaceStyle = .light
         case .dark:
@@ -514,7 +510,7 @@ class WebViewManager {
         let startTime = Date()
         
         preloadFilePath(filePath)
-        print("WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
+        HeliumLogger.log(.trace, category: .ui, "WebViewManager preload in ms \(Date().timeIntervalSince(startTime) * 1000)")
     }
     
     fileprivate func preloadFilePath(_ filePath: String) {

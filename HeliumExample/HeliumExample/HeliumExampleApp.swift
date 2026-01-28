@@ -19,29 +19,27 @@ struct HeliumExampleApp: App {
         // If you are copying this example code, BE SURE TO DOWNLOAD AND ADJUST THIS CODE TO
         // POINT TO THE CORRECT FILE.
         let fallbackBundleURL = Bundle.main.url(forResource: "fallback-bundle-2026-01-05", withExtension: "json")
-        let fallbackConfig = HeliumFallbackConfig.withFallbackBundle(
-            fallbackBundleURL!,
-            loadingBudget: loadStateTestTrigger != nil ? 35 : HeliumFallbackConfig.defaultLoadingBudget
-        )
-
+        Helium.config.customFallbacksURL = fallbackBundleURL
+        
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
-        let delegate: HeliumPaywallDelegate? = ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE")
-            ? MockPaywallDelegate()
-            : nil
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE") {
+            Helium.config.purchaseDelegate = MockPaywallDelegate()
+        }
+        if loadStateTestTrigger != nil {
+            Helium.config.defaultLoadingBudget = 35
+        }
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
-
-        Helium.shared.initialize(
-            apiKey: AppConfig.apiKey,
-            heliumPaywallDelegate: delegate,
-            fallbackConfig: fallbackConfig
-        )
         
-        Helium.setLogLevel(.debug)
+        Helium.shared.initialize(
+            apiKey: AppConfig.apiKey
+        )
         
         // For UI tests:
         if let loadStateTestTrigger {
-            Helium.shared.presentUpsell(trigger: loadStateTestTrigger)
+            Helium.shared.presentPaywall(trigger: loadStateTestTrigger) { reason in
+                print("[Helium Example] loadStateTestTrigger - Could not show paywall. \(reason)")
+            }
         }
     }
     

@@ -33,7 +33,7 @@ public struct HeliumUserTraits {
     private static func toJSONSafeValue(_ value: Any, depth: Int) -> Any? {
         // Check nesting depth first
         if depth > maxNestingDepth {
-            print("[Helium] Warning: User trait value exceeds maximum nesting depth of \(maxNestingDepth). Skipping nested value.")
+            HeliumLogger.log(.warn, category: .config, "User trait value exceeds maximum nesting depth of \(maxNestingDepth). Skipping nested value.")
             return nil
         }
         // Convert known types to JSON-safe equivalents first
@@ -46,7 +46,7 @@ public struct HeliumUserTraits {
         if let url = value as? URL {
             let urlString = url.absoluteString
             if urlString.count > maxStringLength {
-                print("[Helium] Warning: User trait URL value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                HeliumLogger.log(.warn, category: .config, "User trait URL value exceeds maximum length of \(maxStringLength) characters. Truncating.")
                 return String(urlString.prefix(maxStringLength))
             }
             return urlString
@@ -55,7 +55,7 @@ public struct HeliumUserTraits {
         // Handle strings with length limit
         if let string = value as? String {
             if string.count > maxStringLength {
-                print("[Helium] Warning: User trait string value exceeds maximum length of \(maxStringLength) characters. Truncating.")
+                HeliumLogger.log(.warn, category: .config, "User trait string value exceeds maximum length of \(maxStringLength) characters. Truncating.")
                 return String(string.prefix(maxStringLength))
             }
             return string
@@ -65,7 +65,7 @@ public struct HeliumUserTraits {
         if let array = value as? [Any] {
             var truncatedArray = array
             if array.count > maxArrayCount {
-                print("[Helium] Warning: User trait array exceeds maximum count of \(maxArrayCount) elements. Truncating.")
+                HeliumLogger.log(.warn, category: .config, "User trait array exceeds maximum count of \(maxArrayCount) elements. Truncating.")
                 truncatedArray = Array(array.prefix(maxArrayCount))
             }
             return truncatedArray.compactMap { toJSONSafeValue($0, depth: depth + 1) }
@@ -75,7 +75,7 @@ public struct HeliumUserTraits {
         if let dict = value as? [String: Any] {
             var truncatedDict = dict
             if dict.count > maxDictionaryCount {
-                print("[Helium] Warning: User trait dictionary exceeds maximum count of \(maxDictionaryCount) keys. Truncating.")
+                HeliumLogger.log(.warn, category: .config, "User trait dictionary exceeds maximum count of \(maxDictionaryCount) keys. Truncating.")
                 truncatedDict = Dictionary(uniqueKeysWithValues: dict.prefix(maxDictionaryCount).map { ($0.key, $0.value) })
             }
             return truncatedDict.compactMapValues { toJSONSafeValue($0, depth: depth + 1) }
@@ -87,7 +87,7 @@ public struct HeliumUserTraits {
         }
 
         // Non-serializable type - log warning and skip
-        print("[Helium] Warning: Skipping non-JSON-serializable user trait value of type \(type(of: value)). Supported types are String, Int, Double, Bool, Date, Array, Dictionary.")
+        HeliumLogger.log(.warn, category: .config, "Skipping non-JSON-serializable user trait value of type \(type(of: value)). Supported types are String, Int, Double, Bool, Date, Array, Dictionary.")
         return nil
     }
     

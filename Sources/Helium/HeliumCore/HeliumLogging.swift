@@ -130,10 +130,14 @@ final class HeliumLogListenerManager: @unchecked Sendable {
 ///
 /// Provides log level controls and allows wrapper SDKs to subscribe to log events.
 public enum HeliumLogger {
-
-    /// Default level is conservative; integrators can turn this up.
-    @HeliumAtomic private static var level: HeliumLogLevel = .error
-
+    
+#if DEBUG
+    private static let defaultLogLevel = HeliumLogLevel.info
+#else
+    private static let defaultLogLevel = HeliumLogLevel.error
+#endif
+    @HeliumAtomic private static var level: HeliumLogLevel = defaultLogLevel
+    
     /// Underlying sink. Default is OSLog.
     @HeliumAtomic private static var sink: any HeliumLogSink = HeliumOSLogSink()
 
@@ -274,10 +278,10 @@ struct HeliumOSLogSink: HeliumLogSink {
             logger.log(level: map(level), "\(prefixedMessage, privacy: .public)")
         } else {
             let meta = metadata
-                .map { "\($0.key)=\($0.value)" }
+                .map { "\($0.key) = \($0.value)" }
                 .sorted()
-                .joined(separator: " ")
-            logger.log(level: map(level), "\(prefixedMessage, privacy: .public) \(meta, privacy: .private)")
+                .joined(separator: "\n")
+            logger.log(level: map(level), "\(prefixedMessage, privacy: .public)\n\(meta, privacy: .private)")
         }
     }
 
