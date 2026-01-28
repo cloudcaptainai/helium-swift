@@ -63,4 +63,17 @@ struct PersistedEntitlement: Codable {
 /// Container for persisted entitlements data
 struct PersistedEntitlementsData: Codable {
     let entitlements: [PersistedEntitlement]
+    let entitledForTrigger: [String: Bool]
+
+    init(entitlements: [PersistedEntitlement], entitledForTrigger: [String: Bool] = [:]) {
+        self.entitlements = entitlements
+        self.entitledForTrigger = entitledForTrigger
+    }
+
+    // Custom decoding to handle missing entitledForTrigger in older persisted data
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        entitlements = try container.decode([PersistedEntitlement].self, forKey: .entitlements)
+        entitledForTrigger = try container.decodeIfPresent([String: Bool].self, forKey: .entitledForTrigger) ?? [:]
+    }
 }
