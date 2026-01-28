@@ -275,7 +275,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading)
         modalVC.modalPresentationStyle = .fullScreen
         
-        var presenter = viewController ?? UIWindowHelper.findTopMostViewController()
+        var presenter = viewController
         if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
             let newWindow = UIWindow(windowScene: windowScene)
             let containerVC = UIViewController()
@@ -285,6 +285,9 @@ class HeliumPaywallPresenter {
             presenter = containerVC
             
             modalVC.customWindow = newWindow
+        }
+        if presenter == nil {
+            presenter = UIWindowHelper.findTopMostViewController()
         }
         
         guard let presenter else {
