@@ -282,7 +282,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
         modalVC.modalPresentationStyle = .fullScreen
         
-        var presenter = presentationContext.config.presentFromViewController ?? UIWindowHelper.findTopMostViewController()
+        var presenter = presentationContext.config.presentFromViewController
         if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
             let newWindow = UIWindow(windowScene: windowScene)
             let containerVC = UIViewController()
@@ -293,15 +293,19 @@ class HeliumPaywallPresenter {
             
             modalVC.customWindow = newWindow
         }
+        // Try this as backup but if new window failed, this likely will too.
+        if presenter == nil {
+            presenter = UIWindowHelper.findTopMostViewController()
+        }
         
         guard let presenter else {
             // Failed to find a view controller to present on - this should never happen
-            HeliumLogger.log(.error, category: .ui, "No root view controller found to present paywall", metadata: ["trigger": trigger])
+            HeliumLogger.log(.error, category: .ui, "No window scene found to present paywall", metadata: ["trigger": trigger])
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "No root view controller found",
+                    error: "No window scene found",
                     paywallUnavailableReason: .noRootController,
                     loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
                 ),
