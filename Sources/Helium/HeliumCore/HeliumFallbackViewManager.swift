@@ -67,6 +67,11 @@ public class HeliumFallbackViewManager {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
                 
+                let triggersMissingProducts = loadedConfig?.getTriggersWithMissingProducts() ?? []
+                if !triggersMissingProducts.isEmpty {
+                    HeliumLogger.log(.error, category: .fallback, "👷 Some triggers in your fallbacks file have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
+                }
+                
                 if let config = loadedConfig {
                     HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,
@@ -83,10 +88,10 @@ public class HeliumFallbackViewManager {
     
     /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig
     private func resolvedTrigger(for trigger: String) -> String {
-        // Check if trigger exists in config AND has valid resolvedConfig JSON
-        if loadedConfig?.triggerToPaywalls[trigger] != nil,
-           let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"],
-           json.exists() {
+        let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
+        let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
+        let hasResolvedConfig = resolvedConfigJson?.exists() == true && resolvedConfigJson?.type != .null
+        if fallbackPaywallInfo?.hasIosProducts == true && hasResolvedConfig {
             return trigger
         }
         return defaultFallbackTrigger
