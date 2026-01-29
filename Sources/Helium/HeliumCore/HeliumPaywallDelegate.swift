@@ -173,7 +173,13 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
-        HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)")
+        var metadata: [String: String] = [:]
+        if let productEvent = event as? ProductEvent {
+            metadata["productId"] = productEvent.productId
+        } else if let paywallEvent = event as? PaywallContextEvent {
+            metadata["trigger"] = paywallEvent.triggerName
+        }
+        HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
     }

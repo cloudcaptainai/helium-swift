@@ -67,6 +67,11 @@ public class HeliumFallbackViewManager {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
                 
+                let triggersMissingProducts = loadedConfig?.getTriggersWithMissingProducts() ?? []
+                if !triggersMissingProducts.isEmpty {
+                    HeliumLogger.log(.error, category: .fallback, "👷 Some triggers in your fallbacks file have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
+                }
+                
                 if let config = loadedConfig {
                     HeliumAnalyticsManager.shared.setUpAnalytics(
                         writeKey: config.segmentBrowserWriteKey,

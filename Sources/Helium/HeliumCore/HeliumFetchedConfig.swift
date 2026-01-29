@@ -656,6 +656,11 @@ public class HeliumFetchedConfigManager {
         completion(.success(newConfig, metrics))
         updateDownloadState(.downloadSuccess)
         
+        let triggersMissingProducts = newConfig.getTriggersWithMissingProducts()
+        if !triggersMissingProducts.isEmpty {
+            HeliumLogger.log(.error, category: .config, "‼️⚠️‼️ Some triggers have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
+        }
+        
         Task { @MainActor in
             NotificationCenter.default.post(
                 name: NSNotification.Name("HeliumConfigDownloadComplete"),

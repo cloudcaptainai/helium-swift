@@ -34,8 +34,8 @@ public struct HeliumPaywallInfo: Codable {
     var paywallID: Int
     var paywallUUID: String?
     public var paywallTemplateName: String
-    var productsOffered: [String]
-    var productsOfferedIOS: [String]
+    var productsOffered: [String]?
+    var productsOfferedIOS: [String]?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -50,7 +50,7 @@ public struct HeliumPaywallInfo: Codable {
     var presentationStyle: PaywallPresentationStyle?
     
     var productIds: [String] {
-        productsOfferedIOS ?? productsOffered
+        productsOfferedIOS ?? productsOffered ?? []
     }
     
     var hasIosProducts: Bool {
@@ -161,6 +161,10 @@ public struct HeliumFetchedConfig: Codable {
         experimentInfo.enrolledTrigger = enrollment.enrolledTrigger
         
         return experimentInfo
+    }
+    
+    func getTriggersWithMissingProducts() -> [String] {
+        return triggerToPaywalls.filter { !$0.value.hasIosProducts }.map { $0.key }
     }
 }
 
