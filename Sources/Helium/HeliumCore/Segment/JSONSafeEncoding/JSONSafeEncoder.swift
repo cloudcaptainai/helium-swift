@@ -572,11 +572,7 @@ extension _SpecialTreatmentEncoder {
             return .number((date.timeIntervalSince1970 * 1000).description)
 
         case .iso8601:
-            if #available(macOS 10.12, iOS 10.0, watchOS 3.0, tvOS 10.0, *) {
-                return .string(_iso8601Formatter.string(from: date))
-            } else {
-                fatalError("ISO8601DateFormatter is unavailable on this platform.")
-            }
+            return .string(_iso8601Formatter.string(from: date))
 
         case .formatted(let formatter):
             return .string(formatter.string(from: date))
