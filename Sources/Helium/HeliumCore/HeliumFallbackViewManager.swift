@@ -90,7 +90,7 @@ public class HeliumFallbackViewManager {
     private func resolvedTrigger(for trigger: String) -> String {
         let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
         let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
-        let hasResolvedConfig = resolvedConfigJson?.exists() == true
+        let hasResolvedConfig = resolvedConfigJson?.exists() == true && resolvedConfigJson?.type != .null
         if fallbackPaywallInfo?.hasIosProducts == true && hasResolvedConfig {
             return trigger
         }

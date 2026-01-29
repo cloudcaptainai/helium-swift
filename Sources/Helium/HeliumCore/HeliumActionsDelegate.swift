@@ -87,10 +87,7 @@ public class HeliumActionsDelegate: ObservableObject {
     init(paywallInfo: HeliumPaywallInfo, paywallSession: PaywallSession, trigger: String) {
         self.paywallInfo = paywallInfo
         self.paywallSession = paywallSession
-        self.selectedProductId = "";
-        if !paywallInfo.productIds.isEmpty {
-            self.selectedProductId = paywallInfo.productIds[0] ?? ""
-        }
+        self.selectedProductId = paywallInfo.productIds.first ?? ""
     }
     
     public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
