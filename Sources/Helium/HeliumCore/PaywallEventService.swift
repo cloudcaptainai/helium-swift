@@ -32,6 +32,7 @@ public struct PaywallEventHandlers {
     
     /// Called when a paywall fails to open
     /// - Note: Fired when paywall cannot be displayed (e.g., no view available, already presenting, WebView load failure)
+    @available(*, deprecated, message: "Use onPaywallNotShown instead.")
     public var onOpenFailed: ((PaywallOpenFailedEvent) -> Void)?
     
     /// Called when a custom action is triggered from the paywall
@@ -116,6 +117,7 @@ extension PaywallEventHandlers {
     
     /// Set handler for when a paywall fails to open
     /// - Note: Track paywall presentation failures. Useful for debugging and monitoring.
+    @available(*, deprecated, message: "Use onPaywallNotShown instead.")
     public func onOpenFailed(_ handler: @escaping (PaywallOpenFailedEvent) -> Void) -> PaywallEventHandlers {
         var service = self
         service.onOpenFailed = handler

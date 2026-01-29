@@ -13,11 +13,31 @@ enum FallbackPaywallType {
     case fallbackView
 }
 
+/// Presentation context for a single paywall presentation
+struct PaywallPresentationContext {
+    let config: PaywallPresentationConfig
+    let eventHandlers: PaywallEventHandlers?
+    let onEntitledHandler: (() -> Void)?
+    let onPaywallNotShown: ((PaywallNotShownReason) -> Void)?
+    
+    func getCustomVariableValues() -> [String: Any] {
+        return config.customPaywallTraits ?? [:]
+    }
+    
+    static let empty: PaywallPresentationContext = PaywallPresentationContext(
+        config: PaywallPresentationConfig(),
+        eventHandlers: nil,
+        onEntitledHandler: nil,
+        onPaywallNotShown: nil
+    )
+}
+
 /// Represents a single paywall presentation session.
 struct PaywallSession {
     let sessionId: String
     let trigger: String
     let fallbackType: FallbackPaywallType
+    let presentationContext: PaywallPresentationContext
     
     private let paywallInfo: HeliumPaywallInfo?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
@@ -34,10 +54,11 @@ struct PaywallSession {
         }
     }
     
-    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType) {
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
+        self.presentationContext = presentationContext
     }
 }

@@ -16,7 +16,9 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 30) {
             Button("show paywall") {
-                Helium.shared.presentUpsell(trigger: AppConfig.triggerKey)
+                Helium.shared.presentPaywall(trigger: AppConfig.triggerKey) { reason in
+                    print("[Helium Example] show paywall - Could not show paywall. \(reason)")
+                }
             }
             .accessibilityIdentifier("presentPaywall")
             
@@ -24,7 +26,19 @@ struct ContentView: View {
                 showModifierPaywall = true
             }
             .accessibilityIdentifier("showPaywallViaModifier")
-            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey)
+            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey) { reason in
+                Text("no show! \(reason.description)")
+            }
+            
+            Button("show via embedded") {
+                showEmbeddedPaywall = true
+            }
+            .accessibilityIdentifier("showPaywallEmbedded")
+            .fullScreenCover(isPresented: $showEmbeddedPaywall) {
+                HeliumPaywall(trigger: AppConfig.triggerKey) { reason in
+                    Text("no show embedded! \(reason.description)")
+                }
+            }
         }
         .padding()
     }

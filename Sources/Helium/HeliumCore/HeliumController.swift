@@ -13,7 +13,6 @@ public class HeliumController {
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
     var apiKey: String
-    var customAPIEndpoint: String?
     
     public init(apiKey: String) {
         self.apiKey = apiKey
@@ -24,21 +23,10 @@ public class HeliumController {
         HeliumAnalyticsManager.shared.logInitializeEvent()
     }
     
-    func identifyUser(userId: String, traits: HeliumUserTraits? = nil) {
-        if let traits {
-            HeliumIdentityManager.shared.setCustomUserTraits(traits: traits)
-        }
-        HeliumAnalyticsManager.shared.identify(userId: userId)
-    }
-    
-    public func setCustomAPIEndpoint(endpoint: String?) {
-        customAPIEndpoint = endpoint
-    }
-    
     func downloadConfig() {
-        let apiEndpointOrDefault = customAPIEndpoint ?? DEFAULT_API_ENDPOINT
+        let apiEndpointOrDefault = Helium.config.customAPIEndpoint ?? DEFAULT_API_ENDPOINT
         HeliumLogger.log(.info, category: .network, "Starting config download", metadata: ["endpoint": apiEndpointOrDefault])
-
+        
         HeliumFetchedConfigManager.shared.fetchConfig(endpoint: apiEndpointOrDefault, apiKey: self.apiKey) { result in
             switch result {
             case let .success(fetchedConfig, metrics):
@@ -51,7 +39,7 @@ public class HeliumController {
                     endpoint: fetchedConfig.segmentAnalyticsEndpoint,
                     overrideIfNewConfiguration: true
                 )
-
+                
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadSuccessEvent(
                         downloadTimeTakenMS: metrics.configDownloadTimeMS,
@@ -76,7 +64,7 @@ public class HeliumController {
                     writeKey: self.FAILURE_MONITOR_BROWSER_WRITE_KEY,
                     endpoint: self.FAILURE_MONITOR_ANALYTICS_ENDPOINT
                 )
-
+                
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
                         error: errorMessage,

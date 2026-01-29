@@ -27,6 +27,9 @@ actor HeliumEntitlementsManager {
         var subscriptionStatuses: [String: SubscriptionStatusCache] = [:] // productID is key
         
         var lastTransactionsLoadedTime: Date?
+
+        /// Entitlements from persisted data, used before real transactions are loaded
+        var persistedEntitlements: [PersistedEntitlement] = []
         
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
             guard let lastSyncTime = lastTransactionsLoadedTime else { return true }
@@ -34,10 +37,71 @@ actor HeliumEntitlementsManager {
         }
     }
     
+    // MARK: - Persistence Constants
+
+    private let entitlementsFileName = "helium_entitlements.json"
     private var cache = EntitlementsCache()
     private var updateListenerTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     
+    // MARK: - Persistence
+    
+    /// File URL for entitlements storage.
+    private nonisolated var entitlementsFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Helium", isDirectory: true)
+            .appendingPathComponent(entitlementsFileName)
+    }
+    
+    /// Loads persisted entitlements from file storage
+    private func loadPersistedEntitlements() {
+        guard let fileURL = entitlementsFileURL,
+              let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode(PersistedEntitlementsData.self, from: data) else {
+            return
+        }
+        applyPersistedData(decoded)
+    }
+
+    /// Applies persisted data to the cache
+    private func applyPersistedData(_ data: PersistedEntitlementsData) {
+        // Filter to only valid, non-consumable entitlements
+        cache.persistedEntitlements = data.entitlements.filter { $0.appearsValid() && !$0.isConsumable }
+        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements")
+    }
+
+    /// Persists current entitlements to file storage
+    private func saveEntitlements() {
+        guard let fileURL = entitlementsFileURL else { return }
+
+        // Filter out consumables - they don't represent ongoing entitlements
+        let entitlements = cache.transactions
+            .filter { $0.productType != .consumable }
+            .map { PersistedEntitlement(from: $0) }
+        let data = PersistedEntitlementsData(entitlements: entitlements)
+
+        guard let encoded = try? JSONEncoder().encode(data) else {
+            HeliumLogger.log(.warn, category: .entitlements, "Failed to encode entitlements for persistence")
+            return
+        }
+
+        do {
+            let directory = fileURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encoded.write(to: fileURL, options: .atomic)
+            HeliumLogger.log(.debug, category: .entitlements, "Persisted \(entitlements.count) entitlements")
+        } catch {
+            HeliumLogger.log(.warn, category: .entitlements, "Failed to persist entitlements to file", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    /// Clears persisted entitlements
+    private func clearPersistedEntitlements() {
+        guard let fileURL = entitlementsFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
     deinit {
         updateListenerTask?.cancel()
         debounceTask?.cancel()
@@ -71,6 +135,8 @@ actor HeliumEntitlementsManager {
     public func configure() async {
         guard !isConfigured else { return }
         isConfigured = true
+        // Load persisted entitlements first for immediate availability
+        loadPersistedEntitlements()
         startTransactionListener()
         await loadEntitlementsIfNeeded()
     }
@@ -80,7 +146,7 @@ actor HeliumEntitlementsManager {
         if !cache.needsTransactionsSync(resetInterval: cacheResetInterval) {
             return
         }
-        
+
         var transactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
@@ -93,9 +159,33 @@ actor HeliumEntitlementsManager {
                 transactions.append(transaction)
             }
         }
-        
-        cache.transactions = transactions
-        cache.lastTransactionsLoadedTime = Date()
+
+        // If StoreKit returned transactions, use them and update persistence
+        if !transactions.isEmpty {
+            cache.transactions = transactions
+            cache.lastTransactionsLoadedTime = Date()
+            cache.persistedEntitlements.removeAll()
+            saveEntitlements()
+            return
+        }
+
+        // StoreKit returned empty - check if we should trust this result
+        // If persisted entitlements have all expired, trust the empty result
+        let hasValidPersistedEntitlements = cache.persistedEntitlements.contains { $0.appearsValid() }
+
+        if hasValidPersistedEntitlements {
+            // We have non-expired persisted entitlements but StoreKit returned empty
+            // This could be a StoreKit sync issue (offline, not ready, etc.)
+            // Keep persisted data and don't mark as loaded so we retry next time
+            HeliumLogger.log(.warn, category: .entitlements,
+                "StoreKit returned no transactions but valid persisted entitlements exist - keeping persisted data")
+        } else {
+            // All persisted entitlements are expired or none exist - trust empty result
+            cache.transactions = []
+            cache.lastTransactionsLoadedTime = Date()
+            cache.persistedEntitlements.removeAll()
+            saveEntitlements()
+        }
     }
     
     private func getCachedEntitlements() async -> [Transaction] {
@@ -134,8 +224,19 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            for persisted in cache.persistedEntitlements where persisted.appearsValid() {
+                if persisted.isAutoRenewable {
+                    return true
+                } else if includeNonRenewing && persisted.isNonRenewable {
+                    return true
+                }
+            }
+        }
+
         let entitlements = await getCachedEntitlements()
-        
+
         for transaction in entitlements {
             if transaction.productType == .autoRenewable {
                 return true
@@ -147,18 +248,40 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyEntitlement() async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            if cache.persistedEntitlements.contains(where: { $0.appearsValid() }) {
+                return true
+            }
+        }
         let entitlements = await getCachedEntitlements()
         return !entitlements.isEmpty
     }
     
     func purchasedProductIds() async -> [String] {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            let validPersisted = cache.persistedEntitlements.filter { $0.appearsValid() }
+            if !validPersisted.isEmpty {
+                return validPersisted.map { $0.productID }
+            }
+        }
         let entitlements = await getCachedEntitlements()
         return entitlements.map { $0.productID }
     }
-    
+
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            for persisted in cache.persistedEntitlements where persisted.isAutoRenewable && persisted.appearsValid() {
+                if persisted.subscriptionGroupID == subscriptionGroupID {
+                    return true
+                }
+            }
+        }
+
         let entitlements = await getCachedEntitlements()
-        
+
         for transaction in entitlements where transaction.productType == .autoRenewable {
             if transaction.subscriptionGroupID == subscriptionGroupID {
                 return true
@@ -181,6 +304,12 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveEntitlementFor(productId: String) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() }) {
+                return true
+            }
+        }
         let entitlements = await getCachedEntitlements()
         for transaction in entitlements {
             if transaction.productID == productId {
@@ -226,6 +355,7 @@ actor HeliumEntitlementsManager {
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
         cache = EntitlementsCache()
+        clearPersistedEntitlements()
     }
     
     func updateAfterPurchase(productID: String, transaction: Transaction?) async {
@@ -236,6 +366,8 @@ actor HeliumEntitlementsManager {
             if let transaction {
                 if !cache.transactions.contains(where: { $0.productID == productID }) {
                     cache.transactions.append(transaction)
+                    // Persist the updated entitlements
+                    saveEntitlements()
                 }
             } else {
                 cache.lastTransactionsLoadedTime = nil
@@ -265,7 +397,7 @@ actor HeliumEntitlementsManager {
         guard let statusList = try? await product.subscription?.status else {
             return nil
         }
-        var latestStatus: Product.SubscriptionInfo.Status? = nil
+        var latestStatus: Product.SubscriptionInfo.Status?
         for statusOption in statusList {
             if isSubscriptionStateActive(statusOption.state) {
                 if latestStatus == nil {
