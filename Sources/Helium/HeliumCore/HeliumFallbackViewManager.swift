@@ -83,10 +83,10 @@ public class HeliumFallbackViewManager {
     
     /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig
     private func resolvedTrigger(for trigger: String) -> String {
-        // Check if trigger exists in config AND has valid resolvedConfig JSON
-        if loadedConfig?.triggerToPaywalls[trigger] != nil,
-           let json = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"],
-           json.exists() {
+        let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
+        let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
+        let hasResolvedConfig = resolvedConfigJson?.exists() == true
+        if fallbackPaywallInfo?.hasIosProducts == true && hasResolvedConfig {
             return trigger
         }
         return defaultFallbackTrigger
