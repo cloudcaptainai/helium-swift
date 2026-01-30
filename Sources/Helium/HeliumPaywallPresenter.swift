@@ -362,9 +362,9 @@ class HeliumPaywallPresenter {
             return
         }
         let paywallsToRemove = paywallsDisplayed
-        paywallsDisplayed.removeAll()
         
         Task { @MainActor in
+            paywallsDisplayed.removeAll()
             let group = DispatchGroup()
             
             for (index, paywall) in paywallsToRemove.reversed().enumerated() {
