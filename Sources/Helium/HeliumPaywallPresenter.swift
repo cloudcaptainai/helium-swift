@@ -366,12 +366,19 @@ class HeliumPaywallPresenter {
         Task { @MainActor in
             let group = DispatchGroup()
             
-            for (index, paywall) in paywallsToRemove.enumerated() {
+            for (index, paywall) in paywallsToRemove.reversed().enumerated() {
                 group.enter()
-                // Only animate the last (topmost) paywall
-                let shouldAnimate = index == paywallsToRemove.count - 1
-                paywall.dismiss(animated: shouldAnimate) {
-                    group.leave()
+                // Only animate the first (topmost) paywall
+                let shouldAnimate = index == 0
+                // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+                if let presenter = paywall.presentingViewController {
+                    presenter.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
+                } else {
+                    paywall.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
                 }
             }
             
