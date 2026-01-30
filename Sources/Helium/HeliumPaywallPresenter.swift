@@ -360,15 +360,26 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        let paywallsRemoved = paywallsDisplayed
+        let paywallsToRemove = paywallsDisplayed
+        paywallsDisplayed.removeAll()
+        
         Task { @MainActor in
-            // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
-            // since they must have ultimately be presented by the topmost paywall if you go all the way up.
-            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true) { [weak self] in
-                onComplete?()
-                self?.dispatchCloseForAll(paywallVCs: paywallsRemoved)
+            let group = DispatchGroup()
+            
+            for (index, paywall) in paywallsToRemove.enumerated() {
+                group.enter()
+                // Only animate the last (topmost) paywall
+                let shouldAnimate = index == paywallsToRemove.count - 1
+                paywall.dismiss(animated: shouldAnimate) {
+                    group.leave()
+                }
             }
-            paywallsDisplayed.removeAll()
+            
+            group.notify(queue: .main) { [weak self] in
+                // Fire close events topmost to bottom
+                self?.dispatchCloseForAll(paywallVCs: paywallsToRemove.reversed())
+                onComplete?()
+            }
         }
     }
     
