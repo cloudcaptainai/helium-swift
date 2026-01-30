@@ -344,7 +344,8 @@ class HeliumPaywallPresenter {
         }
         HeliumLogger.log(.info, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
         Task { @MainActor in
-            currentPaywall.dismiss(animated: animated) { [weak self] in
+            // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+            currentPaywall.presentingViewController?.dismiss(animated: animated) { [weak self] in
                 if let overrideCloseEvent {
                     overrideCloseEvent()
                 } else {
