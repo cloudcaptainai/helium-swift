@@ -822,6 +822,7 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
         ]
         if let storeKitTransactionId {
             dict["storeKitTransactionId"] = storeKitTransactionId
+            dict["canonicalJoinTransactionId"] = storeKitTransactionId
         }
         if let storeKitOriginalTransactionId {
             dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
