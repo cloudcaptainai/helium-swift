@@ -18,11 +18,18 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+    @HeliumAtomic private var sessionsWithEntitlement: Set<String> = []
     
     func isSecondTryPaywall(trigger: String) -> Bool {
         return paywallsDisplayed.contains {
             $0.trigger == trigger && $0.isSecondTry
         }
+    }
+    
+    /// Mark a session as having achieved entitlement (purchase/restore succeeded).
+    /// The onEntitled callback will be called when the paywall closes.
+    func markSessionAsEntitled(sessionId: String) {
+        _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
     }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
@@ -31,7 +38,7 @@ class HeliumPaywallPresenter {
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 Task { @MainActor in
-                    context.onEntitledHandler?()
+                    context.onEntitled?()
                     context.onPaywallNotShown?(.alreadyEntitled)
                 }
                 return true
@@ -420,6 +427,16 @@ class HeliumPaywallPresenter {
     
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
+        
+        // Call onEntitled if this session had a successful purchase/restore
+        let sessionId = paywallVC.paywallSession.sessionId
+        var wasEntitled = false
+        _sessionsWithEntitlement.withValue { wasEntitled = $0.remove(sessionId) != nil }
+        if wasEntitled {
+            Task { @MainActor in
+                paywallVC.presentationContext.onEntitled?()
+            }
+        }
     }
     
     private func dispatchOpenOrCloseEvent(openEvent: Bool, paywallVC: HeliumViewController) {

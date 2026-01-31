@@ -56,7 +56,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: nil,
+            onEntitled: nil,
             onPaywallNotShown: nil
         )
         
@@ -86,7 +86,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: nil,
+            onEntitled: nil,
             onPaywallNotShown: nil
         )
         

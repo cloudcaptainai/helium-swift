@@ -19,6 +19,8 @@ struct CodableLocale: Codable {
     var decimalSeparator: String?
     var usesMetricSystem: Bool
     var storeCountryCode: String?  // 2-letter alpha-2 code
+    var storefrontId: String?
+    var storefrontCurrency: String?
 }
 
 struct CodableScreenInfo: Codable {
@@ -121,7 +123,9 @@ public struct CodableUserContext: Codable {
             "decimalSeparator": self.locale.decimalSeparator ?? "",
             "usesMetricSystem": self.locale.usesMetricSystem,
             "storeCountryCode": self.locale.storeCountryCode ?? "",
-            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
+            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? "",
+            "storefrontId": locale.storefrontId ?? "",
+            "storefrontCurrency": locale.storefrontCurrency ?? ""
         ]
         
         let nativeBoundsDict: [String: Any] = [
@@ -203,7 +207,9 @@ public struct CodableUserContext: Codable {
             currentTimeZoneName: TimeZone.current.identifier,
             decimalSeparator: Locale.current.decimalSeparator,
             usesMetricSystem: Locale.current.usesMetricSystem,
-            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode()
+            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode(),
+            storefrontId: AppStoreCountryHelper.shared.getStorefrontId(),
+            storefrontCurrency: AppStoreCountryHelper.shared.getStorefrontCurrency()
         )
 
         let screenInfo = CodableScreenInfo(

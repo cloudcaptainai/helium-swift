@@ -190,6 +190,15 @@ class HeliumPaywallDelegateWrapper {
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
+        
+        // Mark session for onEntitled callback on purchase/restore success
+        if let sessionId = paywallSession?.sessionId {
+            if event is PurchaseSucceededEvent ||
+               event is PurchaseRestoredEvent ||
+               event is PurchaseAlreadyEntitledEvent {
+                HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
+            }
+        }
     }
     
 }

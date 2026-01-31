@@ -17,7 +17,7 @@ enum FallbackPaywallType {
 struct PaywallPresentationContext {
     let config: PaywallPresentationConfig
     let eventHandlers: PaywallEventHandlers?
-    let onEntitledHandler: (() -> Void)?
+    let onEntitled: (() -> Void)?
     let onPaywallNotShown: ((PaywallNotShownReason) -> Void)?
     
     func getCustomVariableValues() -> [String: Any] {
@@ -27,7 +27,7 @@ struct PaywallPresentationContext {
     static let empty: PaywallPresentationContext = PaywallPresentationContext(
         config: PaywallPresentationConfig(),
         eventHandlers: nil,
-        onEntitledHandler: nil,
+        onEntitled: nil,
         onPaywallNotShown: nil
     )
 }
