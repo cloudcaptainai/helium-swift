@@ -344,6 +344,24 @@ actor HeliumEntitlementsManager {
         }
         return await hasActiveSubscriptionFor(productId: productId)
     }
+
+    /// Checks if user has personally purchased this exact product (excludes family sharing).
+    /// Note: This checks the exact productId only, not subscription group membership.
+    func hasPersonallyPurchased(productId: String) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() && $0.isPersonalPurchase }) {
+                return true
+            }
+        }
+        let entitlements = await getCachedEntitlements()
+        for transaction in entitlements {
+            if transaction.productID == productId && transaction.ownershipType == .purchased {
+                return true
+            }
+        }
+        return false
+    }
     
     // Note that this should return true if user has purchased product OR a different subscription within same subscription group as supplied product.
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
