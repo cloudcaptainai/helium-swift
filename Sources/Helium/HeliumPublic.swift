@@ -89,7 +89,7 @@ public class Helium {
         let presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: onEntitled,
+            onEntitled: onEntitled,
             onPaywallNotShown: onPaywallNotShown
         )
         if skipPaywallIfNeeded(trigger: trigger, presentationContext: presentationContext) {
@@ -202,7 +202,7 @@ public class Helium {
         let presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: nil,
+            onEntitled: nil,
             onPaywallNotShown: nil
         )
         return upsellViewResultFor(trigger: trigger, presentationContext: presentationContext).viewAndSession?.view
