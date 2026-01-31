@@ -124,8 +124,8 @@ public struct CodableUserContext: Codable {
             "usesMetricSystem": self.locale.usesMetricSystem,
             "storeCountryCode": self.locale.storeCountryCode ?? "",
             "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? "",
-            "storefrontId": AppStoreCountryHelper.shared.getStorefrontId() ?? "",
-            "storefrontCurrency": AppStoreCountryHelper.shared.getStorefrontCurrency() ?? ""
+            "storefrontId": locale.storefrontId ?? "",
+            "storefrontCurrency": locale.storefrontCurrency ?? ""
         ]
         
         let nativeBoundsDict: [String: Any] = [
