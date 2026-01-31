@@ -73,7 +73,9 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
-        let hadEntitlementBeforePurchase = await HeliumEntitlementsManager.shared.hasActiveEntitlementFor(productId: productKey)
+        let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
+            await HeliumEntitlementsManager.shared.hasActiveEntitlementFor(productId: productKey)
+        } ?? false
         
         StoreKit1Listener.ensureListening()
         
