@@ -228,6 +228,10 @@ public class Helium {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
             }
             
+            if !templatePaywallInfo.hasIosProducts {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
+            }
+            
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
                     HeliumLogger.log(.warn, category: .ui, "No local bundle path for trigger", metadata: ["trigger": trigger])

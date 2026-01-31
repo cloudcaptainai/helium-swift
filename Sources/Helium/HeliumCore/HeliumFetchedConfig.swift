@@ -656,6 +656,11 @@ public class HeliumFetchedConfigManager {
         completion(.success(newConfig, metrics))
         updateDownloadState(.downloadSuccess)
         
+        let triggersMissingProducts = newConfig.getTriggersWithMissingProducts()
+        if !triggersMissingProducts.isEmpty {
+            HeliumLogger.log(.error, category: .config, "‼️⚠️‼️ Some triggers have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
+        }
+        
         Task { @MainActor in
             NotificationCenter.default.post(
                 name: NSNotification.Name("HeliumConfigDownloadComplete"),
@@ -669,7 +674,7 @@ public class HeliumFetchedConfigManager {
         var allProductIds: [String] = []
         if let config {
             for paywall in config.triggerToPaywalls.values {
-                allProductIds.append(contentsOf: paywall.productsOffered)
+                allProductIds.append(contentsOf: paywall.productIds)
             }
         }
         return Array(Set(allProductIds))
@@ -771,7 +776,7 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
-        return fetchedConfig?.triggerToPaywalls[trigger]?.productsOffered;
+        fetchedConfig?.triggerToPaywalls[trigger]?.productIds
     }
     
     public func getFetchedTriggerNames() -> [String] {

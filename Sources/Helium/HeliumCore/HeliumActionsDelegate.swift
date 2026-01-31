@@ -81,10 +81,7 @@ public class HeliumActionsDelegate: ObservableObject {
     init(paywallInfo: HeliumPaywallInfo, paywallSession: PaywallSession, trigger: String) {
         self.paywallInfo = paywallInfo
         self.paywallSession = paywallSession
-        self.selectedProductId = "";
-        if (!paywallInfo.productsOffered.isEmpty) {
-            self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
-        }
+        self.selectedProductId = paywallInfo.productIds.first ?? ""
     }
     
     public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
@@ -154,7 +151,7 @@ public class HeliumActionsDelegate: ObservableObject {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {
-                var event = PaywallOpenFailedEvent(
+                let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
                     paywallName: "",
                     error: "Second try - no paywall found for trigger or uuid \(uuid).",
