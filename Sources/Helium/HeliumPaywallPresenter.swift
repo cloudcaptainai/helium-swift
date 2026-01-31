@@ -374,9 +374,9 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        let paywallsToRemove = paywallsDisplayed
         
         Task { @MainActor in
+            let paywallsToRemove = paywallsDisplayed
             paywallsDisplayed.removeAll()
             let group = DispatchGroup()
             
