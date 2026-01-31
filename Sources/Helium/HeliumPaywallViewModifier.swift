@@ -50,13 +50,13 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
 // Extension to make DynamicPaywallModifier easier to use
 public extension View {
     /// Show a paywall with custom loading view
-      func triggerUpsell<LoadingView: View, FallbackView: View>(
+      func heliumPaywall<LoadingView: View, PaywallNotShownView: View>(
           isPresented: Binding<Bool>,
           trigger: String,
           config: PaywallPresentationConfig = PaywallPresentationConfig(),
           eventHandlers: PaywallEventHandlers? = nil,
           @ViewBuilder loadingView: @escaping () -> LoadingView,
-          @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
+          @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> PaywallNotShownView
       ) -> some View {
           self.modifier(DynamicPaywallModifier(
                isPresented: isPresented,
@@ -69,12 +69,12 @@ public extension View {
        }
 
        /// Show a paywall with default loading view
-       func triggerUpsell<FallbackView: View>(
+       func heliumPaywall<PaywallNotShownView: View>(
            isPresented: Binding<Bool>,
            trigger: String,
            config: PaywallPresentationConfig = PaywallPresentationConfig(),
            eventHandlers: PaywallEventHandlers? = nil,
-           @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> FallbackView
+           @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> PaywallNotShownView
        ) -> some View {
            self.modifier(DynamicPaywallModifier(
                isPresented: isPresented,

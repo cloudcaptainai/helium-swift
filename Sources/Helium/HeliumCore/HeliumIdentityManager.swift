@@ -120,6 +120,8 @@ class AppStoreCountryHelper {
     
     @HeliumAtomic private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
     @HeliumAtomic private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
+    @HeliumAtomic private var cachedStorefrontId: String?
+    @HeliumAtomic private var cachedStorefrontCurrency: String?
     private var fetchTask: Task<String?, Never>?
     
     private init() {
@@ -127,9 +129,15 @@ class AppStoreCountryHelper {
     }
     
     private func performFetch() async -> String? {
-        if let alpha3 = await Storefront.current?.countryCode {
-            cachedCountryCode3 = alpha3
-            cachedCountryCode2 = convertAlpha3ToAlpha2(alpha3)
+        if let storefront = await Storefront.current {
+            cachedCountryCode3 = storefront.countryCode
+            cachedCountryCode2 = convertAlpha3ToAlpha2(storefront.countryCode)
+            cachedStorefrontId = storefront.id
+#if compiler(>=6.2)
+            if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, visionOS 1.0, *) {
+                cachedStorefrontCurrency = storefront.currency?.identifier
+            }
+#endif
         }
         return cachedCountryCode2
     }
@@ -150,6 +158,18 @@ class AppStoreCountryHelper {
     /// - Returns: The cached alpha-3 country code, or nil if fetch not yet complete
     func getStoreCountryCode3() -> String? {
         return cachedCountryCode3
+    }
+
+    /// Returns the cached storefront ID synchronously
+    /// - Returns: The cached storefront ID, or nil if fetch not yet complete
+    func getStorefrontId() -> String? {
+        return cachedStorefrontId
+    }
+
+    /// Returns the cached storefront currency synchronously
+    /// - Returns: The cached storefront currency identifier, or nil if fetch not yet complete or unavailable
+    func getStorefrontCurrency() -> String? {
+        return cachedStorefrontCurrency
     }
 }
 
