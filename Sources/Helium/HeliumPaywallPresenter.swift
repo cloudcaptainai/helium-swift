@@ -337,6 +337,10 @@ class HeliumPaywallPresenter {
     
     @discardableResult
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
+        guard !paywallsDisplayed.isEmpty else {
+            HeliumLogger.log(.debug, category: .ui, "Attempted to hide paywall but no paywall to hide")
+            return false
+        }
         Task { @MainActor in
             guard let currentPaywall = paywallsDisplayed.popLast() else {
                 return
@@ -362,11 +366,7 @@ class HeliumPaywallPresenter {
                 }
             }
         }
-        let canHidePaywall = !paywallsDisplayed.isEmpty
-        if !canHidePaywall {
-            HeliumLogger.log(.debug, category: .ui, "Attempted to hide paywall but no paywall to hide")
-        }
-        return canHidePaywall
+        return true
     }
     
     func hideAllUpsells(onComplete: (() -> Void)? = nil) {
