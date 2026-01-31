@@ -328,16 +328,30 @@ class HeliumPaywallPresenter {
     
     @discardableResult
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
-        guard let currentPaywall = paywallsDisplayed.popLast(),
-              currentPaywall.presentingViewController != nil else {
+        guard !paywallsDisplayed.isEmpty else {
             return false
         }
         Task { @MainActor in
-            currentPaywall.dismiss(animated: animated) { [weak self] in
-                if let overrideCloseEvent {
-                    overrideCloseEvent()
-                } else {
-                    self?.dispatchCloseEvent(paywallVC: currentPaywall)
+            guard let currentPaywall = paywallsDisplayed.popLast() else {
+                return
+            }
+            // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+            if let presenter = currentPaywall.presentingViewController {
+                presenter.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
+                }
+            } else {
+                // Not expected to occur, but try indirect dismissal as backup
+                currentPaywall.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
                 }
             }
         }
@@ -349,15 +363,34 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        let paywallsRemoved = paywallsDisplayed
+        
         Task { @MainActor in
-            // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
-            // since they must have ultimately be presented by the topmost paywall if you go all the way up.
-            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true) { [weak self] in
-                onComplete?()
-                self?.dispatchCloseForAll(paywallVCs: paywallsRemoved)
-            }
+            let paywallsToRemove = paywallsDisplayed
             paywallsDisplayed.removeAll()
+            let group = DispatchGroup()
+            
+            for (index, paywall) in paywallsToRemove.reversed().enumerated() {
+                group.enter()
+                // Only animate the first (topmost) paywall
+                let shouldAnimate = index == 0
+                // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+                if let presenter = paywall.presentingViewController {
+                    presenter.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
+                } else {
+                    // Not expected to occur, but try indirect dismissal as backup
+                    paywall.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
+                }
+            }
+            
+            group.notify(queue: .main) { [weak self] in
+                // Fire close events topmost to bottom
+                self?.dispatchCloseForAll(paywallVCs: paywallsToRemove.reversed())
+                onComplete?()
+            }
         }
     }
     
