@@ -456,6 +456,13 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
             self = .subscriptionPending(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName)
+        case "purchase_already_entitled":
+            let productKey = try container.decode(String.self, forKey: .productKey)
+            let triggerName = try container.decode(String.self, forKey: .triggerName)
+            let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
+            let storeKitTransactionId = try container.decodeIfPresent(String.self, forKey: .storeKitTransactionId)
+            let storeKitOriginalTransactionId = try container.decodeIfPresent(String.self, forKey: .storeKitOriginalTransactionId)
+            self = .purchaseAlreadyEntitled(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
         case "paywallOpen":
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
@@ -480,6 +487,12 @@ public enum HeliumPaywallEvent: Codable {
         case "paywallSkipped":
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             self = .paywallSkipped(triggerName: triggerName)
+        case "paywallWebViewRendered":
+            let triggerName = try container.decode(String.self, forKey: .triggerName)
+            let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
+            let webviewRenderTimeTakenMS = try container.decodeIfPresent(UInt64.self, forKey: .webviewRenderTimeTakenMS)
+            let paywallUnavailableReason = try container.decodeIfPresent(String.self, forKey: .paywallUnavailableReason)
+            self = .paywallWebViewRendered(triggerName: triggerName, paywallTemplateName: paywallTemplateName, webviewRenderTimeTakenMS: webviewRenderTimeTakenMS, paywallUnavailableReason: paywallUnavailableReason)
         case "paywallsDownloadSuccess":
             let configId = try container.decode(UUID.self, forKey: .configId)
             self = .paywallsDownloadSuccess(configId: configId)
