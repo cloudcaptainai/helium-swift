@@ -776,7 +776,7 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
-        return fetchedConfig?.triggerToPaywalls[trigger]?.productIds
+        fetchedConfig?.triggerToPaywalls[trigger]?.productIds
     }
     
     public func getFetchedTriggerNames() -> [String] {
