@@ -130,9 +130,13 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
+        let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
+            await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
+        } ?? false
+
         StoreKit1Listener.ensureListening()
-        
-        let transactionStatus = await delegate?.makePurchase(productId: productKey);
+
+        let transactionStatus = await delegate?.makePurchase(productId: productKey)
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
@@ -153,23 +157,27 @@ class HeliumPaywallDelegateWrapper {
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
-            
-            Task {
-                await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
-                
-                await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
-                
-                // update localized products (and offer eligibility) after purchase
-                await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+
+            if hadEntitlementBeforePurchase {
+                fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
+            } else {
+                Task {
+                    await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+
+                    await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
+
+                    // update localized products (and offer eligibility) after purchase
+                    await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+                }
+                #if compiler(>=6.2)
+                if let atID = transactionIds?.transaction?.appTransactionID {
+                    HeliumIdentityManager.shared.appTransactionID = atID
+                }
+                #endif
+
+                let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
+                fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
             }
-            #if compiler(>=6.2)
-            if let atID = transactionIds?.transaction?.appTransactionID {
-                HeliumIdentityManager.shared.appTransactionID = atID
-            }
-            #endif
-            
-            let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
-            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         default:

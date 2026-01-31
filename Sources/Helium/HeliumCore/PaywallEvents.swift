@@ -586,6 +586,62 @@ public struct PurchaseSucceededEvent: ProductEvent {
     }
 }
 
+/// Event fired when a purchase completes but user already had an active entitlement for this product
+/// - Note: This indicates a repurchase or restore scenario where the user already owns the product
+public struct PurchaseAlreadyEntitledEvent: ProductEvent {
+    /// The product identifier that was purchased
+    public let productId: String
+
+    /// The trigger identifier for the paywall
+    public let triggerName: String
+
+    /// The name/identifier of the paywall template
+    public let paywallName: String
+
+    /// StoreKit transaction ID
+    public let storeKitTransactionId: String?
+
+    /// StoreKit original transaction ID
+    public let storeKitOriginalTransactionId: String?
+
+    /// When this event occurred
+    public let timestamp: Date
+
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
+        self.productId = productId
+        self.triggerName = triggerName
+        self.paywallName = paywallName
+        self.storeKitTransactionId = storeKitTransactionId
+        self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
+        self.timestamp = timestamp
+    }
+
+    public var eventName: String { "purchaseAlreadyEntitled" }
+
+    public func toDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "type": eventName,
+            "productId": productId,
+            "triggerName": triggerName,
+            "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
+            "timestamp": timestamp.timeIntervalSince1970
+        ]
+        if let storeKitTransactionId {
+            dict["storeKitTransactionId"] = storeKitTransactionId
+            dict["canonicalJoinTransactionId"] = storeKitTransactionId
+        }
+        if let storeKitOriginalTransactionId {
+            dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
+        }
+        return dict
+    }
+
+    public func toLegacyEvent() -> HeliumPaywallEvent {
+        return .purchaseAlreadyEntitled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, canonicalJoinTransactionId: storeKitTransactionId)
+    }
+}
+
 /// Event fired when StoreKit returns .cancelled status from makePurchase() delegate method
 /// - Note: User explicitly cancelled in StoreKit payment sheet
 public struct PurchaseCancelledEvent: ProductEvent {
