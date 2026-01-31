@@ -129,6 +129,7 @@ public class Helium {
     }
     
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
+    @discardableResult
     public func hidePaywall() -> Bool {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }

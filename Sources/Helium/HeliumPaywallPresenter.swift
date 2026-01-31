@@ -337,23 +337,36 @@ class HeliumPaywallPresenter {
     
     @discardableResult
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
-        guard let currentPaywall = paywallsDisplayed.popLast(),
-              currentPaywall.presentingViewController != nil else {
-            HeliumLogger.log(.debug, category: .ui, "hideUpsell called but no paywall to hide")
-            return false
-        }
-        HeliumLogger.log(.info, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
         Task { @MainActor in
+            guard let currentPaywall = paywallsDisplayed.popLast() else {
+                return
+            }
+            HeliumLogger.log(.trace, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
             // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
-            currentPaywall.presentingViewController?.dismiss(animated: animated) { [weak self] in
-                if let overrideCloseEvent {
-                    overrideCloseEvent()
-                } else {
-                    self?.dispatchCloseEvent(paywallVC: currentPaywall)
+            if let presenter = currentPaywall.presentingViewController {
+                presenter.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
+                }
+            } else {
+                // Not expected to occur, but try indirect dismissal as backup
+                currentPaywall.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
                 }
             }
         }
-        return true
+        let canHidePaywall = !paywallsDisplayed.isEmpty
+        if !canHidePaywall {
+            HeliumLogger.log(.debug, category: .ui, "Attempted to hide paywall but no paywall to hide")
+        }
+        return canHidePaywall
     }
     
     func hideAllUpsells(onComplete: (() -> Void)? = nil) {
@@ -377,6 +390,7 @@ class HeliumPaywallPresenter {
                         group.leave()
                     }
                 } else {
+                    // Not expected to occur, but try indirect dismissal as backup
                     paywall.dismiss(animated: shouldAnimate) {
                         group.leave()
                     }
