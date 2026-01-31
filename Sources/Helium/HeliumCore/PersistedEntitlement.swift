@@ -12,6 +12,7 @@ struct PersistedEntitlement: Codable {
     let productType: String // "autoRenewable", "nonRenewable", "consumable", "nonConsumable"
     let subscriptionGroupID: String?
     let expirationDate: Date?
+    let ownershipType: String? // "purchased", "familyShared"
 
     init(from transaction: Transaction) {
         productID = transaction.productID
@@ -29,6 +30,15 @@ struct PersistedEntitlement: Codable {
             productType = "nonConsumable"
         default:
             productType = "unknown"
+        }
+
+        switch transaction.ownershipType {
+        case .purchased:
+            ownershipType = "purchased"
+        case .familyShared:
+            ownershipType = "familyShared"
+        default:
+            ownershipType = "purchased"
         }
     }
 
@@ -57,6 +67,13 @@ struct PersistedEntitlement: Codable {
 
     var isSubscription: Bool {
         isAutoRenewable || isNonRenewable
+    }
+
+    // If true, the user owns this purchase. In other words, they don't have entitlement due to family sharing.
+    // Defaults to false if unknown, favoring conversion tracking over repurchase detection.
+    // (`ownershipType` not expected to be nil though).
+    var isPersonalPurchase: Bool {
+        ownershipType == "purchased"
     }
 }
 

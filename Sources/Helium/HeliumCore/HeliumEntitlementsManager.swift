@@ -161,6 +161,10 @@ actor HeliumEntitlementsManager {
         var transactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
+                // Skip consumables - they don't represent ongoing entitlements
+                if transaction.productType == .consumable {
+                    continue
+                }
                 if transaction.productType == .nonRenewable {
                     let nonRenewingExpired = transaction.expirationDate != nil && transaction.expirationDate! < Date()
                     if nonRenewingExpired {
@@ -340,6 +344,24 @@ actor HeliumEntitlementsManager {
         }
         return await hasActiveSubscriptionFor(productId: productId)
     }
+
+    /// Checks if user has personally purchased this exact product (excludes family sharing).
+    /// Note: This checks the exact productId only, not subscription group membership.
+    func hasPersonallyPurchased(productId: String) async -> Bool {
+        // If transactions haven't loaded yet, use persisted data immediately for faster response
+        if cache.lastTransactionsLoadedTime == nil {
+            if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() && $0.isPersonalPurchase }) {
+                return true
+            }
+        }
+        let entitlements = await getCachedEntitlements()
+        for transaction in entitlements {
+            if transaction.productID == productId && transaction.ownershipType == .purchased {
+                return true
+            }
+        }
+        return false
+    }
     
     // Note that this should return true if user has purchased product OR a different subscription within same subscription group as supplied product.
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
@@ -381,6 +403,11 @@ actor HeliumEntitlementsManager {
     }
     
     func updateAfterPurchase(productID: String, transaction: Transaction?) async {
+        // Skip consumables - they don't represent ongoing entitlements
+        if transaction?.productType == .consumable {
+            return
+        }
+        
         if !cache.transactions.contains(where: { $0.productID == productID }) {
             cache.lastTransactionsLoadedTime = nil
             await loadEntitlementsIfNeeded()

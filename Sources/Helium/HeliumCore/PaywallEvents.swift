@@ -773,6 +773,68 @@ public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
     }
 }
 
+/// Event fired when user attempts to purchase a non-consumable product they already own
+/// - Note: StoreKit returns .purchased but we detected the user already had an entitlement for this product
+///   before the purchase flow started. This indicates StoreKit returned an existing transaction rather than
+///   a new purchase. This is NOT a new revenue event.
+public struct PurchaseAlreadyEntitledEvent: ProductEvent {
+    /// The product identifier that the user already owns
+    /// - Note: StoreKit product ID from App Store Connect
+    public let productId: String
+
+    /// The trigger identifier for the paywall where re-purchase was attempted
+    /// - Note: Corresponds to trigger key in Helium dashboard
+    public let triggerName: String
+
+    /// The name/identifier of the paywall template where re-purchase was attempted
+    /// - Note: Template name from Helium configuration
+    public let paywallName: String
+
+    /// StoreKit transaction ID (from the existing transaction)
+    public let storeKitTransactionId: String?
+
+    /// StoreKit original transaction ID
+    public let storeKitOriginalTransactionId: String?
+
+    /// When this event occurred
+    /// - Note: Captured using Date() at event creation time
+    public let timestamp: Date
+
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
+        self.productId = productId
+        self.triggerName = triggerName
+        self.paywallName = paywallName
+        self.storeKitTransactionId = storeKitTransactionId
+        self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
+        self.timestamp = timestamp
+    }
+
+    public var eventName: String { "purchaseAlreadyEntitled" }
+
+    public func toDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "type": eventName,
+            "productId": productId,
+            "triggerName": triggerName,
+            "paywallName": paywallName,
+            "isSecondTry": isSecondTry,
+            "timestamp": timestamp.timeIntervalSince1970
+        ]
+        if let storeKitTransactionId {
+            dict["storeKitTransactionId"] = storeKitTransactionId
+            dict["canonicalJoinTransactionId"] = storeKitTransactionId
+        }
+        if let storeKitOriginalTransactionId {
+            dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
+        }
+        return dict
+    }
+
+    public func toLegacyEvent() -> HeliumPaywallEvent {
+        return .purchaseAlreadyEntitled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
+    }
+}
+
 /// Event fired when StoreKit returns .pending status (e.g., waiting for parental approval)
 /// - Note: Transaction is awaiting external action before completion
 public struct PurchasePendingEvent: ProductEvent {
