@@ -773,11 +773,11 @@ public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
     }
 }
 
-/// Event fired when user attempts to purchase a product they already own
+/// Event fired when user attempts to purchase a non-consumable product they already own
 /// - Note: StoreKit returns .purchased but we detected the user already had an entitlement for this product
 ///   before the purchase flow started. This indicates StoreKit returned an existing transaction rather than
 ///   a new purchase. This is NOT a new revenue event.
-public struct PurchaseRepeatEvent: ProductEvent {
+public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// The product identifier that the user already owns
     /// - Note: StoreKit product ID from App Store Connect
     public let productId: String
@@ -809,7 +809,7 @@ public struct PurchaseRepeatEvent: ProductEvent {
         self.timestamp = timestamp
     }
 
-    public var eventName: String { "purchaseRepeat" }
+    public var eventName: String { "purchaseAlreadyEntitled" }
 
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
@@ -830,7 +830,7 @@ public struct PurchaseRepeatEvent: ProductEvent {
     }
 
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .purchaseRepeat(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
+        return .purchaseAlreadyEntitled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
     }
 }
 

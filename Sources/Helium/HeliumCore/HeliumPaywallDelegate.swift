@@ -100,7 +100,7 @@ class HeliumPaywallDelegateWrapper {
             }
             
             if hadEntitlementBeforePurchase {
-                fireEvent(PurchaseRepeatEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
+                fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
             } else {
                 Task {
                     await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
