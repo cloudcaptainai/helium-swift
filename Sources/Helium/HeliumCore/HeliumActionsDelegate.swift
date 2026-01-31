@@ -30,10 +30,6 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.onCTAPress(contentComponentName: contentComponentName)
     }
     
-    public func showScreen(screenId: String) {
-        delegate.showScreen(screenId: screenId)
-    }
-    
     public func selectProduct(productId: String) {
         delegate.selectProduct(productId: productId)
     }
@@ -72,9 +68,7 @@ class ActionsDelegateWrapper: ObservableObject {
 public class HeliumActionsDelegate: ObservableObject {
     let paywallInfo: HeliumPaywallInfo
     let paywallSession: PaywallSession
-    @Published var selectedProductId: String
-    @Published var isShowingModal: Bool = false
-    @Published var showingModalScreen: String? = nil
+    private var selectedProductId: String
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
     
@@ -178,11 +172,6 @@ public class HeliumActionsDelegate: ObservableObject {
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }
-    }
-    
-    public func showScreen(screenId: String) {
-        showingModalScreen = screenId
-        isShowingModal = true
     }
     
     public func selectProduct(productId: String) {

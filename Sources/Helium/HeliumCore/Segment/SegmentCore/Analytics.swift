@@ -91,7 +91,7 @@ class Analytics {
         }
         #endif
         
-        return Analytics(configuration: SegmentConfiguration(writeKey: deadInstance))
+        return getOrCreateAnalytics(configuration: SegmentConfiguration(writeKey: deadInstance))
     }
 
     /// Get an existing Analytics instance for the given write key, or create a new one if none exists.
@@ -153,7 +153,7 @@ class Analytics {
         if Self.isActiveWriteKey(configuration.values.writeKey) {
             // If you're hitting this in testing, it could be a memory leak, or something async is still running
             // and holding a reference.  You can use XCTest.waitUntilFinished(...) to wait for things to complete.
-            fatalError("Cannot initialize multiple instances of Analytics with the same write key")
+            print("[Helium/Analytics] Warning: Attempted to create duplicate Analytics instance")
         } else {
             Self.addActiveWriteKey(configuration.values.writeKey)
         }

@@ -202,8 +202,12 @@ class HeliumAnalyticsManager {
                 
                 // Flush immediately for critical events to minimize event loss
                 switch legacyEvent {
-                case .paywallOpen, .paywallClose, .subscriptionSucceeded:
+                case .paywallOpen, .subscriptionSucceeded:
                     analytics.flush()
+                case .paywallClose:
+                    if (event as? PaywallContextEvent)?.isSecondTry != true {
+                        analytics.flush()
+                    }
                 default:
                     break
                 }
