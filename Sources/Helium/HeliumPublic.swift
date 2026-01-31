@@ -128,11 +128,14 @@ public class Helium {
         return HeliumFetchedConfigManager.shared.downloadStatus;
     }
     
-    public func hideUpsell() -> Bool {
+    /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
+    @discardableResult
+    public func hidePaywall() -> Bool {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }
     
-    public func hideAllUpsells() {
+    /// Hide all currently displayed paywalls, including "second try" paywalls.
+    public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
@@ -171,7 +174,7 @@ public class Helium {
     ///
     /// - Note: This does NOT clear user identification or session data
     public func clearAllCachedState() {
-        hideAllUpsells()
+        hideAllPaywalls()
         
         // Clear physical bundle files from disk
         HeliumAssetManager.shared.clearCache()
@@ -223,6 +226,10 @@ public class Helium {
             
             if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
+            }
+            
+            if !templatePaywallInfo.hasIosProducts {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
             do {
@@ -437,7 +444,7 @@ public class Helium {
         }
         
         // hide any existing upsells
-        hideAllUpsells()
+        hideAllPaywalls()
         
         HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
         presentPaywall(trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false)) { reason in

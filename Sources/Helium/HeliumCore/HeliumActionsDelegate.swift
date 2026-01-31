@@ -30,10 +30,6 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.onCTAPress(contentComponentName: contentComponentName)
     }
     
-    public func showScreen(screenId: String) {
-        delegate.showScreen(screenId: screenId)
-    }
-    
     public func selectProduct(productId: String) {
         delegate.selectProduct(productId: productId)
     }
@@ -72,9 +68,7 @@ class ActionsDelegateWrapper: ObservableObject {
 public class HeliumActionsDelegate: ObservableObject {
     let paywallInfo: HeliumPaywallInfo
     let paywallSession: PaywallSession
-    @Published var selectedProductId: String
-    @Published var isShowingModal: Bool = false
-    @Published var showingModalScreen: String? = nil
+    private var selectedProductId: String
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
     
@@ -87,10 +81,7 @@ public class HeliumActionsDelegate: ObservableObject {
     init(paywallInfo: HeliumPaywallInfo, paywallSession: PaywallSession, trigger: String) {
         self.paywallInfo = paywallInfo
         self.paywallSession = paywallSession
-        self.selectedProductId = "";
-        if (!paywallInfo.productsOffered.isEmpty) {
-            self.selectedProductId = paywallInfo.productsOffered[0] ?? "";
-        }
+        self.selectedProductId = paywallInfo.productIds.first ?? ""
     }
     
     public func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
@@ -160,7 +151,7 @@ public class HeliumActionsDelegate: ObservableObject {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {
-                var event = PaywallOpenFailedEvent(
+                let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
                     paywallName: "",
                     error: "Second try - no paywall found for trigger or uuid \(uuid).",
@@ -181,11 +172,6 @@ public class HeliumActionsDelegate: ObservableObject {
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }
-    }
-    
-    public func showScreen(screenId: String) {
-        showingModalScreen = screenId
-        isShowingModal = true
     }
     
     public func selectProduct(productId: String) {

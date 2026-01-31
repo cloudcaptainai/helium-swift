@@ -25,12 +25,15 @@ actor HeliumEntitlementsManager {
     private struct EntitlementsCache {
         var transactions: [Transaction] = []
         var subscriptionStatuses: [String: SubscriptionStatusCache] = [:] // productID is key
-        
+
         var lastTransactionsLoadedTime: Date?
 
         /// Entitlements from persisted data, used before real transactions are loaded
         var persistedEntitlements: [PersistedEntitlement] = []
-        
+
+        /// Cached entitlement status per trigger, persisted for use before paywalls load
+        var entitledForTrigger: [String: Bool] = [:]
+
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
             guard let lastSyncTime = lastTransactionsLoadedTime else { return true }
             return Date().timeIntervalSince(lastSyncTime) > resetInterval
@@ -43,6 +46,7 @@ actor HeliumEntitlementsManager {
     private var cache = EntitlementsCache()
     private var updateListenerTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
+    private var configDownloadObserver: NSObjectProtocol?
     
     // MARK: - Persistence
     
@@ -68,7 +72,8 @@ actor HeliumEntitlementsManager {
     private func applyPersistedData(_ data: PersistedEntitlementsData) {
         // Filter to only valid, non-consumable entitlements
         cache.persistedEntitlements = data.entitlements.filter { $0.appearsValid() && !$0.isConsumable }
-        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements")
+        cache.entitledForTrigger = data.entitledForTrigger
+        HeliumLogger.log(.debug, category: .entitlements, "Loaded \(cache.persistedEntitlements.count) persisted entitlements, \(cache.entitledForTrigger.count) trigger entitlements")
     }
 
     /// Persists current entitlements to file storage
@@ -79,7 +84,10 @@ actor HeliumEntitlementsManager {
         let entitlements = cache.transactions
             .filter { $0.productType != .consumable }
             .map { PersistedEntitlement(from: $0) }
-        let data = PersistedEntitlementsData(entitlements: entitlements)
+        let data = PersistedEntitlementsData(
+            entitlements: entitlements,
+            entitledForTrigger: cache.entitledForTrigger
+        )
 
         guard let encoded = try? JSONEncoder().encode(data) else {
             HeliumLogger.log(.warn, category: .entitlements, "Failed to encode entitlements for persistence")
@@ -105,6 +113,9 @@ actor HeliumEntitlementsManager {
     deinit {
         updateListenerTask?.cancel()
         debounceTask?.cancel()
+        if let observer = configDownloadObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     // MARK: - Transaction Update Listener
@@ -203,28 +214,39 @@ actor HeliumEntitlementsManager {
         trigger: String,
         considerAssociatedSubscriptions: Bool
     ) async -> Bool? {
+        // If paywalls haven't loaded yet, use persisted trigger entitlement if available
         if !Helium.shared.paywallsLoaded() {
-            return nil
+            return cache.entitledForTrigger[trigger]
         }
-        
+
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        
-        let productIds = paywallInfo?.productsOffered ?? []
-        
+
+        let productIds = paywallInfo?.productIds ?? []
+
+        var result: Bool
+
         // Just see if any of the paywall products are purchased/active
         if !considerAssociatedSubscriptions {
-            return await purchasedProductIds().contains { productIds.contains($0) }
-        }
-        
-        // Otherwise check products and associated subscription groups
-        for productId in productIds {
-            let entitled = await hasActiveEntitlementFor(productId: productId)
-            if entitled {
-                return true
+            result = await purchasedProductIds().contains { productIds.contains($0) }
+        } else {
+            // Otherwise check products and associated subscription groups
+            result = false
+            for productId in productIds {
+                let entitled = await hasActiveEntitlementFor(productId: productId)
+                if entitled {
+                    result = true
+                    break
+                }
             }
         }
-        
-        return false
+
+        // Cache and persist the result for this trigger
+        if cache.entitledForTrigger[trigger] != result {
+            cache.entitledForTrigger[trigger] = result
+            saveEntitlements()
+        }
+
+        return result
     }
     
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
@@ -382,9 +404,55 @@ actor HeliumEntitlementsManager {
                 cache.lastTransactionsLoadedTime = nil
             }
         }
-        
+
         cache.subscriptionStatuses[productID] = nil
         let _ = await getSubscriptionStatus(for: productID)
+
+        // Refresh entitledForTrigger cache now that entitlements have changed
+        if Helium.shared.paywallsLoaded() {
+            await refreshEntitledForTriggerCache()
+        } else {
+            // Listen for config download completion to refresh the cache
+            setupConfigDownloadObserver()
+        }
+    }
+
+    /// Sets up a one-time observer for config download completion
+    private func setupConfigDownloadObserver() {
+        // Remove any existing observer first
+        if let existingObserver = configDownloadObserver {
+            NotificationCenter.default.removeObserver(existingObserver)
+            configDownloadObserver = nil
+        }
+
+        configDownloadObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("HeliumConfigDownloadComplete"),
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task {
+                await self.removeConfigDownloadObserver()
+                await self.refreshEntitledForTriggerCache()
+            }
+        }
+    }
+
+    /// Removes the config download observer
+    private func removeConfigDownloadObserver() {
+        if let observer = configDownloadObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configDownloadObserver = nil
+        }
+    }
+
+    /// Refreshes the entitledForTrigger cache for all known triggers
+    private func refreshEntitledForTriggerCache() async {
+        let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        for trigger in triggers {
+            // This will compute and cache the entitlement status for each trigger
+            let _ = await hasEntitlementForPaywall(trigger: trigger, considerAssociatedSubscriptions: true)
+        }
     }
     
     // MARK: - Private Helper Methods

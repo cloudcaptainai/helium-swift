@@ -31,25 +31,11 @@ enum PaywallPresentationStyle: String, Codable {
 }
 
 public struct HeliumPaywallInfo: Codable {
-    init(paywallID: Int, paywallTemplateName: String, productsOffered: [String], resolvedConfig: AnyCodable, shouldShow: Bool, fallbackPaywallName: String, experimentID: String? = nil, modelID: String? = nil, resolvedConfigJSON: JSON? = nil, forceShowFallback: Bool? = false, paywallUUID: String? = nil, presentationStyle: PaywallPresentationStyle? = nil) {
-        self.paywallID = paywallID
-        self.paywallUUID = paywallUUID;
-        self.paywallTemplateName = paywallTemplateName;
-        self.productsOffered = productsOffered;
-        self.resolvedConfig = resolvedConfig;
-        self.shouldShow = shouldShow;
-        self.fallbackPaywallName = fallbackPaywallName;
-        self.experimentID = experimentID;
-        self.modelID = modelID;
-        self.resolvedConfigJSON = resolvedConfigJSON;
-        self.forceShowFallback = forceShowFallback;
-        self.presentationStyle = presentationStyle
-    }
-    
     var paywallID: Int
     var paywallUUID: String?
     public var paywallTemplateName: String
-    var productsOffered: [String]
+    var productsOffered: [String]?
+    var productsOfferedIOS: [String]?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -62,6 +48,14 @@ public struct HeliumPaywallInfo: Codable {
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
     var presentationStyle: PaywallPresentationStyle?
+    
+    var productIds: [String] {
+        productsOfferedIOS ?? productsOffered ?? []
+    }
+    
+    var hasIosProducts: Bool {
+        !productIds.isEmpty
+    }
     
     /// Extracted bundle URL - single source of truth for bundle URL extraction
     var extractedBundleUrl: String? {
@@ -167,6 +161,10 @@ public struct HeliumFetchedConfig: Codable {
         experimentInfo.enrolledTrigger = enrollment.enrolledTrigger
         
         return experimentInfo
+    }
+    
+    func getTriggersWithMissingProducts() -> [String] {
+        triggerToPaywalls.filter { !$0.value.hasIosProducts }.map { $0.key }
     }
 }
 
@@ -749,6 +747,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetch404
     case bundleFetch410
     case bundleFetchCannotDecodeContent
+    case noProductsIOS
 }
 
 public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
