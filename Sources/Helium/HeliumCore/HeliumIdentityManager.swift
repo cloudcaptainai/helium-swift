@@ -1,4 +1,5 @@
 import Foundation
+import PassKit
 import StoreKit
 
 public class HeliumIdentityManager {
@@ -221,5 +222,50 @@ public class HeliumSdkConfig {
     /// The SDK version - wrapper SDK version or native SDK version
     var heliumWrapperSdkVersion: String {
         return wrapperSdkVersion ?? BuildConstants.version
+    }
+}
+
+class ApplePayHelper {
+    static let shared = ApplePayHelper()
+
+    private var cachedCanMakePayments: Bool?
+
+    private init() {
+        cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
+    }
+
+    /// Checks if the device supports Apple Pay (cached)
+    func canMakePayments() -> Bool {
+        return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
+    }
+}
+
+class LowPowerModeHelper {
+    static let shared = LowPowerModeHelper()
+
+    private var cachedIsLowPowerMode: Bool?
+    private var lastFetchTime: Date?
+    private let cacheDuration: TimeInterval = 10 * 60 // 10 minutes
+
+    private init() {
+        refreshCache()
+    }
+
+    private func refreshCache() {
+        cachedIsLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        lastFetchTime = Date()
+    }
+
+    private func isCacheExpired() -> Bool {
+        guard let lastFetch = lastFetchTime else { return true }
+        return Date().timeIntervalSince(lastFetch) >= cacheDuration
+    }
+
+    /// Checks if the device is in low power mode (cached, refreshes every 10 minutes)
+    func isLowPowerModeEnabled() -> Bool {
+        if isCacheExpired() {
+            refreshCache()
+        }
+        return cachedIsLowPowerMode ?? ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 }

@@ -109,6 +109,8 @@ public struct CodableUserContext: Codable {
     var screenInfo: CodableScreenInfo
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
+    var isLowPowerMode: Bool
+    var isApplePayAvailable: Bool
     var additionalParams: HeliumUserTraits
     
     public func buildRequestPayload() -> [String: Any] {
@@ -191,6 +193,8 @@ public struct CodableUserContext: Codable {
             "deviceInfo": deviceInfoDict,
             "applicationInfo": applicationInfoDict,
             "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
+            "isLowPowerMode": isLowPowerMode,
+            "isApplePayAvailable": isApplePayAvailable,
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
@@ -247,6 +251,8 @@ public struct CodableUserContext: Codable {
             screenInfo: screenInfo,
             deviceInfo: deviceInfo,
             applicationInfo: applicationInfo,
+            isLowPowerMode: LowPowerModeHelper.shared.isLowPowerModeEnabled(),
+            isApplePayAvailable: ApplePayHelper.shared.canMakePayments(),
             additionalParams: userTraits ?? HeliumUserTraits([:])
         )
     }
