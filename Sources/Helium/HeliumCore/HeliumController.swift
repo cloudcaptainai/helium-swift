@@ -55,9 +55,9 @@ public class HeliumController {
                     ),
                     paywallSession: nil
                 )
-            case let .failure(errorMessage, metrics):
+            case let .failure(fetchError, metrics):
                 HeliumLogger.log(.error, category: .network, "Config download failed", metadata: [
-                    "error": errorMessage,
+                    "error": fetchError.description,
                     "numAttempts": String(metrics.numConfigAttempts),
                 ])
                 HeliumAnalyticsManager.shared.setUpAnalytics(
@@ -67,7 +67,7 @@ public class HeliumController {
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadErrorEvent(
-                        error: errorMessage,
+                        error: fetchError.description,
                         configDownloaded: metrics.configSuccess,
                         downloadTimeTakenMS: metrics.configDownloadTimeMS,
                         bundleDownloadTimeMS: metrics.bundleDownloadTimeMS,
