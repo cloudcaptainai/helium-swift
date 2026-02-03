@@ -228,7 +228,7 @@ public class HeliumSdkConfig {
 class ApplePayHelper {
     static let shared = ApplePayHelper()
 
-    private var cachedCanMakePayments: Bool?
+    @HeliumAtomic private var cachedCanMakePayments: Bool?
 
     private init() {
         cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
