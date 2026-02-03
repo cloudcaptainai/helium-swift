@@ -243,8 +243,8 @@ class ApplePayHelper {
 class LowPowerModeHelper {
     static let shared = LowPowerModeHelper()
 
-    private var cachedIsLowPowerMode: Bool?
-    private var lastFetchTime: Date?
+    @HeliumAtomic private var cachedIsLowPowerMode: Bool?
+    @HeliumAtomic private var lastFetchTime: Date?
     private let cacheDuration: TimeInterval = 10 * 60 // 10 minutes
 
     private init() {
