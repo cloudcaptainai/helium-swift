@@ -164,8 +164,10 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {
         switch reason {
         case .alreadyEntitled:
-            // nothing for now
-            break
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
+                paywallSession: nil
+            )
         case .targetingHoldout:
             Helium.shared.handlePaywallSkip(trigger: trigger)
         case .error(unavailableReason: let unavailableReason):

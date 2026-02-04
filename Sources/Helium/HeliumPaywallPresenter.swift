@@ -38,9 +38,16 @@ class HeliumPaywallPresenter {
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 Task { @MainActor in
-                    context.onEntitled?()
-                    context.onPaywallNotShown?(.alreadyEntitled)
+                    if let onEntitled = context.onEntitled {
+                        onEntitled()
+                    } else {
+                        context.onPaywallNotShown?(.alreadyEntitled)
+                    }
                 }
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
+                    paywallSession: nil
+                )
                 return true
             }
         }

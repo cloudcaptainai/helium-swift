@@ -308,17 +308,22 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     }
 }
 
+/// Event fired when paywall is not shown due to targeting holdout, workflow configuration, or user having existing entitlement to a product in the paywall.
 public struct PaywallSkippedEvent: HeliumEvent {
     /// The trigger identifier that was skipped
     /// - Note: Trigger key from Helium dashboard where shouldShow=false in config
     public let triggerName: String
     
+    /// Reason why the paywall was skipped
+    public let skipReason: PaywallSkippedReason?
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, timestamp: Date = Date()) {
+    public init(triggerName: String, skipReason: PaywallSkippedReason = .targetingHoldout, timestamp: Date = Date()) {
         self.triggerName = triggerName
+        self.skipReason = skipReason
         self.timestamp = timestamp
     }
     
@@ -328,12 +333,13 @@ public struct PaywallSkippedEvent: HeliumEvent {
         return [
             "type": eventName,
             "triggerName": triggerName,
+            "skipReason": skipReason,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallSkipped(triggerName: triggerName)
+        return .paywallSkipped(triggerName: triggerName, skipReason: skipReason?.rawValue)
     }
 }
 
