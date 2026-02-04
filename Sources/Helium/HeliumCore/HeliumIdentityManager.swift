@@ -13,7 +13,7 @@ public class HeliumIdentityManager {
     }
     private init() {
         // Check before anything is created to determine if this is a new user
-        let hasExistingPersistentId = UserDefaults.standard.string(forKey: "heliumPersistentUserId") != nil
+        let hasExistingPersistentId = UserDefaults.standard.string(forKey: Self.heliumPersistentIdKey) != nil
         self.isFirstHeliumSession = !hasExistingPersistentId
         
         self.heliumSessionId = UUID().uuidString
@@ -47,7 +47,7 @@ public class HeliumIdentityManager {
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
     private let heliumUserIdKey = "heliumUserId"
-    private let heliumPersistentIdKey = "heliumPersistentUserId"
+    private static let heliumPersistentIdKey = "heliumPersistentUserId"
     private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
     private let heliumUserSeedKey = "heliumUserSeed"
     
@@ -86,11 +86,11 @@ public class HeliumIdentityManager {
     /// Creates or retrieves the Helium persistent ID
     /// - Returns: The Helium persistent ID
     public func getHeliumPersistentId() -> String {
-        if let existingUserId = UserDefaults.standard.string(forKey: heliumPersistentIdKey) {
+        if let existingUserId = UserDefaults.standard.string(forKey: Self.heliumPersistentIdKey) {
             return existingUserId
         } else {
             let newUserId = UUID().uuidString
-            UserDefaults.standard.setValue(newUserId, forKey: heliumPersistentIdKey)
+            UserDefaults.standard.setValue(newUserId, forKey: Self.heliumPersistentIdKey)
             return newUserId
         }
     }
