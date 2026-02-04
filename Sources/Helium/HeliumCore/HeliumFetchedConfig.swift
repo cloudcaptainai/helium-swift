@@ -16,7 +16,7 @@ enum PaywallsDownloadStep {
 }
 
 struct HeliumFetchError {
-    private static let maxServerMessageLength = 50
+    private static let maxServerMessageLength = 60
     private static let maxDescriptionLength = 150
     
     let summary: String
@@ -101,12 +101,12 @@ enum BundleFetchError: Error {
     case permanentFailure(PaywallUnavailableReason)
 }
 
-struct ConfigFetchError: Error {
+struct ConfigFetchError: LocalizedError {
     let statusCode: Int?
     let serverMessage: String?
     let underlyingError: Error?
     
-    var localizedDescription: String {
+    var errorDescription: String {
         var parts: [String] = []
         if let statusCode = statusCode {
             parts.append("HTTP \(statusCode)")
