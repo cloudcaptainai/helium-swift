@@ -119,6 +119,8 @@ public class HeliumIdentityManager {
 class AppStoreCountryHelper {
     static let shared = AppStoreCountryHelper()
     
+    private let persistedCountryCode2Key = "heliumStoreCountryCode2"
+    
     @HeliumAtomic private var cachedCountryCode3: String?  // Alpha-3 (e.g., "USA")
     @HeliumAtomic private var cachedCountryCode2: String?  // Alpha-2 (e.g., "US")
     @HeliumAtomic private var cachedStorefrontId: String?
@@ -126,6 +128,10 @@ class AppStoreCountryHelper {
     private var fetchTask: Task<String?, Never>?
     
     private init() {
+        // Load persisted country code for immediate use
+        cachedCountryCode2 = UserDefaults.standard.string(forKey: persistedCountryCode2Key)
+        
+        // Always refresh in background to stay current
         fetchTask = Task { await self.performFetch() }
     }
     
@@ -139,13 +145,18 @@ class AppStoreCountryHelper {
                 cachedStorefrontCurrency = storefront.currency?.identifier
             }
 #endif
+            // Persist country code for next launch
+            UserDefaults.standard.set(cachedCountryCode2, forKey: persistedCountryCode2Key)
         }
         return cachedCountryCode2
     }
     
-    /// Awaits the fetch task and returns the 2-char alpha-2 country code
+    /// Returns the cached country code immediately if available, otherwise awaits the fetch
     /// - Returns: The 2-char country code (e.g., "US", "GB"), or nil if unavailable
     func fetchStoreCountryCode() async -> String? {
+        if let cached = cachedCountryCode2 {
+            return cached
+        }
         return await fetchTask?.value
     }
     

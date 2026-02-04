@@ -229,11 +229,8 @@ public class HeliumFetchedConfigManager {
             updateDownloadState(.inProgress)
             downloadStep = .config
 
-            // Try to ensure App Store country code is available. It should not take longer
-            // than 5ms but do a short timeout to make sure we don't delay config fetch too long.
-            let _ = await withTimeoutOrNil(milliseconds: 25) {
-                await AppStoreCountryHelper.shared.fetchStoreCountryCode()
-            }
+            // Pre-fetching
+            await AppStoreCountryHelper.shared.fetchStoreCountryCode()
             
             let params: [String: Any] = [
                 "apiKey": apiKey,
