@@ -339,7 +339,7 @@ public struct PaywallSkippedEvent: HeliumEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallSkipped(triggerName: triggerName)
+        return .paywallSkipped(triggerName: triggerName, skipReason: skipReason?.rawValue)
     }
 }
 
