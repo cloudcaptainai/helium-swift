@@ -151,13 +151,12 @@ class AppStoreCountryHelper {
         return cachedCountryCode2
     }
     
-    /// Returns the cached country code immediately if available, otherwise awaits the fetch
-    /// - Returns: The 2-char country code (e.g., "US", "GB"), or nil if unavailable
-    func fetchStoreCountryCode() async -> String? {
-        if let cached = cachedCountryCode2 {
-            return cached
+    /// Ensures the store country code is available (returns immediately if cached, otherwise awaits fetch)
+    func fetchStoreCountryCode() async {
+        if cachedCountryCode2 != nil {
+            return
         }
-        return await fetchTask?.value
+        let _ = await fetchTask?.value
     }
     
     /// Returns the cached 2-char store country code synchronously
