@@ -174,7 +174,7 @@ class HeliumAnalyticsManager {
                 heliumEvent: legacyEvent,
                 fetchedConfigId: fetchedConfigId,
                 timestamp: formatAsTimestamp(date: Date()),
-                contextTraits: HeliumIdentityManager.shared.getUserContext(skipDeviceCapacity: true),
+                contextTraits: HeliumIdentityManager.shared.getUserContext(),
                 experimentID: experimentID,
                 modelID: modelID,
                 paywallID: paywallInfo?.paywallID,

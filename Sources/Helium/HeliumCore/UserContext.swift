@@ -204,7 +204,7 @@ public struct CodableUserContext: Codable {
         ]
     }
 
-    static func create(userTraits: HeliumUserTraits?, skipDeviceCapacity: Bool = false) -> CodableUserContext {
+    static func create(userTraits: HeliumUserTraits?) -> CodableUserContext {
         
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
@@ -246,9 +246,7 @@ public struct CodableUserContext: Codable {
             systemName: UIDevice.current.systemName,
             systemVersion: UIDevice.current.systemVersion,
             deviceModel: DeviceHelpers.current.getDeviceModel(),
-            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
-            totalCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.totalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.availableCapacity
+            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom)
         )
 
         return CodableUserContext(
