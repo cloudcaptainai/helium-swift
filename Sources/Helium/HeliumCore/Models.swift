@@ -784,6 +784,11 @@ public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
     }
 }
 
+public enum PaywallSkippedReason: String, Codable {
+    case targetingHoldout
+    case alreadyEntitled
+}
+
 public enum HeliumLightDarkMode {
     case light
     case dark
