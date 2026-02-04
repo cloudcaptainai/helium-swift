@@ -140,10 +140,8 @@ public class HeliumIdentityManager {
     
     /// Gets the current user context, creating it if necessary
     /// - Returns: The current user context
-    public func getUserContext(
-        skipDeviceCapacity: Bool = false
-    ) -> CodableUserContext {
-        let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits, skipDeviceCapacity: skipDeviceCapacity)
+    public func getUserContext() -> CodableUserContext {
+        let userContext = CodableUserContext.create(userTraits: self.heliumUserTraits)
         return userContext
     }
 }

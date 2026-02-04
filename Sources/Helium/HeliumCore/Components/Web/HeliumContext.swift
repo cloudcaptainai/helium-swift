@@ -25,9 +25,7 @@ func createHeliumContext(triggerName: String?) -> JSON {
         let safeDayIndex = max(0, min(weekdayIndex, weekdays.count - 1))
         
         // Get user context from identity manager
-        let userContext = HeliumIdentityManager.shared.getUserContext(
-            skipDeviceCapacity: true
-        )
+        let userContext = HeliumIdentityManager.shared.getUserContext()
         
         // Create the base context JSON from user context params
         var contextJSON = JSON(userContext.buildRequestPayload())
