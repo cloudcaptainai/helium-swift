@@ -56,8 +56,6 @@ struct CodableDeviceInfo: Codable {
     var systemVersion: String
     var deviceModel: String
     var userInterfaceIdiom: String
-    var totalCapacity: Int?
-    var availableCapacity: Int64?
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
