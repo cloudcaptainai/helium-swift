@@ -12,15 +12,20 @@ public class HeliumIdentityManager {
         shared.heliumInitializeId = UUID().uuidString
     }
     private init() {
+        // Check before anything is created to determine if this is a new user
+        let hasExistingPersistentId = UserDefaults.standard.string(forKey: Self.heliumPersistentIdKey) != nil
+        self.isFirstHeliumSession = !hasExistingPersistentId
+        
         self.heliumSessionId = UUID().uuidString
         self.heliumInitializeId = UUID().uuidString
-        self.heliumUserTraits = HeliumUserTraits([:]);
+        self.heliumUserTraits = HeliumUserTraits([:])
     }
     
     // MARK: - Properties
     private let heliumSessionId: String
     private(set) var heliumInitializeId: String
     private var heliumUserTraits: HeliumUserTraits
+    private(set) var isFirstHeliumSession: Bool = false
     
     // Used to connect StoreKit purchase events
     var appAttributionToken: UUID {
@@ -42,7 +47,9 @@ public class HeliumIdentityManager {
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
     private let heliumUserIdKey = "heliumUserId"
-    private let heliumPersistentIdKey = "heliumPersistentUserId"
+    private static let heliumPersistentIdKey = "heliumPersistentUserId"
+    private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
+    private let heliumUserSeedKey = "heliumUserSeed"
     
     // MARK: - Public Methods
     
@@ -79,11 +86,11 @@ public class HeliumIdentityManager {
     /// Creates or retrieves the Helium persistent ID
     /// - Returns: The Helium persistent ID
     public func getHeliumPersistentId() -> String {
-        if let existingUserId = UserDefaults.standard.string(forKey: heliumPersistentIdKey) {
+        if let existingUserId = UserDefaults.standard.string(forKey: Self.heliumPersistentIdKey) {
             return existingUserId
         } else {
             let newUserId = UUID().uuidString
-            UserDefaults.standard.setValue(newUserId, forKey: heliumPersistentIdKey)
+            UserDefaults.standard.setValue(newUserId, forKey: Self.heliumPersistentIdKey)
             return newUserId
         }
     }
@@ -104,6 +111,31 @@ public class HeliumIdentityManager {
     
     public func getAppTransactionID() -> String? {
         return appTransactionID
+    }
+    
+    /// Gets or creates the Helium first seen date
+    /// - Returns: The timestamp of when the user was first seen
+    func getHeliumFirstSeenDate() -> String {
+        if let existingDate = UserDefaults.standard.string(forKey: heliumFirstSeenDateKey) {
+            return existingDate
+        } else {
+            let newDate = formatAsTimestamp(date: Date())
+            UserDefaults.standard.setValue(newDate, forKey: heliumFirstSeenDateKey)
+            return newDate
+        }
+    }
+    
+    /// Gets or creates the user seed (random value 1-100, persisted)
+    /// Note that this has nothing to do with experiments, it just allows user to run their own targeting logic if desired.
+    /// - Returns: The user seed value
+    func getUserSeed() -> Int {
+        if let existingSeed = UserDefaults.standard.object(forKey: heliumUserSeedKey) as? Int {
+            return existingSeed
+        } else {
+            let newSeed = Int.random(in: 1...100)
+            UserDefaults.standard.setValue(newSeed, forKey: heliumUserSeedKey)
+            return newSeed
+        }
     }
     
     /// Gets the current user context, creating it if necessary
