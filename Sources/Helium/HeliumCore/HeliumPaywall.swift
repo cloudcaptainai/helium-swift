@@ -168,7 +168,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
                 paywallSession: nil
             )
-            break
         case .targetingHoldout:
             Helium.shared.handlePaywallSkip(trigger: trigger)
         case .error(unavailableReason: let unavailableReason):
