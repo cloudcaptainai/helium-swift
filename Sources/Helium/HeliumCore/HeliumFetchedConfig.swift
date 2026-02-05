@@ -105,7 +105,7 @@ struct ConfigFetchError: LocalizedError {
     let statusCode: Int?
     let serverMessage: String?
     let underlyingError: Error?
-    
+
     var errorDescription: String {
         var parts: [String] = []
         if let statusCode = statusCode {
@@ -118,6 +118,15 @@ struct ConfigFetchError: LocalizedError {
             parts.append(underlyingError.localizedDescription)
         }
         return parts.isEmpty ? "Unknown error" : parts.joined(separator: " - ")
+    }
+
+    /// Checks if this error indicates an invalid API key (HTTP 400 with validation error message)
+    var isInvalidApiKeyError: Bool {
+        guard statusCode == 400,
+              let message = serverMessage else {
+            return false
+        }
+        return message.contains("Validation error")
     }
 }
 
@@ -434,7 +443,8 @@ public class HeliumFetchedConfigManager {
         } catch {
             // Extract error details
             let (errorStatusCode, errorServerMessage, errorDesc): (Int?, String?, String)
-            if let configError = error as? ConfigFetchError {
+            let configError = error as? ConfigFetchError
+            if let configError {
                 errorStatusCode = configError.statusCode
                 errorServerMessage = configError.serverMessage
                 errorDesc = configError.localizedDescription
@@ -443,10 +453,36 @@ public class HeliumFetchedConfigManager {
                 errorServerMessage = nil
                 errorDesc = error.localizedDescription
             }
-            
+
             let newLastStatusCode = errorStatusCode ?? lastStatusCode
             let newLastServerMessage = errorServerMessage ?? lastServerMessage
-            
+
+            // Check for invalid API key error - this is non-retryable
+            if let configError, configError.isInvalidApiKeyError {
+                HeliumLogger.log(.error, category: .config, "Invalid API key detected. Please check your Helium API key configuration.", metadata: [
+                    "statusCode": String(errorStatusCode ?? 0),
+                    "serverMessage": errorServerMessage ?? ""
+                ])
+                updateDownloadState(.downloadFailure)
+                let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
+                completion(.failure(
+                    HeliumFetchError(
+                        summary: "config_fetch_invalid_api_key",
+                        lastHttpStatusCode: newLastStatusCode,
+                        lastServerMessage: newLastServerMessage
+                    ),
+                    HeliumFetchMetrics(
+                        numConfigAttempts: attemptCounter,
+                        numBundleAttempts: 0,
+                        configSuccess: false,
+                        configDownloadTimeMS: configDownloadTimeMS,
+                        totalTimeMS: totalTimeMS
+                    )
+                ))
+                return
+            }
+
             // Retry on network/fetch failure
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
