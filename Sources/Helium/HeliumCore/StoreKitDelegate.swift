@@ -8,7 +8,7 @@
 import StoreKit
 
 public protocol HeliumDelegateReturnsTransaction {
-    func getLatestCompletedTransaction() -> Transaction?
+    func getLatestCompletedTransactionIdResult() -> HeliumTransactionIdResult?
 }
 
 /// A simple HeliumPaywallDelegate implementation that uses StoreKit 2 under the hood.
@@ -76,6 +76,14 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
     
     open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
+    }
+    
+    /// Returns transaction id/s of the most recent successful purchase transaction processed by this delegated, if there is one.
+    public func getLatestCompletedTransactionIdResult() -> HeliumTransactionIdResult? {
+        guard let latestCompletedTransaction else {
+            return nil
+        }
+        return HeliumTransactionIdResult(transaction: latestCompletedTransaction)
     }
     
     /// Returns the most recent successful purchase transaction processed by this delegated, if there is one.
