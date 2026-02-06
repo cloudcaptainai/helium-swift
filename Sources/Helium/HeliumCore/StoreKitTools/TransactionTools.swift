@@ -13,21 +13,21 @@ public struct HeliumTransactionIdResult {
     let transaction: Transaction?
     let productId: String
     
-    init(transaction: Transaction) {
+    public init(transaction: Transaction) {
         transactionId = transaction.id.description
         originalTransactionId = transaction.originalID.description
         self.transaction = transaction
         self.productId = transaction.productID
     }
     
-    init(storeKit1Purchase: SKPaymentTransaction) {
+    public init(storeKit1Purchase: SKPaymentTransaction) {
         transactionId = storeKit1Purchase.transactionIdentifier
         originalTransactionId = storeKit1Purchase.original?.transactionIdentifier
         transaction = nil
         productId = storeKit1Purchase.payment.productIdentifier
     }
     
-    init(productId: String, transactionId: String, originalTransactionId: String?) {
+    public init(productId: String, transactionId: String, originalTransactionId: String?) {
         self.transactionId = transactionId
         self.originalTransactionId = originalTransactionId
         self.transaction = nil

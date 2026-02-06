@@ -78,7 +78,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         // Override in a subclass if desired
     }
     
-    /// Returns transaction id/s of the most recent successful purchase transaction processed by this delegated, if there is one.
+    /// Returns transaction id/s of the most recent successful purchase transaction processed by this delegate, if there is one.
     public func getLatestCompletedTransactionIdResult() -> HeliumTransactionIdResult? {
         guard let latestCompletedTransaction else {
             return nil
@@ -86,7 +86,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         return HeliumTransactionIdResult(transaction: latestCompletedTransaction)
     }
     
-    /// Returns the most recent successful purchase transaction processed by this delegated, if there is one.
+    /// Returns the most recent successful purchase transaction processed by this delegate, if there is one.
     public func getLatestCompletedTransaction() -> Transaction? {
         return latestCompletedTransaction
     }
