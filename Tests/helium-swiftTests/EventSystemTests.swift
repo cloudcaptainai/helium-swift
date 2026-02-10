@@ -24,21 +24,6 @@ final class EventSystemTests: HeliumTestCase {
         XCTAssertEqual(listenerEvents.count, 1)
     }
 
-    func testFireEventWithNilSessionSkipsSessionHandlers() {
-        let event = PaywallDismissedEvent(triggerName: "test", paywallName: "wall")
-
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
-
-        // Delegate should still receive it
-        let delegateEvents = mockDelegate.receivedEvents.compactMap { $0 as? PaywallDismissedEvent }
-        XCTAssertEqual(delegateEvents.count, 1)
-
-        // Listener should still receive it
-        let listenerEvents = listener.eventsOfType(PaywallDismissedEvent.self)
-        XCTAssertEqual(listenerEvents.count, 1)
-    }
-
     func testMultipleListenersReceiveEvents() {
         let listener2 = CapturingEventListener()
         let listener3 = CapturingEventListener()

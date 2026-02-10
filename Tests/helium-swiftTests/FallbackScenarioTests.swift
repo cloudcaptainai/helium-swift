@@ -75,12 +75,7 @@ final class FallbackScenarioTests: XCTestCase {
             presentationContext: PaywallPresentationContext.empty
         )
         XCTAssertNil(result.viewAndSession)
-        // Should be one of the download-related reasons
-        let validReasons: [PaywallUnavailableReason] = [
-            .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress,
-            .productsFetchInProgress, .paywallsDownloadFail, .paywallBundlesMissing
-        ]
-        XCTAssertTrue(validReasons.contains(result.fallbackReason!),
-                       "Expected download-related fallback reason, got: \(result.fallbackReason!)")
+        // After reset with no config injected, download status is .notDownloadedYet
+        XCTAssertEqual(result.fallbackReason, .paywallsNotDownloaded)
     }
 }
