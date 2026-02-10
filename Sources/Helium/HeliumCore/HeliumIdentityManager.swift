@@ -55,20 +55,18 @@ public class HeliumIdentityManager {
     
     /// Gets the current user ID, creating one if it doesn't exist
     /// - Returns: The current user ID
-    public func getUserId() -> String {
-        if let existingUserId = UserDefaults.standard.string(forKey: heliumUserIdKey) {
-            return existingUserId
-        } else {
-            let newUserId = UUID().uuidString
-            UserDefaults.standard.setValue(newUserId, forKey: heliumUserIdKey)
-            return newUserId
-        }
+    func getUserId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumUserIdKey)
     }
     
     /// Sets a custom user ID
     /// - Parameter userId: The custom user ID to set
-    public func setCustomUserId(_ userId: String) {
-        UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
+    func setCustomUserId(_ userId: String?) {
+        if let userId {
+            UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: heliumUserIdKey)
+        }
     }
     
     func setCustomUserTraits(_ traits: HeliumUserTraits) {

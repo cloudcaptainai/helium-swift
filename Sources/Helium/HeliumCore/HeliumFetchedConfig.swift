@@ -126,7 +126,7 @@ struct ConfigFetchError: LocalizedError {
               let message = serverMessage else {
             return false
         }
-        return message.contains("Validation error: Key")
+        return message.contains("OnLaunchRequest.ApiKey")
     }
 }
 
@@ -243,7 +243,7 @@ public class HeliumFetchedConfigManager {
             
             let params: [String: Any] = [
                 "apiKey": apiKey,
-                "userId": HeliumIdentityManager.shared.getUserId(),
+                "userId": HeliumIdentityManager.shared.getUserId() ?? HeliumIdentityManager.shared.getHeliumPersistentId(),
                 "userContext": HeliumIdentityManager.shared.getUserContext().buildRequestPayload(),
                 "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
             ]

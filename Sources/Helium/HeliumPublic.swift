@@ -525,7 +525,7 @@ public class HeliumIdentify {
     init() {}
     
     /// Custom user ID to identify this user.
-    public var userId: String {
+    public var userId: String? {
         get {
             HeliumIdentityManager.shared.getUserId()
         }
