@@ -126,7 +126,7 @@ struct ConfigFetchError: LocalizedError {
               let message = serverMessage else {
             return false
         }
-        return message.contains("Validation error")
+        return message.contains("Validation error: Key")
     }
 }
 
@@ -465,7 +465,7 @@ public class HeliumFetchedConfigManager {
 
             // Check for invalid API key error - this is non-retryable
             if let configError, configError.isInvalidApiKeyError {
-                HeliumLogger.log(.error, category: .config, "Invalid API key detected. Please check your Helium API key.")
+                HeliumLogger.log(.error, category: .config, "Invalid API key detected. Get your Helium API key at https://app.tryhelium.com/profile")
                 updateDownloadState(.downloadFailure)
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
