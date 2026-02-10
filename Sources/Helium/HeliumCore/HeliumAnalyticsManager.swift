@@ -15,16 +15,19 @@ enum AnalyticsDestination {
 
 class HeliumAnalyticsManager {
     static let shared = HeliumAnalyticsManager()
-    
+
     private let initializationWriteKey = "dIPnOYdPFgAabYaURULtIHAxbofvIIAD:GV9TlMOuPgt989LaumjVTJofZ8vipJXb"
     private let initializationEndpoint = "cm7mjur1o00003p6r7lio27sb.d.jitsu.com"
-    
+
     private let queue = DispatchQueue(label: "com.helium.analyticsManager")
     private let initQueue = DispatchQueue(label: "com.helium.analyticsManager.init")
     private var analytics: Analytics?
     private var initAnalytics: Analytics?
     private var currentWriteKey: String?
     private var pendingTracks: [(Analytics) -> Void] = []
+
+    /// When true, all analytics operations are no-ops. Accessible via @testable import.
+    private(set) var analyticsDisabledForTesting: Bool = false
     
     private init() {
         // Flush when will resign active for more frequent event dispatch and better chance of success during app force-close.
@@ -53,6 +56,7 @@ class HeliumAnalyticsManager {
     /// - Parameter overrideIfNewConfiguration: If true and the writeKey differs from the
     ///   existing configuration, creates a new analytics instance instead of reusing the existing one.
     func setUpAnalytics(writeKey: String, endpoint: String, overrideIfNewConfiguration: Bool = false) {
+        guard !analyticsDisabledForTesting else { return }
         queue.async { [weak self] in
             guard let self else { return }
             
@@ -76,6 +80,7 @@ class HeliumAnalyticsManager {
 
     /// Logs the initialize event to a dedicated analytics endpoint.
     func logInitializeEvent() {
+        guard !analyticsDisabledForTesting else { return }
         initQueue.async { [weak self] in
             guard let self else { return }
             
@@ -108,6 +113,7 @@ class HeliumAnalyticsManager {
     /// Identifies the current user with the analytics instance.
     /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
     func identify(userId: String? = nil) {
+        guard !analyticsDisabledForTesting else { return }
         queue.async { [weak self] in
             guard let self, let analytics else { return }
             HeliumLogger.log(.debug, category: .events, "Identifying user", metadata: ["userId": userId ?? "Unknown userId"])
@@ -134,6 +140,7 @@ class HeliumAnalyticsManager {
         paywallSession: PaywallSession?,
         destination: AnalyticsDestination = .standard
     ) {
+        guard !analyticsDisabledForTesting else { return }
         let dispatchQueue = destination == .initialize ? initQueue : queue
         dispatchQueue.async { [weak self] in
             guard let self else { return }
@@ -237,9 +244,23 @@ class HeliumAnalyticsManager {
     
     /// Flushes pending analytics events to the network.
     func flush() {
+        guard !analyticsDisabledForTesting else { return }
         queue.async { [weak self] in
             self?.analytics?.flush()
         }
     }
-    
+
+    // MARK: - Testing
+
+    /// Disables all analytics operations. Accessible via @testable import for unit tests.
+    func disableAnalyticsForTesting() {
+        analyticsDisabledForTesting = true
+        queue.async { [weak self] in
+            self?.analytics = nil
+            self?.initAnalytics = nil
+            self?.pendingTracks.removeAll()
+            self?.currentWriteKey = nil
+        }
+    }
+
 }

@@ -5,6 +5,7 @@ final class InitializationEdgeCaseTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium()
     }
 

@@ -5,6 +5,7 @@ final class LoadingBudgetTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.config.defaultLoadingBudget = 7.0
     }
 

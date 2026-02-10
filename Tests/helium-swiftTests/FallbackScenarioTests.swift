@@ -5,6 +5,7 @@ final class FallbackScenarioTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium()
     }
 
@@ -24,8 +25,7 @@ final class FallbackScenarioTests: XCTestCase {
     }
 
     func testTriggerHasNoPaywallReturnsFallbackReason() {
-        // Initialize Helium (mark as initialized)
-        Helium.shared.initialize(apiKey: "test_key_for_unit_test")
+        Helium.shared.markInitializedForTesting()
 
         // Inject config with a DIFFERENT trigger
         let config = makeTestConfig(triggers: ["other_trigger": makeTestPaywallInfo(trigger: "other_trigger")])
@@ -39,7 +39,7 @@ final class FallbackScenarioTests: XCTestCase {
     }
 
     func testNoProductsIOSReturnsFallbackReason() {
-        Helium.shared.initialize(apiKey: "test_key_for_unit_test")
+        Helium.shared.markInitializedForTesting()
 
         let paywallInfo = makeTestPaywallInfo(trigger: "no_products", products: [])
         let config = makeTestConfig(triggers: ["no_products": paywallInfo])
@@ -53,7 +53,7 @@ final class FallbackScenarioTests: XCTestCase {
     }
 
     func testForceShowFallbackReturnsFallbackReason() {
-        Helium.shared.initialize(apiKey: "test_key_for_unit_test")
+        Helium.shared.markInitializedForTesting()
 
         let paywallInfo = makeTestPaywallInfo(trigger: "force_fallback", forceShowFallback: true)
         let config = makeTestConfig(triggers: ["force_fallback": paywallInfo])
@@ -67,10 +67,9 @@ final class FallbackScenarioTests: XCTestCase {
     }
 
     func testDownloadNotCompletedReturnsFallbackReason() {
-        Helium.shared.initialize(apiKey: "test_key_for_unit_test")
+        Helium.shared.markInitializedForTesting()
 
-        // Don't inject any config - download status stays at its current state
-        // After initialize without network, it will be inProgress or notDownloadedYet
+        // Don't inject any config - download status stays at notDownloadedYet
         let result = Helium.shared.upsellViewResultFor(
             trigger: "test",
             presentationContext: PaywallPresentationContext.empty

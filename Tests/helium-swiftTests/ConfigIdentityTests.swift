@@ -5,6 +5,7 @@ final class ConfigIdentityTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium(clearUserTraits: true)
     }
 
