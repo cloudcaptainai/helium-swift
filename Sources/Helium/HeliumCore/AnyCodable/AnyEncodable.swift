@@ -71,8 +71,9 @@ extension _AnyEncodable {
         // HELIUM MODIFICATION: Added `where type(of: value) == Bool.self` guard to prevent
         // NSNumber from incorrectly matching as Bool. Without this guard, NSNumber(0.0) and
         // NSNumber(1.0) from Expo/Flutter bridges match this case and encode as false/true
-        // instead of 0.0/1.0. The guard ensures NSNumber falls through to the objCType-aware
-        // NSNumber case below, while native Swift Bool values still match correctly.
+        // instead of numeric values. The guard ensures only native Swift Bool matches here,
+        // while NSNumber values fall through to numeric cases (Int, Float, etc.) and encode
+        // as numbers.
         case let bool as Bool where type(of: value) == Bool.self:
             try container.encode(bool)
         case let int as Int:
