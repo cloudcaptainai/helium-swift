@@ -16,7 +16,11 @@ struct HeliumExampleApp: App {
         
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE") {
-            Helium.config.purchaseDelegate = MockPaywallDelegate()
+            let mock = MockPaywallDelegate()
+            if ProcessInfo.processInfo.arguments.contains("UI_TESTING_RESTORE_SUCCESS") {
+                mock.shouldRestoreSucceed = true
+            }
+            Helium.config.purchaseDelegate = mock
         }
         if loadStateTestTrigger != nil {
             Helium.config.defaultLoadingBudget = 35
