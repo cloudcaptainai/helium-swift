@@ -38,7 +38,7 @@ public struct HeliumUserTraits {
         }
         // Convert known types to JSON-safe equivalents first
         if let date = value as? Date {
-            return ISO8601DateFormatter().string(from: date)
+            return formatAsTimestamp(date: date)
         }
         if let uuid = value as? UUID {
             return uuid.uuidString
