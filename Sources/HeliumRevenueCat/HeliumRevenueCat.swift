@@ -185,6 +185,12 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     public func getLatestCompletedTransaction() -> Transaction? {
         return getLatestCompletedPurchaseResult()?.transaction?.sk2Transaction
     }
+    public func getLatestCompletedTransactionIdResult() -> HeliumTransactionIdResult? {
+        guard let latestCompletedTransaction = getLatestCompletedTransaction() else {
+            return nil
+        }
+        return HeliumTransactionIdResult(transaction: latestCompletedTransaction)
+    }
     
 }
 

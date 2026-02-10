@@ -89,12 +89,12 @@ class HeliumPaywallDelegateWrapper {
             self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
-            var transactionIds: TransactionIdPair? = nil
+            var transactionIds: HeliumTransactionIdResult? = nil
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
-               let transaction = transactionDelegate.getLatestCompletedTransaction() {
+               let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
                 // Double-check to make sure correct transaction retrieved
-                if transaction.productID == productKey {
-                    transactionIds = TransactionIdPair(transaction: transaction)
+                if heliumTransactionIdResult.productId == productKey {
+                    transactionIds = heliumTransactionIdResult
                 }
             }
             if transactionIds == nil {
