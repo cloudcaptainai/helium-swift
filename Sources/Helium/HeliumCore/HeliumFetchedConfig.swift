@@ -126,7 +126,7 @@ struct ConfigFetchError: LocalizedError {
               let message = serverMessage else {
             return false
         }
-        return message.contains("Validation error: Key")
+        return message.contains("OnLaunchRequest.ApiKey")
     }
 }
 

@@ -137,7 +137,7 @@ final class HeliumExampleUITests: XCTestCase {
         sleep(2)
 
         // Look for a restore purchases link/button in the WebView
-        let restoreButton = webView.links["Restore Purchases"].firstMatch
+        let restoreButton = webView.buttons["Restore Purchases"].firstMatch
         guard restoreButton.waitForExistence(timeout: 10) else {
             // If no restore button found, skip - this paywall may not have one
             throw XCTSkip("Restore Purchases button not found in this paywall configuration")
@@ -162,7 +162,7 @@ final class HeliumExampleUITests: XCTestCase {
         XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
         sleep(2)
 
-        let restoreButton = webView.links["Restore Purchases"].firstMatch
+        let restoreButton = webView.buttons["Restore Purchases"].firstMatch
         guard restoreButton.waitForExistence(timeout: 10) else {
             throw XCTSkip("Restore Purchases button not found in this paywall configuration")
         }
