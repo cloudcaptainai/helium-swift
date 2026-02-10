@@ -3,6 +3,17 @@ import XCTest
 
 final class ProductLocalizationTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
+        Helium.resetHelium()
+    }
+
+    override func tearDown() {
+        Helium.resetHelium()
+        super.tearDown()
+    }
+
     func testLocalizedPriceJsonSerialization() {
         let price = LocalizedPrice(
             baseInfo: BasePriceInfo(

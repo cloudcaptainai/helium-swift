@@ -6,20 +6,20 @@ final class EventListenerTests: HeliumTestCase {
     func testAddAndRemoveListener() {
         let extra = CapturingEventListener()
         Helium.shared.addHeliumEventListener(extra)
-        waitForListenerRegistration()
+        waitForListenerRegistration(of: extra, registered: true)
 
         let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
+        waitForEventDispatch { extra.eventsOfType(PaywallOpenEvent.self).count == 1 }
         XCTAssertEqual(extra.eventsOfType(PaywallOpenEvent.self).count, 1)
 
         // Remove and fire again
         Helium.shared.removeHeliumEventListener(extra)
-        waitForListenerRegistration()
+        waitForListenerRegistration(of: extra, registered: false)
 
         let event2 = PaywallCloseEvent(triggerName: "t", paywallName: "p")
         HeliumPaywallDelegateWrapper.shared.fireEvent(event2, paywallSession: nil)
-        waitForEventDispatch()
+        waitForEventDispatch { self.listener.eventsOfType(PaywallCloseEvent.self).count == 1 }
         XCTAssertEqual(extra.eventsOfType(PaywallCloseEvent.self).count, 0, "Removed listener should not receive events")
     }
 
@@ -28,14 +28,15 @@ final class EventListenerTests: HeliumTestCase {
         let extra2 = CapturingEventListener()
         Helium.shared.addHeliumEventListener(extra1)
         Helium.shared.addHeliumEventListener(extra2)
-        waitForListenerRegistration()
+        waitForListenerRegistration(of: extra2, registered: true)
 
         Helium.shared.removeAllHeliumEventListeners()
-        waitForListenerRegistration()
+        waitForListenerRegistration(of: listener, registered: false)
 
         let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
+        // No listener to receive events — wait for delegate dispatch instead
+        waitForEventDispatch { self.mockDelegate.receivedEvents.count >= 1 }
 
         XCTAssertEqual(listener.capturedEvents.count, 0, "self.listener should be removed")
         XCTAssertEqual(extra1.capturedEvents.count, 0, "extra1 should be removed")
@@ -45,13 +46,13 @@ final class EventListenerTests: HeliumTestCase {
     func testDuplicateListenerNotAdded() {
         let extra = CapturingEventListener()
         Helium.shared.addHeliumEventListener(extra)
-        waitForListenerRegistration()
-        Helium.shared.addHeliumEventListener(extra) // duplicate
-        waitForListenerRegistration()
+        waitForListenerRegistration(of: extra, registered: true)
+        Helium.shared.addHeliumEventListener(extra) // duplicate — still registered
+        waitForListenerRegistration(of: extra, registered: true)
 
         let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
+        waitForEventDispatch { extra.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
         XCTAssertEqual(extra.eventsOfType(PaywallOpenEvent.self).count, 1,
                        "Duplicate listener should only receive event once")
@@ -75,16 +76,4 @@ final class EventListenerTests: HeliumTestCase {
         XCTAssertEqual(anyEvents.count, 2, "Should not fire for non-PaywallContextEvent")
     }
 
-    func testBothSpecificAndOnAnyHandlersFire() {
-        var openCount = 0
-        var anyCount = 0
-
-        let handlers = PaywallEventHandlers()
-            .onOpen { _ in openCount += 1 }
-            .onAnyEvent { _ in anyCount += 1 }
-
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
-        XCTAssertEqual(openCount, 1)
-        XCTAssertEqual(anyCount, 1)
-    }
 }

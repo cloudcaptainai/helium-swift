@@ -3,10 +3,18 @@ import XCTest
 
 final class LoadingBudgetTests: XCTestCase {
 
+    private var previousDefaultLoadingBudget: TimeInterval!
+
     override func setUp() {
         super.setUp()
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
+        previousDefaultLoadingBudget = Helium.config.defaultLoadingBudget
         Helium.config.defaultLoadingBudget = 7.0
+    }
+
+    override func tearDown() {
+        Helium.config.defaultLoadingBudget = previousDefaultLoadingBudget
+        super.tearDown()
     }
 
     func testDefaultLoadingBudgetUsesConfigDefault() {

@@ -4,25 +4,32 @@ import XCTest
 // MARK: - MockHeliumPaywallDelegate
 
 class MockHeliumPaywallDelegate: HeliumPaywallDelegate {
+    private let lock = NSLock()
+
     var purchaseResult: HeliumPaywallTransactionStatus = .purchased
     var restoreResult: Bool = false
 
-    var makePurchaseCalls: [String] = []
-    var restorePurchasesCalled: Int = 0
-    var receivedEvents: [HeliumEvent] = []
+    private var _makePurchaseCalls: [String] = []
+    var makePurchaseCalls: [String] { lock.withLock { _makePurchaseCalls } }
+
+    private var _restorePurchasesCalled: Int = 0
+    var restorePurchasesCalled: Int { lock.withLock { _restorePurchasesCalled } }
+
+    private var _receivedEvents: [HeliumEvent] = []
+    var receivedEvents: [HeliumEvent] { lock.withLock { _receivedEvents } }
 
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
-        makePurchaseCalls.append(productId)
+        lock.withLock { _makePurchaseCalls.append(productId) }
         return purchaseResult
     }
 
     func restorePurchases() async -> Bool {
-        restorePurchasesCalled += 1
+        lock.withLock { _restorePurchasesCalled += 1 }
         return restoreResult
     }
 
     func onPaywallEvent(_ event: HeliumEvent) {
-        receivedEvents.append(event)
+        lock.withLock { _receivedEvents.append(event) }
     }
 }
 
@@ -85,38 +92,72 @@ class HeliumTestCase: XCTestCase {
     }
 
     override func tearDown() {
-        // Flush any pending async events so they don't leak into the next test
-        waitForEventDispatch()
+        // Drain any pending MainActor tasks so async events don't leak into the next test.
+        // Uses a trivial always-true condition so the poll returns on first RunLoop tick.
+        drainMainActor()
         Helium.resetHelium()
         super.tearDown()
     }
 
-    /// Wait for the listener dispatch queue to process pending add/remove operations
-    func waitForListenerRegistration() {
-        let exp = XCTestExpectation(description: "Listener queue flush")
-        // HeliumEventListeners uses a serial queue for add/remove.
-        // dispatchEvent does a queue.sync read, so doing a dispatch+MainActor round-trip
-        // ensures the add has completed.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
-            exp.fulfill()
+    /// Performs a quick RunLoop drain to flush pending MainActor tasks between tests.
+    private func drainMainActor() {
+        let exp = XCTestExpectation(description: "MainActor drain")
+        Task { @MainActor in
+            Task { @MainActor in
+                exp.fulfill()
+            }
         }
         wait(for: [exp], timeout: 1.0)
     }
 
-    /// Wait for async event dispatch to complete.
-    /// fireEvent uses Task { @MainActor } and listeners dispatch via Task { @MainActor }.
-    /// We need to wait for: 1) the dispatch queue sync, 2) MainActor task completion.
-    func waitForEventDispatch(timeout: TimeInterval = 1.0) {
-        // Two round-trips through MainActor to ensure all dispatched tasks complete
-        let exp = XCTestExpectation(description: "Event dispatch")
-        Task { @MainActor in
-            // First MainActor hop (fireEvent's Task { @MainActor })
-            Task { @MainActor in
-                // Second MainActor hop (listener dispatch's Task { @MainActor })
-                exp.fulfill()
-            }
+    /// Polls `HeliumEventListeners.shared.hasListener(_:)` until the expected
+    /// registration state is reached or the timeout expires.
+    ///
+    /// `hasListener` performs a `queue.sync` read on the SDK's internal serial
+    /// queue (`com.helium.eventListeners`), which acts as a barrier: it will
+    /// block until any prior `queue.async` add/remove operations have drained.
+    func waitForListenerRegistration(
+        of target: HeliumEventListener? = nil,
+        registered: Bool = true,
+        timeout: TimeInterval = 2.0
+    ) {
+        let checkTarget = target ?? listener
+        guard let checkTarget else { return }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if HeliumEventListeners.shared.hasListener(checkTarget) == registered { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
-        wait(for: [exp], timeout: timeout)
+        XCTFail("Timed out waiting for listener \(registered ? "registration" : "removal")")
+    }
+
+    /// Waits for async event dispatch to complete by polling a condition.
+    ///
+    /// SDK dispatch path that this must wait through:
+    ///   1. `HeliumPaywallDelegateWrapper.fireEvent()` enqueues `Task { @MainActor }`
+    ///   2. Inside that task: session handlers fire synchronously, then
+    ///      `delegate.onPaywallEvent()` fires, then
+    ///      `HeliumEventListeners.shared.dispatchEvent()` is called
+    ///   3. `dispatchEvent` captures listeners via `queue.sync`, then enqueues
+    ///      another `Task { @MainActor }` to call `onHeliumEvent` on each
+    ///
+    /// This helper polls the given condition (default: `mockDelegate.receivedEvents`
+    /// is non-empty) in a tight RunLoop to avoid brittle fixed delays.
+    func waitForEventDispatch(
+        timeout: TimeInterval = 2.0,
+        condition: (() -> Bool)? = nil
+    ) {
+        let check = condition ?? { [weak self] in
+            guard let self else { return true }
+            return !self.mockDelegate.receivedEvents.isEmpty
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if check() { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        // Condition not met — not necessarily a failure (e.g., tearDown flush
+        // when no events were fired), so we don't XCTFail here.
     }
 }
 

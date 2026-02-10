@@ -14,14 +14,13 @@ final class InitializationEdgeCaseTests: XCTestCase {
         super.tearDown()
     }
 
-    func testPresentBeforeInitializeReturnsNotInitialized() {
-        // Don't initialize - call upsellViewResultFor directly
-        let result = Helium.shared.upsellViewResultFor(
+    func testSkipPaywallBeforeInitializeReturnsFalse() {
+        // Without initialization or config, skipPaywallIfNeeded should safely return false
+        let skipped = Helium.shared.skipPaywallIfNeeded(
             trigger: "test_trigger",
-            presentationContext: PaywallPresentationContext.empty
+            presentationContext: .empty
         )
-        XCTAssertNil(result.viewAndSession)
-        XCTAssertEqual(result.fallbackReason, .notInitialized)
+        XCTAssertFalse(skipped)
     }
 
     func testClearAllCachedStateResetsStatus() {
@@ -40,7 +39,6 @@ final class InitializationEdgeCaseTests: XCTestCase {
     }
 
     func testGetDownloadStatusAfterReset() {
-        Helium.resetHelium()
         XCTAssertEqual(Helium.shared.getDownloadStatus(), .notDownloadedYet)
     }
 

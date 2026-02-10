@@ -19,8 +19,8 @@ final class EventToDictionaryTests: XCTestCase {
         XCTAssertEqual(dict["viewType"] as? String, "presented")
         XCTAssertEqual(dict["loadTimeTakenMS"] as? UInt64, 500)
         XCTAssertEqual(dict["loadingBudgetMS"] as? UInt64, 7000)
-        XCTAssertNotNil(dict["isSecondTry"])
-        XCTAssertNotNil(dict["timestamp"])
+        XCTAssertEqual(dict["isSecondTry"] as? Bool, false)
+        XCTAssertEqual(dict["timestamp"] as? Double, 1000.0)
     }
 
     func testPurchaseSucceededEventToDictionary() {
@@ -47,7 +47,7 @@ final class EventToDictionaryTests: XCTestCase {
         let dict = event.toDictionary()
         XCTAssertEqual(dict["type"] as? String, "paywallSkipped")
         XCTAssertEqual(dict["triggerName"] as? String, "onboarding")
-        XCTAssertNotNil(dict["skipReason"])
+        XCTAssertEqual(dict["skipReason"] as? PaywallSkippedReason, .targetingHoldout)
     }
 
     func testCustomPaywallActionEventToDictionary() {

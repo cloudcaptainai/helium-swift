@@ -59,6 +59,16 @@ class HeliumEventListeners {
         }
     }
     
+    /// Synchronously checks whether the given listener is currently registered.
+    /// Performs a queue.sync read, which also acts as a barrier ensuring any
+    /// prior queue.async add/remove operations have completed.
+    /// Accessible via @testable import for unit tests.
+    func hasListener(_ listener: HeliumEventListener) -> Bool {
+        return queue.sync {
+            listeners.contains(where: { $0.value === listener })
+        }
+    }
+
     func removeAllListeners() {
         queue.async { [weak self] in
             guard let self else { return }

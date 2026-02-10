@@ -12,7 +12,9 @@ final class PaywallSkipTests: HeliumTestCase {
         let skipped = Helium.shared.skipPaywallIfNeeded(trigger: "skip_trigger", presentationContext: context)
         XCTAssertTrue(skipped)
 
-        waitForEventDispatch()
+        waitForEventDispatch {
+            self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent }
+        }
 
         // Check delegate received the event
         let skippedEvents = mockDelegate.receivedEvents.compactMap { $0 as? PaywallSkippedEvent }

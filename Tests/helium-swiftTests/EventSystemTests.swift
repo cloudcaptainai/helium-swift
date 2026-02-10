@@ -9,7 +9,7 @@ final class EventSystemTests: HeliumTestCase {
         let event = PaywallDismissedEvent(triggerName: "test_trigger", paywallName: "test_paywall")
 
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
-        waitForEventDispatch()
+        waitForEventDispatch { self.listener.eventsOfType(PaywallDismissedEvent.self).count == 1 }
 
         // 1. Session event handlers (captor)
         XCTAssertEqual(captor.dismissedEvents.count, 1)
@@ -29,10 +29,11 @@ final class EventSystemTests: HeliumTestCase {
         let listener3 = CapturingEventListener()
         Helium.shared.addHeliumEventListener(listener2)
         Helium.shared.addHeliumEventListener(listener3)
+        waitForListenerRegistration(of: listener3, registered: true)
 
         let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
+        waitForEventDispatch { listener3.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
         // All 3 listeners (self.listener + listener2 + listener3) should receive
         XCTAssertEqual(listener.eventsOfType(PaywallOpenEvent.self).count, 1)
@@ -40,17 +41,20 @@ final class EventSystemTests: HeliumTestCase {
         XCTAssertEqual(listener3.eventsOfType(PaywallOpenEvent.self).count, 1)
     }
 
-    func testWeakListenerGetsCleanedUp() {
-        var weakListener: CapturingEventListener? = CapturingEventListener()
-        Helium.shared.addHeliumEventListener(weakListener!)
+    func testWeakListenerDeallocatesAndStopsReceivingEvents() {
+        var strongRef: CapturingEventListener? = CapturingEventListener()
+        weak var weakRef = strongRef
+        Helium.shared.addHeliumEventListener(strongRef!)
+        waitForListenerRegistration(of: strongRef!, registered: true)
 
-        // Nil it out
-        weakListener = nil
+        // Drop the only strong reference — weak storage in HeliumEventListeners should let it deallocate
+        strongRef = nil
+        XCTAssertNil(weakRef, "Listener should be deallocated after dropping the strong reference")
 
-        // Fire event - should not crash
+        // Fire event — deallocated listener should not receive it and should not crash
         let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
-        waitForEventDispatch()
+        waitForEventDispatch { self.listener.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
         // Original listener (self.listener) should still work
         XCTAssertEqual(listener.eventsOfType(PaywallOpenEvent.self).count, 1)
