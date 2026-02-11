@@ -73,6 +73,10 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
+        let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
+            await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
+        } ?? false
+        
         StoreKit1Listener.ensureListening()
         
         let transactionStatus = await delegate.makePurchase(productId: productKey)
@@ -85,34 +89,38 @@ class HeliumPaywallDelegateWrapper {
             self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
-            var transactionIds: TransactionIdPair? = nil
+            var transactionIds: HeliumTransactionIdResult? = nil
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
-               let transaction = transactionDelegate.getLatestCompletedTransaction() {
+               let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
                 // Double-check to make sure correct transaction retrieved
-                if transaction.productID == productKey {
-                    transactionIds = TransactionIdPair(transaction: transaction)
+                if heliumTransactionIdResult.productId == productKey {
+                    transactionIds = heliumTransactionIdResult
                 }
             }
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
             
-            Task {
-                await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+            if hadEntitlementBeforePurchase {
+                fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
+            } else {
+                Task {
+                    await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
+                    
+                    await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
+                    
+                    // update localized products (and offer eligibility) after purchase
+                    await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+                }
+                #if compiler(>=6.2)
+                if let atID = transactionIds?.transaction?.appTransactionID {
+                    HeliumIdentityManager.shared.appTransactionID = atID
+                }
+                #endif
                 
-                await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
-                
-                // update localized products (and offer eligibility) after purchase
-                await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+                let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
+                fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
             }
-            #if compiler(>=6.2)
-            if let atID = transactionIds?.transaction?.appTransactionID {
-                HeliumIdentityManager.shared.appTransactionID = atID
-            }
-            #endif
-            
-            let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
-            self.fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         default:
@@ -173,9 +181,24 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         
-        HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)")
+        var metadata: [String: String] = [:]
+        if let productEvent = event as? ProductEvent {
+            metadata["productId"] = productEvent.productId
+        } else if let paywallEvent = event as? PaywallContextEvent {
+            metadata["trigger"] = paywallEvent.triggerName
+        }
+        HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
+        
+        // Mark session for onEntitled callback on purchase/restore success
+        if let sessionId = paywallSession?.sessionId {
+            if event is PurchaseSucceededEvent ||
+               event is PurchaseRestoredEvent ||
+               event is PurchaseAlreadyEntitledEvent {
+                HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
+            }
+        }
     }
     
 }

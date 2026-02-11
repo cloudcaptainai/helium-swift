@@ -81,10 +81,8 @@ extension AnyCodable {
 }
 
 func formatAsTimestamp(date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX" // ISO 8601 format
-    formatter.locale = Locale.current // Use user's current locale
-    formatter.timeZone = TimeZone.current // Use user's current timezone
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter.string(from: date)
 }
 

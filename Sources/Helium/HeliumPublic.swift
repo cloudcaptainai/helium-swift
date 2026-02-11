@@ -15,18 +15,19 @@ struct PaywallViewAndSession {
     let paywallSession: PaywallSession
 }
 
+/// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
-    // View controller to present from. Defaults to current top view controller. Ignored for HeliumPaywall embedded view.
     var presentFromViewController: UIViewController? = nil
-    // Custom traits to send to the paywall
     var customPaywallTraits: [String: Any]? = nil
-    // Don't show paywall if user is entitled to a product in paywall
     var dontShowIfAlreadyEntitled: Bool = true
-    // How long to allow loading state before switching to fallback logic.
-    // Use zero or negative value to disable loading state.
-    // If not set, Helium.config.defaultLoadingBudget will be used.
     var loadingBudget: TimeInterval? = nil
-    
+
+    /// Creates a new paywall presentation configuration.
+    /// - Parameters:
+    ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
+    ///   - customPaywallTraits: Custom traits to send to the paywall.
+    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `true`.
+    ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
@@ -77,6 +78,39 @@ public class Helium {
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
     
+    /// Presents a full-screen paywall for the specified trigger.
+    ///
+    /// You must have a trigger and workflow configured in the [Helium dashboard](https://app.tryhelium.com/workflows)
+    /// in order to show a paywall.
+    ///
+    /// ## Example
+    /// ```swift
+    /// Helium.shared.presentPaywall(
+    ///     trigger: "premium"
+    /// ) { paywallNotShownReason in
+    ///     switch paywallNotShownReason {
+    ///         case .targetingHoldout:
+    ///             break
+    ///         case .alreadyEntitled:
+    ///             // e.g. ensure premium access
+    ///             break
+    ///         default:
+    ///             // handle the rare case where a paywall fails to show
+    ///             break
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Note: See the [Fallbacks documentation](https://docs.tryhelium.com/guides/fallback-bundle) to reduce cases where a paywall fails to show.
+    ///
+    /// - Parameters:
+    ///   - trigger: The trigger name configured in the Helium dashboard.
+    ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
+    ///   - eventHandlers: Optional event handlers for paywall lifecycle events.
+    ///   - onEntitled: Optional handler called when user becomes entitled to a product in the paywall, via purchase or existing entitlement.
+    ///   - onPaywallNotShown: Required handler for any scenario where the paywall does not show.
+    ///
+    /// - Important: If user is already entitled and `config.dontShowIfAlreadyEntitled` is true,  `onEntitled` will be called if provided otherwise `onPaywallNotShown(.alreadyEntitled)` will be called.
     public func presentPaywall(
         trigger: String,
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
@@ -89,7 +123,7 @@ public class Helium {
         let presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: onEntitled,
+            onEntitled: onEntitled,
             onPaywallNotShown: onPaywallNotShown
         )
         if skipPaywallIfNeeded(trigger: trigger, presentationContext: presentationContext) {
@@ -128,11 +162,14 @@ public class Helium {
         return HeliumFetchedConfigManager.shared.downloadStatus;
     }
     
-    public func hideUpsell() -> Bool {
+    /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
+    @discardableResult
+    public func hidePaywall() -> Bool {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }
     
-    public func hideAllUpsells() {
+    /// Hide all currently displayed paywalls, including "second try" paywalls.
+    public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
@@ -171,7 +208,7 @@ public class Helium {
     ///
     /// - Note: This does NOT clear user identification or session data
     public func clearAllCachedState() {
-        hideAllUpsells()
+        hideAllPaywalls()
         
         // Clear physical bundle files from disk
         HeliumAssetManager.shared.clearCache()
@@ -199,7 +236,7 @@ public class Helium {
         let presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitledHandler: nil,
+            onEntitled: nil,
             onPaywallNotShown: nil
         )
         return upsellViewResultFor(trigger: trigger, presentationContext: presentationContext).viewAndSession?.view
@@ -223,6 +260,10 @@ public class Helium {
             
             if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
+            }
+            
+            if !templatePaywallInfo.hasIosProducts {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
             do {
@@ -271,7 +312,6 @@ public class Helium {
     }
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
-        HeliumLogger.log(.info, category: .fallback, "Looking for fallback", metadata: ["trigger": trigger, "reason": fallbackReason.rawValue])
         
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
@@ -365,7 +405,13 @@ public class Helium {
     func isInitialized() -> Bool {
         return initialized
     }
-    
+
+    /// Marks the SDK as initialized without triggering side effects (config fetch, analytics, etc.).
+    /// Accessible via @testable import for unit tests.
+    func markInitializedForTesting() {
+        initialized = true
+    }
+
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
             return true;
@@ -437,7 +483,7 @@ public class Helium {
         }
         
         // hide any existing upsells
-        hideAllUpsells()
+        hideAllPaywalls()
         
         HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
         presentPaywall(trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false)) { reason in

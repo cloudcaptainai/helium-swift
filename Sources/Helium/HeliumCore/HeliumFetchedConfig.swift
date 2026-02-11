@@ -15,9 +15,47 @@ enum PaywallsDownloadStep {
     case products
 }
 
+struct HeliumFetchError {
+    private static let maxServerMessageLength = 60
+    private static let maxDescriptionLength = 150
+    
+    let summary: String
+    let lastHttpStatusCode: Int?
+    let lastServerMessage: String?
+    let failedBundleFilename: String?
+    
+    init(
+        summary: String,
+        lastHttpStatusCode: Int? = nil,
+        lastServerMessage: String? = nil,
+        failedBundleUrl: String? = nil
+    ) {
+        self.summary = summary
+        self.lastHttpStatusCode = lastHttpStatusCode
+        self.lastServerMessage = lastServerMessage.map { String($0.prefix(Self.maxServerMessageLength)) }
+        // Extract just the filename from the URL (e.g., "bundle_1767639080410.html")
+        self.failedBundleFilename = failedBundleUrl.flatMap { URL(string: $0)?.lastPathComponent }
+    }
+    
+    var description: String {
+        var parts = [summary]
+        if let statusCode = lastHttpStatusCode {
+            parts.append("HTTP \(statusCode)")
+        }
+        if let serverMessage = lastServerMessage, !serverMessage.isEmpty {
+            parts.append(serverMessage)
+        }
+        if let filename = failedBundleFilename {
+            parts.append(filename)
+        }
+        let joined = parts.joined(separator: " | ")
+        return String(joined.prefix(Self.maxDescriptionLength))
+    }
+}
+
 enum HeliumFetchResult {
     case success(HeliumFetchedConfig, HeliumFetchMetrics)
-    case failure(errorMessage: String, HeliumFetchMetrics)
+    case failure(HeliumFetchError, HeliumFetchMetrics)
 }
 
 struct HeliumFetchMetrics {
@@ -42,6 +80,7 @@ private struct BundlesRetrieveResult {
     let numBundles: Int
     let numBundlesFromCache: Int
     let numBundleAttempts: Int
+    let failedBundleUrls: [String]
 }
 
 private struct BundlesFetchResult {
@@ -60,6 +99,35 @@ private struct SingleBundleFetchResult {
 
 enum BundleFetchError: Error {
     case permanentFailure(PaywallUnavailableReason)
+}
+
+struct ConfigFetchError: LocalizedError {
+    let statusCode: Int?
+    let serverMessage: String?
+    let underlyingError: Error?
+
+    var errorDescription: String {
+        var parts: [String] = []
+        if let statusCode = statusCode {
+            parts.append("HTTP \(statusCode)")
+        }
+        if let serverMessage = serverMessage, !serverMessage.isEmpty {
+            parts.append(serverMessage)
+        }
+        if let underlyingError = underlyingError {
+            parts.append(underlyingError.localizedDescription)
+        }
+        return parts.isEmpty ? "Unknown error" : parts.joined(separator: " - ")
+    }
+
+    /// Checks if this error indicates an invalid API key (HTTP 400 with validation error message)
+    var isInvalidApiKeyError: Bool {
+        guard statusCode == 400,
+              let message = serverMessage else {
+            return false
+        }
+        return message.contains("OnLaunchRequest.ApiKey")
+    }
 }
 
 class NetworkReachability {
@@ -110,9 +178,14 @@ func fetchEndpoint(
     
     let (data, response) = try await session.data(for: request)
     
-    guard let httpResponse = response as? HTTPURLResponse,
-          (200...299).contains(httpResponse.statusCode) else {
-        throw URLError(.badServerResponse)
+    guard let httpResponse = response as? HTTPURLResponse else {
+        throw ConfigFetchError(statusCode: nil, serverMessage: nil, underlyingError: URLError(.badServerResponse))
+    }
+    
+    guard (200...299).contains(httpResponse.statusCode) else {
+        let truncatedData = data.prefix(100)
+        let serverMessage = String(data: truncatedData, encoding: .utf8)
+        throw ConfigFetchError(statusCode: httpResponse.statusCode, serverMessage: serverMessage, underlyingError: nil)
     }
     
     let decodedResponse = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
@@ -133,7 +206,13 @@ public class HeliumFetchedConfigManager {
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
     }
-    
+
+    /// Inject config for testing purposes only. Accessible via @testable import.
+    func injectConfigForTesting(_ config: HeliumFetchedConfig) {
+        self.fetchedConfig = config
+        self._downloadStatus = .downloadSuccess
+    }
+
     private init() {}
     
     private var fetchTask: Task<Void, Never>?
@@ -165,11 +244,8 @@ public class HeliumFetchedConfigManager {
             updateDownloadState(.inProgress)
             downloadStep = .config
 
-            // Try to ensure App Store country code is available. It should not take longer
-            // than 5ms but do a short timeout to make sure we don't delay config fetch too long.
-            let _ = await withTimeoutOrNil(milliseconds: 25) {
-                await AppStoreCountryHelper.shared.fetchStoreCountryCode()
-            }
+            // Pre-fetching
+            await AppStoreCountryHelper.shared.fetchStoreCountryCode()
             
             let params: [String: Any] = [
                 "apiKey": apiKey,
@@ -186,6 +262,8 @@ public class HeliumFetchedConfigManager {
                 attemptCounter: 1,
                 initializeStartTime: initializeStartTime,
                 configStartTime: configStartTime,
+                lastStatusCode: nil,
+                lastServerMessage: nil,
                 completion: completion
             )
         }
@@ -198,6 +276,8 @@ public class HeliumFetchedConfigManager {
         attemptCounter: Int,
         initializeStartTime: DispatchTime,
         configStartTime: DispatchTime,
+        lastStatusCode: Int?,
+        lastServerMessage: String?,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         do {
@@ -221,6 +301,8 @@ public class HeliumFetchedConfigManager {
                         attemptCounter: attemptCounter + 1,
                         initializeStartTime: initializeStartTime,
                         configStartTime: configStartTime,
+                        lastStatusCode: lastStatusCode,
+                        lastServerMessage: lastServerMessage,
                         completion: completion
                     )
                 } else {
@@ -231,7 +313,11 @@ public class HeliumFetchedConfigManager {
                     let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                     updateDownloadState(.downloadFailure)
                     completion(.failure(
-                        errorMessage: "Reached max retries for config.",
+                        HeliumFetchError(
+                            summary: "config_fetch",
+                            lastHttpStatusCode: lastStatusCode,
+                            lastServerMessage: lastServerMessage
+                        ),
                         HeliumFetchMetrics(
                             numConfigAttempts: attemptCounter,
                             numBundleAttempts: 0,
@@ -324,7 +410,10 @@ public class HeliumFetchedConfigManager {
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
                     updateDownloadState(.downloadFailure)
                     completion(.failure(
-                        errorMessage: "Failed to fetch bundles for \(bundlesResult.triggersWithNoBundle.count) trigger(s)",
+                        HeliumFetchError(
+                            summary: "bundle_fetch",
+                            failedBundleUrl: bundlesResult.failedBundleUrls.first
+                        ),
                         HeliumFetchMetrics(
                             numConfigAttempts: attemptCounter,
                             numBundleAttempts: bundlesResult.numBundleAttempts,
@@ -358,12 +447,51 @@ public class HeliumFetchedConfigManager {
                 }
             }
         } catch {
+            // Extract error details
+            let (errorStatusCode, errorServerMessage, errorDesc): (Int?, String?, String)
+            let configError = error as? ConfigFetchError
+            if let configError {
+                errorStatusCode = configError.statusCode
+                errorServerMessage = configError.serverMessage
+                errorDesc = configError.localizedDescription
+            } else {
+                errorStatusCode = nil
+                errorServerMessage = nil
+                errorDesc = error.localizedDescription
+            }
+
+            let newLastStatusCode = errorStatusCode ?? lastStatusCode
+            let newLastServerMessage = errorServerMessage ?? lastServerMessage
+
+            // Check for invalid API key error - this is non-retryable
+            if let configError, configError.isInvalidApiKeyError {
+                HeliumLogger.log(.error, category: .config, "Invalid API key detected. Get your Helium API key at https://app.tryhelium.com/profile")
+                updateDownloadState(.downloadFailure)
+                let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
+                let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
+                completion(.failure(
+                    HeliumFetchError(
+                        summary: "config_fetch_invalid_api_key",
+                        lastHttpStatusCode: newLastStatusCode,
+                        lastServerMessage: newLastServerMessage
+                    ),
+                    HeliumFetchMetrics(
+                        numConfigAttempts: attemptCounter,
+                        numBundleAttempts: 0,
+                        configSuccess: false,
+                        configDownloadTimeMS: configDownloadTimeMS,
+                        totalTimeMS: totalTimeMS
+                    )
+                ))
+                return
+            }
+
             // Retry on network/fetch failure
             if attemptCounter < maxAttempts {
                 let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
                 HeliumLogger.log(.warn, category: .network, "Config fetch error, retrying", metadata: [
                     "attempt": String(attemptCounter),
-                    "error": error.localizedDescription,
+                    "error": errorDesc,
                     "delaySeconds": String(delaySeconds)
                 ])
                 
@@ -376,18 +504,24 @@ public class HeliumFetchedConfigManager {
                     attemptCounter: attemptCounter + 1,
                     initializeStartTime: initializeStartTime,
                     configStartTime: configStartTime,
+                    lastStatusCode: newLastStatusCode,
+                    lastServerMessage: newLastServerMessage,
                     completion: completion
                 )
             } else {
                 HeliumLogger.log(.error, category: .network, "Config fetch failed after all retries", metadata: [
-                    "error": error.localizedDescription,
+                    "error": errorDesc,
                     "attempts": String(attemptCounter)
                 ])
                 updateDownloadState(.downloadFailure)
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
-                    errorMessage: error.localizedDescription,
+                    HeliumFetchError(
+                        summary: "config_fetch",
+                        lastHttpStatusCode: newLastStatusCode,
+                        lastServerMessage: newLastServerMessage
+                    ),
                     HeliumFetchMetrics(
                         numConfigAttempts: attemptCounter,
                         numBundleAttempts: 0,
@@ -422,7 +556,8 @@ public class HeliumFetchedConfigManager {
                 triggersWithSkippedBundleAndReason: [],
                 numBundles: 0,
                 numBundlesFromCache: 0,
-                numBundleAttempts: 0
+                numBundleAttempts: 0,
+                failedBundleUrls: []
             )
         }
         
@@ -484,7 +619,8 @@ public class HeliumFetchedConfigManager {
             triggersWithSkippedBundleAndReason: triggersWithSkippedBundle + additionalTriggersWithSkippedBundle,
             numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
             numBundlesFromCache: cachedBundleIdToHtmlMap.count,
-            numBundleAttempts: fetchResult.numBundleAttempts ?? 0
+            numBundleAttempts: fetchResult.numBundleAttempts ?? 0,
+            failedBundleUrls: fetchResult.bundleUrlsFailedToFetched
         )
     }
     
@@ -571,7 +707,7 @@ public class HeliumFetchedConfigManager {
                             ])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason)
                         } else {
-                            HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url])
+                            HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url, "error": error.localizedDescription])
                             return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil)
                         }
                     }
@@ -656,6 +792,11 @@ public class HeliumFetchedConfigManager {
         completion(.success(newConfig, metrics))
         updateDownloadState(.downloadSuccess)
         
+        let triggersMissingProducts = newConfig.getTriggersWithMissingProducts()
+        if !triggersMissingProducts.isEmpty {
+            HeliumLogger.log(.error, category: .config, "‼️⚠️‼️ Some triggers have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
+        }
+        
         Task { @MainActor in
             NotificationCenter.default.post(
                 name: NSNotification.Name("HeliumConfigDownloadComplete"),
@@ -669,7 +810,7 @@ public class HeliumFetchedConfigManager {
         var allProductIds: [String] = []
         if let config {
             for paywall in config.triggerToPaywalls.values {
-                allProductIds.append(contentsOf: paywall.productsOffered)
+                allProductIds.append(contentsOf: paywall.productIds)
             }
         }
         return Array(Set(allProductIds))
@@ -771,7 +912,7 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
-        return fetchedConfig?.triggerToPaywalls[trigger]?.productsOffered;
+        fetchedConfig?.triggerToPaywalls[trigger]?.productIds
     }
     
     public func getFetchedTriggerNames() -> [String] {

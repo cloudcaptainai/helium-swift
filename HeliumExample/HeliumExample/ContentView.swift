@@ -26,7 +26,7 @@ struct ContentView: View {
                 showModifierPaywall = true
             }
             .accessibilityIdentifier("showPaywallViaModifier")
-            .triggerUpsell(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey) { reason in
+            .heliumPaywall(isPresented: $showModifierPaywall, trigger: AppConfig.triggerKey) { reason in
                 Text("no show! \(reason.description)")
             }
             

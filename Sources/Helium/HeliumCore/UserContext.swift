@@ -19,6 +19,8 @@ struct CodableLocale: Codable {
     var decimalSeparator: String?
     var usesMetricSystem: Bool
     var storeCountryCode: String?  // 2-letter alpha-2 code
+    var storefrontId: String?
+    var storefrontCurrency: String?
 }
 
 struct CodableScreenInfo: Codable {
@@ -54,8 +56,6 @@ struct CodableDeviceInfo: Codable {
     var systemVersion: String
     var deviceModel: String
     var userInterfaceIdiom: String
-    var totalCapacity: Int?
-    var availableCapacity: Int64?
 }
 
 func createApplicationInfo() -> CodableApplicationInfo {
@@ -107,6 +107,10 @@ public struct CodableUserContext: Codable {
     var screenInfo: CodableScreenInfo
     var deviceInfo: CodableDeviceInfo
     var applicationInfo: CodableApplicationInfo
+    var isLowPowerMode: Bool
+    var isApplePayAvailable: Bool
+    var heliumFirstSeenDate: String
+    var userSeed: Int
     var additionalParams: HeliumUserTraits
     
     public func buildRequestPayload() -> [String: Any] {
@@ -121,7 +125,9 @@ public struct CodableUserContext: Codable {
             "decimalSeparator": self.locale.decimalSeparator ?? "",
             "usesMetricSystem": self.locale.usesMetricSystem,
             "storeCountryCode": self.locale.storeCountryCode ?? "",
-            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? ""
+            "iosStoreCountryCode": AppStoreCountryHelper.shared.getStoreCountryCode3() ?? "",
+            "storefrontId": locale.storefrontId ?? "",
+            "storefrontCurrency": locale.storefrontCurrency ?? ""
         ]
         
         let nativeBoundsDict: [String: Any] = [
@@ -187,11 +193,16 @@ public struct CodableUserContext: Codable {
             "deviceInfo": deviceInfoDict,
             "applicationInfo": applicationInfoDict,
             "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
+            "isLowPowerMode": isLowPowerMode,
+            "isApplePayAvailable": isApplePayAvailable,
+            "heliumFirstSeenDate": heliumFirstSeenDate,
+            "isFirstHeliumSession": HeliumIdentityManager.shared.isFirstHeliumSession,
+            "userSeed": userSeed,
             "additionalParams": self.additionalParams.dictionaryRepresentation
         ]
     }
 
-    static func create(userTraits: HeliumUserTraits?, skipDeviceCapacity: Bool = false) -> CodableUserContext {
+    static func create(userTraits: HeliumUserTraits?) -> CodableUserContext {
         
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
@@ -203,7 +214,9 @@ public struct CodableUserContext: Codable {
             currentTimeZoneName: TimeZone.current.identifier,
             decimalSeparator: Locale.current.decimalSeparator,
             usesMetricSystem: Locale.current.usesMetricSystem,
-            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode()
+            storeCountryCode: AppStoreCountryHelper.shared.getStoreCountryCode(),
+            storefrontId: AppStoreCountryHelper.shared.getStorefrontId(),
+            storefrontCurrency: AppStoreCountryHelper.shared.getStorefrontCurrency()
         )
 
         let screenInfo = CodableScreenInfo(
@@ -231,9 +244,7 @@ public struct CodableUserContext: Codable {
             systemName: UIDevice.current.systemName,
             systemVersion: UIDevice.current.systemVersion,
             deviceModel: DeviceHelpers.current.getDeviceModel(),
-            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom),
-            totalCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.totalCapacity,
-            availableCapacity: skipDeviceCapacity ? -1 : DeviceHelpers.current.availableCapacity
+            userInterfaceIdiom: String(describing: UIDevice.current.userInterfaceIdiom)
         )
 
         return CodableUserContext(
@@ -241,6 +252,10 @@ public struct CodableUserContext: Codable {
             screenInfo: screenInfo,
             deviceInfo: deviceInfo,
             applicationInfo: applicationInfo,
+            isLowPowerMode: LowPowerModeHelper.shared.isLowPowerModeEnabled(),
+            isApplePayAvailable: ApplePayHelper.shared.canMakePayments(),
+            heliumFirstSeenDate: HeliumIdentityManager.shared.getHeliumFirstSeenDate(),
+            userSeed: HeliumIdentityManager.shared.getUserSeed(),
             additionalParams: userTraits ?? HeliumUserTraits([:])
         )
     }

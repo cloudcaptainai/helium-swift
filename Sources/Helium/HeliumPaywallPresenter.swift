@@ -18,11 +18,18 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+    @HeliumAtomic private var sessionsWithEntitlement: Set<String> = []
     
     func isSecondTryPaywall(trigger: String) -> Bool {
         return paywallsDisplayed.contains {
             $0.trigger == trigger && $0.isSecondTry
         }
+    }
+    
+    /// Mark a session as having achieved entitlement (purchase/restore succeeded).
+    /// The onEntitled callback will be called when the paywall closes.
+    func markSessionAsEntitled(sessionId: String) {
+        _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
     }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
@@ -31,9 +38,16 @@ class HeliumPaywallPresenter {
             if skipIt == true {
                 HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 Task { @MainActor in
-                    context.onEntitledHandler?()
-                    context.onPaywallNotShown?(.alreadyEntitled)
+                    if let onEntitled = context.onEntitled {
+                        onEntitled()
+                    } else {
+                        context.onPaywallNotShown?(.alreadyEntitled)
+                    }
                 }
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
+                    paywallSession: nil
+                )
                 return true
             }
         }
@@ -282,7 +296,7 @@ class HeliumPaywallPresenter {
         let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: isSecondTry, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
         modalVC.modalPresentationStyle = .fullScreen
         
-        var presenter = presentationContext.config.presentFromViewController ?? UIWindowHelper.findTopMostViewController()
+        var presenter = presentationContext.config.presentFromViewController
         if presenter == nil, let windowScene = UIWindowHelper.findActiveWindow()?.windowScene {
             let newWindow = UIWindow(windowScene: windowScene)
             let containerVC = UIViewController()
@@ -293,15 +307,19 @@ class HeliumPaywallPresenter {
             
             modalVC.customWindow = newWindow
         }
+        // Try this as backup but if new window failed, this likely will too.
+        if presenter == nil {
+            presenter = UIWindowHelper.findTopMostViewController()
+        }
         
         guard let presenter else {
             // Failed to find a view controller to present on - this should never happen
-            HeliumLogger.log(.error, category: .ui, "No root view controller found to present paywall", metadata: ["trigger": trigger])
+            HeliumLogger.log(.error, category: .ui, "No window scene found to present paywall", metadata: ["trigger": trigger])
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
                     paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "No root view controller found",
+                    error: "No window scene found",
                     paywallUnavailableReason: .noRootController,
                     loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
                 ),
@@ -333,18 +351,32 @@ class HeliumPaywallPresenter {
     
     @discardableResult
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
-        guard let currentPaywall = paywallsDisplayed.popLast(),
-              currentPaywall.presentingViewController != nil else {
-            HeliumLogger.log(.debug, category: .ui, "hideUpsell called but no paywall to hide")
+        guard !paywallsDisplayed.isEmpty else {
+            HeliumLogger.log(.debug, category: .ui, "Attempted to hide paywall but no paywall to hide")
             return false
         }
-        HeliumLogger.log(.info, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
         Task { @MainActor in
-            currentPaywall.dismiss(animated: animated) { [weak self] in
-                if let overrideCloseEvent {
-                    overrideCloseEvent()
-                } else {
-                    self?.dispatchCloseEvent(paywallVC: currentPaywall)
+            guard let currentPaywall = paywallsDisplayed.popLast() else {
+                return
+            }
+            HeliumLogger.log(.trace, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
+            // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+            if let presenter = currentPaywall.presentingViewController {
+                presenter.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
+                }
+            } else {
+                // Not expected to occur, but try indirect dismissal as backup
+                currentPaywall.dismiss(animated: animated) { [weak self] in
+                    if let overrideCloseEvent {
+                        overrideCloseEvent()
+                    } else {
+                        self?.dispatchCloseEvent(paywallVC: currentPaywall)
+                    }
                 }
             }
         }
@@ -356,15 +388,34 @@ class HeliumPaywallPresenter {
             onComplete?()
             return
         }
-        let paywallsRemoved = paywallsDisplayed
+        
         Task { @MainActor in
-            // Have the topmost paywall get dismissed by its presenter which should dismiss all the others,
-            // since they must have ultimately be presented by the topmost paywall if you go all the way up.
-            paywallsDisplayed.first?.presentingViewController?.dismiss(animated: true) { [weak self] in
-                onComplete?()
-                self?.dispatchCloseForAll(paywallVCs: paywallsRemoved)
-            }
+            let paywallsToRemove = paywallsDisplayed
             paywallsDisplayed.removeAll()
+            let group = DispatchGroup()
+            
+            for (index, paywall) in paywallsToRemove.reversed().enumerated() {
+                group.enter()
+                // Only animate the first (topmost) paywall
+                let shouldAnimate = index == 0
+                // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
+                if let presenter = paywall.presentingViewController {
+                    presenter.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
+                } else {
+                    // Not expected to occur, but try indirect dismissal as backup
+                    paywall.dismiss(animated: shouldAnimate) {
+                        group.leave()
+                    }
+                }
+            }
+            
+            group.notify(queue: .main) { [weak self] in
+                // Fire close events topmost to bottom
+                self?.dispatchCloseForAll(paywallVCs: paywallsToRemove.reversed())
+                onComplete?()
+            }
         }
     }
     
@@ -383,6 +434,16 @@ class HeliumPaywallPresenter {
     
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
+        
+        // Call onEntitled if this session had a successful purchase/restore
+        let sessionId = paywallVC.paywallSession.sessionId
+        var wasEntitled = false
+        _sessionsWithEntitlement.withValue { wasEntitled = $0.remove(sessionId) != nil }
+        if wasEntitled {
+            Task { @MainActor in
+                paywallVC.presentationContext.onEntitled?()
+            }
+        }
     }
     
     private func dispatchOpenOrCloseEvent(openEvent: Bool, paywallVC: HeliumViewController) {
