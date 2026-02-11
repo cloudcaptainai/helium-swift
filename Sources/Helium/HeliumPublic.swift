@@ -495,7 +495,8 @@ public class Helium {
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
     public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
         HeliumPaywallPresenter.shared.hideAllUpsells()
-        
+        HeliumPaywallDelegateWrapper.shared.cancelAllPendingPurchaseObservers()
+
         // Clear fetched configuration from memory
         HeliumFetchedConfigManager.reset()
         
