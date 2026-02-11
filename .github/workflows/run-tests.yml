@@ -64,8 +64,11 @@ jobs:
 
       - name: Run UI tests with retry logic
         run: |
+          TEST_SCOPE="${{ inputs.test_scope }}"
+          TEST_SCOPE="${TEST_SCOPE:-ui}"
+
           RUN_ONLY_TESTING=""
-          if [ "${{ inputs.test_scope }}" = "ui" ]; then
+          if [ "$TEST_SCOPE" = "ui" ]; then
             RUN_ONLY_TESTING="-only-testing:HeliumExampleUITests"
           fi
 
