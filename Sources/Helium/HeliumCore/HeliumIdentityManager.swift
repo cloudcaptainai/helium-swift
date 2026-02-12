@@ -56,7 +56,7 @@ public class HeliumIdentityManager {
         return getCustomUserId() ?? getHeliumPersistentId()
     }
     
-    func hasCustomerUserId() -> Bool {
+    func hasCustomUserId() -> Bool {
         return getCustomUserId() != nil
     }
     

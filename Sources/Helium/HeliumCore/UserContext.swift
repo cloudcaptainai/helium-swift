@@ -186,7 +186,7 @@ public struct CodableUserContext: Codable {
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "userId": HeliumIdentityManager.shared.getResolvedUserId(),
-            "hasCustomUserId": HeliumIdentityManager.shared.hasCustomerUserId(),
+            "hasCustomUserId": HeliumIdentityManager.shared.hasCustomUserId(),
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": localeDict,

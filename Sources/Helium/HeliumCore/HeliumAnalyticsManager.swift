@@ -188,7 +188,7 @@ class HeliumAnalyticsManager {
                 organizationID: organizationID,
                 heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
                 userId: HeliumIdentityManager.shared.getResolvedUserId(),
-                hasCustomUserId: HeliumIdentityManager.shared.hasCustomerUserId(),
+                hasCustomUserId: HeliumIdentityManager.shared.hasCustomUserId(),
                 heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                 heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
                 heliumPaywallSessionId: paywallSession?.sessionId,
