@@ -209,7 +209,8 @@ public class Helium {
     /// - Note: This does NOT clear user identification or session data
     public func clearAllCachedState() {
         hideAllPaywalls()
-        
+        HeliumPaywallDelegateWrapper.shared.cancelAllPendingPurchaseObservers()
+
         // Clear physical bundle files from disk
         HeliumAssetManager.shared.clearCache()
         
@@ -495,7 +496,6 @@ public class Helium {
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
     public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
         HeliumPaywallPresenter.shared.hideAllUpsells()
-        HeliumPaywallDelegateWrapper.shared.cancelAllPendingPurchaseObservers()
 
         // Clear fetched configuration from memory
         HeliumFetchedConfigManager.reset()

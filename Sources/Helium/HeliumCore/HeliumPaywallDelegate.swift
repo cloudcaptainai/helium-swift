@@ -210,11 +210,6 @@ class HeliumPaywallDelegateWrapper {
     /// Observes Transaction.updates for a pending purchase (e.g., Ask to Buy) to complete.
     /// When the transaction is approved, finishes it, updates entitlements, fires events, and dismisses the paywall.
     private func observePendingPurchase(productId: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) {
-        // Cancel any existing observation for the same product
-        _pendingPurchaseTasks.withValue { tasks in
-            tasks[productId]?.cancel()
-        }
-
         let task = Task { [weak self] in
             for await verificationResult in Transaction.updates {
                 guard !Task.isCancelled else { return }
@@ -232,8 +227,11 @@ class HeliumPaywallDelegateWrapper {
 
                 HeliumLogger.log(.info, category: .core, "Pending purchase approved for product: \(productId)")
 
-                // Finish the transaction so StoreKit knows we processed it
-                await transaction.finish()
+                // Only finish the transaction if Helium owns StoreKit (StoreKitDelegate);
+                // custom delegates are responsible for finishing transactions themselves.
+                if self?.delegate is StoreKitDelegate {
+                    await transaction.finish()
+                }
 
                 // Update entitlements and sync
                 let transactionIds = HeliumTransactionIdResult(transaction: transaction)
@@ -271,7 +269,9 @@ class HeliumPaywallDelegateWrapper {
             }
         }
 
+        // Cancel any existing observation and store the new one atomically
         _pendingPurchaseTasks.withValue { tasks in
+            tasks[productId]?.cancel()
             tasks[productId] = task
         }
     }
