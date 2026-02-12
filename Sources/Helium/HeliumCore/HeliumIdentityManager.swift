@@ -50,6 +50,7 @@ public class HeliumIdentityManager {
     private static let heliumPersistentIdKey = "heliumPersistentUserId"
     private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
     private let heliumUserSeedKey = "heliumUserSeed"
+    private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
     
     /// We may remove this at some point but for now it ensures a user id always set
     func getResolvedUserId() -> String {
@@ -57,11 +58,10 @@ public class HeliumIdentityManager {
     }
     
     func hasCustomUserId() -> Bool {
-        return getCustomUserId() != nil
+        return UserDefaults.standard.bool(forKey: heliumHasCustomUserIdKey)
     }
     
-    /// Gets the current user ID, creating one if it doesn't exist
-    /// - Returns: The current user ID
+    /// Returns the current user ID
     func getCustomUserId() -> String? {
         return UserDefaults.standard.string(forKey: heliumUserIdKey)
     }
@@ -71,8 +71,10 @@ public class HeliumIdentityManager {
     func setCustomUserId(_ userId: String?) {
         if let userId {
             UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
+            UserDefaults.standard.setValue(true, forKey: heliumHasCustomUserIdKey)
         } else {
             UserDefaults.standard.removeObject(forKey: heliumUserIdKey)
+            UserDefaults.standard.removeObject(forKey: heliumHasCustomUserIdKey)
         }
     }
     
