@@ -52,8 +52,12 @@ public class HeliumIdentityManager {
     private let heliumUserSeedKey = "heliumUserSeed"
     
     /// We may remove this at some point but for now it ensures a user id always set
-    func getResolvedUserId() -> String? {
+    func getResolvedUserId() -> String {
         return getCustomUserId() ?? getHeliumPersistentId()
+    }
+    
+    func hasCustomerUserId() -> Bool {
+        return getCustomUserId() != nil
     }
     
     /// Gets the current user ID, creating one if it doesn't exist

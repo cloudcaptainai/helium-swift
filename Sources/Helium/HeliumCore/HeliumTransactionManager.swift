@@ -166,7 +166,7 @@ class TransactionSyncClient {
         guard !transactions.isEmpty else { return }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
-        let userId = HeliumIdentityManager.shared.getUserId()
+        let userId = HeliumIdentityManager.shared.getResolvedUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
         // Note that organizationId may not be filled depending on when this is called
         let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
