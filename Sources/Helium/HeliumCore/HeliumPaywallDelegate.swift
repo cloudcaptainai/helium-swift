@@ -65,12 +65,12 @@ public extension HeliumPaywallDelegate {
 
 
 class HeliumPaywallDelegateWrapper {
-
+    
     public static let shared = HeliumPaywallDelegateWrapper()
-
+    
     /// Tracks Transaction.updates observation tasks for pending purchases, keyed by product ID
     @HeliumAtomic private var pendingPurchaseTasks: [String: Task<Void, Never>] = [:]
-
+    
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
     }
@@ -186,13 +186,13 @@ class HeliumPaywallDelegateWrapper {
         // Mark session for onEntitled callback on purchase/restore success
         if let sessionId = paywallSession?.sessionId {
             if event is PurchaseSucceededEvent ||
-               event is PurchaseRestoredEvent ||
-               event is PurchaseAlreadyEntitledEvent {
+                event is PurchaseRestoredEvent ||
+                event is PurchaseAlreadyEntitledEvent {
                 HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
             }
         }
     }
-
+    
     /// Updates entitlements, transaction history, localized prices, and app transaction ID after a new purchase.
     private func syncAfterPurchase(productId: String, transaction: Transaction?) {
         Task {
@@ -200,22 +200,22 @@ class HeliumPaywallDelegateWrapper {
             await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
             await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
         }
-        #if compiler(>=6.2)
+#if compiler(>=6.2)
         if let atID = transaction?.appTransactionID {
             HeliumIdentityManager.shared.appTransactionID = atID
         }
-        #endif
+#endif
     }
-
+    
     // MARK: - Pending Purchase Observation
-
+    
     /// Observes Transaction.updates for a pending purchase (e.g., Ask to Buy) to complete.
-    /// When the transaction is approved, finishes it, updates entitlements, fires events, and dismisses the paywall.
+    /// When the transaction is approved, finishes it, updates entitlements, and fires events.
     private func observePendingPurchase(productId: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) {
         let task = Task { [weak self] in
             for await verificationResult in Transaction.updates {
                 guard !Task.isCancelled else { return }
-
+                
                 guard case .verified(let transaction) = verificationResult else {
                     continue
                 }
@@ -226,18 +226,18 @@ class HeliumPaywallDelegateWrapper {
                 guard transaction.revocationDate == nil else {
                     continue
                 }
-
+                
                 HeliumLogger.log(.info, category: .core, "Pending purchase approved for product: \(productId)")
-
+                
                 // Only finish the transaction if Helium owns StoreKit (StoreKitDelegate);
                 // custom delegates are responsible for finishing transactions themselves.
                 if self?.delegate is StoreKitDelegate {
                     await transaction.finish()
                 }
-
+                
                 let transactionIds = HeliumTransactionIdResult(transaction: transaction)
                 self?.syncAfterPurchase(productId: productId, transaction: transaction)
-
+                
                 // Fire purchase success event
                 self?.fireEvent(
                     PurchaseSucceededEvent(
@@ -250,10 +250,7 @@ class HeliumPaywallDelegateWrapper {
                     ),
                     paywallSession: paywallSession
                 )
-
-                // Dismiss the paywall if still showing
-                HeliumPaywallPresenter.shared.hideUpsell()
-
+                
                 // Clean up this observer
                 self?._pendingPurchaseTasks.withValue { tasks in
                     tasks.removeValue(forKey: productId)
@@ -261,22 +258,11 @@ class HeliumPaywallDelegateWrapper {
                 return
             }
         }
-
+        
         // Cancel any existing observation and store the new one atomically
         _pendingPurchaseTasks.withValue { tasks in
             tasks[productId]?.cancel()
             tasks[productId] = task
         }
     }
-
-    /// Cancels all pending purchase observation tasks. Called during SDK reset.
-    func cancelAllPendingPurchaseObservers() {
-        _pendingPurchaseTasks.withValue { tasks in
-            for (_, task) in tasks {
-                task.cancel()
-            }
-            tasks.removeAll()
-        }
-    }
-
 }

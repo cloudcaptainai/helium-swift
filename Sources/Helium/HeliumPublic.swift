@@ -209,7 +209,6 @@ public class Helium {
     /// - Note: This does NOT clear user identification or session data
     public func clearAllCachedState() {
         hideAllPaywalls()
-        HeliumPaywallDelegateWrapper.shared.cancelAllPendingPurchaseObservers()
 
         // Clear physical bundle files from disk
         HeliumAssetManager.shared.clearCache()
