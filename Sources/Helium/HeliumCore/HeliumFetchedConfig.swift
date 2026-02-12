@@ -206,7 +206,13 @@ public class HeliumFetchedConfigManager {
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
     }
-    
+
+    /// Inject config for testing purposes only. Accessible via @testable import.
+    func injectConfigForTesting(_ config: HeliumFetchedConfig) {
+        self.fetchedConfig = config
+        self._downloadStatus = .downloadSuccess
+    }
+
     private init() {}
     
     private var fetchTask: Task<Void, Never>?

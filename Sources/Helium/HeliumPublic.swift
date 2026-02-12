@@ -405,7 +405,13 @@ public class Helium {
     func isInitialized() -> Bool {
         return initialized
     }
-    
+
+    /// Marks the SDK as initialized without triggering side effects (config fetch, analytics, etc.).
+    /// Accessible via @testable import for unit tests.
+    func markInitializedForTesting() {
+        initialized = true
+    }
+
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
             return true;
