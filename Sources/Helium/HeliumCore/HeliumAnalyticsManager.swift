@@ -111,18 +111,17 @@ class HeliumAnalyticsManager {
     // MARK: - Identity
     
     /// Identifies the current user with the analytics instance.
-    /// - Parameter userId: Optional userId to use. If nil, uses HeliumIdentityManager's userId.
-    func identify(userId: String? = nil) {
+    func identify() {
         guard !analyticsDisabledForTesting else { return }
         queue.async { [weak self] in
             guard let self, let analytics else { return }
-            HeliumLogger.log(.debug, category: .events, "Identifying user", metadata: ["userId": userId ?? "Unknown userId"])
-            performIdentify(on: analytics, userId: userId)
+            HeliumLogger.log(.debug, category: .events, "Identifying user")
+            performIdentify(on: analytics)
         }
     }
     
-    private func performIdentify(on analytics: Analytics, userId: String? = nil) {
-        let resolvedUserId = userId ?? HeliumIdentityManager.shared.getResolvedUserId()
+    private func performIdentify(on analytics: Analytics) {
+        let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
         let userContext = HeliumIdentityManager.shared.getUserContext()
         analytics.identify(userId: resolvedUserId, traits: userContext)
     }
