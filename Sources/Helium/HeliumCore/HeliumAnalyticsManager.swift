@@ -116,9 +116,7 @@ class HeliumAnalyticsManager {
     }
     
     private func performIdentify(on analytics: Analytics, userId: String? = nil) {
-        guard let resolvedUserId = userId ?? HeliumIdentityManager.shared.getUserId() else {
-            return
-        }
+        guard let resolvedUserId = userId ?? HeliumIdentityManager.shared.getResolvedUserId()
         let userContext = HeliumIdentityManager.shared.getUserContext()
         analytics.identify(userId: resolvedUserId, traits: userContext)
     }
@@ -183,7 +181,8 @@ class HeliumAnalyticsManager {
                 paywallUUID: paywallInfo?.paywallUUID,
                 organizationID: organizationID,
                 heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
-                userId: HeliumIdentityManager.shared.getUserId() ?? "not_set",
+                userId: HeliumIdentityManager.shared.getResolvedUserId(),
+                hasCustomUserId: HeliumIdentityManager.shared.getCustomUserId() != nil,
                 heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                 heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
                 heliumPaywallSessionId: paywallSession?.sessionId,
