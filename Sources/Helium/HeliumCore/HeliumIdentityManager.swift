@@ -50,25 +50,32 @@ public class HeliumIdentityManager {
     private static let heliumPersistentIdKey = "heliumPersistentUserId"
     private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
     private let heliumUserSeedKey = "heliumUserSeed"
+    private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
     
-    // MARK: - Public Methods
+    /// We may remove this at some point but for now it ensures a user id always set
+    func getResolvedUserId() -> String {
+        return getCustomUserId() ?? getHeliumPersistentId()
+    }
     
-    /// Gets the current user ID, creating one if it doesn't exist
-    /// - Returns: The current user ID
-    public func getUserId() -> String {
-        if let existingUserId = UserDefaults.standard.string(forKey: heliumUserIdKey) {
-            return existingUserId
-        } else {
-            let newUserId = UUID().uuidString
-            UserDefaults.standard.setValue(newUserId, forKey: heliumUserIdKey)
-            return newUserId
-        }
+    func hasCustomUserId() -> Bool {
+        return UserDefaults.standard.bool(forKey: heliumHasCustomUserIdKey)
+    }
+    
+    /// Returns the current user ID
+    func getCustomUserId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumUserIdKey)
     }
     
     /// Sets a custom user ID
     /// - Parameter userId: The custom user ID to set
-    public func setCustomUserId(_ userId: String) {
-        UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
+    func setCustomUserId(_ userId: String?) {
+        if let userId {
+            UserDefaults.standard.setValue(userId, forKey: heliumUserIdKey)
+            UserDefaults.standard.setValue(true, forKey: heliumHasCustomUserIdKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: heliumUserIdKey)
+            UserDefaults.standard.removeObject(forKey: heliumHasCustomUserIdKey)
+        }
     }
     
     func setCustomUserTraits(_ traits: HeliumUserTraits) {

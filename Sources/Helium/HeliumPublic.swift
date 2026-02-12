@@ -531,13 +531,13 @@ public class HeliumIdentify {
     init() {}
     
     /// Custom user ID to identify this user.
-    public var userId: String {
+    public var userId: String? {
         get {
-            HeliumIdentityManager.shared.getUserId()
+            HeliumIdentityManager.shared.getCustomUserId()
         }
         set {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
-            HeliumAnalyticsManager.shared.identify(userId: newValue)
+            HeliumAnalyticsManager.shared.identify()
         }
     }
     

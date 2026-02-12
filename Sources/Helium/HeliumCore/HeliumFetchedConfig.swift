@@ -249,7 +249,7 @@ public class HeliumFetchedConfigManager {
             
             let params: [String: Any] = [
                 "apiKey": apiKey,
-                "userId": HeliumIdentityManager.shared.getUserId(),
+                "userId": HeliumIdentityManager.shared.getResolvedUserId(),
                 "userContext": HeliumIdentityManager.shared.getUserContext().buildRequestPayload(),
                 "existingBundleIds": HeliumAssetManager.shared.getExistingBundleIDs()
             ]
