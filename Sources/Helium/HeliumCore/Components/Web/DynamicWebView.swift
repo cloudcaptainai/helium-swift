@@ -33,6 +33,7 @@ public struct DynamicWebView: View {
     
     @State private var isContentLoaded = false
     @State private var webView: WKWebView? = nil
+    @State private var showControlPanel = false
     @State private var viewLoadStartTime: Date?
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
@@ -96,7 +97,7 @@ public struct DynamicWebView: View {
            }
            
            if let webView {
-               WebViewRepresentable(webView: webView)
+               WebViewRepresentable(webView: webView, showControlPanel: $showControlPanel)
                    .padding(.horizontal, -1)
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -113,6 +114,15 @@ public struct DynamicWebView: View {
            }
        }
        .edgesIgnoringSafeArea(.all)
+       .sheet(isPresented: $showControlPanel) {
+           if #available(iOS 16.0, *) {
+               HeliumControlPanelView()
+                   .presentationDetents([.large])
+                   .presentationDragIndicator(.visible)
+           } else {
+               HeliumControlPanelView()
+           }
+       }
        .onAppear {
            viewLoadStartTime = Date()
            loadWebView()
@@ -363,9 +373,20 @@ public struct DynamicWebView: View {
 
 fileprivate struct WebViewRepresentable: UIViewRepresentable {
     let webView: WKWebView
+    @Binding var showControlPanel: Bool
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(showControlPanel: $showControlPanel)
+    }
     
     func makeUIView(context: Context) -> WKWebView {
         webView.translatesAutoresizingMaskIntoConstraints = false
+
+        let tripleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTripleTap))
+        tripleTap.numberOfTapsRequired = 3
+        tripleTap.delegate = context.coordinator
+        webView.addGestureRecognizer(tripleTap)
+
         return webView
     }
     
@@ -396,6 +417,25 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
             }
         """
         webView.evaluateJavaScript(js)
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        @Binding var showControlPanel: Bool
+
+        init(showControlPanel: Binding<Bool>) {
+            _showControlPanel = showControlPanel
+        }
+
+        @objc func handleTripleTap() {
+            showControlPanel = true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            return true
+        }
     }
 }
 
