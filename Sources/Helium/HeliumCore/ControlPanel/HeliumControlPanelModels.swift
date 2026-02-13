@@ -10,7 +10,15 @@ struct HeliumPaywallPreview: Codable, Identifiable {
     let paywallUuid: String
     let paywallName: String
     let eventPreviewUrl: String?
+    let productIds: [String]
+    let versionNumber: Int
+    let versionId: String
+    let lastPublishedAt: String
     var id: String { paywallUuid }
+
+    var formattedPublishedDate: String {
+        formatDateForDisplay(lastPublishedAt)
+    }
 }
 
 enum HeliumControlPanelState {

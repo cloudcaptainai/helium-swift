@@ -90,6 +90,28 @@ func dispatchTimeDifferenceInMS(from: DispatchTime, to: DispatchTime = DispatchT
     return UInt64(Double(to.uptimeNanoseconds - from.uptimeNanoseconds) / 1_000_000.0)
 }
 
+func parseISODate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    // Try without fractional seconds first, then with
+    if let date = formatter.date(from: dateString) {
+        return date
+    }
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: dateString)
+}
+
+let invalidDateString = "unknown"
+
+func formatDateForDisplay(_ dateString: String?) -> String {
+    guard let date = parseISODate(dateString) else { return invalidDateString }
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+}
+
 
 public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 0, additionalBottomPadding: CGFloat = 0) -> EdgeInsets {
     let topPadding: CGFloat

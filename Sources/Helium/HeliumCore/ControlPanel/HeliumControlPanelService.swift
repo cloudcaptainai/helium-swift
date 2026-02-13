@@ -6,6 +6,42 @@ class HeliumControlPanelService {
 
     private let endpoint = "https://api-v2.tryhelium.com/preview-paywalls"
 
+    /// Fetches a single bundle HTML from a URL for preview purposes.
+    func fetchSingleBundle(bundleURL: String) async throws -> (bundleId: String, html: String) {
+        guard HeliumFetchedConfigManager.shared.isValidURL(bundleURL) else {
+            throw HeliumControlPanelError.badURL
+        }
+
+        guard let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleURL) else {
+            throw HeliumControlPanelError.badURL
+        }
+
+        guard let url = URL(string: bundleURL) else {
+            throw HeliumControlPanelError.badURL
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw HeliumControlPanelError.networkError(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw HeliumControlPanelError.networkError(URLError(.badServerResponse))
+        }
+
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw HeliumControlPanelError.decodingError(URLError(.cannotDecodeContentData))
+        }
+
+        return (bundleId, html)
+    }
+
     func fetchPreviewPaywalls() async throws -> HeliumControlPanelResponse {
         guard let apiKey = Helium.shared.controller?.apiKey else {
             throw HeliumControlPanelError.noApiKey

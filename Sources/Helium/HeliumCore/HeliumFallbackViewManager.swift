@@ -18,7 +18,6 @@ public class HeliumFallbackViewManager {
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
     private let defaultFallbackTrigger = "hlm_ios_default_flbk"
-    static let invalidDateString = "unknown"
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
@@ -60,7 +59,7 @@ public class HeliumFallbackViewManager {
                        let daysAgo = Calendar.current.dateComponents([.day], from: date, to: Date()).day,
                        daysAgo > 30 {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks were generated \(daysAgo) days ago! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
-                    } else if generatedAtDisplay == HeliumFallbackViewManager.invalidDateString {
+                    } else if generatedAtDisplay == invalidDateString {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     }
                 } else {
@@ -131,24 +130,3 @@ public class HeliumFallbackViewManager {
     
 }
 
-// MARK: - Date Helpers
-
-private func parseISODate(_ dateString: String?) -> Date? {
-    guard let dateString = dateString else { return nil }
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
-    // Try without fractional seconds first, then with
-    if let date = formatter.date(from: dateString) {
-        return date
-    }
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.date(from: dateString)
-}
-
-private func formatDateForDisplay(_ dateString: String?) -> String {
-    guard let date = parseISODate(dateString) else { return HeliumFallbackViewManager.invalidDateString }
-    let formatter = DateFormatter()
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter.string(from: date)
-}

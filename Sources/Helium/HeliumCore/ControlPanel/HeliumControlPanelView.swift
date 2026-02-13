@@ -3,6 +3,7 @@ import SwiftUI
 struct HeliumControlPanelView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var state: HeliumControlPanelState = .loading
+    @State private var loadingPaywallId: String? = nil
 
     var body: some View {
         NavigationView {
@@ -17,18 +18,24 @@ struct HeliumControlPanelView: View {
                     } else {
                         List(response.paywalls) { paywall in
                             Button {
-                                // TODO: Paywall selection/display logic
-                                print("[HeliumControlPanel] Selected paywall: \(paywall.paywallName) (\(paywall.paywallUuid))")
+                                selectPaywall(paywall)
                             } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(paywall.paywallName)
-                                        .font(.body)
-                                        .foregroundColor(.primary)
-                                    Text(paywall.paywallUuid)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(paywall.paywallName)
+                                            .font(.body)
+                                            .foregroundColor(.primary)
+                                        Text("v\(paywall.versionNumber) · \(paywall.formattedPublishedDate)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    if loadingPaywallId == paywall.id {
+                                        ProgressView()
+                                    }
                                 }
                             }
+                            .disabled(loadingPaywallId != nil)
                         }
                     }
                 case .error(let message):
@@ -55,11 +62,43 @@ struct HeliumControlPanelView: View {
     }
 
     private func fetchPaywalls() async {
-        do {
-            let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
-            state = .loaded(response)
-        } catch {
-            state = .error(error.localizedDescription)
+        // TODO: Switch to fetchPreviewPaywalls() once the endpoint is live
+        let response = await HeliumControlPanelService.shared.fetchPreviewPaywallsTest()
+
+        // Fetch all products data
+        await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
+
+        state = .loaded(response)
+    }
+
+    private func selectPaywall(_ paywall: HeliumPaywallPreview) {
+        guard loadingPaywallId == nil else { return }
+        loadingPaywallId = paywall.id
+        print("[HeliumControlPanel] Selected paywall: \(paywall.paywallName) (\(paywall.paywallUuid))")
+
+        Task {
+            do {
+                let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: paywall.bundleUrl)
+
+                HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
+                    bundleId: bundleId,
+                    bundleUrl: paywall.bundleUrl,
+                    bundleHtml: html,
+                    productIds: paywall.productIds
+                )
+
+                Helium.shared.presentPaywall(
+                    trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
+                    onPaywallNotShown: { reason in
+                        print("[HeliumControlPanel] Preview paywall not shown: \(reason)")
+                    }
+                )
+            } catch {
+                await MainActor.run {
+                    loadingPaywallId = nil
+                    state = .error("Failed to load paywall: \(error.localizedDescription)")
+                }
+            }
         }
     }
 }
