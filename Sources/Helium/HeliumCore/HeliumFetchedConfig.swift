@@ -996,9 +996,6 @@ public class HeliumFetchedConfigManager {
             configJSON["triggerToPaywalls"][Self.HELIUM_PREVIEW_TRIGGER] = sourceJSON
             fetchedConfigJSON = configJSON
         }
-
-        // Save bundle to disk
-        HeliumAssetManager.shared.writeBundles(bundles: [bundleId: bundleHtml])
     }
 }
 

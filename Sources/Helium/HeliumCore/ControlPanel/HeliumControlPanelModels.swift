@@ -25,4 +25,9 @@ enum HeliumControlPanelState {
     case loading
     case loaded(HeliumControlPanelResponse)
     case error(String)
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
 }

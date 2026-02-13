@@ -53,8 +53,18 @@ struct HeliumControlPanelView: View {
             }
             .navigationTitle("Paywall Previews")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        state = .loading
+                        loadingPaywallId = nil
+                        Task { await fetchPaywalls() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(state.isLoading || loadingPaywallId != nil)
                 }
             }
         }
@@ -87,11 +97,15 @@ struct HeliumControlPanelView: View {
                     productIds: paywall.productIds
                 )
 
-                Helium.shared.presentPaywall(
+                await MainActor.run { loadingPaywallId = nil }
+                HeliumPaywallPresenter.shared.presentUpsell(
                     trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
-                    onPaywallNotShown: { reason in
-                        print("[HeliumControlPanel] Preview paywall not shown: \(reason)")
-                    }
+                    presentationContext: PaywallPresentationContext(
+                        config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
+                        eventHandlers: nil,
+                        onEntitled: nil,
+                        onPaywallNotShown: nil
+                    )
                 )
             } catch {
                 await MainActor.run {
