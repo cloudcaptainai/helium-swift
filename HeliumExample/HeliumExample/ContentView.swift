@@ -39,6 +39,13 @@ struct ContentView: View {
                     Text("no show embedded! \(reason.description)")
                 }
             }
+
+            Button("show fallback (invalid trigger)") {
+                Helium.shared.presentPaywall(trigger: "nonexistent_trigger_that_does_not_exist") { reason in
+                    print("[Helium Example] invalid trigger - Could not show paywall. \(reason)")
+                }
+            }
+            .accessibilityIdentifier("presentFallbackInvalidTrigger")
         }
         .padding()
     }
