@@ -112,7 +112,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
-                transitionState(allowLoadingState: !loadingBudgetExpired)
+                transitionState(allowLoadingState: true)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .heliumEmbeddedPaywallRenderFail)) { notification in
@@ -191,7 +191,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     paywallName: "",
                     error: "Paywall failed to show in embedded view.",
                     paywallUnavailableReason: unavailableReason,
-                    loadtimeTakenMS: resolvedLoadTimeTakenMS,
+                    loadTimeTakenMS: resolvedLoadTimeTakenMS,
                     loadingBudgetMS: config.loadingBudgetForAnalyticsMS
                 ),
                 paywallSession: nil,
