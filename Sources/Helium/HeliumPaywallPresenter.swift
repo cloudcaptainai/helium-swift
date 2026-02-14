@@ -178,7 +178,7 @@ class HeliumPaywallPresenter {
                         paywallName: "",
                         error: "No paywall for trigger and no fallback available after load complete.",
                         paywallUnavailableReason: upsellViewResult.fallbackReason,
-                        loadtimeTakenMS: loadTimeTakenMS,
+                        loadTimeTakenMS: loadTimeTakenMS,
                         loadingBudgetMS: loadingBudgetMS,
                         newWindowCreated: loadingPaywall.customWindow != nil
                     ),

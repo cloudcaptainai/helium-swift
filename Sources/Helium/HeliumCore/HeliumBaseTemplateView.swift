@@ -9,6 +9,7 @@ public struct DynamicBaseTemplateView: View {
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
+    @Environment(\.heliumLoadTimeTakenMS) var loadTimeTakenMS: UInt64?
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
     let filePath: String
@@ -60,7 +61,7 @@ public struct DynamicBaseTemplateView: View {
             if presentationState.viewType != .presented {
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
-                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason)
+                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
                 }
             }
         }

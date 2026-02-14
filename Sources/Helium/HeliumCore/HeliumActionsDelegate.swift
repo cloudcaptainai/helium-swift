@@ -48,8 +48,8 @@ class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
-        delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason)
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64? = nil) {
+        delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
     }
     
     public func logClosure() {
@@ -223,7 +223,7 @@ public class HeliumActionsDelegate: ObservableObject {
         return false
     }
     
-    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?) {
+    public func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64? = nil) {
         if hiddenBehindSecondTry {
             return
         }
@@ -242,7 +242,7 @@ public class HeliumActionsDelegate: ObservableObject {
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
             viewType: viewType,
-            loadTimeTakenMS: nil,
+            loadTimeTakenMS: loadTimeTakenMS,
             loadingBudgetMS: paywallSession.presentationContext.config.loadingBudgetForAnalyticsMS,
             paywallUnavailableReason: fallbackReason
         )
