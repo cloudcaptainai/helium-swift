@@ -65,7 +65,7 @@ public class Helium {
     init() {}
     
     var controller: HeliumController?
-    private var initialized: Bool = false;
+    @HeliumAtomic private var initialized: Bool = false
     
     private func reset() {
         controller = nil
@@ -369,11 +369,15 @@ public class Helium {
         apiKey: String
     ) {
         HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
-        if initialized {
+        let alreadyInitialized = _initialized.withValue { value in
+            if value { return true }
+            value = true
+            return false
+        }
+        if alreadyInitialized {
             HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
             return
         }
-        initialized = true
         
         // Start store country code fetch immediately
         _ = AppStoreCountryHelper.shared
