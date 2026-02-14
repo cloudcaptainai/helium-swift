@@ -65,7 +65,7 @@ public class Helium {
     init() {}
     
     var controller: HeliumController?
-    private var initialized: Bool = false;
+    @HeliumAtomic private var initialized: Bool = false
     
     private func reset() {
         controller = nil
@@ -77,6 +77,7 @@ public class Helium {
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
+    @HeliumAtomic static var lastApiKeyUsed: String? = nil
     
     /// Presents a full-screen paywall for the specified trigger.
     ///
@@ -171,63 +172,6 @@ public class Helium {
     /// Hide all currently displayed paywalls, including "second try" paywalls.
     public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
-    }
-    
-    /// Clears all cached Helium state and allows safe re-initialization.
-    ///
-    /// **Warning:** This method is intended for debugging, testing, and development scenarios only.
-    /// In production apps, configurations should be managed through normal fetch cycles.
-    ///
-    /// This comprehensive reset will:
-    /// - Clear all downloaded bundle files from disk
-    /// - Clear fetched paywall configurations from memory
-    /// - Clear fallback bundle cache
-    /// - Reset download status to `.notDownloadedYet`
-    /// - Reset initialization state to allow `initialize()` to be called again
-    /// - Clear the controller instance
-    /// - Force fallback views to be shown until next successful fetch
-    ///
-    /// Use cases:
-    /// - Testing different configurations
-    /// - Switching between environments (staging/production)
-    /// - Debugging configuration issues
-    /// - Forcing a complete fresh state during development
-    ///
-    /// After calling this method, you MUST call `initialize()` again before using any
-    /// Helium functionality. The SDK will be in an uninitialized state.
-    ///
-    /// Example:
-    /// ```swift
-    /// // Clear everything and reinitialize with new config
-    /// Helium.shared.clearAllCachedState()
-    /// Helium.shared.initialize(
-    ///     apiKey: newApiKey,
-    ///     fallbackConfig: newFallbackConfig
-    /// )
-    /// ```
-    ///
-    /// - Note: This does NOT clear user identification or session data
-    public func clearAllCachedState() {
-        hideAllPaywalls()
-        
-        // Clear physical bundle files from disk
-        HeliumAssetManager.shared.clearCache()
-        
-        // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.reset()
-        
-        // Completely reset all fallback configurations
-        HeliumFallbackViewManager.reset()
-        
-        // Reset experiment allocation tracking
-        ExperimentAllocationTracker.shared.reset()
-        
-        HeliumEventListeners.shared.removeAllListeners()
-
-        // Reset initialization state to allow re-initialization
-        reset()
-
-        HeliumLogger.log(.info, category: .core, "All cached state cleared and SDK reset. Call initialize() before using Helium again.")
     }
     
     @available(*, deprecated, message: "Use HeliumPaywall directly instead")
@@ -364,16 +308,19 @@ public class Helium {
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
     ///
-    @available(iOS 15.0, *)
     public func initialize(
         apiKey: String
     ) {
         HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
-        if initialized {
+        let alreadyInitialized = _initialized.withValue { value in
+            if value { return true }
+            value = true
+            return false
+        }
+        if alreadyInitialized {
             HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
             return
         }
-        initialized = true
         
         // Start store country code fetch immediately
         _ = AppStoreCountryHelper.shared
@@ -387,6 +334,7 @@ public class Helium {
             customAPIEndpoint: Helium.config.customAPIEndpoint
         )
         
+        Helium.lastApiKeyUsed = apiKey
         let fetchController = HeliumController(
             apiKey: apiKey
         )
@@ -493,26 +441,54 @@ public class Helium {
     }
     
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
-    public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
-        HeliumPaywallPresenter.shared.hideAllUpsells()
-        
-        // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.reset()
-        
-        // Completely reset all fallback configurations
-        HeliumFallbackViewManager.reset()
-        
-        if clearExperimentAllocations {
-            ExperimentAllocationTracker.shared.reset()
+    ///
+    /// - Parameters:
+    ///   - clearUserTraits: Whether to clear user traits set via `Helium.identify`. Defaults to `true`.
+    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `true`.
+    ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
+    ///   - clearCachedPaywalls: Whether to clear cached paywall bundle files from disk. Defaults to `false`.
+    ///   - autoInitialize: If `true`, automatically re-initializes Helium with the last used API key after the reset completes.
+    ///   - onComplete: Called when the reset has completed. If `autoInitialize` is true, `onComplete` will be called once Helium.shared.initialize has kicked
+    ///   off.
+    public static func resetHelium(
+        clearUserTraits: Bool = true,
+        clearHeliumEventListeners: Bool = true,
+        clearExperimentAllocations: Bool = false,
+        clearCachedPaywalls: Bool = false,
+        autoInitialize: Bool = false,
+        onComplete: (() -> Void)? = nil
+    ) {
+        HeliumPaywallPresenter.shared.hideAllUpsells {
+            if clearCachedPaywalls {
+                HeliumAssetManager.shared.clearCache()
+            }
+            
+            // Clear fetched configuration from memory
+            HeliumFetchedConfigManager.reset()
+            
+            // Completely reset all fallback configurations
+            HeliumFallbackViewManager.reset()
+            
+            if clearExperimentAllocations {
+                ExperimentAllocationTracker.shared.reset()
+            }
+            
+            HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+            
+            if clearHeliumEventListeners {
+                HeliumEventListeners.shared.removeAllListeners()
+            }
+            
+            Helium.shared.reset()
+            
+            // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
+            
+            if autoInitialize, let apiKey = Helium.lastApiKeyUsed {
+                Helium.shared.initialize(apiKey: apiKey)
+            }
+            
+            onComplete?()
         }
-        
-        HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
-        
-        HeliumEventListeners.shared.removeAllListeners()
-        
-        Helium.shared.reset()
-        
-        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
     }
     
 }
