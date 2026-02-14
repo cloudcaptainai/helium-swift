@@ -77,7 +77,7 @@ public class Helium {
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
-    static var lastApiKeyUsed: String? = nil
+    @HeliumAtomic static var lastApiKeyUsed: String? = nil
     
     /// Presents a full-screen paywall for the specified trigger.
     ///
@@ -504,7 +504,8 @@ public class Helium {
     ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `true`.
     ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
     ///   - autoInitialize: If `true`, automatically re-initializes Helium with the last used API key after the reset completes.
-    ///   - onComplete: Called when the reset has fully completed.
+    ///   - onComplete: Called when the reset has completed. If `autoInitialize` is true, `onComplete` will be called once Helium.shared.initialize has kicked
+    ///   off.
     public static func resetHelium(
         clearUserTraits: Bool = true,
         clearHeliumEventListeners: Bool = true,
