@@ -17,10 +17,10 @@ struct PaywallViewAndSession {
 
 /// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
-    var presentFromViewController: UIViewController? = nil
-    var customPaywallTraits: [String: Any]? = nil
-    var dontShowIfAlreadyEntitled: Bool = false
-    var loadingBudget: TimeInterval? = nil
+    var presentFromViewController: UIViewController?
+    var customPaywallTraits: [String: Any]?
+    var dontShowIfAlreadyEntitled: Bool
+    var loadingBudget: TimeInterval?
 
     /// Creates a new paywall presentation configuration.
     /// - Parameters:
@@ -31,7 +31,7 @@ public struct PaywallPresentationConfig {
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = true,
+        dontShowIfAlreadyEntitled: Bool = false,
         loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
