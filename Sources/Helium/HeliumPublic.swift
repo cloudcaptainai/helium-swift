@@ -17,21 +17,21 @@ struct PaywallViewAndSession {
 
 /// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
-    var presentFromViewController: UIViewController? = nil
-    var customPaywallTraits: [String: Any]? = nil
-    var dontShowIfAlreadyEntitled: Bool = true
-    var loadingBudget: TimeInterval? = nil
+    var presentFromViewController: UIViewController?
+    var customPaywallTraits: [String: Any]?
+    var dontShowIfAlreadyEntitled: Bool
+    var loadingBudget: TimeInterval?
 
     /// Creates a new paywall presentation configuration.
     /// - Parameters:
     ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
     ///   - customPaywallTraits: Custom traits to send to the paywall.
-    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `true`.
+    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
     ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = true,
+        dontShowIfAlreadyEntitled: Bool = false,
         loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
@@ -93,7 +93,8 @@ public class Helium {
     ///         case .targetingHoldout:
     ///             break
     ///         case .alreadyEntitled:
-    ///             // e.g. ensure premium access
+    ///             // e.g. ensure premium access.
+    ///             // In order for this case to be hit, `config.dontShowIfAlreadyEntitled` must be true
     ///             break
     ///         default:
     ///             // handle the rare case where a paywall fails to show
