@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
   workflow_call:  # Allow other workflows to call this
+    inputs:
+      test_scope:
+        description: "Test scope: ui or full"
+        required: false
+        type: string
+        default: "ui"
   workflow_dispatch:
 
 jobs:
@@ -58,12 +64,20 @@ jobs:
 
       - name: Run UI tests with retry logic
         run: |
+          TEST_SCOPE="${{ inputs.test_scope }}"
+          TEST_SCOPE="${TEST_SCOPE:-ui}"
+
+          RUN_ONLY_TESTING=""
+          if [ "$TEST_SCOPE" = "ui" ]; then
+            RUN_ONLY_TESTING="-only-testing:HeliumExampleUITests"
+          fi
+
           run_tests() {
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
               -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
-              -only-testing:HeliumExampleUITests \
+              $RUN_ONLY_TESTING \
               -disable-concurrent-destination-testing \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
               HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \

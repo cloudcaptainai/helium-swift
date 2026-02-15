@@ -1,0 +1,20 @@
+name: Main Branch Tests
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  spm-tests:
+    runs-on: warp-macos-26-arm64-6x
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run SwiftPM tests
+        run: swift test
+
+  ui-tests:
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      test_scope: full
+    secrets: inherit
