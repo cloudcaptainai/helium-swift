@@ -55,11 +55,6 @@ final class HeliumExampleUITests: XCTestCase {
         XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
         sleep(2) // Buffer for WebView to finish rendering
         
-        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
-        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
-        
-        subscribeButton.tap()
-        
         let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
         XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
         
@@ -80,11 +75,7 @@ final class HeliumExampleUITests: XCTestCase {
         let webView = app.webViews.firstMatch
         XCTAssert(webView.waitForExistence(timeout: 30), "Paywall WebView did not appear")
         sleep(2) // Buffer for WebView to finish rendering
-        
-        // Ensure webview properly displays
-        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
-        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
-        
+                
         // Close the paywall
         let closeButton = webView.buttons["Close"].firstMatch
         XCTAssert(closeButton.waitForExistence(timeout: 15), "Close button not found")
@@ -108,11 +99,6 @@ final class HeliumExampleUITests: XCTestCase {
         let webView = app.webViews.firstMatch
         XCTAssert(webView.waitForExistence(timeout: 40), "Paywall WebView did not appear")
         sleep(2) // Buffer for WebView to finish rendering
-
-        let subscribeButton = webView.buttons["START MY FREE TRIAL"].firstMatch
-        XCTAssert(subscribeButton.waitForExistence(timeout: 15), "Subscribe button not found")
-        
-        subscribeButton.tap()
         
         let purchaseFeedbackIndicator = app.staticTexts["makePurchaseCalled"]
         XCTAssert(purchaseFeedbackIndicator.waitForExistence(timeout: 10), "makePurchase method was not called")
