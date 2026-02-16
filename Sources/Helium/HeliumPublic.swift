@@ -17,21 +17,21 @@ struct PaywallViewAndSession {
 
 /// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
-    var presentFromViewController: UIViewController? = nil
-    var customPaywallTraits: [String: Any]? = nil
-    var dontShowIfAlreadyEntitled: Bool = true
-    var loadingBudget: TimeInterval? = nil
+    var presentFromViewController: UIViewController?
+    var customPaywallTraits: [String: Any]?
+    var dontShowIfAlreadyEntitled: Bool
+    var loadingBudget: TimeInterval?
 
     /// Creates a new paywall presentation configuration.
     /// - Parameters:
     ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
     ///   - customPaywallTraits: Custom traits to send to the paywall.
-    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `true`.
+    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
     ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = true,
+        dontShowIfAlreadyEntitled: Bool = false,
         loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
@@ -65,7 +65,7 @@ public class Helium {
     init() {}
     
     var controller: HeliumController?
-    private var initialized: Bool = false;
+    @HeliumAtomic private var initialized: Bool = false
     
     private func reset() {
         controller = nil
@@ -77,6 +77,7 @@ public class Helium {
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
+    @HeliumAtomic static var lastApiKeyUsed: String? = nil
     
     /// Presents a full-screen paywall for the specified trigger.
     ///
@@ -92,7 +93,8 @@ public class Helium {
     ///         case .targetingHoldout:
     ///             break
     ///         case .alreadyEntitled:
-    ///             // e.g. ensure premium access
+    ///             // e.g. ensure premium access.
+    ///             // In order for this case to be hit, `config.dontShowIfAlreadyEntitled` must be true
     ///             break
     ///         default:
     ///             // handle the rare case where a paywall fails to show
@@ -364,16 +366,19 @@ public class Helium {
     /// - Parameters:
     ///   - apiKey: Your Helium API key from the dashboard
     ///
-    @available(iOS 15.0, *)
     public func initialize(
         apiKey: String
     ) {
         HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
-        if initialized {
+        let alreadyInitialized = _initialized.withValue { value in
+            if value { return true }
+            value = true
+            return false
+        }
+        if alreadyInitialized {
             HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
             return
         }
-        initialized = true
         
         // Start store country code fetch immediately
         _ = AppStoreCountryHelper.shared
@@ -387,6 +392,7 @@ public class Helium {
             customAPIEndpoint: Helium.config.customAPIEndpoint
         )
         
+        Helium.lastApiKeyUsed = apiKey
         let fetchController = HeliumController(
             apiKey: apiKey
         )
@@ -493,26 +499,54 @@ public class Helium {
     }
     
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
-    public static func resetHelium(clearUserTraits: Bool = true, clearExperimentAllocations: Bool = false) {
-        HeliumPaywallPresenter.shared.hideAllUpsells()
-
-        // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.reset()
-        
-        // Completely reset all fallback configurations
-        HeliumFallbackViewManager.reset()
-        
-        if clearExperimentAllocations {
-            ExperimentAllocationTracker.shared.reset()
+    ///
+    /// - Parameters:
+    ///   - clearUserTraits: Whether to clear user traits set via `Helium.identify`. Defaults to `true`.
+    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `true`.
+    ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
+    ///   - clearCachedPaywalls: Whether to clear cached paywall bundle files from disk. Defaults to `false`.
+    ///   - autoInitialize: If `true`, automatically re-initializes Helium with the last used API key after the reset completes.
+    ///   - onComplete: Called when the reset has completed. If `autoInitialize` is true, `onComplete` will be called once Helium.shared.initialize has kicked
+    ///   off.
+    public static func resetHelium(
+        clearUserTraits: Bool = true,
+        clearHeliumEventListeners: Bool = true,
+        clearExperimentAllocations: Bool = false,
+        clearCachedPaywalls: Bool = false,
+        autoInitialize: Bool = false,
+        onComplete: (() -> Void)? = nil
+    ) {
+        HeliumPaywallPresenter.shared.hideAllUpsells {
+            if clearCachedPaywalls {
+                HeliumAssetManager.shared.clearCache()
+            }
+            
+            // Clear fetched configuration from memory
+            HeliumFetchedConfigManager.reset()
+            
+            // Completely reset all fallback configurations
+            HeliumFallbackViewManager.reset()
+            
+            if clearExperimentAllocations {
+                ExperimentAllocationTracker.shared.reset()
+            }
+            
+            HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+            
+            if clearHeliumEventListeners {
+                HeliumEventListeners.shared.removeAllListeners()
+            }
+            
+            Helium.shared.reset()
+            
+            // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
+            
+            if autoInitialize, let apiKey = Helium.lastApiKeyUsed {
+                Helium.shared.initialize(apiKey: apiKey)
+            }
+            
+            onComplete?()
         }
-        
-        HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
-        
-        HeliumEventListeners.shared.removeAllListeners()
-        
-        Helium.shared.reset()
-        
-        // NOTE - not clearing entitlements nor products cache nor transactions caches nor cached bundles
     }
     
 }
@@ -531,13 +565,13 @@ public class HeliumIdentify {
     init() {}
     
     /// Custom user ID to identify this user.
-    public var userId: String {
+    public var userId: String? {
         get {
-            HeliumIdentityManager.shared.getUserId()
+            HeliumIdentityManager.shared.getCustomUserId()
         }
         set {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
-            HeliumAnalyticsManager.shared.identify(userId: newValue)
+            HeliumAnalyticsManager.shared.identify()
         }
     }
     

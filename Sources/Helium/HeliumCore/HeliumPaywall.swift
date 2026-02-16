@@ -34,6 +34,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     @State private var state: HeliumPaywallViewState
     @State private var loadingBudgetExpired = false
     @State private var isEntitled: Bool? = nil
+    @State private var loadingStartTime = DispatchTime.now()
+    @State private var resolvedLoadTimeTakenMS: UInt64?
     
     /// Creates a new paywall view for the specified trigger with default loading view
     ///
@@ -100,6 +102,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 resolvedLoadingView
             case .ready(let paywallViewAndSession):
                 paywallViewAndSession.view
+                    .environment(\.heliumLoadTimeTakenMS, resolvedLoadTimeTakenMS)
             case .noShow(let reason):
                 paywallNotShownView(reason)
                     .onAppear {
@@ -109,7 +112,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config, presentationContext: presentationContext)
+                transitionState(allowLoadingState: true)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .heliumEmbeddedPaywallRenderFail)) { notification in
@@ -126,7 +129,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 isEntitled = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
                 // Check if task was cancelled (e.g. by loading budget timeout)
                 guard !Task.isCancelled else { return }
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: !loadingBudgetExpired, config: config, presentationContext: presentationContext)
+                transitionState(allowLoadingState: !loadingBudgetExpired)
             }
         }
         .task {
@@ -144,7 +147,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             // After timeout, re-resolve state with whatever info we have
             loadingBudgetExpired = true
             if state.isLoading {
-                state = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: false, config: config, presentationContext: presentationContext)
+                transitionState(allowLoadingState: false)
             }
         }
     }
@@ -159,6 +162,14 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             let backgroundConfig = HeliumFallbackViewManager.shared.getBackgroundConfigForTrigger(trigger)
             HeliumPaywallPresenter.shared.createDefaultLoadingView(backgroundConfig: backgroundConfig)
         }
+    }
+    
+    private func transitionState(allowLoadingState: Bool) {
+        let newState = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: allowLoadingState, config: config, presentationContext: presentationContext)
+        if state.isLoading && !newState.isLoading {
+            resolvedLoadTimeTakenMS = dispatchTimeDifferenceInMS(from: loadingStartTime)
+        }
+        state = newState
     }
     
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {
@@ -180,6 +191,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     paywallName: "",
                     error: "Paywall failed to show in embedded view.",
                     paywallUnavailableReason: unavailableReason,
+                    loadTimeTakenMS: resolvedLoadTimeTakenMS,
                     loadingBudgetMS: config.loadingBudgetForAnalyticsMS
                 ),
                 paywallSession: nil,
@@ -273,4 +285,17 @@ private func shouldShowLoadingState(for trigger: String, config: PaywallPresenta
     (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
     
     return heliumDownloadsIncoming
+}
+
+// MARK: - Load Time Environment Key
+
+private struct HeliumLoadTimeTakenMSKey: EnvironmentKey {
+    static let defaultValue: UInt64? = nil
+}
+
+extension EnvironmentValues {
+    var heliumLoadTimeTakenMS: UInt64? {
+        get { self[HeliumLoadTimeTakenMSKey.self] }
+        set { self[HeliumLoadTimeTakenMSKey.self] = newValue }
+    }
 }

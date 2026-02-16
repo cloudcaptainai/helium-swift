@@ -219,6 +219,7 @@ public struct ExperimentInfo: Codable {
         case hashDetails
         case enrolledAt
         case isEnrolled
+        case audienceDataIsAllUsers
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -243,6 +244,12 @@ public struct ExperimentInfo: Codable {
                 try container.encode(jsonString, forKey: .audienceData)
             } else {
                 HeliumLogger.log(.error, category: .core, "Failed to encode audienceData for experiment info")
+            }
+            // audienceData.value is a JSON string, so parse it to extract isAllUsers
+            if let jsonString = audienceData.value as? String,
+               let data = jsonString.data(using: .utf8),
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                try container.encodeIfPresent(dict["isAllUsers"] as? Bool, forKey: .audienceDataIsAllUsers)
             }
         }
         
