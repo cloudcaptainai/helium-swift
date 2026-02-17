@@ -109,6 +109,7 @@ public struct CodableUserContext: Codable {
     var applicationInfo: CodableApplicationInfo
     var isLowPowerMode: Bool
     var isApplePayAvailable: Bool
+    var hasCustomUserId: Bool
     var heliumFirstSeenDate: String
     var userSeed: Int
     var additionalParams: HeliumUserTraits
@@ -186,7 +187,7 @@ public struct CodableUserContext: Codable {
             "heliumInitializeId": HeliumIdentityManager.shared.heliumInitializeId,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "userId": HeliumIdentityManager.shared.getResolvedUserId(),
-            "hasCustomUserId": HeliumIdentityManager.shared.hasCustomUserId(),
+            "hasCustomUserId": hasCustomUserId,
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": localeDict,
@@ -255,6 +256,7 @@ public struct CodableUserContext: Codable {
             applicationInfo: applicationInfo,
             isLowPowerMode: LowPowerModeHelper.shared.isLowPowerModeEnabled(),
             isApplePayAvailable: ApplePayHelper.shared.canMakePayments(),
+            hasCustomUserId: HeliumIdentityManager.shared.hasCustomUserId(),
             heliumFirstSeenDate: HeliumIdentityManager.shared.getHeliumFirstSeenDate(),
             userSeed: HeliumIdentityManager.shared.getUserSeed(),
             additionalParams: userTraits ?? HeliumUserTraits([:])
