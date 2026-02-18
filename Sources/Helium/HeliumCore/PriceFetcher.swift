@@ -102,6 +102,42 @@ public struct LocalizedPrice: Codable {
     }
 }
 
+/// Server-provided price info for a single product (flat JSON shape from config response)
+public struct ServerProductPrice: Codable {
+    public let formattedPrice: String
+    public let currencySymbol: String
+    public let value: Decimal
+    public let decimalSeparator: String
+    public let locale: String
+    public let productType: String
+    public let currency: String
+    public let localizedTitle: String?
+    public let subscription: SubscriptionInfo?
+    public let iap: IAPInfo?
+
+    func toLocalizedPrice() -> LocalizedPrice {
+        let baseInfo = BasePriceInfo(
+            currency: currency,
+            locale: locale,
+            value: value,
+            formattedPrice: formattedPrice,
+            currencySymbol: currencySymbol,
+            decimalSeparator: decimalSeparator
+        )
+        return LocalizedPrice(
+            baseInfo: baseInfo,
+            productType: productType,
+            localizedTitle: localizedTitle,
+            localizedDescription: nil,
+            displayName: nil,
+            description: nil,
+            subscriptionInfo: subscription,
+            iapInfo: iap,
+            familyShareable: false
+        )
+    }
+}
+
 /// A utility class for fetching localized pricing information for a given SKU
 public class PriceFetcher {
     
