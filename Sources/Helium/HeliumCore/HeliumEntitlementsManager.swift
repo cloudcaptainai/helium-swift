@@ -11,6 +11,14 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
+    private var thirdPartySource: ThirdPartyEntitlementsSource?
+    
+    /// Registers a third-party entitlements source.
+    /// The manager will query this source alongside StoreKit using OR-logic.
+    func setThirdPartyEntitlementsSource(_ source: ThirdPartyEntitlementsSource) {
+        self.thirdPartySource = source
+    }
+    
     private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
     
     /// Debounce interval for transaction updates in seconds
@@ -150,6 +158,13 @@ actor HeliumEntitlementsManager {
         loadPersistedEntitlements()
         startTransactionListener()
         await loadEntitlementsIfNeeded()
+
+        // Refresh trigger entitlement cache now or when config finishes downloading
+        if Helium.shared.paywallsLoaded() {
+            await refreshEntitledForTriggerCache()
+        } else {
+            setupConfigDownloadObserver()
+        }
     }
     
     private func loadEntitlementsIfNeeded() async {
@@ -250,6 +265,12 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
+        // Check third-party source
+        if let source = thirdPartySource,
+           await source.hasAnyActiveSubscription() {
+            return true
+        }
+        
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
             for persisted in cache.persistedEntitlements where persisted.appearsValid() {
@@ -274,6 +295,12 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyEntitlement() async -> Bool {
+        // Check third-party source
+        if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
+           !thirdPartyIds.isEmpty {
+            return true
+        }
+        
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
             if cache.persistedEntitlements.contains(where: { $0.appearsValid() }) {
@@ -289,11 +316,19 @@ actor HeliumEntitlementsManager {
         if cache.lastTransactionsLoadedTime == nil {
             let validPersisted = cache.persistedEntitlements.filter { $0.appearsValid() }
             if !validPersisted.isEmpty {
-                return validPersisted.map { $0.productID }
+                var ids = Set(validPersisted.map { $0.productID })
+                if let thirdPartyIds = await thirdPartySource?.entitledProductIds() {
+                    ids.formUnion(thirdPartyIds)
+                }
+                return Array(ids)
             }
         }
         let entitlements = await getCachedEntitlements()
-        return entitlements.map { $0.productID }
+        var ids = Set(entitlements.map { $0.productID })
+        if let thirdPartyIds = await thirdPartySource?.entitledProductIds() {
+            ids.formUnion(thirdPartyIds)
+        }
+        return Array(ids)
     }
 
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
@@ -330,6 +365,12 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveEntitlementFor(productId: String) async -> Bool {
+        // Check third-party source
+        if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
+           thirdPartyIds.contains(productId) {
+            return true
+        }
+        
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
             if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() }) {
@@ -426,12 +467,13 @@ actor HeliumEntitlementsManager {
         cache.subscriptionStatuses[productID] = nil
         let _ = await getSubscriptionStatus(for: productID)
 
-        // Refresh entitledForTrigger cache now that entitlements have changed
+        // Delegate to third-party source if registered
+        await thirdPartySource?.didCompletePurchase(productId: productID)
+        
+        // Check paywalls downloaded to be safer. If non-fallback, paywalls should be downloaded. If fallback, paywalls
+        // may or may not be downloaded.
         if Helium.shared.paywallsLoaded() {
             await refreshEntitledForTriggerCache()
-        } else {
-            // Listen for config download completion to refresh the cache
-            setupConfigDownloadObserver()
         }
     }
 
@@ -469,7 +511,7 @@ actor HeliumEntitlementsManager {
         let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
         for trigger in triggers {
             // This will compute and cache the entitlement status for each trigger
-            let _ = await hasEntitlementForPaywall(trigger: trigger, considerAssociatedSubscriptions: true)
+            let _ = await hasEntitlementForPaywall(trigger: trigger, considerAssociatedSubscriptions: false)
         }
     }
     

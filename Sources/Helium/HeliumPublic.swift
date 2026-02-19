@@ -786,6 +786,14 @@ public class HeliumEntitlements {
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
+
+    /// Registers a third-party entitlements source.
+    /// The entitlements manager will query this source alongside StoreKit using OR-logic.
+    public func setThirdPartySource(_ source: ThirdPartyEntitlementsSource) {
+        Task {
+            await HeliumEntitlementsManager.shared.setThirdPartyEntitlementsSource(source)
+        }
+    }
 }
 
 @available(iOS 15.0, *)
