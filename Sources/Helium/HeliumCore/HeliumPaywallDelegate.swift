@@ -68,6 +68,9 @@ class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
     
+    /// Tracks Transaction.updates observation tasks for pending purchases, keyed by product ID
+    @HeliumAtomic private var pendingPurchaseTasks: [String: Task<Void, Never>] = [:]
+    
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
     }
@@ -100,29 +103,25 @@ class HeliumPaywallDelegateWrapper {
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
-            
+
+#if compiler(>=6.2)
+            if let atID = transactionIds?.transaction?.appTransactionID {
+                HeliumIdentityManager.shared.appTransactionID = atID
+            }
+#endif
+
             if hadEntitlementBeforePurchase {
                 fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
             } else {
-                Task {
-                    await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productKey, transaction: transactionIds?.transaction)
-                    
-                    await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transactionIds?.transaction)
-                    
-                    // update localized products (and offer eligibility) after purchase
-                    await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
-                }
-                #if compiler(>=6.2)
-                if let atID = transactionIds?.transaction?.appTransactionID {
-                    HeliumIdentityManager.shared.appTransactionID = atID
-                }
-                #endif
+                syncAfterPurchase(productId: productKey, transaction: transactionIds?.transaction)
                 
                 let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
                 fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
+            let detachedSession = paywallSession.withPresentationContext(.empty)
+            observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
         default:
             break
         }
@@ -194,11 +193,113 @@ class HeliumPaywallDelegateWrapper {
         // Mark session for onEntitled callback on purchase/restore success
         if let sessionId = paywallSession?.sessionId {
             if event is PurchaseSucceededEvent ||
-               event is PurchaseRestoredEvent ||
-               event is PurchaseAlreadyEntitledEvent {
+                event is PurchaseRestoredEvent ||
+                event is PurchaseAlreadyEntitledEvent {
                 HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
             }
         }
     }
     
+    /// Updates entitlements, transaction history, and localized prices after a new purchase.
+    private func syncAfterPurchase(productId: String, transaction: Transaction?) {
+        Task {
+            await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
+            await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
+            await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+        }
+    }
+    
+    // MARK: - Pending Purchase Observation
+
+    /// How long to wait for a pending purchase (e.g., Ask to Buy) before giving up.
+    private static let pendingPurchaseTimeoutNanoseconds: UInt64 = 24 * 60 * 60 * 1_000_000_000 // 24 hours
+
+    /// Observes Transaction.updates for a pending purchase (e.g., Ask to Buy) to complete.
+    /// When the transaction is approved, finishes it, updates entitlements, and fires events.
+    /// Automatically cancels after a timeout if no verified transaction arrives.
+    private func observePendingPurchase(productId: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) {
+        let task = Task { [weak self] in
+            // Race the transaction listener against a timeout
+            await withTaskGroup(of: Void.self) { group in
+                // Timeout child task
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: Self.pendingPurchaseTimeoutNanoseconds)
+                    // If we wake up naturally (not cancelled), the timeout has elapsed
+                }
+
+                // Transaction listener child task
+                group.addTask { [weak self] in
+                    for await verificationResult in Transaction.updates {
+                        guard !Task.isCancelled else { return }
+
+                        guard case .verified(let transaction) = verificationResult else {
+                            continue
+                        }
+                        guard transaction.productID == productId else {
+                            continue
+                        }
+
+                        // Revoked transaction (e.g., Ask to Buy declined) — clean up and stop observing
+                        if transaction.revocationDate != nil {
+                            HeliumLogger.log(.info, category: .core, "Pending purchase revoked for product: \(productId)")
+                            self?._pendingPurchaseTasks.withValue { tasks in
+                                tasks.removeValue(forKey: productId)
+                            }
+                            return
+                        }
+
+                        HeliumLogger.log(.info, category: .core, "Pending purchase approved for product: \(productId)")
+
+                        // Only finish the transaction if Helium owns StoreKit (StoreKitDelegate);
+                        // custom delegates are responsible for finishing transactions themselves.
+                        if self?.delegate is StoreKitDelegate {
+                            await transaction.finish()
+                        }
+
+                        let transactionIds = HeliumTransactionIdResult(transaction: transaction)
+                        self?.syncAfterPurchase(productId: productId, transaction: transaction)
+
+                        // Fire purchase success event
+                        self?.fireEvent(
+                            PurchaseSucceededEvent(
+                                productId: productId,
+                                triggerName: triggerName,
+                                paywallName: paywallTemplateName,
+                                storeKitTransactionId: transactionIds.transactionId,
+                                storeKitOriginalTransactionId: transactionIds.originalTransactionId,
+                                skPostPurchaseTxnTimeMS: nil
+                            ),
+                            paywallSession: paywallSession
+                        )
+
+                        // Clean up this observer
+                        self?._pendingPurchaseTasks.withValue { tasks in
+                            tasks.removeValue(forKey: productId)
+                        }
+                        return
+                    }
+                }
+
+                // Wait for whichever child finishes first (approval, revocation, or timeout),
+                // then cancel the other.
+                _ = await group.next()
+                group.cancelAll()
+            }
+
+            // If we got here via timeout, clean up the pending task entry
+            self?._pendingPurchaseTasks.withValue { tasks in
+                tasks.removeValue(forKey: productId)
+            }
+
+            if Task.isCancelled {
+                HeliumLogger.log(.info, category: .core, "Pending purchase observer cancelled for product: \(productId)")
+            }
+        }
+
+        // Cancel any existing observation and store the new one atomically
+        _pendingPurchaseTasks.withValue { tasks in
+            tasks[productId]?.cancel()
+            tasks[productId] = task
+        }
+    }
 }
