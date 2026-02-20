@@ -11,12 +11,8 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
-    private var thirdPartySource: ThirdPartyEntitlementsSource?
-    
-    /// Registers a third-party entitlements source.
-    /// The manager will query this source alongside StoreKit using OR-logic.
-    func setThirdPartyEntitlementsSource(_ source: ThirdPartyEntitlementsSource) {
-        self.thirdPartySource = source
+    private nonisolated var thirdPartySource: ThirdPartyEntitlementsSource? {
+        Helium.config.thirdPartyEntitlementsSource
     }
     
     private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
