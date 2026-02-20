@@ -47,8 +47,8 @@ public class HeliumIdentityManager {
             return _appTransactionID ?? UserDefaults.standard.string(forKey: heliumAppTransactionIDKey)
         }
         set {
-            _appTransactionID = newValue
             if let newValue {
+                _appTransactionID = newValue
                 UserDefaults.standard.set(newValue, forKey: heliumAppTransactionIDKey)
             }
         }
