@@ -105,6 +105,7 @@ public struct HeliumFetchedConfig: Codable {
     var bundles: [String: String]?
     var generatedAt: String?
     var productsPriceMap: [String: ServerProductPrice]?
+    var stripeCustomerId: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for

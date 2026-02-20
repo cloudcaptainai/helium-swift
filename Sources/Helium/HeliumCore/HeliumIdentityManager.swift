@@ -42,7 +42,18 @@ public class HeliumIdentityManager {
     // Used to connect RevenueCat purchase events
     var revenueCatAppUserId: String? = nil
     
-    var appTransactionID: String? = nil
+    var appTransactionID: String? {
+        get {
+            return _appTransactionID ?? UserDefaults.standard.string(forKey: heliumAppTransactionIDKey)
+        }
+        set {
+            _appTransactionID = newValue
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: heliumAppTransactionIDKey)
+            }
+        }
+    }
+    private var _appTransactionID: String? = nil
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
@@ -51,6 +62,8 @@ public class HeliumIdentityManager {
     private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
     private let heliumUserSeedKey = "heliumUserSeed"
     private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
+    private let heliumStripeCustomerIdKey = "heliumStripeCustomerId"
+    private let heliumAppTransactionIDKey = "heliumAppTransactionID"
     
     /// We may remove this at some point but for now it ensures a user id always set
     func getResolvedUserId() -> String {
@@ -114,6 +127,14 @@ public class HeliumIdentityManager {
     
     func setRevenueCatAppUserId(_ rcAppUserId: String) {
         revenueCatAppUserId = rcAppUserId
+    }
+    
+    public func setStripeCustomerId(_ customerId: String) {
+        UserDefaults.standard.setValue(customerId, forKey: heliumStripeCustomerIdKey)
+    }
+    
+    public func getStripeCustomerId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumStripeCustomerIdKey)
     }
     
     public func getAppTransactionID() -> String? {
