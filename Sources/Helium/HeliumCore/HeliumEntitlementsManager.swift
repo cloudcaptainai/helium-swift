@@ -467,9 +467,6 @@ actor HeliumEntitlementsManager {
 
         cache.subscriptionStatuses[productID] = nil
         let _ = await getSubscriptionStatus(for: productID)
-
-        // Delegate to third-party source if registered
-        await thirdPartySource?.didCompletePurchase(productId: productID)
         
         // Check paywalls downloaded to be safer. If non-fallback, paywalls should be downloaded. If fallback, paywalls
         // may or may not be downloaded.

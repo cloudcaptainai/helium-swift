@@ -338,6 +338,10 @@ public class HeliumFetchedConfigManager {
             self.fetchedConfigJSON = newConfigJSON
             triggersWithSkippedBundleAndReason = []
             
+            if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
+                HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
+            }
+            
             // Download assets
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {

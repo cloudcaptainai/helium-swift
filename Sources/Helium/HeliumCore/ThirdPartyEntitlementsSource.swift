@@ -17,7 +17,4 @@ public protocol ThirdPartyEntitlementsSource: AnyObject, Sendable {
 
     /// Whether the user has any active subscription from this source.
     func hasAnyActiveSubscription() async -> Bool
-
-    /// Notify the source that a purchase completed so it can update internal state.
-    func didCompletePurchase(productId: String) async
 }
