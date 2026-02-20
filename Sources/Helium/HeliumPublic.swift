@@ -654,6 +654,11 @@ public class HeliumConfig {
     /// - Note: .system respects the device's current appearance setting (default)
     public var lightDarkModeOverride: HeliumLightDarkMode = .system
     
+    /// Registers a third-party entitlements source.
+    /// The entitlements manager will query this source alongside StoreKit using OR-logic.
+    /// Set this before calling `Helium.shared.initialize()`.
+    public var thirdPartyEntitlementsSource: ThirdPartyEntitlementsSource? = nil
+    
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
     
@@ -843,6 +848,7 @@ public class HeliumEntitlements {
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
     }
+    
 }
 
 @available(iOS 15.0, *)
