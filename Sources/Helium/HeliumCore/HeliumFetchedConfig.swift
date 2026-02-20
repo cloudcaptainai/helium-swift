@@ -825,11 +825,11 @@ public class HeliumFetchedConfigManager {
         let productIds = getAllProductIds(config: config)
         await buildLocalizedPriceMap(productIds)
 
-        // Merge server-provided prices (favoring server values on collision)
+        // Merge server-provided prices (favoring StoreKit values on collision)
         if let serverPrices = config?.productsPriceMap {
             let converted = serverPrices.mapValues { $0.toLocalizedPrice() }
             _localizedPriceMap.withValue { map in
-                map.merge(converted) { _, serverValue in serverValue }
+                map.merge(converted) { storeKitValue, _ in storeKitValue }
             }
         }
 

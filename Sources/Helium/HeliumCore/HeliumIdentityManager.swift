@@ -53,7 +53,7 @@ public class HeliumIdentityManager {
             }
         }
     }
-    private var _appTransactionID: String? = nil
+    @HeliumAtomic private var _appTransactionID: String? = nil
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
