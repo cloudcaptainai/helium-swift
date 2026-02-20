@@ -11,7 +11,7 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
-    private nonisolated var thirdPartySource: ThirdPartyEntitlementsSource? {
+    private var thirdPartySource: ThirdPartyEntitlementsSource? {
         Helium.config.thirdPartyEntitlementsSource
     }
     
@@ -240,13 +240,18 @@ actor HeliumEntitlementsManager {
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
-            // Otherwise check products and associated subscription groups
-            result = false
-            for productId in productIds {
-                let entitled = await hasActiveEntitlementFor(productId: productId)
-                if entitled {
-                    result = true
-                    break
+            // Check third-party source
+            if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
+               productIds.contains(where: { thirdPartyIds.contains($0) }) {
+                result = true
+            } else {
+                // Check products and associated subscription groups
+                result = false
+                for productId in productIds {
+                    if await hasActiveEntitlementFor(productId: productId, checkThirdPartyIds: false) {
+                        result = true
+                        break
+                    }
                 }
             }
         }
@@ -360,9 +365,9 @@ actor HeliumEntitlementsManager {
         return nil
     }
     
-    func hasActiveEntitlementFor(productId: String) async -> Bool {
-        // Check third-party source
-        if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
+    func hasActiveEntitlementFor(productId: String, checkThirdPartyIds: Bool = true) async -> Bool {
+        if checkThirdPartyIds,
+           let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
            thirdPartyIds.contains(productId) {
             return true
         }

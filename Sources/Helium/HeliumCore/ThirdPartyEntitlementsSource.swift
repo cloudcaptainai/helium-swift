@@ -3,8 +3,6 @@
 //  helium-swift
 //
 
-import Foundation
-
 /// A protocol for third-party entitlement providers to integrate
 /// with `HeliumEntitlementsManager`. The manager queries this source alongside
 /// StoreKit using OR-logic: the user is entitled if StoreKit OR the third-party
