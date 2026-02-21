@@ -104,7 +104,7 @@ public struct HeliumFetchedConfig: Codable {
     var additionalFields: JSON?
     var bundles: [String: String]?
     var generatedAt: String?
-    var productsPriceMap: [String: ServerProductPrice]?
+    var stripeProducts: [String: ServerProductPrice]?
     var stripeCustomerId: String?
     
     /// Extract experiment info for a specific trigger

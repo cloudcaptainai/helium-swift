@@ -826,7 +826,7 @@ public class HeliumFetchedConfigManager {
         await buildLocalizedPriceMap(productIds)
 
         // Merge server-provided prices (favoring StoreKit values on collision)
-        if let serverPrices = config?.productsPriceMap {
+        if let serverPrices = config?.stripeProducts {
             let converted = serverPrices.mapValues { $0.toLocalizedPrice() }
             _localizedPriceMap.withValue { map in
                 map.merge(converted) { storeKitValue, _ in storeKitValue }
@@ -865,7 +865,7 @@ public class HeliumFetchedConfigManager {
     // NOTE - be careful about removing the public declaration here because this is in use
     // by some sdk integrations.
     public func getServerProductsPriceMap() -> [String: ServerProductPrice]? {
-        return fetchedConfig?.productsPriceMap
+        return fetchedConfig?.stripeProducts
     }
     
     /// Get localized prices filtered by a specific trigger's product IDs

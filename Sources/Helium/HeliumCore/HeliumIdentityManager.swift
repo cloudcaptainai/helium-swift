@@ -42,6 +42,7 @@ public class HeliumIdentityManager {
     // Used to connect RevenueCat purchase events
     var revenueCatAppUserId: String? = nil
     
+    @HeliumAtomic private var _appTransactionID: String? = nil
     var appTransactionID: String? {
         get {
             return _appTransactionID ?? UserDefaults.standard.string(forKey: heliumAppTransactionIDKey)
@@ -53,7 +54,6 @@ public class HeliumIdentityManager {
             }
         }
     }
-    @HeliumAtomic private var _appTransactionID: String? = nil
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
