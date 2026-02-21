@@ -809,12 +809,12 @@ public class HeliumFetchedConfigManager {
         }
     }
     
-    private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
+    private func getAllProductIdsIos(config: HeliumFetchedConfig?) -> [String] {
         // Get all unique product IDs from all paywalls
         var allProductIds: [String] = []
         if let config {
             for paywall in config.triggerToPaywalls.values {
-                allProductIds.append(contentsOf: paywall.productIds)
+                allProductIds.append(contentsOf: paywall.productIdsIOS)
             }
         }
         return Array(Set(allProductIds))
@@ -822,7 +822,7 @@ public class HeliumFetchedConfigManager {
     
     @discardableResult
     func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
-        let productIds = getAllProductIds(config: config)
+        let productIds = getAllProductIdsIos(config: config)
         await buildLocalizedPriceMap(productIds)
 
         // Merge server-provided prices (favoring StoreKit values on collision)
