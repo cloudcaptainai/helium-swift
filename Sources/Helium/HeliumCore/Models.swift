@@ -36,6 +36,7 @@ public struct HeliumPaywallInfo: Codable {
     public var paywallTemplateName: String
     var productsOffered: [String]?
     var productsOfferedIOS: [String]?
+    var productsOfferedStripe: [String]?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -49,8 +50,12 @@ public struct HeliumPaywallInfo: Codable {
     var additionalPaywallFields: JSON?
     var presentationStyle: PaywallPresentationStyle?
     
-    var productIds: [String] {
+    var productIdsIOS: [String] {
         productsOfferedIOS ?? productsOffered ?? []
+    }
+    
+    var productIds: [String] {
+        productIdsIOS + (productsOfferedStripe ?? [])
     }
     
     var hasIosProducts: Bool {
@@ -104,7 +109,7 @@ public struct HeliumFetchedConfig: Codable {
     var additionalFields: JSON?
     var bundles: [String: String]?
     var generatedAt: String?
-    var productsPriceMap: [String: ServerProductPrice]?
+    var stripeProducts: [String: ServerProductPrice]?
     var stripeCustomerId: String?
     
     /// Extract experiment info for a specific trigger
