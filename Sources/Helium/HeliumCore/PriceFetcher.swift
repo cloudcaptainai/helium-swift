@@ -137,7 +137,7 @@ public struct ServerProductPrice: Codable {
     public let subscriptionPeriod: String?
     public let subscription: ServerSubscriptionDetail?
 
-    func toLocalizedPrice() -> LocalizedPrice {
+    public func toLocalizedPrice() -> LocalizedPrice {
         let baseInfo = BasePriceInfo(
             currency: currency ?? "",
             locale: "",
