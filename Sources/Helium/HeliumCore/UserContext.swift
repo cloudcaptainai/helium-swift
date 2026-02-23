@@ -199,6 +199,7 @@ public struct CodableUserContext: Codable {
             "experimentAllocationHistory": ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload(),
             "isLowPowerMode": isLowPowerMode,
             "isApplePayAvailable": isApplePayAvailable,
+            "isStripeApplePayAvailable": ApplePayHelper.shared.getStripeApplePayAvailable(),
             "heliumFirstSeenDate": heliumFirstSeenDate,
             "isFirstHeliumSession": HeliumIdentityManager.shared.isFirstHeliumSession,
             "userSeed": userSeed,
