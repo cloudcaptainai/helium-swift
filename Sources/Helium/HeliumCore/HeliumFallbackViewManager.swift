@@ -91,7 +91,7 @@ public class HeliumFallbackViewManager {
         let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
         let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
         let hasResolvedConfig = resolvedConfigJson?.exists() == true && resolvedConfigJson?.type != .null
-        if fallbackPaywallInfo?.hasIosProducts == true && hasResolvedConfig {
+        if fallbackPaywallInfo?.hasProducts == true && hasResolvedConfig {
             return trigger
         }
         return defaultFallbackTrigger
