@@ -12,16 +12,21 @@ struct ContentView: View {
     
     @State var showEmbeddedPaywall: Bool = false
     @State var showModifierPaywall: Bool = false
+    @State var dontShowIfAlreadyEntitled: Bool = false
     @State var showEntitlementAlert: Bool = false
     @State var entitlementInfo: String = ""
     @State var trigger: String = AppConfig.triggerKey
 
     var body: some View {
-        VStack(spacing: 30) {
+        VStack(spacing: 28) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Trigger").font(.caption).foregroundStyle(.secondary)
                 TextField("Trigger key", text: $trigger)
                     .textFieldStyle(.roundedBorder)
+                
+                Spacer().frame(height: 10)
+                
+                Toggle("dontShowIfAlreadyEntitled", isOn: $dontShowIfAlreadyEntitled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 30)
@@ -29,7 +34,9 @@ struct ContentView: View {
             Spacer()
 
             Button("show paywall") {
-                Helium.shared.presentPaywall(trigger: trigger) { reason in
+                Helium.shared.presentPaywall(
+                    trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled)
+                ) { reason in
                     print("[Helium Example] show paywall - Could not show paywall. \(reason)")
                 }
             }
@@ -39,7 +46,11 @@ struct ContentView: View {
                 showModifierPaywall = true
             }
             .accessibilityIdentifier("showPaywallViaModifier")
-            .heliumPaywall(isPresented: $showModifierPaywall, trigger: trigger) { reason in
+            .heliumPaywall(
+                isPresented: $showModifierPaywall,
+                trigger: trigger,
+                config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled)
+            ) { reason in
                 Text("no show! \(reason.description)")
             }
             
@@ -48,7 +59,9 @@ struct ContentView: View {
             }
             .accessibilityIdentifier("showPaywallEmbedded")
             .fullScreenCover(isPresented: $showEmbeddedPaywall) {
-                HeliumPaywall(trigger: trigger) { reason in
+                HeliumPaywall(
+                    trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled)
+                ) { reason in
                     Text("no show embedded! \(reason.description)")
                 }
             }
