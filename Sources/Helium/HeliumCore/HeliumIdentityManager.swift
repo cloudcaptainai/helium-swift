@@ -129,7 +129,11 @@ public class HeliumIdentityManager {
         revenueCatAppUserId = rcAppUserId
     }
     
-    public func setStripeCustomerId(_ customerId: String) {
+    public func setStripeCustomerId(_ customerId: String?) {
+        guard let customerId, !customerId.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: heliumStripeCustomerIdKey)
+            return
+        }
         UserDefaults.standard.setValue(customerId, forKey: heliumStripeCustomerIdKey)
     }
     
@@ -293,8 +297,8 @@ public class HeliumSdkConfig {
     }
 }
 
-class ApplePayHelper {
-    static let shared = ApplePayHelper()
+public class ApplePayHelper {
+    public static let shared = ApplePayHelper()
 
     @HeliumAtomic private var cachedCanMakePayments: Bool?
 
@@ -305,6 +309,14 @@ class ApplePayHelper {
     /// Checks if the device supports Apple Pay (cached)
     func canMakePayments() -> Bool {
         return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
+    }
+    
+    @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
+    public func setStripeApplePayAvailable(_ value: Bool) {
+        isStripeApplePayAvailable = value
+    }
+    public func getStripeApplePayAvailable() -> Bool {
+        return isStripeApplePayAvailable && canMakePayments()
     }
 }
 
