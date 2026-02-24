@@ -315,7 +315,7 @@ public class ApplePayHelper {
     public func setStripeApplePayAvailable(_ value: Bool) {
         isStripeApplePayAvailable = value
     }
-    func getStripeApplePayAvailable() -> Bool {
+    public func getStripeApplePayAvailable() -> Bool {
         return isStripeApplePayAvailable && canMakePayments()
     }
 }
