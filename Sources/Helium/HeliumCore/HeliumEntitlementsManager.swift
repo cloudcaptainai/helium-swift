@@ -240,9 +240,10 @@ actor HeliumEntitlementsManager {
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
-            // Check third-party source
+            // Check third-party source (paywall productIds may be "prod_id:price_id", extract prefix to compare)
+            let paywallProductIdPrefixes = productIds.map { String($0.prefix(while: { $0 != ":" })) }
             if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
-               productIds.contains(where: { thirdPartyIds.contains($0) }) {
+               paywallProductIdPrefixes.contains(where: { thirdPartyIds.contains($0) }) {
                 result = true
             } else {
                 // Check products and associated subscription groups
@@ -317,19 +318,11 @@ actor HeliumEntitlementsManager {
         if cache.lastTransactionsLoadedTime == nil {
             let validPersisted = cache.persistedEntitlements.filter { $0.appearsValid() }
             if !validPersisted.isEmpty {
-                var ids = Set(validPersisted.map { $0.productID })
-                if let thirdPartyIds = await thirdPartySource?.entitledProductIds() {
-                    ids.formUnion(thirdPartyIds)
-                }
-                return Array(ids)
+                return await purchaseProductIdsWithThirdPartyIncluded(Set(validPersisted.map { $0.productID }))
             }
         }
         let entitlements = await getCachedEntitlements()
-        var ids = Set(entitlements.map { $0.productID })
-        if let thirdPartyIds = await thirdPartySource?.entitledProductIds() {
-            ids.formUnion(thirdPartyIds)
-        }
-        return Array(ids)
+        return await purchaseProductIdsWithThirdPartyIncluded(Set(entitlements.map { $0.productID }))
     }
 
     func hasActiveSubscriptionFor(subscriptionGroupID: String) async -> Bool {
@@ -415,6 +408,11 @@ actor HeliumEntitlementsManager {
             }
         }
         
+        if let thirdPartySubs = await thirdPartySource?.activeSubscriptions(),
+           thirdPartySubs.contains(productId) {
+            return true
+        }
+
         let status = await subscriptionStatusFor(productId: productId)
         return isSubscriptionStateActive(status?.state)
     }
@@ -513,6 +511,14 @@ actor HeliumEntitlementsManager {
         }
     }
     
+    private func purchaseProductIdsWithThirdPartyIncluded(_ ids: Set<String>) async -> [String] {
+        var result = ids
+        if let thirdPartyIds = await thirdPartySource?.purchasedHeliumProductIds() {
+            result.formUnion(thirdPartyIds)
+        }
+        return Array(result)
+    }
+
     // MARK: - Private Helper Methods
     
     /// Lazily loads and caches (auto-renewable) subscription status for a product

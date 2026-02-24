@@ -11,10 +11,15 @@
 /// Implementations handle their own caching and persistence.
 public protocol ThirdPartyEntitlementsSource: AnyObject, Sendable {
 
-    /// Product IDs the user is currently entitled to.
-    /// Implementation should return cached data when available.
+    /// Returns an array of all purchased product IDs that the user currently has access to.
+    func purchasedHeliumProductIds() async -> Set<String>
+    
+    /// Product IDs the user is currently entitled to, whether through direct purchase or otherwise.
     func entitledProductIds() async -> Set<String>
 
     /// Whether the user has any active subscription from this source.
     func hasAnyActiveSubscription() async -> Bool
+    
+    /// Returns list of active subscriptions by product ID.
+    func activeSubscriptions() async -> Set<String>
 }
