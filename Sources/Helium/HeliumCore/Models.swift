@@ -58,7 +58,7 @@ public struct HeliumPaywallInfo: Codable {
         productIdsIOS + (productsOfferedStripe ?? [])
     }
     
-    var hasIosProducts: Bool {
+    var hasProducts: Bool {
         !productIds.isEmpty
     }
     
@@ -171,7 +171,7 @@ public struct HeliumFetchedConfig: Codable {
     }
     
     func getTriggersWithMissingProducts() -> [String] {
-        triggerToPaywalls.filter { !$0.value.hasIosProducts }.map { $0.key }
+        triggerToPaywalls.filter { !$0.value.hasProducts }.map { $0.key }
     }
 }
 

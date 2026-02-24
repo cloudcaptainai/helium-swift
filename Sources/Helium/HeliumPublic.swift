@@ -175,63 +175,6 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
-    /// Clears all cached Helium state and allows safe re-initialization.
-    ///
-    /// **Warning:** This method is intended for debugging, testing, and development scenarios only.
-    /// In production apps, configurations should be managed through normal fetch cycles.
-    ///
-    /// This comprehensive reset will:
-    /// - Clear all downloaded bundle files from disk
-    /// - Clear fetched paywall configurations from memory
-    /// - Clear fallback bundle cache
-    /// - Reset download status to `.notDownloadedYet`
-    /// - Reset initialization state to allow `initialize()` to be called again
-    /// - Clear the controller instance
-    /// - Force fallback views to be shown until next successful fetch
-    ///
-    /// Use cases:
-    /// - Testing different configurations
-    /// - Switching between environments (staging/production)
-    /// - Debugging configuration issues
-    /// - Forcing a complete fresh state during development
-    ///
-    /// After calling this method, you MUST call `initialize()` again before using any
-    /// Helium functionality. The SDK will be in an uninitialized state.
-    ///
-    /// Example:
-    /// ```swift
-    /// // Clear everything and reinitialize with new config
-    /// Helium.shared.clearAllCachedState()
-    /// Helium.shared.initialize(
-    ///     apiKey: newApiKey,
-    ///     fallbackConfig: newFallbackConfig
-    /// )
-    /// ```
-    ///
-    /// - Note: This does NOT clear user identification or session data
-    public func clearAllCachedState() {
-        hideAllPaywalls()
-
-        // Clear physical bundle files from disk
-        HeliumAssetManager.shared.clearCache()
-        
-        // Clear fetched configuration from memory
-        HeliumFetchedConfigManager.reset()
-        
-        // Completely reset all fallback configurations
-        HeliumFallbackViewManager.reset()
-        
-        // Reset experiment allocation tracking
-        ExperimentAllocationTracker.shared.reset()
-        
-        HeliumEventListeners.shared.removeAllListeners()
-
-        // Reset initialization state to allow re-initialization
-        reset()
-
-        HeliumLogger.log(.info, category: .core, "All cached state cleared and SDK reset. Call initialize() before using Helium again.")
-    }
-    
     @available(*, deprecated, message: "Use HeliumPaywall directly instead")
     public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
         let config = PaywallPresentationConfig(customPaywallTraits: customPaywallTraits)
@@ -264,7 +207,7 @@ public class Helium {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
             }
             
-            if !templatePaywallInfo.hasIosProducts {
+            if !templatePaywallInfo.hasProducts {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
@@ -570,8 +513,13 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.getCustomUserId()
         }
         set {
+            if newValue == HeliumIdentityManager.shared.getCustomUserId() {
+                return
+            }
             HeliumIdentityManager.shared.setCustomUserId(newValue)
-            HeliumAnalyticsManager.shared.identify()
+            if newValue != nil {
+                HeliumAnalyticsManager.shared.identify()
+            }
         }
     }
     

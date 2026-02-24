@@ -103,17 +103,17 @@ class HeliumPaywallDelegateWrapper {
             if transactionIds == nil {
                 transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
             }
-
-#if compiler(>=6.2)
-            if let atID = transactionIds?.transaction?.appTransactionID {
-                HeliumIdentityManager.shared.appTransactionID = atID
-            }
-#endif
-
+            
             if hadEntitlementBeforePurchase {
                 fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
             } else {
                 syncAfterPurchase(productId: productKey, transaction: transactionIds?.transaction)
+                
+                #if compiler(>=6.2)
+                if let atID = transactionIds?.transaction?.appTransactionID {
+                    HeliumIdentityManager.shared.appTransactionID = atID
+                }
+                #endif
                 
                 let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
                 fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
@@ -200,13 +200,16 @@ class HeliumPaywallDelegateWrapper {
         }
     }
     
-    /// Updates entitlements, transaction history, and localized prices after a new purchase.
     private func syncAfterPurchase(productId: String, transaction: Transaction?) {
         Task {
             await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
+            
             await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
+            
+            // update localized products (and offer eligibility) after purchase
             await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
         }
+
     }
     
     // MARK: - Pending Purchase Observation
