@@ -10,12 +10,12 @@ import Helium
 
 struct ContentView: View {
     
-    @State var showEmbeddedPaywall: Bool = false
-    @State var showModifierPaywall: Bool = false
-    @State var dontShowIfAlreadyEntitled: Bool = false
-    @State var showEntitlementAlert: Bool = false
-    @State var entitlementInfo: String = ""
-    @State var trigger: String = AppConfig.triggerKey
+    @State private var showEmbeddedPaywall: Bool = false
+    @State private var showModifierPaywall: Bool = false
+    @State private var dontShowIfAlreadyEntitled: Bool = false
+    @State private var showEntitlementAlert: Bool = false
+    @State private var entitlementInfo: String = ""
+    @State private var trigger: String = AppConfig.triggerKey
 
     var body: some View {
         VStack(spacing: 28) {

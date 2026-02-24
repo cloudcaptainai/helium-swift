@@ -400,17 +400,17 @@ actor HeliumEntitlementsManager {
     
     // Note that this should return true if user has purchased product OR a different subscription within same subscription group as supplied product.
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
+        if let thirdPartySubs = await thirdPartySource?.activeSubscriptions(),
+           thirdPartySubs.contains(productId) {
+            return true
+        }
+
         let entitlements = await getCachedEntitlements()
         for transaction in entitlements {
             if transaction.productID == productId
                 && (transaction.productType == .autoRenewable || transaction.productType == .nonRenewable) {
                 return true
             }
-        }
-        
-        if let thirdPartySubs = await thirdPartySource?.activeSubscriptions(),
-           thirdPartySubs.contains(productId) {
-            return true
         }
 
         let status = await subscriptionStatusFor(productId: productId)
