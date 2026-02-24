@@ -518,11 +518,12 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.getCustomUserId()
         }
         set {
-            if newValue == HeliumIdentityManager.shared.getCustomUserId() {
+            let userIdChanged = newValue != HeliumIdentityManager.shared.getCustomUserId()
+            if !userIdChanged && HeliumIdentityManager.shared.hasCustomUserId() {
                 return
             }
             HeliumIdentityManager.shared.setCustomUserId(newValue)
-            if newValue != nil {
+            if newValue != nil && userIdChanged {
                 HeliumAnalyticsManager.shared.identify()
             }
         }
