@@ -774,6 +774,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetch410
     case bundleFetchCannotDecodeContent
     case noProductsIOS
+    case stripeNoCustomUserId
 }
 
 public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
