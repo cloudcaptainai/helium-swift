@@ -954,6 +954,74 @@ public class HeliumFetchedConfigManager {
         }
         return true
     }
+
+    // MARK: - Preview Control Panel
+
+    static let HELIUM_PREVIEW_TRIGGER = "helium_preview_trigger"
+
+    /// Sets up a preview trigger configuration for the control panel.
+    /// Clones an existing trigger's config and updates it to use the specified bundle.
+    func setPreviewTriggerConfig(
+        bundleId: String,
+        bundleUrl: String,
+        bundleHtml: String,
+        productIds: [String]
+    ) throws {
+        guard var config = fetchedConfig else {
+            throw HeliumControlPanelError.noConfigAvailable
+        }
+
+        guard let sourceTrigger = config.triggerToPaywalls.keys
+            .filter({ $0 != Self.HELIUM_PREVIEW_TRIGGER })
+            .sorted()
+            .first,
+              var previewPaywallInfo = config.triggerToPaywalls[sourceTrigger] else {
+            throw HeliumControlPanelError.noSourceTrigger
+        }
+
+        // Update the bundle URL in resolvedConfig so extractedBundleUrl returns our new URL
+        guard var resolvedConfigDict = previewPaywallInfo.resolvedConfig.value as? [String: Any],
+              var baseStack = resolvedConfigDict["baseStack"] as? [String: Any],
+              var componentProps = baseStack["componentProps"] as? [String: Any] else {
+            throw HeliumControlPanelError.invalidResolvedConfig
+        }
+        componentProps["bundleURL"] = bundleUrl
+        baseStack["componentProps"] = componentProps
+        resolvedConfigDict["baseStack"] = baseStack
+        previewPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
+
+        // Update additionalPaywallFields
+        var additionalFields = previewPaywallInfo.additionalPaywallFields ?? JSON([:])
+        additionalFields["paywallBundleUrl"] = JSON(bundleUrl)
+        previewPaywallInfo.additionalPaywallFields = additionalFields
+
+        // Update product IDs
+        previewPaywallInfo.productsOfferedIOS = productIds
+
+        // Clear fields inherited from source trigger that would interfere with preview
+        previewPaywallInfo.forceShowFallback = nil
+        previewPaywallInfo.productsOfferedStripe = nil
+
+        // Store the preview trigger config
+        config.triggerToPaywalls[Self.HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
+
+        // Store the bundle HTML
+        if config.bundles == nil {
+            config.bundles = [:]
+        }
+        config.bundles?[bundleId] = bundleHtml
+
+        // Update the fetched config
+        fetchedConfig = config
+
+        // Also update fetchedConfigJSON so getResolvedConfigJSONForTrigger works
+        if var configJSON = fetchedConfigJSON {
+            var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
+            sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
+            configJSON["triggerToPaywalls"][Self.HELIUM_PREVIEW_TRIGGER] = sourceJSON
+            fetchedConfigJSON = configJSON
+        }
+    }
 }
 
 enum FetchError: LocalizedError {

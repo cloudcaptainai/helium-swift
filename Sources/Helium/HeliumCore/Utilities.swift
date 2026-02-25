@@ -80,14 +80,47 @@ extension AnyCodable {
     }
 }
 
-func formatAsTimestamp(date: Date) -> String {
+private let isoFormatterWithFractional: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: date)
+    return formatter
+}()
+
+private let isoFormatter: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter
+}()
+
+func formatAsTimestamp(date: Date) -> String {
+    return isoFormatterWithFractional.string(from: date)
 }
 
 func dispatchTimeDifferenceInMS(from: DispatchTime, to: DispatchTime = DispatchTime.now()) -> UInt64 {
     return UInt64(Double(to.uptimeNanoseconds - from.uptimeNanoseconds) / 1_000_000.0)
+}
+
+func parseISODate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    // Try without fractional seconds first, then with
+    if let date = isoFormatter.date(from: dateString) {
+        return date
+    }
+    return isoFormatterWithFractional.date(from: dateString)
+}
+
+let invalidDateString = "unknown"
+
+private let displayDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter
+}()
+
+func formatDateForDisplay(_ dateString: String?) -> String {
+    guard let date = parseISODate(dateString) else { return invalidDateString }
+    return displayDateFormatter.string(from: date)
 }
 
 
