@@ -382,10 +382,12 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         webView.translatesAutoresizingMaskIntoConstraints = false
 
-        let tripleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTripleTap))
-        tripleTap.numberOfTapsRequired = 3
-        tripleTap.delegate = context.coordinator
-        webView.addGestureRecognizer(tripleTap)
+        if HeliumControlPanelService.shared.allowPaywallControlPanel {
+            let tripleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTripleTap))
+            tripleTap.numberOfTapsRequired = 3
+            tripleTap.delegate = context.coordinator
+            webView.addGestureRecognizer(tripleTap)
+        }
 
         return webView
     }
@@ -427,6 +429,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
         }
 
         @objc func handleTripleTap() {
+            guard HeliumControlPanelService.shared.allowPaywallControlPanel else { return }
             showControlPanel = true
         }
 
