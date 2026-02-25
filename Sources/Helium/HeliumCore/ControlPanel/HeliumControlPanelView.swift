@@ -83,6 +83,8 @@ struct HeliumControlPanelView: View {
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
             
             state = .loaded(response)
+        } catch is CancellationError {
+            // Ignore — task was intentionally cancelled by a retry/refresh
         } catch {
             state = .error(error.localizedDescription)
         }
