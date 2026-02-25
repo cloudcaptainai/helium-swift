@@ -11,9 +11,38 @@ import SwiftUI
 @main
 struct HeliumExampleApp: App {
     init() {
-        // For automated UI tests:
+        configureHelium()
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+    
+    private func configureHelium() {
         let loadStateTestTrigger = ProcessInfo.processInfo.environment["LOAD_STATE_TEST_TRIGGER"]
         let fallbackTestMode = ProcessInfo.processInfo.environment["FALLBACK_TEST_MODE"]
+        preInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
+        
+        Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
+
+        let apiKey: String = if fallbackTestMode == FallbackTestMode.downloadFailure.rawValue {
+            "invalid_api_key_for_testing"
+        } else {
+            AppConfig.apiKey
+        }
+
+        Helium.shared.initialize(
+            apiKey: apiKey
+        )
+
+        postInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
+    }
+    
+    // MARK: - Automated UI Tests Setup
+    
+    private func preInitializeTestSetup(loadStateTestTrigger: String?, fallbackTestMode: String?) {
 
         // Mock delegate used for UI tests, otherwise default StoreKitDelegate is used
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING_PURCHASE") {
@@ -31,21 +60,9 @@ struct HeliumExampleApp: App {
         if fallbackTestMode == FallbackTestMode.loadingBudget.rawValue {
             Helium.config.defaultLoadingBudget = 1
         }
-
-        // Helium initialize
-        Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
-
-        let apiKey: String = if fallbackTestMode == FallbackTestMode.downloadFailure.rawValue {
-            "invalid_api_key_for_testing"
-        } else {
-            AppConfig.apiKey
-        }
-
-        Helium.shared.initialize(
-            apiKey: apiKey
-        )
-
-        // For automated UI tests:
+    }
+    
+    private func postInitializeTestSetup(loadStateTestTrigger: String?, fallbackTestMode: String?) {
         if let loadStateTestTrigger {
             Helium.shared.presentPaywall(trigger: loadStateTestTrigger) { reason in
                 print("[Helium Example] loadStateTestTrigger - Could not show paywall. \(reason)")
@@ -66,19 +83,13 @@ struct HeliumExampleApp: App {
             }
         }
     }
-
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
 }
 
 fileprivate class LogHeliumEventListener: HeliumEventListener {
     static let shared = LogHeliumEventListener()
 
     func onHeliumEvent(event: any HeliumEvent) {
-        print("helium event - \(event.toDictionary())")
+        print("[Helium Example] Helium event - \(event.toDictionary())")
     }
 }
 
