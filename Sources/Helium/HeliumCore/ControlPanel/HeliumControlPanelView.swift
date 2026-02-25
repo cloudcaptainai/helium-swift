@@ -72,13 +72,18 @@ struct HeliumControlPanelView: View {
     }
 
     private func fetchPaywalls() async {
-        // TODO: Switch to fetchPreviewPaywalls() once the endpoint is live
-        let response = await HeliumControlPanelService.shared.fetchPreviewPaywallsTest()
-
-        // Fetch all products data
-        await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
-
-        state = .loaded(response)
+        do {
+            let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
+            
+            // Fetch all products data
+            await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
+            
+            state = .loaded(response)
+        } catch let error as HeliumControlPanelError {
+            state = .error(error.localizedDescription)
+        } catch {
+            state = .error("Unexpected error: \(error.localizedDescription)")
+        }
     }
 
     private func selectPaywall(_ paywall: HeliumPaywallPreview) {
