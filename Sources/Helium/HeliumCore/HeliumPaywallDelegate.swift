@@ -242,7 +242,7 @@ class HeliumPaywallDelegateWrapper {
         case .notInitialized:
             notShownAddendum = "Helium is not initialized"
         case .triggerHasNoPaywall:
-            notShownAddendum = "Trigger has no paywall. Verify your trigger is in a workflow https://app.tryhelium.com/workflows"
+            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow https://app.tryhelium.com/workflows"
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
         case .paywallsDownloadFail:
