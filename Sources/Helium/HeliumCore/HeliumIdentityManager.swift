@@ -42,7 +42,18 @@ public class HeliumIdentityManager {
     // Used to connect RevenueCat purchase events
     var revenueCatAppUserId: String? = nil
     
-    var appTransactionID: String? = nil
+    @HeliumAtomic private var _appTransactionID: String? = nil
+    var appTransactionID: String? {
+        get {
+            return _appTransactionID ?? UserDefaults.standard.string(forKey: heliumAppTransactionIDKey)
+        }
+        set {
+            if let newValue {
+                _appTransactionID = newValue
+                UserDefaults.standard.set(newValue, forKey: heliumAppTransactionIDKey)
+            }
+        }
+    }
     
     // MARK: - Constants
     private let userContextKey = "heliumUserContext"
@@ -51,6 +62,8 @@ public class HeliumIdentityManager {
     private let heliumFirstSeenDateKey = "heliumFirstSeenDate"
     private let heliumUserSeedKey = "heliumUserSeed"
     private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
+    private let heliumStripeCustomerIdKey = "heliumStripeCustomerId"
+    private let heliumAppTransactionIDKey = "heliumAppTransactionID"
     
     /// We may remove this at some point but for now it ensures a user id always set
     func getResolvedUserId() -> String {
@@ -114,6 +127,18 @@ public class HeliumIdentityManager {
     
     func setRevenueCatAppUserId(_ rcAppUserId: String) {
         revenueCatAppUserId = rcAppUserId
+    }
+    
+    public func setStripeCustomerId(_ customerId: String?) {
+        guard let customerId, !customerId.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: heliumStripeCustomerIdKey)
+            return
+        }
+        UserDefaults.standard.setValue(customerId, forKey: heliumStripeCustomerIdKey)
+    }
+    
+    public func getStripeCustomerId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumStripeCustomerIdKey)
     }
     
     public func getAppTransactionID() -> String? {
@@ -272,8 +297,8 @@ public class HeliumSdkConfig {
     }
 }
 
-class ApplePayHelper {
-    static let shared = ApplePayHelper()
+public class ApplePayHelper {
+    public static let shared = ApplePayHelper()
 
     @HeliumAtomic private var cachedCanMakePayments: Bool?
 
@@ -284,6 +309,14 @@ class ApplePayHelper {
     /// Checks if the device supports Apple Pay (cached)
     func canMakePayments() -> Bool {
         return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
+    }
+    
+    @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
+    public func setStripeApplePayAvailable(_ value: Bool) {
+        isStripeApplePayAvailable = value
+    }
+    public func getStripeApplePayAvailable() -> Bool {
+        return isStripeApplePayAvailable && canMakePayments()
     }
 }
 

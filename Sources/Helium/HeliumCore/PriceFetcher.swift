@@ -102,6 +102,90 @@ public struct LocalizedPrice: Codable {
     }
 }
 
+/// Subscription detail from server
+public struct ServerSubscriptionDetail: Codable {
+    public let period: String?
+    public let periodUnit: String?
+    public let periodValue: Int?
+    public let introOfferEligible: Bool?
+    public let introOffers: [ServerIntroOffer]?
+}
+
+/// Intro offer from server
+public struct ServerIntroOffer: Codable {
+    public let type: String?
+    public let price: Decimal?
+    public let displayPrice: String?
+    public let periodUnit: String?
+    public let periodValue: Int?
+    public let periodCount: Int?
+    public let paymentMode: String?
+}
+
+/// Server-provided price info for a single product
+public struct ServerProductPrice: Codable {
+    public let id: String?
+    public let priceId: String?
+    public let formattedPrice: String?
+    public let localizedTitle: String?
+    public let localizedDescription: String?
+    public let currency: String?
+    public let value: Decimal?
+    public let currencySymbol: String?
+    public let duration: String?
+    public let productType: String?
+    public let subscriptionPeriod: String?
+    public let subscription: ServerSubscriptionDetail?
+
+    public func toLocalizedPrice() -> LocalizedPrice {
+        let baseInfo = BasePriceInfo(
+            currency: currency ?? "",
+            locale: "",
+            value: value ?? 0,
+            formattedPrice: formattedPrice ?? "",
+            currencySymbol: currencySymbol ?? "",
+            decimalSeparator: "."
+        )
+
+        var subscriptionInfo: SubscriptionInfo?
+        var iapInfo: IAPInfo?
+
+        if let sub = subscription {
+            let introOffer: SubscriptionOffer? = sub.introOffers?.first.map { offer in
+                SubscriptionOffer(
+                    type: offer.type ?? "",
+                    price: offer.price ?? 0,
+                    displayPrice: offer.displayPrice ?? "",
+                    periodUnit: offer.periodUnit ?? "",
+                    periodValue: offer.periodValue ?? 0,
+                    periodCount: offer.periodCount ?? 0,
+                    paymentMode: offer.paymentMode ?? ""
+                )
+            }
+            subscriptionInfo = SubscriptionInfo(
+                periodUnit: sub.periodUnit ?? "",
+                periodValue: sub.periodValue ?? 0,
+                introOfferEligible: sub.introOfferEligible ?? false,
+                introOffer: introOffer
+            )
+        } else if productType == "one_time" {
+            iapInfo = IAPInfo(quantity: 1)
+        }
+
+        return LocalizedPrice(
+            baseInfo: baseInfo,
+            productType: productType ?? "",
+            localizedTitle: localizedTitle,
+            localizedDescription: localizedDescription,
+            displayName: nil,
+            description: nil,
+            subscriptionInfo: subscriptionInfo,
+            iapInfo: iapInfo,
+            familyShareable: false
+        )
+    }
+}
+
 /// A utility class for fetching localized pricing information for a given SKU
 public class PriceFetcher {
     

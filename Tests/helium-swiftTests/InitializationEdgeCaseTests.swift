@@ -23,16 +23,6 @@ final class InitializationEdgeCaseTests: XCTestCase {
         XCTAssertFalse(skipped)
     }
 
-    func testClearAllCachedStateResetsStatus() {
-        // Inject config to simulate download success
-        let config = makeTestConfig(triggers: ["t": makeTestPaywallInfo()])
-        injectConfig(config)
-        XCTAssertEqual(Helium.shared.getDownloadStatus(), .downloadSuccess)
-
-        Helium.shared.clearAllCachedState()
-        XCTAssertEqual(Helium.shared.getDownloadStatus(), .notDownloadedYet)
-    }
-
     func testPaywallsLoadedReturnsFalseBeforeDownload() {
         // After reset, no paywalls loaded
         XCTAssertFalse(Helium.shared.paywallsLoaded())

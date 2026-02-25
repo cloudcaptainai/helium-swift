@@ -227,7 +227,6 @@ class ExperimentAllocationTracker {
     }
     
     /// Resets all allocation tracking
-    /// - Note: Called when SDK cache is cleared via clearAllCachedState()
     func reset() {
         storedAllocations.removeAll()
         UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)

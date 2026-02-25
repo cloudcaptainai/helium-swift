@@ -263,7 +263,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         paywallName: String,
         error: String,
         paywallUnavailableReason: PaywallUnavailableReason? = nil,
-        loadtimeTakenMS: UInt64? = nil,
+        loadTimeTakenMS: UInt64? = nil,
         loadingBudgetMS: UInt64? = nil,
         newWindowCreated: Bool? = nil,
         secondTry: Bool = false,
@@ -273,7 +273,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         self.paywallName = paywallName
         self.error = error
         self.paywallUnavailableReason = paywallUnavailableReason
-        self.loadTimeTakenMS = loadtimeTakenMS
+        self.loadTimeTakenMS = loadTimeTakenMS
         self.loadingBudgetMS = loadingBudgetMS
         self.newWindowCreated = newWindowCreated
         self._secondTry = secondTry

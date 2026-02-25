@@ -338,6 +338,10 @@ public class HeliumFetchedConfigManager {
             self.fetchedConfigJSON = newConfigJSON
             triggersWithSkippedBundleAndReason = []
             
+            if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
+                HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
+            }
+            
             // Download assets
             
             if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
@@ -805,12 +809,12 @@ public class HeliumFetchedConfigManager {
         }
     }
     
-    private func getAllProductIds(config: HeliumFetchedConfig?) -> [String] {
+    private func getAllProductIdsIos(config: HeliumFetchedConfig?) -> [String] {
         // Get all unique product IDs from all paywalls
         var allProductIds: [String] = []
         if let config {
             for paywall in config.triggerToPaywalls.values {
-                allProductIds.append(contentsOf: paywall.productIds)
+                allProductIds.append(contentsOf: paywall.productIdsIOS)
             }
         }
         return Array(Set(allProductIds))
@@ -818,8 +822,17 @@ public class HeliumFetchedConfigManager {
     
     @discardableResult
     func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
-        let productIds = getAllProductIds(config: config)
+        let productIds = getAllProductIdsIos(config: config)
         await buildLocalizedPriceMap(productIds)
+
+        // Merge server-provided prices (favoring StoreKit values on collision)
+        if let serverPrices = config?.stripeProducts {
+            let converted = serverPrices.mapValues { $0.toLocalizedPrice() }
+            _localizedPriceMap.withValue { map in
+                map.merge(converted) { storeKitValue, _ in storeKitValue }
+            }
+        }
+
         var allFound = false
         _localizedPriceMap.withValue { map in
             allFound = productIds.allSatisfy { map.keys.contains($0) }
@@ -847,6 +860,12 @@ public class HeliumFetchedConfigManager {
     // by some sdk integrations.
     public func getLocalizedPriceMap() -> [String: LocalizedPrice] {
         return localizedPriceMap
+    }
+
+    // NOTE - be careful about removing the public declaration here because this is in use
+    // by some sdk integrations.
+    public func getServerProductsPriceMap() -> [String: ServerProductPrice]? {
+        return fetchedConfig?.stripeProducts
     }
     
     /// Get localized prices filtered by a specific trigger's product IDs

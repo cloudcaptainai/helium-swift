@@ -61,4 +61,23 @@ struct PaywallSession {
         self.paywallInfo = paywallInfo
         self.presentationContext = presentationContext
     }
+
+    /// Returns a copy of this session with the presentation context replaced.
+    func withPresentationContext(_ context: PaywallPresentationContext) -> PaywallSession {
+        PaywallSession(
+            sessionId: self.sessionId,
+            trigger: self.trigger,
+            paywallInfo: self.paywallInfo,
+            fallbackType: self.fallbackType,
+            presentationContext: context
+        )
+    }
+
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
+        self.sessionId = sessionId
+        self.trigger = trigger
+        self.fallbackType = fallbackType
+        self.paywallInfo = paywallInfo
+        self.presentationContext = presentationContext
+    }
 }

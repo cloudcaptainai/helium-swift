@@ -36,6 +36,7 @@ public struct HeliumPaywallInfo: Codable {
     public var paywallTemplateName: String
     var productsOffered: [String]?
     var productsOfferedIOS: [String]?
+    var productsOfferedStripe: [String]?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -49,11 +50,15 @@ public struct HeliumPaywallInfo: Codable {
     var additionalPaywallFields: JSON?
     var presentationStyle: PaywallPresentationStyle?
     
-    var productIds: [String] {
+    var productIdsIOS: [String] {
         productsOfferedIOS ?? productsOffered ?? []
     }
     
-    var hasIosProducts: Bool {
+    var productIds: [String] {
+        productIdsIOS + (productsOfferedStripe ?? [])
+    }
+    
+    var hasProducts: Bool {
         !productIds.isEmpty
     }
     
@@ -104,6 +109,8 @@ public struct HeliumFetchedConfig: Codable {
     var additionalFields: JSON?
     var bundles: [String: String]?
     var generatedAt: String?
+    var stripeProducts: [String: ServerProductPrice]?
+    var stripeCustomerId: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for
@@ -164,7 +171,7 @@ public struct HeliumFetchedConfig: Codable {
     }
     
     func getTriggersWithMissingProducts() -> [String] {
-        triggerToPaywalls.filter { !$0.value.hasIosProducts }.map { $0.key }
+        triggerToPaywalls.filter { !$0.value.hasProducts }.map { $0.key }
     }
 }
 
@@ -767,6 +774,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetch410
     case bundleFetchCannotDecodeContent
     case noProductsIOS
+    case stripeNoCustomUserId
 }
 
 public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
