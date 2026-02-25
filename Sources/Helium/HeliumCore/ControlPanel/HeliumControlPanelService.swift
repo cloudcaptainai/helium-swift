@@ -33,9 +33,13 @@ class HeliumControlPanelService {
             throw HeliumControlPanelError.networkError(error)
         }
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw HeliumControlPanelError.networkError(URLError(.badServerResponse))
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let message = String(data: data.prefix(200), encoding: .utf8)
+            throw HeliumControlPanelError.httpError(statusCode: httpResponse.statusCode, message: message)
         }
 
         guard let html = String(data: data, encoding: .utf8) else {
@@ -92,6 +96,9 @@ enum HeliumControlPanelError: LocalizedError {
     case httpError(statusCode: Int, message: String?)
     case decodingError(Error)
     case networkError(Error)
+    case noConfigAvailable
+    case noSourceTrigger
+    case invalidResolvedConfig
 
     var errorDescription: String? {
         switch self {
@@ -105,6 +112,12 @@ enum HeliumControlPanelError: LocalizedError {
             return "Failed to decode response: \(error.localizedDescription)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .noConfigAvailable:
+            return "No fetched config available. Ensure Helium is initialized."
+        case .noSourceTrigger:
+            return "No source trigger config available to clone."
+        case .invalidResolvedConfig:
+            return "Resolved config missing expected structure."
         }
     }
 }

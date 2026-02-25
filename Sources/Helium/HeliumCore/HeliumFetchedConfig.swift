@@ -966,27 +966,29 @@ public class HeliumFetchedConfigManager {
         bundleUrl: String,
         bundleHtml: String,
         productIds: [String]
-    ) {
+    ) throws {
         guard var config = fetchedConfig else {
-            HeliumLogger.log(.warn, category: .config, "[HeliumControlPanel] setPreviewTriggerConfig - No fetched config available")
-            return
+            throw HeliumControlPanelError.noConfigAvailable
         }
 
-        guard let sourceTrigger = config.triggerToPaywalls.keys.first,
+        guard let sourceTrigger = config.triggerToPaywalls.keys
+            .filter({ $0 != Self.HELIUM_PREVIEW_TRIGGER })
+            .sorted()
+            .first,
               var previewPaywallInfo = config.triggerToPaywalls[sourceTrigger] else {
-            HeliumLogger.log(.warn, category: .config, "[HeliumControlPanel] setPreviewTriggerConfig - No source trigger config available")
-            return
+            throw HeliumControlPanelError.noSourceTrigger
         }
 
         // Update the bundle URL in resolvedConfig so extractedBundleUrl returns our new URL
-        if var resolvedConfigDict = previewPaywallInfo.resolvedConfig.value as? [String: Any],
-           var baseStack = resolvedConfigDict["baseStack"] as? [String: Any],
-           var componentProps = baseStack["componentProps"] as? [String: Any] {
-            componentProps["bundleURL"] = bundleUrl
-            baseStack["componentProps"] = componentProps
-            resolvedConfigDict["baseStack"] = baseStack
-            previewPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
+        guard var resolvedConfigDict = previewPaywallInfo.resolvedConfig.value as? [String: Any],
+              var baseStack = resolvedConfigDict["baseStack"] as? [String: Any],
+              var componentProps = baseStack["componentProps"] as? [String: Any] else {
+            throw HeliumControlPanelError.invalidResolvedConfig
         }
+        componentProps["bundleURL"] = bundleUrl
+        baseStack["componentProps"] = componentProps
+        resolvedConfigDict["baseStack"] = baseStack
+        previewPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
 
         // Update additionalPaywallFields
         var additionalFields = previewPaywallInfo.additionalPaywallFields ?? JSON([:])

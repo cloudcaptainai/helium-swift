@@ -79,23 +79,21 @@ struct HeliumControlPanelView: View {
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
             
             state = .loaded(response)
-        } catch let error as HeliumControlPanelError {
-            state = .error(error.localizedDescription)
         } catch {
-            state = .error("Unexpected error: \(error.localizedDescription)")
+            state = .error(error.localizedDescription)
         }
     }
 
     private func selectPaywall(_ paywall: HeliumPaywallPreview) {
         guard loadingPaywallId == nil else { return }
         loadingPaywallId = paywall.id
-        print("[HeliumControlPanel] Selected paywall: \(paywall.paywallName) (\(paywall.paywallUuid))")
+        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) (\(paywall.paywallUuid))")
 
         Task {
             do {
                 let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: paywall.bundleUrl)
 
-                HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
+                try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
                     bundleId: bundleId,
                     bundleUrl: paywall.bundleUrl,
                     bundleHtml: html,

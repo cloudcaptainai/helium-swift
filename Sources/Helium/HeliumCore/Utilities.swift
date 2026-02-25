@@ -104,12 +104,16 @@ func parseISODate(_ dateString: String?) -> Date? {
 
 let invalidDateString = "unknown"
 
-func formatDateForDisplay(_ dateString: String?) -> String {
-    guard let date = parseISODate(dateString) else { return invalidDateString }
+private let displayDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
-    return formatter.string(from: date)
+    return formatter
+}()
+
+func formatDateForDisplay(_ dateString: String?) -> String {
+    guard let date = parseISODate(dateString) else { return invalidDateString }
+    return displayDateFormatter.string(from: date)
 }
 
 
