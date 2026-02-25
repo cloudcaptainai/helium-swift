@@ -156,6 +156,18 @@ class HeliumPaywallDelegateWrapper {
         return result;
     }
     
+    private func syncAfterPurchase(productId: String, transaction: Transaction?) {
+        Task {
+            await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
+            
+            await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
+            
+            // update localized products (and offer eligibility) after purchase
+            await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+        }
+
+    }
+    
     
     /// Fire a v2 typed event - main entry point for all SDK events
     func fireEvent(
@@ -188,6 +200,22 @@ class HeliumPaywallDelegateWrapper {
         }
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
         
+        if let openFailEvent = event as? PaywallOpenFailedEvent {
+            logPaywallUnavailable(
+                trigger: openFailEvent.triggerName,
+                paywallUnavailableReason: openFailEvent.paywallUnavailableReason,
+                logPrefix: "Paywall not shown!", logMetadata: metadata
+            )
+        }
+        if let openEvent = event as? PaywallOpenEvent,
+           let paywallUnavailableReason = openEvent.paywallUnavailableReason {
+            logPaywallUnavailable(
+                trigger: openEvent.triggerName,
+                paywallUnavailableReason: paywallUnavailableReason,
+                logPrefix: "Fallback paywall shown!", logMetadata: metadata
+            )
+        }
+        
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
         
         // Mark session for onEntitled callback on purchase/restore success
@@ -200,16 +228,37 @@ class HeliumPaywallDelegateWrapper {
         }
     }
     
-    private func syncAfterPurchase(productId: String, transaction: Transaction?) {
-        Task {
-            await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
-            
-            await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
-            
-            // update localized products (and offer eligibility) after purchase
-            await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+    private func logPaywallUnavailable(
+        trigger: String,
+        paywallUnavailableReason: PaywallUnavailableReason?,
+        logPrefix: String,
+        logMetadata: [String: String]
+    ) {
+        var notShownAddendum: String = ""
+        switch paywallUnavailableReason {
+        case .notInitialized:
+            notShownAddendum = "Helium is not initialized"
+        case .triggerHasNoPaywall:
+            notShownAddendum = "Trigger has no paywall. Verify your trigger is in a workflow https://app.tryhelium.com/workflows"
+        case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
+            notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
+        case .paywallsDownloadFail:
+            notShownAddendum = "Paywalls failed to download. Check your connection"
+        case .alreadyPresented:
+            notShownAddendum = "A Helium paywall is already being presented"
+        case .noProductsIOS:
+            var paywallLink = "https://app.tryhelium.com/paywalls"
+            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+            if let paywallId = paywallInfo?.paywallUUID {
+                paywallLink += "/\(paywallId)"
+            }
+            notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
+        case .stripeNoCustomUserId:
+            notShownAddendum = "Stripe purchase flows require a custom user ID to be set"
+        default:
+            notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }
-
+        HeliumLogger.log(.error, category: .ui, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
     }
     
     // MARK: - Pending Purchase Observation
