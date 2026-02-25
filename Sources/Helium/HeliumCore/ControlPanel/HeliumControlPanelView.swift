@@ -74,6 +74,7 @@ struct HeliumControlPanelView: View {
         .task { await fetchPaywalls() }
     }
 
+    @MainActor
     private func fetchPaywalls() async {
         do {
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
