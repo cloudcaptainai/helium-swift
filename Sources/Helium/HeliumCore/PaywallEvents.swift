@@ -315,7 +315,7 @@ public struct PaywallSkippedEvent: HeliumEvent {
     public let triggerName: String
     
     /// Reason why the paywall was skipped
-    public let skipReason: PaywallSkippedReason?
+    public let skipReason: PaywallSkippedReason
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
@@ -339,7 +339,7 @@ public struct PaywallSkippedEvent: HeliumEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallSkipped(triggerName: triggerName, skipReason: skipReason?.rawValue)
+        return .paywallSkipped(triggerName: triggerName, skipReason: skipReason.rawValue)
     }
 }
 

@@ -215,6 +215,9 @@ class HeliumPaywallDelegateWrapper {
                 logPrefix: "Fallback paywall shown!", logMetadata: metadata
             )
         }
+        if let skipEvent = event as? PaywallSkippedEvent {
+            logPaywallSkip(skipReason: skipEvent.skipReason, logMetadata: metadata)
+        }
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
         
@@ -258,7 +261,21 @@ class HeliumPaywallDelegateWrapper {
         default:
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }
-        HeliumLogger.log(.error, category: .ui, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
+        HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
+    }
+    
+    private func logPaywallSkip(
+        skipReason: PaywallSkippedReason,
+        logMetadata: [String: String]
+    ) {
+        var skipMessage: String = ""
+        switch skipReason {
+        case .targetingHoldout:
+            skipMessage = "Paywall skipped due to targeting holdout"
+        case .alreadyEntitled:
+            skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
+        }
+        HeliumLogger.log(.warn, category: .ui, skipMessage, metadata: logMetadata)
     }
     
     // MARK: - Pending Purchase Observation
