@@ -998,6 +998,10 @@ public class HeliumFetchedConfigManager {
         // Update product IDs
         previewPaywallInfo.productsOfferedIOS = productIds
 
+        // Clear fields inherited from source trigger that would interfere with preview
+        previewPaywallInfo.forceShowFallback = nil
+        previewPaywallInfo.productsOfferedStripe = nil
+
         // Store the preview trigger config
         config.triggerToPaywalls[Self.HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
 

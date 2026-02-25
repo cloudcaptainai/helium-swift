@@ -382,16 +382,30 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         webView.translatesAutoresizingMaskIntoConstraints = false
 
+        // Remove stale recognizer from a previous presentation (webviews are pooled)
+        if let old = context.coordinator.tripleTapRecognizer {
+            webView.removeGestureRecognizer(old)
+            context.coordinator.tripleTapRecognizer = nil
+        }
+
         if HeliumControlPanelService.shared.allowPaywallControlPanel {
             let tripleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTripleTap))
             tripleTap.numberOfTapsRequired = 3
             tripleTap.delegate = context.coordinator
             webView.addGestureRecognizer(tripleTap)
+            context.coordinator.tripleTapRecognizer = tripleTap
         }
 
         return webView
     }
-    
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        if let recognizer = coordinator.tripleTapRecognizer {
+            webView.removeGestureRecognizer(recognizer)
+            coordinator.tripleTapRecognizer = nil
+        }
+    }
+
     func updateUIView(_ webView: WKWebView, context: Context) {
         // Ensure constraints are set properly
         if let superview = webView.superview {
@@ -423,6 +437,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
 
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
         @Binding var showControlPanel: Bool
+        var tripleTapRecognizer: UITapGestureRecognizer?
 
         init(showControlPanel: Binding<Bool>) {
             _showControlPanel = showControlPanel

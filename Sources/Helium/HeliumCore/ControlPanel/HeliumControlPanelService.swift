@@ -5,7 +5,7 @@ class HeliumControlPanelService {
     private init() {}
 
     // Off for now. This value will be sent/derived from server once fully implemented.
-    var allowPaywallControlPanel: Bool = false
+    @HeliumAtomic var allowPaywallControlPanel: Bool = false
 
     private let endpoint = "https://api-v2.tryhelium.com/preview-paywalls"
 

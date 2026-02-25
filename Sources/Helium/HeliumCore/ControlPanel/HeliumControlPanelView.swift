@@ -4,6 +4,7 @@ struct HeliumControlPanelView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var state: HeliumControlPanelState = .loading
     @State private var loadingPaywallId: String? = nil
+    @State private var fetchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationView {
@@ -46,7 +47,8 @@ struct HeliumControlPanelView: View {
                             .padding(.horizontal)
                         Button("Retry") {
                             state = .loading
-                            Task { await fetchPaywalls() }
+                            fetchTask?.cancel()
+                            fetchTask = Task { await fetchPaywalls() }
                         }
                     }
                 }
@@ -60,7 +62,8 @@ struct HeliumControlPanelView: View {
                     Button {
                         state = .loading
                         loadingPaywallId = nil
-                        Task { await fetchPaywalls() }
+                        fetchTask?.cancel()
+                        fetchTask = Task { await fetchPaywalls() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
