@@ -157,6 +157,10 @@ public class HeliumIdentityManager {
         }
     }
     
+    public func isNewHeliumUser() -> Bool {
+        return isFirstHeliumSession
+    }
+    
     /// Gets or creates the user seed (random value 1-100, persisted)
     /// Note that this has nothing to do with experiments, it just allows user to run their own targeting logic if desired.
     /// - Returns: The user seed value
