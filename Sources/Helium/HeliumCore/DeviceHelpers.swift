@@ -21,7 +21,7 @@
 //NOTE - largely taken from https://github.com/devicekit/DeviceKit with some minor modifications
 //Devices updated 9/25/25 to include iPhone 17
 
-import UIKit
+import Foundation
 
 class DeviceHelpers {
     static let current: DeviceHelpers = DeviceHelpers()
