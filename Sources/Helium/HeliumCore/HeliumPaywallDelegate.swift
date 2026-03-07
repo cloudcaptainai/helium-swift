@@ -250,7 +250,7 @@ class HeliumPaywallDelegateWrapper {
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
         case .paywallsDownloadFail:
-            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key."
+            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key"
         case .alreadyPresented:
             notShownAddendum = "A Helium paywall is already being presented"
         case .noProductsIOS:
@@ -268,7 +268,7 @@ class HeliumPaywallDelegateWrapper {
         HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
         
 #if DEBUG
-        if !fallbackShown {
+        if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
             Task { @MainActor in
                 HeliumPaywallDiagnosticView.presentIfNeeded(
                     trigger: trigger,
@@ -287,7 +287,7 @@ class HeliumPaywallDelegateWrapper {
         var skipMessage: String = ""
         switch skipReason {
         case .targetingHoldout:
-            skipMessage = "Paywall skipped due to targeting holdout"
+            skipMessage = "Paywall skipped due to targeting holdout. Check your workflow configuration if this is not expected https://app.tryhelium.com/workflows"
         case .alreadyEntitled:
             skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
         }

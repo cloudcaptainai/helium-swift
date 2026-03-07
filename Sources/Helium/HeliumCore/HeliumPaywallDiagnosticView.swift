@@ -32,7 +32,14 @@ struct DiagnosticContent {
 
     static func from(bodyText: String) -> DiagnosticContent {
         let (url, strippedText) = extractAndStripURL(from: bodyText)
-        let ctaTitle = url == defaultURL ? "View Docs" : "Open Dashboard"
+        let ctaTitle: String
+        if url == defaultURL {
+            ctaTitle = "View Docs"
+        } else if url.host?.contains("app.tryhelium.com") == true {
+            ctaTitle = "Open Dashboard"
+        } else {
+            ctaTitle = "View Docs"
+        }
         return DiagnosticContent(bodyText: strippedText, ctaTitle: ctaTitle, ctaURL: url)
     }
 }

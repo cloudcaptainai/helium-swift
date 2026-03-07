@@ -26,17 +26,17 @@ struct HeliumExampleApp: App {
         preInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
         
         Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
-
+        
         let apiKey: String = if fallbackTestMode == FallbackTestMode.downloadFailure.rawValue {
             "invalid_api_key_for_testing"
         } else {
             AppConfig.apiKey
         }
-
+        
         Helium.shared.initialize(
             apiKey: apiKey
         )
-
+        
         postInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
     }
     
