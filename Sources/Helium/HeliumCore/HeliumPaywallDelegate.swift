@@ -197,6 +197,8 @@ class HeliumPaywallDelegateWrapper {
             metadata["productId"] = productEvent.productId
         } else if let paywallEvent = event as? PaywallContextEvent {
             metadata["trigger"] = paywallEvent.triggerName
+        } else if let skipEvent = event as? PaywallSkippedEvent {
+            metadata["trigger"] = skipEvent.triggerName
         }
         if paywallSession?.isFallback == true {
             metadata["fallback"] = "true"

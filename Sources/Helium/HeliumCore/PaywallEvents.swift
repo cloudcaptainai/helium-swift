@@ -333,7 +333,7 @@ public struct PaywallSkippedEvent: HeliumEvent {
         return [
             "type": eventName,
             "triggerName": triggerName,
-            "skipReason": skipReason,
+            "skipReason": skipReason.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }

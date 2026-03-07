@@ -47,7 +47,7 @@ final class EventToDictionaryTests: XCTestCase {
         let dict = event.toDictionary()
         XCTAssertEqual(dict["type"] as? String, "paywallSkipped")
         XCTAssertEqual(dict["triggerName"] as? String, "onboarding")
-        XCTAssertEqual(dict["skipReason"] as? PaywallSkippedReason, .targetingHoldout)
+        XCTAssertEqual(dict["skipReason"] as? String, PaywallSkippedReason.targetingHoldout.rawValue)
     }
 
     func testCustomPaywallActionEventToDictionary() {
