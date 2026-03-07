@@ -286,6 +286,9 @@ class HeliumPaywallPresenter {
     
     @MainActor
     private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext) {
+#if DEBUG
+        HeliumPaywallDiagnosticView.dismissIfPresented()
+#endif
         HeliumLogger.log(.debug, category: .ui, "Presenting paywall", metadata: [
             "trigger": trigger,
             "isLoading": String(isLoading),

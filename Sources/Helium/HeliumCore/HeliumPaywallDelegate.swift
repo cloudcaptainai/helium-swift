@@ -204,7 +204,7 @@ class HeliumPaywallDelegateWrapper {
             logPaywallUnavailable(
                 trigger: openFailEvent.triggerName,
                 paywallUnavailableReason: openFailEvent.paywallUnavailableReason,
-                logPrefix: "Paywall not shown!", logMetadata: metadata
+                fallbackShown: false, logMetadata: metadata
             )
         }
         if let openEvent = event as? PaywallOpenEvent,
@@ -212,11 +212,11 @@ class HeliumPaywallDelegateWrapper {
             logPaywallUnavailable(
                 trigger: openEvent.triggerName,
                 paywallUnavailableReason: paywallUnavailableReason,
-                logPrefix: "Fallback paywall shown!", logMetadata: metadata
+                fallbackShown: true, logMetadata: metadata
             )
         }
         if let skipEvent = event as? PaywallSkippedEvent {
-            logPaywallSkip(skipReason: skipEvent.skipReason, logMetadata: metadata)
+            logPaywallSkip(trigger: skipEvent.triggerName, skipReason: skipEvent.skipReason, logMetadata: metadata)
         }
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
@@ -234,9 +234,10 @@ class HeliumPaywallDelegateWrapper {
     private func logPaywallUnavailable(
         trigger: String,
         paywallUnavailableReason: PaywallUnavailableReason?,
-        logPrefix: String,
+        fallbackShown: Bool,
         logMetadata: [String: String]
     ) {
+        let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
         var notShownAddendum: String = ""
         switch paywallUnavailableReason {
         case .notInitialized:
@@ -246,7 +247,7 @@ class HeliumPaywallDelegateWrapper {
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
         case .paywallsDownloadFail:
-            notShownAddendum = "Paywalls failed to download. Check your connection"
+            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key."
         case .alreadyPresented:
             notShownAddendum = "A Helium paywall is already being presented"
         case .noProductsIOS:
@@ -262,9 +263,22 @@ class HeliumPaywallDelegateWrapper {
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }
         HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
+        
+#if DEBUG
+        if !fallbackShown {
+            Task { @MainActor in
+                HeliumPaywallDiagnosticView.presentIfNeeded(
+                    trigger: trigger,
+                    unavailableReason: paywallUnavailableReason,
+                    message: notShownAddendum
+                )
+            }
+        }
+#endif
     }
     
     private func logPaywallSkip(
+        trigger: String,
         skipReason: PaywallSkippedReason,
         logMetadata: [String: String]
     ) {
@@ -276,6 +290,16 @@ class HeliumPaywallDelegateWrapper {
             skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
         }
         HeliumLogger.log(.warn, category: .ui, skipMessage, metadata: logMetadata)
+        
+#if DEBUG
+        Task { @MainActor in
+            HeliumPaywallDiagnosticView.presentIfNeeded(
+                trigger: trigger,
+                skipReason: skipReason,
+                message: skipMessage
+            )
+        }
+#endif
     }
     
     // MARK: - Pending Purchase Observation

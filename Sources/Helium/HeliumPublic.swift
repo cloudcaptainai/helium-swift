@@ -616,6 +616,12 @@ public class HeliumConfig {
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
     
+    /// Controls whether a debug diagnostic view is shown when a paywall fails to display or is skipped.
+    /// Only applies in DEBUG builds. Defaults to `true`.
+    /// The debug view also contains a "Do not show again" checkbox that persists per-device via UserDefaults (resets on app delete).
+    /// Set this to `false` to disable the diagnostic view for all users in DEBUG builds.
+    public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
+    
 }
 
 public class HeliumExperiments {
