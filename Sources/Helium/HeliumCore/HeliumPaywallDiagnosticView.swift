@@ -16,88 +16,24 @@ struct DiagnosticContent {
     let ctaTitle: String
     let ctaURL: URL
 
-    // MARK: - Factory from PaywallUnavailableReason
+    private static let defaultURL = URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!
 
-    static func from(
-        unavailableReason: PaywallUnavailableReason?,
-        bodyText: String
-    ) -> DiagnosticContent {
-        guard let reason = unavailableReason else {
-            return DiagnosticContent(
-                bodyText: bodyText,
-                ctaTitle: "View Docs",
-                ctaURL: URL(string: "https://docs.tryhelium.com")!
-            )
+    /// Extracts the first URL found in the given text and returns it along with the text stripped of that URL.
+    private static func extractAndStripURL(from text: String) -> (url: URL, strippedText: String) {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue),
+              let match = detector.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text),
+              let url = URL(string: String(text[range])) else {
+            return (defaultURL, text)
         }
-
-        let (ctaTitle, ctaURL): (String, URL) = {
-            switch reason {
-            case .notInitialized:
-                return ("View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
-
-            case .triggerHasNoPaywall:
-                return ("Open Workflows", URL(string: "https://app.tryhelium.com/workflows")!)
-
-            case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
-                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
-
-            case .paywallsDownloadFail:
-                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
-
-            case .paywallBundlesMissing:
-                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
-
-            case .noProductsIOS:
-                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
-
-            case .stripeNoCustomUserId:
-                return ("View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
-
-            case .alreadyPresented:
-                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
-
-            case .noRootController:
-                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
-
-            case .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl:
-                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
-
-            case .bundleFetch403:
-                return ("Open Settings", URL(string: "https://app.tryhelium.com/settings")!)
-
-            case .bundleFetch404:
-                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
-
-            case .bundleFetch410:
-                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
-
-            case .bundleFetchCannotDecodeContent:
-                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
-
-            case .webviewRenderFail, .bridgingError:
-                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
-
-            case .forceShowFallback, .invalidResolvedConfig, .secondTryNoMatch:
-                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
-            }
-        }()
-
-        return DiagnosticContent(bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
+        let stripped = text.replacingCharacters(in: range, with: "").trimmingCharacters(in: .whitespaces)
+        return (url, stripped)
     }
 
-    // MARK: - Factory from PaywallSkippedReason
-
-    static func from(skipReason: PaywallSkippedReason, bodyText: String) -> DiagnosticContent {
-        let (ctaTitle, ctaURL): (String, URL) = {
-            switch skipReason {
-            case .targetingHoldout:
-                return ("Learn About Targeting", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#experiments")!)
-            case .alreadyEntitled:
-                return ("Learn About Entitlements", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements")!)
-            }
-        }()
-
-        return DiagnosticContent(bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
+    static func from(bodyText: String) -> DiagnosticContent {
+        let (url, strippedText) = extractAndStripURL(from: bodyText)
+        let ctaTitle = url == defaultURL ? "View Docs" : "Open Dashboard"
+        return DiagnosticContent(bodyText: strippedText, ctaTitle: ctaTitle, ctaURL: url)
     }
 }
 
@@ -172,14 +108,14 @@ struct HeliumPaywallDiagnosticView: View {
                     .background(triggerBackgroundColor)
                     .cornerRadius(12)
                 }
-                .padding(.top, 30)
+                .padding(.top, 40)
 
                 // Body text
                 Text(content.bodyText)
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 28)
+                    .padding(.top, 32)
 
                 // CTA button + copy
                 HStack(spacing: 12) {
@@ -205,7 +141,7 @@ struct HeliumPaywallDiagnosticView: View {
                             .cornerRadius(12)
                     }
                 }
-                .padding(.top, 32)
+                .padding(.top, 40)
 
                 // Checkbox + Footer
                 Toggle(isOn: $doNotShowAgain) {
@@ -213,7 +149,7 @@ struct HeliumPaywallDiagnosticView: View {
                         .font(.subheadline)
                 }
                 .toggleStyle(CheckboxToggleStyle())
-                .padding(.top, 25)
+                .padding(.top, 30)
 
                 Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
                     .font(.footnote)
@@ -261,27 +197,11 @@ extension HeliumPaywallDiagnosticView {
     @MainActor
     static func presentIfNeeded(
         trigger: String,
-        unavailableReason: PaywallUnavailableReason?,
         message: String
     ) {
         guard shouldPresent() else { return }
 
-        let content = DiagnosticContent.from(
-            unavailableReason: unavailableReason,
-            bodyText: message
-        )
-        present(content: content, triggerName: trigger)
-    }
-
-    @MainActor
-    static func presentIfNeeded(
-        trigger: String,
-        skipReason: PaywallSkippedReason,
-        message: String
-    ) {
-        guard shouldPresent() else { return }
-
-        let content = DiagnosticContent.from(skipReason: skipReason, bodyText: message)
+        let content = DiagnosticContent.from(bodyText: message)
         present(content: content, triggerName: trigger)
     }
 

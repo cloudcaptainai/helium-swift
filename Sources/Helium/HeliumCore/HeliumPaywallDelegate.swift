@@ -272,7 +272,6 @@ class HeliumPaywallDelegateWrapper {
             Task { @MainActor in
                 HeliumPaywallDiagnosticView.presentIfNeeded(
                     trigger: trigger,
-                    unavailableReason: paywallUnavailableReason,
                     message: notShownAddendum
                 )
             }
@@ -298,7 +297,6 @@ class HeliumPaywallDelegateWrapper {
         Task { @MainActor in
             HeliumPaywallDiagnosticView.presentIfNeeded(
                 trigger: trigger,
-                skipReason: skipReason,
                 message: skipMessage
             )
         }
