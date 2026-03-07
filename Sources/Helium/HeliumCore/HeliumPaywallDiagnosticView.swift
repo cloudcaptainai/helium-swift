@@ -191,14 +191,21 @@ extension HeliumPaywallDiagnosticView {
 
     private static var isCurrentlyPresented = false
     private static weak var presentedController: UIViewController?
+    private static var diagnosticWindow: UIWindow?
 
     /// Dismisses the diagnostic view if it is currently presented.
     @MainActor
     static func dismissIfPresented() {
         guard isCurrentlyPresented, let controller = presentedController else { return }
         controller.dismiss(animated: false)
+        tearDown()
+    }
+
+    private static func tearDown() {
         isCurrentlyPresented = false
         presentedController = nil
+        diagnosticWindow?.isHidden = true
+        diagnosticWindow = nil
     }
 
     @MainActor
@@ -222,7 +229,7 @@ extension HeliumPaywallDiagnosticView {
 
     @MainActor
     private static func present(content: DiagnosticContent, triggerName: String) {
-        guard let topVC = UIWindowHelper.findTopMostViewController() else { return }
+        guard let windowScene = UIWindowHelper.findActiveWindow()?.windowScene else { return }
 
         isCurrentlyPresented = true
 
@@ -230,17 +237,25 @@ extension HeliumPaywallDiagnosticView {
             content: content,
             triggerName: triggerName,
             onDismiss: {
-                topVC.presentedViewController?.dismiss(animated: true) {
-                    isCurrentlyPresented = false
+                presentedController?.dismiss(animated: true) {
+                    tearDown()
                 }
             }
         )
 
         let hostingController = UIHostingController(rootView: diagnosticView)
         hostingController.modalPresentationStyle = .fullScreen
+
+        let window = UIWindow(windowScene: windowScene)
+        let containerVC = UIViewController()
+        window.rootViewController = containerVC
+        window.windowLevel = .alert + 1
+        window.makeKeyAndVisible()
+
+        diagnosticWindow = window
         presentedController = hostingController
 
-        topVC.present(hostingController, animated: true)
+        containerVC.present(hostingController, animated: true)
     }
 }
 
