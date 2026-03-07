@@ -3,7 +3,9 @@
 //
 
 import Foundation
+#if os(iOS) || os(tvOS) || os(visionOS) || targetEnvironment(macCatalyst)
 import UIKit
+#endif
 
 /// Specifies which analytics endpoint to send events to
 enum AnalyticsDestination {

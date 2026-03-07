@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if os(iOS) || os(tvOS) || os(visionOS) || targetEnvironment(macCatalyst)
 import UIKit
+#endif
 
 struct CodableLocale: Codable {
     var currentCountry: String?
