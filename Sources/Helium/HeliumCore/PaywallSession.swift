@@ -39,6 +39,10 @@ struct PaywallSession {
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
     
+    var isFallback: Bool {
+        return fallbackType != .notFallback
+    }
+    
     private let paywallInfo: HeliumPaywallInfo?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
         if let paywallInfo {

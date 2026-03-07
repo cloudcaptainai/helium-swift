@@ -12,7 +12,6 @@ import UIKit
 // MARK: - Data Model
 
 struct DiagnosticContent {
-    let headerText: String
     let bodyText: String
     let ctaTitle: String
     let ctaURL: URL
@@ -25,81 +24,80 @@ struct DiagnosticContent {
     ) -> DiagnosticContent {
         guard let reason = unavailableReason else {
             return DiagnosticContent(
-                headerText: "Paywall Not Shown",
                 bodyText: bodyText,
                 ctaTitle: "View Docs",
                 ctaURL: URL(string: "https://docs.tryhelium.com")!
             )
         }
 
-        let (headerText, ctaTitle, ctaURL): (String, String, URL) = {
+        let (ctaTitle, ctaURL): (String, URL) = {
             switch reason {
             case .notInitialized:
-                return ("Welcome to Helium", "View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
+                return ("View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
 
             case .triggerHasNoPaywall:
-                return ("Trigger Not Found", "Open Workflows", URL(string: "https://app.tryhelium.com/workflows")!)
+                return ("Open Workflows", URL(string: "https://app.tryhelium.com/workflows")!)
 
             case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
-                return ("Still Loading", "Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
+                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
 
             case .paywallsDownloadFail:
-                return ("Download Failed", "Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
+                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
 
             case .paywallBundlesMissing:
-                return ("Bundles Missing", "Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
+                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
 
             case .noProductsIOS:
-                return ("No iOS Products", "Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
+                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
 
             case .stripeNoCustomUserId:
-                return ("User ID Required", "View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
+                return ("View Quickstart Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!)
 
             case .alreadyPresented:
-                return ("Already Presenting", "View Docs", URL(string: "https://docs.tryhelium.com")!)
+                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
 
             case .noRootController:
-                return ("No View Controller", "View Docs", URL(string: "https://docs.tryhelium.com")!)
+                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
 
             case .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl:
-                return ("Bundle URL Issue", "Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
+                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
 
             case .bundleFetch403:
-                return ("Access Denied (403)", "Open Settings", URL(string: "https://app.tryhelium.com/settings")!)
+                return ("Open Settings", URL(string: "https://app.tryhelium.com/settings")!)
 
             case .bundleFetch404:
-                return ("Bundle Not Found (404)", "Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
+                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
 
             case .bundleFetch410:
-                return ("Bundle Gone (410)", "Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
+                return ("Open Paywalls", URL(string: "https://app.tryhelium.com/paywalls")!)
 
             case .bundleFetchCannotDecodeContent:
-                return ("Decode Error", "View Docs", URL(string: "https://docs.tryhelium.com")!)
+                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
 
             case .webviewRenderFail, .bridgingError:
-                return ("Render Error", "View Docs", URL(string: "https://docs.tryhelium.com")!)
+                return ("View Docs", URL(string: "https://docs.tryhelium.com")!)
 
             case .forceShowFallback, .invalidResolvedConfig, .secondTryNoMatch:
-                return ("Fallback Triggered", "Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
+                return ("Fallbacks Guide", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#fallback-bundles")!)
             }
         }()
 
-        return DiagnosticContent(headerText: headerText, bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
+        return DiagnosticContent(bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
     }
 
     // MARK: - Factory from PaywallSkippedReason
 
     static func from(skipReason: PaywallSkippedReason, bodyText: String) -> DiagnosticContent {
-        let (headerText, ctaTitle, ctaURL): (String, String, URL) = {
+        let (ctaTitle, ctaURL): (String, URL) = {
             switch skipReason {
             case .targetingHoldout:
-                return ("Targeting Holdout", "Learn About Targeting", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#experiments")!)
+                return ("Learn About Targeting", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#experiments")!)
             case .alreadyEntitled:
-                return ("User Already Entitled", "Learn About Entitlements", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements")!)
+                return ("Learn About Entitlements", URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements")!)
             }
         }()
 
-        return DiagnosticContent(headerText: headerText, bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
+        return DiagnosticContent(bodyText: bodyText, ctaTitle: ctaTitle, ctaURL: ctaURL)
     }
 }
 
@@ -110,7 +108,20 @@ struct HeliumPaywallDiagnosticView: View {
     let triggerName: String
     let onDismiss: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain")
+
+    private var triggerTextColor: Color {
+        colorScheme == .dark
+            ? Color(red: 241/255, green: 233/255, blue: 253/255)
+            : Color(red: 44/255, green: 112/255, blue: 106/255)
+    }
+
+    private var triggerBackgroundColor: Color {
+        colorScheme == .dark
+            ? Color(red: 118/255, green: 44/255, blue: 200/255)
+            : Color(red: 213/255, green: 248/255, blue: 239/255)
+    }
 
     var body: some View {
         ScrollView {
@@ -131,7 +142,7 @@ struct HeliumPaywallDiagnosticView: View {
                 }
                 .padding(.top, 8)
 
-                // Logo + Header + Trigger group
+                // Logo + Trigger group
                 Image("heliumlogo", bundle: .module)
                     .resizable()
                     .scaledToFit()
@@ -139,42 +150,36 @@ struct HeliumPaywallDiagnosticView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
-                Text(content.headerText)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 8)
-
                 Button(action: {
                     UIPasteboard.general.string = triggerName
                 }) {
-                    HStack(spacing: 8) {
-                        VStack(spacing: 4) {
+                    HStack(spacing: 10) {
+                        VStack(spacing: 5) {
                             Text("Trigger")
                                 .font(.subheadline)
-                                .foregroundColor(Color(red: 44/255, green: 112/255, blue: 106/255))
+                                .foregroundColor(triggerTextColor)
                             Text(triggerName)
                                 .font(.title3)
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(red: 44/255, green: 112/255, blue: 106/255))
+                                .foregroundColor(triggerTextColor)
                         }
                         Image(systemName: "doc.on.doc")
                             .font(.caption)
-                            .foregroundColor(Color(red: 44/255, green: 112/255, blue: 106/255))
+                            .foregroundColor(triggerTextColor)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(Color(red: 213/255, green: 248/255, blue: 239/255))
+                    .background(triggerBackgroundColor)
                     .cornerRadius(12)
                 }
-                .padding(.top, 10)
+                .padding(.top, 30)
 
                 // Body text
                 Text(content.bodyText)
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 24)
+                    .padding(.top, 28)
 
                 // CTA button + copy
                 HStack(spacing: 12) {
@@ -200,7 +205,7 @@ struct HeliumPaywallDiagnosticView: View {
                             .cornerRadius(12)
                     }
                 }
-                .padding(.top, 28)
+                .padding(.top, 32)
 
                 // Checkbox + Footer
                 Toggle(isOn: $doNotShowAgain) {
@@ -210,7 +215,7 @@ struct HeliumPaywallDiagnosticView: View {
                 .toggleStyle(CheckboxToggleStyle())
                 .padding(.top, 25)
 
-                Text("This diagnostic view is only shown in DEBUG builds. You can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
+                Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.top, 38)

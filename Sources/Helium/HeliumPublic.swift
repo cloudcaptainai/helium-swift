@@ -109,8 +109,9 @@ public class Helium {
     ///   - trigger: The trigger name configured in the Helium dashboard.
     ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events.
-    ///   - onEntitled: Optional handler called when user becomes entitled to a product in the paywall, via purchase or existing entitlement.
-    ///   - onPaywallNotShown: Required handler for any scenario where the paywall does not show.
+    ///   - onEntitled: (Optional) Called upon purchase success or purchase restore. If you set `dontShowIfAlreadyEntitled`
+    ///    to true, this handler will also be called when paywall not shown to users who already have entitlement for a product in the paywall.
+    ///   - onPaywallNotShown: Called if desired paywall and fallback paywall did not show for any reason.
     ///
     /// - Important: If user is already entitled and `config.dontShowIfAlreadyEntitled` is true,  `onEntitled` will be called if provided otherwise `onPaywallNotShown(.alreadyEntitled)` will be called.
     public func presentPaywall(

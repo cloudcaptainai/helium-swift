@@ -198,6 +198,9 @@ class HeliumPaywallDelegateWrapper {
         } else if let paywallEvent = event as? PaywallContextEvent {
             metadata["trigger"] = paywallEvent.triggerName
         }
+        if paywallSession?.isFallback == true {
+            metadata["fallback"] = "true"
+        }
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
         
         if let openFailEvent = event as? PaywallOpenFailedEvent {
