@@ -36,7 +36,6 @@ class HeliumPaywallPresenter {
         if context.config.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
-                HeliumLogger.log(.info, category: .ui, "Paywall not shown - user already entitled", metadata: ["trigger": trigger])
                 Task { @MainActor in
                     if let onEntitled = context.onEntitled {
                         onEntitled()
@@ -287,6 +286,9 @@ class HeliumPaywallPresenter {
     
     @MainActor
     private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool = false, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext) {
+#if DEBUG
+        HeliumPaywallDiagnosticView.dismissIfPresented()
+#endif
         HeliumLogger.log(.debug, category: .ui, "Presenting paywall", metadata: [
             "trigger": trigger,
             "isLoading": String(isLoading),

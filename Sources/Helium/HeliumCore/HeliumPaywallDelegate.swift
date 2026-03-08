@@ -156,6 +156,18 @@ class HeliumPaywallDelegateWrapper {
         return result;
     }
     
+    private func syncAfterPurchase(productId: String, transaction: Transaction?) {
+        Task {
+            await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
+            
+            await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
+            
+            // update localized products (and offer eligibility) after purchase
+            await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+        }
+
+    }
+    
     
     /// Fire a v2 typed event - main entry point for all SDK events
     func fireEvent(
@@ -185,8 +197,32 @@ class HeliumPaywallDelegateWrapper {
             metadata["productId"] = productEvent.productId
         } else if let paywallEvent = event as? PaywallContextEvent {
             metadata["trigger"] = paywallEvent.triggerName
+        } else if let skipEvent = event as? PaywallSkippedEvent {
+            metadata["trigger"] = skipEvent.triggerName
+        }
+        if paywallSession?.isFallback == true {
+            metadata["fallback"] = "true"
         }
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
+        
+        if let openFailEvent = event as? PaywallOpenFailedEvent {
+            logPaywallUnavailable(
+                trigger: openFailEvent.triggerName,
+                paywallUnavailableReason: openFailEvent.paywallUnavailableReason,
+                fallbackShown: false, logMetadata: metadata
+            )
+        }
+        if let openEvent = event as? PaywallOpenEvent,
+           let paywallUnavailableReason = openEvent.paywallUnavailableReason {
+            logPaywallUnavailable(
+                trigger: openEvent.triggerName,
+                paywallUnavailableReason: paywallUnavailableReason,
+                fallbackShown: true, logMetadata: metadata
+            )
+        }
+        if let skipEvent = event as? PaywallSkippedEvent {
+            logPaywallSkip(trigger: skipEvent.triggerName, skipReason: skipEvent.skipReason, logMetadata: metadata)
+        }
         
         HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
         
@@ -200,16 +236,73 @@ class HeliumPaywallDelegateWrapper {
         }
     }
     
-    private func syncAfterPurchase(productId: String, transaction: Transaction?) {
-        Task {
-            await HeliumEntitlementsManager.shared.updateAfterPurchase(productID: productId, transaction: transaction)
-            
-            await HeliumTransactionManager.shared.updateAfterPurchase(transaction: transaction)
-            
-            // update localized products (and offer eligibility) after purchase
-            await HeliumFetchedConfigManager.shared.refreshLocalizedPriceMap()
+    private func logPaywallUnavailable(
+        trigger: String,
+        paywallUnavailableReason: PaywallUnavailableReason?,
+        fallbackShown: Bool,
+        logMetadata: [String: String]
+    ) {
+        let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
+        var notShownAddendum: String = ""
+        switch paywallUnavailableReason {
+        case .notInitialized:
+            notShownAddendum = "Helium is not initialized"
+        case .triggerHasNoPaywall:
+            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow https://app.tryhelium.com/workflows"
+        case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
+            notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
+        case .paywallsDownloadFail:
+            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key"
+        case .alreadyPresented:
+            notShownAddendum = "A Helium paywall is already being presented"
+        case .noProductsIOS:
+            var paywallLink = "https://app.tryhelium.com/paywalls"
+            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+            if let paywallId = paywallInfo?.paywallUUID {
+                paywallLink += "/\(paywallId)"
+            }
+            notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
+        case .stripeNoCustomUserId:
+            notShownAddendum = "Stripe purchase flows require a custom user ID to be set"
+        default:
+            notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }
-
+        HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
+        
+#if DEBUG
+        if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
+            Task { @MainActor in
+                HeliumPaywallDiagnosticView.presentIfNeeded(
+                    trigger: trigger,
+                    message: notShownAddendum
+                )
+            }
+        }
+#endif
+    }
+    
+    private func logPaywallSkip(
+        trigger: String,
+        skipReason: PaywallSkippedReason,
+        logMetadata: [String: String]
+    ) {
+        var skipMessage: String = ""
+        switch skipReason {
+        case .targetingHoldout:
+            skipMessage = "Paywall skipped due to targeting holdout. Check your workflow configuration if this is not expected https://app.tryhelium.com/workflows"
+        case .alreadyEntitled:
+            skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
+        }
+        HeliumLogger.log(.warn, category: .ui, skipMessage, metadata: logMetadata)
+        
+#if DEBUG
+        Task { @MainActor in
+            HeliumPaywallDiagnosticView.presentIfNeeded(
+                trigger: trigger,
+                message: skipMessage
+            )
+        }
+#endif
     }
     
     // MARK: - Pending Purchase Observation
