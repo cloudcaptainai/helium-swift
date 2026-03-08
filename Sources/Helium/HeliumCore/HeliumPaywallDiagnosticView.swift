@@ -73,9 +73,6 @@ struct HeliumPaywallDiagnosticView: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        if doNotShowAgain {
-                            UserDefaults.standard.set(true, forKey: "heliumDiagnosticDoNotShowAgain")
-                        }
                         onDismiss()
                     }) {
                         Image(systemName: "xmark.circle.fill")
@@ -156,6 +153,9 @@ struct HeliumPaywallDiagnosticView: View {
                         .font(.subheadline)
                 }
                 .toggleStyle(CheckboxToggleStyle())
+                .onChange(of: doNotShowAgain) { newValue in
+                    UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
+                }
                 .padding(.top, 30)
 
                 Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
