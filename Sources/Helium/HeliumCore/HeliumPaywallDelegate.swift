@@ -5,7 +5,6 @@
 //  Created by Anish Doshi on 8/19/24.
 //
 
-import UIKit
 import StoreKit
 
 public enum HeliumPaywallTransactionStatus {

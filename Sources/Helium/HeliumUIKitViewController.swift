@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import UIKit
 
 public class HeliumPaywallPresentationState: ObservableObject {
     

@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import UIKit
 
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()

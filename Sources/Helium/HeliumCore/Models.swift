@@ -6,7 +6,6 @@
 ////
 //
 import Foundation
-import UIKit
 import SwiftUI
 
 enum PaywallPresentationStyle: String, Codable {
