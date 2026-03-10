@@ -16,7 +16,7 @@ final class FallbackScenarioTests: XCTestCase {
 
     func testNotInitializedReturnsFallbackReason() {
         // Don't initialize
-        let result = Helium.shared.upsellViewResultFor(
+        let result = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "test",
             presentationContext: PaywallPresentationContext.empty
         )
@@ -31,7 +31,7 @@ final class FallbackScenarioTests: XCTestCase {
         let config = makeTestConfig(triggers: ["other_trigger": makeTestPaywallInfo(trigger: "other_trigger")])
         injectConfig(config)
 
-        let result = Helium.shared.upsellViewResultFor(
+        let result = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "nonexistent_trigger",
             presentationContext: PaywallPresentationContext.empty
         )
@@ -45,7 +45,7 @@ final class FallbackScenarioTests: XCTestCase {
         let config = makeTestConfig(triggers: ["no_products": paywallInfo])
         injectConfig(config)
 
-        let result = Helium.shared.upsellViewResultFor(
+        let result = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "no_products",
             presentationContext: PaywallPresentationContext.empty
         )
@@ -59,7 +59,7 @@ final class FallbackScenarioTests: XCTestCase {
         let config = makeTestConfig(triggers: ["force_fallback": paywallInfo])
         injectConfig(config)
 
-        let result = Helium.shared.upsellViewResultFor(
+        let result = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "force_fallback",
             presentationContext: PaywallPresentationContext.empty
         )
@@ -70,7 +70,7 @@ final class FallbackScenarioTests: XCTestCase {
         Helium.shared.markInitializedForTesting()
 
         // Don't inject any config - download status stays at notDownloadedYet
-        let result = Helium.shared.upsellViewResultFor(
+        let result = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "test",
             presentationContext: PaywallPresentationContext.empty
         )

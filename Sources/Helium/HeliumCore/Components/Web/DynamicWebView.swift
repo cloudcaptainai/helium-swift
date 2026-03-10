@@ -11,7 +11,7 @@ extension Notification.Name {
     static let heliumEmbeddedPaywallRenderFail = Notification.Name("heliumEmbeddedPaywallRenderFail")
 }
 
-public struct DynamicWebView: View {
+struct DynamicWebView: View {
     let bundleId: String?
     let filePath: String
     let backupBundleId: String?
@@ -78,7 +78,7 @@ public struct DynamicWebView: View {
         shouldEnableScroll = json["shouldEnableScroll"].bool ?? true
     }
 
-    public var body: some View {
+    var body: some View {
        ZStack {
            // Background view - shows either initial background or post-load background when content is loaded
            if isContentLoaded {
@@ -609,6 +609,6 @@ class PaywallWebViewHolder {
     }
 }
 
-public enum WebViewError: Error {
+enum WebViewError: Error {
     case bundleNotFound
 }

@@ -10,14 +10,14 @@ import WebKit
 
 
 
-public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
+class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var delegateWrapper: ActionsDelegateWrapper?
     
     func setActionsDelegate(delegateWrapper: ActionsDelegateWrapper) {
         self.delegateWrapper = delegateWrapper
     }
 
-    public func userContentController(
+    func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage,
         replyHandler: @escaping (Any?, String?) -> Void
@@ -179,7 +179,7 @@ public class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
 
 extension WebViewMessageHandler: WKNavigationDelegate {
-    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         HeliumLogger.log(.trace, category: .ui, "WebView did commit navigation")
     }
     
@@ -188,7 +188,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         return true;
     }
     
-    public func webView(
+    func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
@@ -202,17 +202,17 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         }
     }
     
-    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         HeliumLogger.log(.debug, category: .ui, "WebView finished loading")
         NotificationCenter.default.post(name: .webViewContentLoaded, object: self)
     }
 
-    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
         HeliumLogger.log(.error, category: .ui, "WebView failed to load", metadata: ["error": error.localizedDescription])
         NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
     }
     
-    public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
         HeliumLogger.log(.error, category: .ui, "WebView provisional navigation failed", metadata: ["error": error.localizedDescription])
         NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
     }

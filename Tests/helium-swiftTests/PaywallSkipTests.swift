@@ -9,7 +9,7 @@ final class PaywallSkipTests: HeliumTestCase {
         injectConfig(config)
 
         let context = PaywallPresentationContext.empty
-        let skipped = Helium.shared.skipPaywallIfNeeded(trigger: "skip_trigger", presentationContext: context)
+        let skipped = HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "skip_trigger", presentationContext: context)
         XCTAssertTrue(skipped)
 
         waitForEventDispatch {
@@ -35,7 +35,7 @@ final class PaywallSkipTests: HeliumTestCase {
             onPaywallNotShown: { reason in notShownReason = reason }
         )
 
-        let skipped = Helium.shared.skipPaywallIfNeeded(trigger: "skip_trigger", presentationContext: context)
+        let skipped = HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "skip_trigger", presentationContext: context)
         XCTAssertTrue(skipped)
         XCTAssertEqual(notShownReason, .targetingHoldout)
     }
@@ -45,7 +45,7 @@ final class PaywallSkipTests: HeliumTestCase {
         let config = makeTestConfig(triggers: ["show_trigger": paywallInfo])
         injectConfig(config)
 
-        let skipped = Helium.shared.skipPaywallIfNeeded(trigger: "show_trigger", presentationContext: .empty)
+        let skipped = HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "show_trigger", presentationContext: .empty)
         XCTAssertFalse(skipped)
     }
 
@@ -54,7 +54,7 @@ final class PaywallSkipTests: HeliumTestCase {
         let config = makeTestConfig(triggers: ["nil_trigger": paywallInfo])
         injectConfig(config)
 
-        let skipped = Helium.shared.skipPaywallIfNeeded(trigger: "nil_trigger", presentationContext: .empty)
+        let skipped = HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "nil_trigger", presentationContext: .empty)
         XCTAssertFalse(skipped)
     }
 }

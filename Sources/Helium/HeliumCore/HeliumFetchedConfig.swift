@@ -871,7 +871,7 @@ public class HeliumFetchedConfigManager {
     /// Get localized prices filtered by a specific trigger's product IDs
     /// - Parameter triggerName: The trigger name to get products for
     /// - Returns: Dictionary containing only prices for products in the specified trigger
-    public func getLocalizedPriceMapForTrigger(_ triggerName: String?) -> [String: LocalizedPrice] {
+    func getLocalizedPriceMapForTrigger(_ triggerName: String?) -> [String: LocalizedPrice] {
         guard let triggerName = triggerName,
                 let productIDs = getProductIDsForTrigger(triggerName) else {
             return [:]
@@ -945,7 +945,7 @@ public class HeliumFetchedConfigManager {
         return fetchedConfig?.orgName
     }
     
-    public func isValidURL(_ urlString: String) -> Bool {
+    func isValidURL(_ urlString: String) -> Bool {
         guard let url = URL(string: urlString),
               let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme),
