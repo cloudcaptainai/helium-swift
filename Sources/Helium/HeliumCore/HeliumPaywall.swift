@@ -180,7 +180,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 paywallSession: nil
             )
         case .targetingHoldout:
-            Helium.shared.handlePaywallSkip(trigger: trigger)
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger)
         case .error(unavailableReason: let unavailableReason):
             if unavailableReason == .webviewRenderFail {
                 return
@@ -260,7 +260,7 @@ fileprivate func resolvePaywallState(
         }
     }
     
-    let result = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
+    let result = HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
     
     if let viewAndSession = result.viewAndSession {
         return .ready(viewAndSession)

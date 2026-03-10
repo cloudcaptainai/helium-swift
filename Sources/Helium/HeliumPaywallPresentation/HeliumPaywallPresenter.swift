@@ -53,13 +53,37 @@ class HeliumPaywallPresenter {
         return false
     }
     
+    func skipPaywallIfNeeded(trigger: String, presentationContext: PaywallPresentationContext) -> Bool {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallInfo?.shouldShow == false {
+            handlePaywallSkip(trigger: trigger)
+            presentationContext.onPaywallNotShown?(.targetingHoldout)
+            return true
+        }
+        return false
+    }
+    
+    func handlePaywallSkip(trigger: String) {
+        // Fire allocation event even when paywall is skipped
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: false,
+            paywallSession: nil
+        )
+        
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallSkippedEvent(triggerName: trigger),
+            paywallSession: nil
+        )
+    }
+    
     func presentUpsell(trigger: String, isSecondTry: Bool = false, presentationContext: PaywallPresentationContext) {
         Task { @MainActor in
             if await paywallEntitlementsCheck(trigger: trigger, context: presentationContext) {
                 return
             }
             
-            let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
+            let upsellViewResult = upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
             guard let viewAndSession = upsellViewResult.viewAndSession else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
@@ -156,7 +180,7 @@ class HeliumPaywallPresenter {
         // Get context from the loading paywall's stored context
         let context = loadingPaywall.presentationContext
         
-        if Helium.shared.skipPaywallIfNeeded(trigger: trigger, presentationContext: context) {
+        if skipPaywallIfNeeded(trigger: trigger, presentationContext: context) {
             hideUpsell()
             return
         }
@@ -166,7 +190,7 @@ class HeliumPaywallPresenter {
             return
         }
         
-        let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: context)
+        let upsellViewResult = upsellViewResultFor(trigger: trigger, presentationContext: context)
         guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
             let loadingBudgetMS = context.config.loadingBudgetForAnalyticsMS
@@ -501,96 +525,102 @@ class HeliumPaywallPresenter {
 
 }
 
-// MARK: - Slide-in Animation Classes
-
-/// Transitioning delegate that manages the slide-in animation from right
-class SlideInTransitioningDelegate: NSObject, UIViewControllerTransitioningDelegate {
-
-    func animationController(forPresented presented: UIViewController,
-                              presenting: UIViewController,
-                              source: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        return SlideInPresentationAnimator()
-    }
-
-    func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        return SlideInDismissalAnimator()
-    }
-}
-
-/// Animator for presenting the view controller with a slide-in from right animation
-class SlideInPresentationAnimator: NSObject, UIViewControllerAnimatedTransitioning {
-    private let animationDuration: TimeInterval = 0.24
-
-    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        return animationDuration
-    }
-
-    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard let toViewController = transitionContext.viewController(forKey: .to),
-              let toView = toViewController.view else {
-            transitionContext.completeTransition(false)
-            return
+extension HeliumPaywallPresenter {
+    func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
+        HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
+        if !Helium.shared.isInitialized() {
+            HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
         }
-
-        let containerView = transitionContext.containerView
-        let finalFrame = transitionContext.finalFrame(for: toViewController)
-
-        // Position the view off-screen to the right
-        toView.frame = finalFrame
-        toView.frame.origin.x = containerView.frame.width
-
-        // Add shadow for depth effect
-        toView.layer.shadowColor = UIColor.black.cgColor
-        toView.layer.shadowOpacity = 0.2
-        toView.layer.shadowOffset = CGSize(width: -5, height: 0)
-        toView.layer.shadowRadius = 10
-
-        containerView.addSubview(toView)
-
-        // Animate sliding in from the right
-        UIView.animate(
-            withDuration: animationDuration,
-            delay: 0,
-            options: [.curveEaseOut],
-            animations: {
-                toView.frame = finalFrame
-            },
-            completion: { finished in
-                transitionContext.completeTransition(finished)
+        
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if Helium.shared.paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
+            guard let templatePaywallInfo = paywallInfo else {
+                return fallbackViewFor(trigger: trigger, paywallInfo: nil, fallbackReason: .triggerHasNoPaywall, presentationContext: presentationContext)
             }
-        )
-    }
-}
-
-/// Animator for dismissing the view controller with a slide-out to right animation
-class SlideInDismissalAnimator: NSObject, UIViewControllerAnimatedTransitioning {
-    private let animationDuration: TimeInterval = 0.20
-
-    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        return animationDuration
-    }
-
-    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard let fromViewController = transitionContext.viewController(forKey: .from),
-              let fromView = fromViewController.view else {
-            transitionContext.completeTransition(false)
-            return
+            if templatePaywallInfo.forceShowFallback == true {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .forceShowFallback, presentationContext: presentationContext)
+            }
+            
+            if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
+            }
+            
+            if !templatePaywallInfo.hasProducts {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
+            }
+            
+            let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
+            if hasStripeProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
+            }
+            
+            do {
+                guard let filePath = templatePaywallInfo.localBundlePath else {
+                    HeliumLogger.log(.warn, category: .ui, "No local bundle path for trigger", metadata: ["trigger": trigger])
+                    return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .couldNotFindBundleUrl, presentationContext: presentationContext)
+                }
+                let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
+                
+                let paywallSession = PaywallSession(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackType: .notFallback, presentationContext: presentationContext)
+                
+                let paywallView = try AnyView(DynamicBaseTemplateView(
+                    paywallSession: paywallSession,
+                    fallbackReason: nil,
+                    filePath: filePath,
+                    backupFilePath: backupFilePath,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                ))
+                HeliumLogger.log(.debug, category: .ui, "Created paywall view for trigger", metadata: ["trigger": trigger])
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: paywallView, paywallSession: paywallSession), fallbackReason: nil)
+            } catch {
+                HeliumLogger.log(.error, category: .ui, "Failed to create Helium view wrapper: \(error). Falling back.", metadata: ["trigger": trigger])
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .invalidResolvedConfig, presentationContext: presentationContext)
+            }
+        } else {
+            let fallbackReason: PaywallUnavailableReason
+            switch HeliumFetchedConfigManager.shared.downloadStatus {
+            case .notDownloadedYet:
+                fallbackReason = .paywallsNotDownloaded
+            case .inProgress:
+                switch HeliumFetchedConfigManager.shared.downloadStep {
+                case .config:
+                    fallbackReason = .configFetchInProgress
+                case .bundles:
+                    fallbackReason = .bundlesFetchInProgress
+                case .products:
+                    fallbackReason = .productsFetchInProgress
+                }
+            case .downloadSuccess:
+                fallbackReason = .paywallBundlesMissing
+            case .downloadFailure:
+                fallbackReason = .paywallsDownloadFail
+            }
+            return fallbackViewFor(trigger: trigger, paywallInfo: paywallInfo, fallbackReason: fallbackReason, presentationContext: presentationContext)
         }
-
-        let containerView = transitionContext.containerView
-
-        // Animate sliding out to the right
-        UIView.animate(
-            withDuration: animationDuration,
-            delay: 0,
-            options: [.curveEaseOut],
-            animations: {
-                fromView.frame.origin.x = containerView.frame.width
-            },
-            completion: { finished in
-                fromView.removeFromSuperview()
-                transitionContext.completeTransition(finished)
+    }
+    
+    private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
+        
+        // Check existing fallback mechanisms
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+           let filePath = fallbackPaywallInfo.localBundlePath {
+            do {
+                let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle, presentationContext: presentationContext)
+                let fallbackBundleView = try AnyView(
+                    DynamicBaseTemplateView(
+                        paywallSession: fallbackBundlePaywallSession,
+                        fallbackReason: fallbackReason,
+                        filePath: filePath,
+                        backupFilePath: nil,
+                        resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    )
+                )
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
+            } catch {
+                HeliumLogger.log(.warn, category: .fallback, "Failed to create fallback view", metadata: ["trigger": trigger, "error": "\(error)"])
             }
-        )
+        }
+        return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
     }
 }
