@@ -16,7 +16,7 @@ final class InitializationEdgeCaseTests: XCTestCase {
 
     func testSkipPaywallBeforeInitializeReturnsFalse() {
         // Without initialization or config, skipPaywallIfNeeded should safely return false
-        let skipped = Helium.shared.skipPaywallIfNeeded(
+        let skipped = HeliumPaywallPresenter.shared.skipPaywallIfNeeded(
             trigger: "test_trigger",
             presentationContext: .empty
         )
