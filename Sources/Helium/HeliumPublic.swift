@@ -140,6 +140,14 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
     
+    /// Checks whether a paywall can be displayed for the given trigger without actually presenting it.
+    ///
+    /// In most cases you don't need this — ``presentPaywall()`` already handles availability checks and fallback logic for you.
+    ///
+    /// - Parameter trigger: The trigger name configured in the Helium dashboard.
+    /// - Returns: A ``CanShowPaywallResult`` indicating whether a paywall can show, whether it would be a fallback, and the reason if it is not ready to be shown.
+    ///
+    /// - Note: This does not account for entitlement status or targeting holdouts. A result of `canShow == true` means the paywall content is available, not that it will necessarily be presented to the user.
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
         let upsellResult = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: trigger, presentationContext: PaywallPresentationContext.empty)
@@ -152,6 +160,12 @@ public class Helium {
         )
     }
     
+    /// Returns metadata about the paywall configured for a given trigger.
+    ///
+    /// Requires that paywalls have finished downloading (see ``paywallsLoaded()``).
+    ///
+    /// - Parameter trigger: The trigger name configured in the Helium dashboard.
+    /// - Returns: A ``PaywallInfo`` containing the paywall template name and whether it should show, or `nil` if paywalls haven't loaded or no paywall is configured for this trigger.
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
         if !paywallsLoaded() {
             return nil
@@ -162,15 +176,19 @@ public class Helium {
         return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
     
-    public func getDownloadStatus() -> HeliumFetchedConfigStatus {
-        return HeliumFetchedConfigManager.shared.downloadStatus
-    }
-
+    /// Returns `true` if the Helium configuration has been successfully downloaded and paywalls are ready to present.
     public func paywallsLoaded() -> Bool {
         if case .downloadSuccess = HeliumFetchedConfigManager.shared.downloadStatus {
             return true;
         }
         return false;
+    }
+    
+    /// Returns the current download status of the Helium paywall configuration.
+    ///
+    /// - SeeAlso: ``paywallsLoaded()``
+    public func getDownloadStatus() -> HeliumFetchedConfigStatus {
+        return HeliumFetchedConfigManager.shared.downloadStatus
     }
     
     /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
@@ -362,7 +380,9 @@ public class HeliumIdentify {
     
     init() {}
     
-    /// Custom user ID to identify this user.
+    /// Your application's user ID for this user. Used for targeting and analytics.
+    ///
+    /// Set this before calling `Helium.shared.initialize()` for best results. Can also be updated after initialization.
     public var userId: String? {
         get {
             HeliumIdentityManager.shared.getCustomUserId()
@@ -379,8 +399,9 @@ public class HeliumIdentify {
         }
     }
     
-    /// Custom appAccountToken for StoreKit purchases. If not set, Helium will generate one.
-    /// Only need to set if you use this value in App Store Server Notifications or your app makes non-Helium purchases with StoreKit.
+    /// Custom `appAccountToken` for StoreKit purchases. If not set, Helium will generate one automatically.
+    ///
+    /// Only set this if you use this value in App Store Server Notifications or your app makes non-Helium purchases with StoreKit.
     public var appAccountToken: UUID {
         get {
             HeliumIdentityManager.shared.appAttributionToken
@@ -390,7 +411,9 @@ public class HeliumIdentify {
         }
     }
     
-    /// RevenueCat app user ID -- set this if you use RevenueCat along with Helium.
+    /// RevenueCat app user ID. Set this if you use RevenueCat alongside Helium to keep user identity in sync.
+    ///
+    /// Update this whenever the RevenueCat user ID changes (e.g., after login/logout).
     public var revenueCatAppUserId: String? {
         get {
             HeliumIdentityManager.shared.revenueCatAppUserId
@@ -402,13 +425,21 @@ public class HeliumIdentify {
         }
     }
     
-    /// Custom user traits for targeting and analytics.
+    /// Replaces all custom user traits with the provided traits. Used for audience targeting and analytics.
+    ///
+    /// - Parameter traits: The new set of user traits.
+    /// - SeeAlso: ``addUserTraits(_:)``
     public func setUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.setCustomUserTraits(traits)
     }
+    /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
+    ///
+    /// - Parameter traits: The traits to add or update.
+    /// - SeeAlso: ``setUserTraits(_:)``
     public func addUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.addToCustomUserTraits(traits)
     }
+    /// Returns the current custom user traits as a dictionary.
     public func getUserTraits() -> [String : Any] {
         HeliumIdentityManager.shared.getUserTraits().dictionaryRepresentation
     }
