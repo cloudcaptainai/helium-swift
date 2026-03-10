@@ -29,7 +29,7 @@ class HeliumPaywallPresenter {
     /// Mark a session as having achieved entitlement (purchase/restore succeeded).
     /// The onEntitled callback will be called when the paywall closes.
     func markSessionAsEntitled(sessionId: String) {
-        _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
+        let _ = _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
     }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
@@ -59,7 +59,7 @@ class HeliumPaywallPresenter {
                 return
             }
             
-            let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
+            let upsellViewResult = upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
             guard let viewAndSession = upsellViewResult.viewAndSession else {
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallOpenFailedEvent(
@@ -166,7 +166,7 @@ class HeliumPaywallPresenter {
             return
         }
         
-        let upsellViewResult = Helium.shared.upsellViewResultFor(trigger: trigger, presentationContext: context)
+        let upsellViewResult = upsellViewResultFor(trigger: trigger, presentationContext: context)
         guard let viewAndSession = upsellViewResult.viewAndSession else {
             let loadTimeTakenMS = loadingPaywall.loadTimeTakenMS
             let loadingBudgetMS = context.config.loadingBudgetForAnalyticsMS
@@ -499,4 +499,104 @@ class HeliumPaywallPresenter {
         paywallsDisplayed.removeAll()
     }
 
+}
+
+extension HeliumPaywallPresenter {
+    func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
+        HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
+        if !Helium.shared.isInitialized() {
+            HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
+        }
+        
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if Helium.shared.paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
+            guard let templatePaywallInfo = paywallInfo else {
+                return fallbackViewFor(trigger: trigger, paywallInfo: nil, fallbackReason: .triggerHasNoPaywall, presentationContext: presentationContext)
+            }
+            if templatePaywallInfo.forceShowFallback == true {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .forceShowFallback, presentationContext: presentationContext)
+            }
+            
+            if let bundleSkip = HeliumFetchedConfigManager.shared.triggersWithSkippedBundleAndReason.first(where: { $0.trigger == trigger }) {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: bundleSkip.reason, presentationContext: presentationContext)
+            }
+            
+            if !templatePaywallInfo.hasProducts {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
+            }
+            
+            let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
+            if hasStripeProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
+            }
+            
+            do {
+                guard let filePath = templatePaywallInfo.localBundlePath else {
+                    HeliumLogger.log(.warn, category: .ui, "No local bundle path for trigger", metadata: ["trigger": trigger])
+                    return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .couldNotFindBundleUrl, presentationContext: presentationContext)
+                }
+                let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
+                
+                let paywallSession = PaywallSession(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackType: .notFallback, presentationContext: presentationContext)
+                
+                let paywallView = try AnyView(DynamicBaseTemplateView(
+                    paywallSession: paywallSession,
+                    fallbackReason: nil,
+                    filePath: filePath,
+                    backupFilePath: backupFilePath,
+                    resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                ))
+                HeliumLogger.log(.debug, category: .ui, "Created paywall view for trigger", metadata: ["trigger": trigger])
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: paywallView, paywallSession: paywallSession), fallbackReason: nil)
+            } catch {
+                HeliumLogger.log(.error, category: .ui, "Failed to create Helium view wrapper: \(error). Falling back.", metadata: ["trigger": trigger])
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .invalidResolvedConfig, presentationContext: presentationContext)
+            }
+        } else {
+            let fallbackReason: PaywallUnavailableReason
+            switch HeliumFetchedConfigManager.shared.downloadStatus {
+            case .notDownloadedYet:
+                fallbackReason = .paywallsNotDownloaded
+            case .inProgress:
+                switch HeliumFetchedConfigManager.shared.downloadStep {
+                case .config:
+                    fallbackReason = .configFetchInProgress
+                case .bundles:
+                    fallbackReason = .bundlesFetchInProgress
+                case .products:
+                    fallbackReason = .productsFetchInProgress
+                }
+            case .downloadSuccess:
+                fallbackReason = .paywallBundlesMissing
+            case .downloadFailure:
+                fallbackReason = .paywallsDownloadFail
+            }
+            return fallbackViewFor(trigger: trigger, paywallInfo: paywallInfo, fallbackReason: fallbackReason, presentationContext: presentationContext)
+        }
+    }
+    
+    private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
+        
+        // Check existing fallback mechanisms
+        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+           let filePath = fallbackPaywallInfo.localBundlePath {
+            do {
+                let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle, presentationContext: presentationContext)
+                let fallbackBundleView = try AnyView(
+                    DynamicBaseTemplateView(
+                        paywallSession: fallbackBundlePaywallSession,
+                        fallbackReason: fallbackReason,
+                        filePath: filePath,
+                        backupFilePath: nil,
+                        resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                    )
+                )
+                return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)
+            } catch {
+                HeliumLogger.log(.warn, category: .fallback, "Failed to create fallback view", metadata: ["trigger": trigger, "error": "\(error)"])
+            }
+        }
+        return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
+    }
 }

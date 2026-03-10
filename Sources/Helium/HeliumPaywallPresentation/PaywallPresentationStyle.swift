@@ -5,6 +5,8 @@
 //  Created by Kyle Gorlick on 3/10/26.
 //
 
+import UIKit
+
 /// Transitioning delegate that manages the slide-in animation from right
 class SlideInTransitioningDelegate: NSObject, UIViewControllerTransitioningDelegate {
 
