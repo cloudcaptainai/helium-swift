@@ -29,7 +29,7 @@ class HeliumPaywallPresenter {
     /// Mark a session as having achieved entitlement (purchase/restore succeeded).
     /// The onEntitled callback will be called when the paywall closes.
     func markSessionAsEntitled(sessionId: String) {
-        let _ = _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
+        _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
     }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
