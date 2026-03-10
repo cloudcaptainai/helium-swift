@@ -2,32 +2,6 @@ import Foundation
 import SwiftUI
 import StoreKit
 
-/// Configuration options for presenting a paywall.
-public struct PaywallPresentationConfig {
-    var presentFromViewController: UIViewController?
-    var customPaywallTraits: [String: Any]?
-    var dontShowIfAlreadyEntitled: Bool
-    var loadingBudget: TimeInterval?
-
-    /// Creates a new paywall presentation configuration.
-    /// - Parameters:
-    ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
-    ///   - customPaywallTraits: Custom traits to send to the paywall.
-    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
-    ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
-    public init(
-        presentFromViewController: UIViewController? = nil,
-        customPaywallTraits: [String: Any]? = nil,
-        dontShowIfAlreadyEntitled: Bool = false,
-        loadingBudget: TimeInterval? = nil
-    ) {
-        self.presentFromViewController = presentFromViewController
-        self.customPaywallTraits = customPaywallTraits
-        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
-        self.loadingBudget = loadingBudget
-    }
-}
-
 public class Helium {
     init() {}
     
@@ -45,6 +19,57 @@ public class Helium {
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
     @HeliumAtomic static var lastApiKeyUsed: String? = nil
+    
+    /// Initializes the Helium paywall system.
+    /// - Set up user identification using Helium.identify, ideally before calling initialize().
+    /// - Adjust Helium configuration using Helium.config, ideally before calling initialize().
+    /// - Initialize as early as possible in your app’s lifecycle
+    /// - Latest docs at https://docs.tryhelium.com/sdk/quickstart-ios
+    ///
+    /// - Parameters:
+    ///   - apiKey: Your Helium API key from the dashboard
+    ///
+    public func initialize(
+        apiKey: String
+    ) {
+        HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
+        let alreadyInitialized = _initialized.withValue { value in
+            if value { return true }
+            value = true
+            return false
+        }
+        if alreadyInitialized {
+            HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
+            return
+        }
+        
+        // Start store country code fetch immediately
+        _ = AppStoreCountryHelper.shared
+        
+        AppReceiptsHelper.shared.setUp()
+        
+        HeliumFallbackViewManager.shared.setUpFallbackBundle()
+        
+        HeliumSdkConfig.shared.setInitializeConfig(
+            purchaseDelegate: Helium.config.purchaseDelegate.delegateType,
+            customAPIEndpoint: Helium.config.customAPIEndpoint
+        )
+        
+        Helium.lastApiKeyUsed = apiKey
+        let fetchController = HeliumController(
+            apiKey: apiKey
+        )
+        self.controller = fetchController
+        fetchController.logInitializeEvent()
+        fetchController.downloadConfig()
+        
+        Task {
+            await WebViewManager.shared.preCreateFirstWebView()
+
+            await HeliumEntitlementsManager.shared.configure()
+            await HeliumTransactionManager.shared.configure()
+        }
+    }
     
     /// Presents a full-screen paywall for the specified trigger.
     ///
@@ -104,10 +129,6 @@ public class Helium {
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationContext: presentationContext)
     }
     
-    public func getDownloadStatus() -> HeliumFetchedConfigStatus {
-        return HeliumFetchedConfigManager.shared.downloadStatus;
-    }
-    
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
     @discardableResult
     public func hidePaywall() -> Bool {
@@ -117,30 +138,6 @@ public class Helium {
     /// Hide all currently displayed paywalls, including "second try" paywalls.
     public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
-    }
-    
-    @available(*, deprecated, message: "Use HeliumPaywall directly instead")
-    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
-        let config = PaywallPresentationConfig(customPaywallTraits: customPaywallTraits)
-        let presentationContext = PaywallPresentationContext(
-            config: config,
-            eventHandlers: eventHandlers,
-            onEntitled: nil,
-            onPaywallNotShown: nil
-        )
-        return HeliumPaywallPresenter.shared.upsellViewResultFor(
-            trigger: trigger, presentationContext: presentationContext
-        ).viewAndSession?.view
-    }
-    
-    public func getPaywallInfo(trigger: String) -> PaywallInfo? {
-        if !paywallsLoaded() {
-            return nil
-        }
-        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
-            return nil
-        }
-        return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
     
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
@@ -155,65 +152,18 @@ public class Helium {
         )
     }
     
-    /// Initializes the Helium paywall system.
-    /// - Set up user identification using Helium.identify, ideally before calling initialize().
-    /// - Adjust Helium configuration using Helium.config, ideally before calling initialize().
-    /// - Initialize as early as possible in your app’s lifecycle
-    /// - Latest docs at https://docs.tryhelium.com/sdk/quickstart-ios
-    ///
-    /// - Parameters:
-    ///   - apiKey: Your Helium API key from the dashboard
-    ///
-    public func initialize(
-        apiKey: String
-    ) {
-        HeliumLogger.log(.info, category: .core, "Helium.initialize() called")
-        let alreadyInitialized = _initialized.withValue { value in
-            if value { return true }
-            value = true
-            return false
+    public func getPaywallInfo(trigger: String) -> PaywallInfo? {
+        if !paywallsLoaded() {
+            return nil
         }
-        if alreadyInitialized {
-            HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
-            return
+        guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+            return nil
         }
-        
-        // Start store country code fetch immediately
-        _ = AppStoreCountryHelper.shared
-        
-        AppReceiptsHelper.shared.setUp()
-        
-        HeliumFallbackViewManager.shared.setUpFallbackBundle()
-        
-        HeliumSdkConfig.shared.setInitializeConfig(
-            purchaseDelegate: Helium.config.purchaseDelegate.delegateType,
-            customAPIEndpoint: Helium.config.customAPIEndpoint
-        )
-        
-        Helium.lastApiKeyUsed = apiKey
-        let fetchController = HeliumController(
-            apiKey: apiKey
-        )
-        self.controller = fetchController
-        fetchController.logInitializeEvent()
-        fetchController.downloadConfig()
-        
-        Task {
-            await WebViewManager.shared.preCreateFirstWebView()
-
-            await HeliumEntitlementsManager.shared.configure()
-            await HeliumTransactionManager.shared.configure()
-        }
+        return PaywallInfo(paywallTemplateName: paywallInfo.paywallTemplateName, shouldShow: paywallInfo.shouldShow ?? true)
     }
-
-    func isInitialized() -> Bool {
-        return initialized
-    }
-
-    /// Marks the SDK as initialized without triggering side effects (config fetch, analytics, etc.).
-    /// Accessible via @testable import for unit tests.
-    func markInitializedForTesting() {
-        initialized = true
+    
+    public func getDownloadStatus() -> HeliumFetchedConfigStatus {
+        return HeliumFetchedConfigManager.shared.downloadStatus
     }
 
     public func paywallsLoaded() -> Bool {
@@ -347,6 +297,56 @@ public class Helium {
         }
     }
     
+    func isInitialized() -> Bool {
+        return initialized
+    }
+
+    /// Marks the SDK as initialized without triggering side effects (config fetch, analytics, etc.).
+    /// Accessible via @testable import for unit tests.
+    func markInitializedForTesting() {
+        initialized = true
+    }
+    
+    @available(*, deprecated, message: "Use HeliumPaywall directly instead")
+    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
+        let config = PaywallPresentationConfig(customPaywallTraits: customPaywallTraits)
+        let presentationContext = PaywallPresentationContext(
+            config: config,
+            eventHandlers: eventHandlers,
+            onEntitled: nil,
+            onPaywallNotShown: nil
+        )
+        return HeliumPaywallPresenter.shared.upsellViewResultFor(
+            trigger: trigger, presentationContext: presentationContext
+        ).viewAndSession?.view
+    }
+    
+}
+
+/// Configuration options for presenting a paywall.
+public struct PaywallPresentationConfig {
+    var presentFromViewController: UIViewController?
+    var customPaywallTraits: [String: Any]?
+    var dontShowIfAlreadyEntitled: Bool
+    var loadingBudget: TimeInterval?
+
+    /// Creates a new paywall presentation configuration.
+    /// - Parameters:
+    ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
+    ///   - customPaywallTraits: Custom traits to send to the paywall.
+    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
+    ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
+    public init(
+        presentFromViewController: UIViewController? = nil,
+        customPaywallTraits: [String: Any]? = nil,
+        dontShowIfAlreadyEntitled: Bool = false,
+        loadingBudget: TimeInterval? = nil
+    ) {
+        self.presentFromViewController = presentFromViewController
+        self.customPaywallTraits = customPaywallTraits
+        self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.loadingBudget = loadingBudget
+    }
 }
 
 /// Configuration object for user identification settings.
