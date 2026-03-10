@@ -7,18 +7,18 @@
 
 import Foundation
 
-public class HeliumController {
+class HeliumController {
     let DEFAULT_API_ENDPOINT = "https://api-v2.tryhelium.com/on-launch"
     let FAILURE_MONITOR_BROWSER_WRITE_KEY = "RRVlneoxysmfB9IdrJPmdri8gThW5lZV:FgPUdTsNAlJxCrK1XCbjjxALb31iEiwd"
     let FAILURE_MONITOR_ANALYTICS_ENDPOINT = "cm2kqwnbc00003p6u45zdyl8z.d.jitsu.com"
     
-    var apiKey: String
+    let apiKey: String
     
-    public init(apiKey: String) {
+    init(apiKey: String) {
         self.apiKey = apiKey
     }
     
-    public func logInitializeEvent() {
+    func logInitializeEvent() {
         HeliumLogger.log(.debug, category: .core, "Logging initialize event to analytics")
         HeliumAnalyticsManager.shared.logInitializeEvent()
     }

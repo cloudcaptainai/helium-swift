@@ -187,12 +187,12 @@ public struct ServerProductPrice: Codable {
 }
 
 /// A utility class for fetching localized pricing information for a given SKU
-public class PriceFetcher {
+class PriceFetcher {
     
     /// Fetches the localized price for multiple SKUs using async/await
     /// - Parameter skus: Array of product identifiers
     /// - Returns: Dictionary mapping SKUs to their localized price information
-    public static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
+    static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
         
             let products = await fetchProductsWithRetry(for: skus)

@@ -147,7 +147,7 @@ actor HeliumEntitlementsManager {
     /// Configures the entitlements manager by starting the transaction listener
     /// and performing an initial load of entitlements.
     /// Call this method once during app initialization.
-    public func configure() async {
+    func configure() async {
         guard !isConfigured else { return }
         isConfigured = true
         // Load persisted entitlements first for immediate availability

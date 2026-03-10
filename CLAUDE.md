@@ -26,3 +26,4 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 - Version is tracked in `Sources/Helium/HeliumCore/BuildConstants.swift`.
 - No external SPM dependencies — third-party code (Segment, SwiftyJSON, AnyCodable) is vendored.
 - Releases are automated (see `CONTRIBUTING.md`).
+- **Many files in `HeliumCore/` have `public` declarations that are not intended as public API.** The only supported public interface is in `HeliumPublic.swift`. Do not rely on or extend `public` symbols elsewhere — they are being migrated to `internal` over time. Some are kept `public` because wrapper SDKs (React Native, Flutter) depend on them.
