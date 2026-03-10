@@ -96,36 +96,12 @@ public class Helium {
             onEntitled: onEntitled,
             onPaywallNotShown: onPaywallNotShown
         )
-        if skipPaywallIfNeeded(trigger: trigger, presentationContext: presentationContext) {
+        if HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: trigger, presentationContext: presentationContext) {
             HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
             return
         }
         
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationContext: presentationContext)
-    }
-    
-    func skipPaywallIfNeeded(trigger: String, presentationContext: PaywallPresentationContext) -> Bool {
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        if paywallInfo?.shouldShow == false {
-            handlePaywallSkip(trigger: trigger)
-            presentationContext.onPaywallNotShown?(.targetingHoldout)
-            return true
-        }
-        return false
-    }
-    
-    func handlePaywallSkip(trigger: String) {
-        // Fire allocation event even when paywall is skipped
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: trigger,
-            isFallback: false,
-            paywallSession: nil
-        )
-        
-        HeliumPaywallDelegateWrapper.shared.fireEvent(
-            PaywallSkippedEvent(triggerName: trigger),
-            paywallSession: nil
-        )
     }
     
     public func getDownloadStatus() -> HeliumFetchedConfigStatus {
@@ -688,7 +664,8 @@ public class HeliumEntitlements {
 @available(iOS 15.0, *)
 extension Product {
     /// Initiates a product purchase with specific configuration to support Helium analytics.
-    /// This method provides a wrapper around the standard purchase flow
+    /// This method provides a wrapper around the standard purchase flow.
+    /// Typically only used for advanced custom purchase delegate implementations.
     ///
     /// - Parameter options: A set of options to configure the purchase.
     /// - Returns: The result of the purchase.

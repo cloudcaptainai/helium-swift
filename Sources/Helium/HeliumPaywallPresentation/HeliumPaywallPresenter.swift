@@ -53,6 +53,30 @@ class HeliumPaywallPresenter {
         return false
     }
     
+    func skipPaywallIfNeeded(trigger: String, presentationContext: PaywallPresentationContext) -> Bool {
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        if paywallInfo?.shouldShow == false {
+            handlePaywallSkip(trigger: trigger)
+            presentationContext.onPaywallNotShown?(.targetingHoldout)
+            return true
+        }
+        return false
+    }
+    
+    func handlePaywallSkip(trigger: String) {
+        // Fire allocation event even when paywall is skipped
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: false,
+            paywallSession: nil
+        )
+        
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            PaywallSkippedEvent(triggerName: trigger),
+            paywallSession: nil
+        )
+    }
+    
     func presentUpsell(trigger: String, isSecondTry: Bool = false, presentationContext: PaywallPresentationContext) {
         Task { @MainActor in
             if await paywallEntitlementsCheck(trigger: trigger, context: presentationContext) {
@@ -156,7 +180,7 @@ class HeliumPaywallPresenter {
         // Get context from the loading paywall's stored context
         let context = loadingPaywall.presentationContext
         
-        if Helium.shared.skipPaywallIfNeeded(trigger: trigger, presentationContext: context) {
+        if skipPaywallIfNeeded(trigger: trigger, presentationContext: context) {
             hideUpsell()
             return
         }
