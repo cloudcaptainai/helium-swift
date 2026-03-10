@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import StoreKit
 
+/// The main entry point for the Helium SDK.
+///
+/// - Latest docs: https://docs.tryhelium.com/sdk/quickstart-ios
 public class Helium {
     init() {}
     
