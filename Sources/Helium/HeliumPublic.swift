@@ -78,7 +78,7 @@ public class Helium {
     ///
     /// You must have a trigger and workflow configured in the [Helium dashboard](https://app.tryhelium.com/workflows)
     /// in order to show a paywall.
-    /// 
+    ///
     /// - Parameters:
     ///   - trigger: The trigger configured in the Helium dashboard.
     ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
@@ -251,7 +251,7 @@ public class Helium {
     ///
     /// - Parameters:
     ///   - clearUserTraits: Whether to clear user traits set via `Helium.identify`. Defaults to `true`.
-    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `true`.
+    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `false`.
     ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
     ///   - clearCachedPaywalls: Whether to clear cached paywall bundle files from disk. Defaults to `false`.
     ///   - autoInitialize: If `true`, automatically re-initializes Helium with the last used API key after the reset completes.
@@ -259,7 +259,7 @@ public class Helium {
     ///   off.
     public static func resetHelium(
         clearUserTraits: Bool = true,
-        clearHeliumEventListeners: Bool = true,
+        clearHeliumEventListeners: Bool = false,
         clearExperimentAllocations: Bool = false,
         clearCachedPaywalls: Bool = false,
         autoInitialize: Bool = false,
@@ -410,12 +410,18 @@ public class HeliumIdentify {
     
     /// Replaces all custom user traits with the provided traits. Used for audience targeting and analytics.
     ///
+    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
+    /// To use updated traits for targeting, reset Helium and initialize again.
+    ///
     /// - Parameter traits: The new set of user traits.
     /// - SeeAlso: ``addUserTraits(_:)``
     public func setUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.setCustomUserTraits(traits)
     }
     /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
+    ///
+    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
+    /// To use updated traits for targeting, reset Helium and initialize again.
     ///
     /// - Parameter traits: The traits to add or update.
     /// - SeeAlso: ``setUserTraits(_:)``
