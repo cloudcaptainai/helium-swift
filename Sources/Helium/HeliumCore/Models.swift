@@ -777,9 +777,15 @@ public enum PaywallUnavailableReason: String, Codable {
     case stripeNoCustomUserId
 }
 
+/// Reason a paywall was not shown.
 public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
+    /// Paywall not shown because user is already entitled to a product in the paywall.
+    /// To disable this, ensure `dontShowIfAlreadyEntitled` is `false`.
     case alreadyEntitled
+    /// Paywall skipped due to targeting holdout. Check your workflow configuration if this is
+    /// not expected: https://app.tryhelium.com/workflows
     case targetingHoldout
+    /// An unexpected error prevented the paywall from being shown.
     case error(unavailableReason: PaywallUnavailableReason?)
 
     public var description: String {

@@ -30,7 +30,7 @@ public class Helium {
     /// - Latest docs at https://docs.tryhelium.com/sdk/quickstart-ios
     ///
     /// - Parameters:
-    ///   - apiKey: Your Helium API key from the dashboard
+    ///   - apiKey: Your Helium API key from the dashboard https://app.tryhelium.com/profile
     ///
     public func initialize(
         apiKey: String
@@ -42,7 +42,7 @@ public class Helium {
             return false
         }
         if alreadyInitialized {
-            HeliumLogger.log(.debug, category: .core, "Helium already initialized, skipping")
+            HeliumLogger.log(.warn, category: .core, "Helium already initialized, ignoring subsequent call. Use resetHelium if you need to initialize again.")
             return
         }
         
@@ -79,29 +79,8 @@ public class Helium {
     /// You must have a trigger and workflow configured in the [Helium dashboard](https://app.tryhelium.com/workflows)
     /// in order to show a paywall.
     ///
-    /// ## Example
-    /// ```swift
-    /// Helium.shared.presentPaywall(
-    ///     trigger: "premium"
-    /// ) { paywallNotShownReason in
-    ///     switch paywallNotShownReason {
-    ///         case .targetingHoldout:
-    ///             break
-    ///         case .alreadyEntitled:
-    ///             // e.g. ensure premium access.
-    ///             // In order for this case to be hit, `config.dontShowIfAlreadyEntitled` must be true
-    ///             break
-    ///         default:
-    ///             // handle the rare case where a paywall fails to show
-    ///             break
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// - Note: See the [Fallbacks documentation](https://docs.tryhelium.com/guides/fallback-bundle) to reduce cases where a paywall fails to show.
-    ///
     /// - Parameters:
-    ///   - trigger: The trigger name configured in the Helium dashboard.
+    ///   - trigger: The trigger configured in the Helium dashboard.
     ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events.
     ///   - onEntitled: (Optional) Called upon purchase success or purchase restore. If you set `dontShowIfAlreadyEntitled`
@@ -147,7 +126,7 @@ public class Helium {
     ///
     /// In most cases you don't need this — ``presentPaywall()`` already handles availability checks and fallback logic for you.
     ///
-    /// - Parameter trigger: The trigger name configured in the Helium dashboard.
+    /// - Parameter trigger: The trigger configured in the Helium dashboard.
     /// - Returns: A ``CanShowPaywallResult`` indicating whether a paywall can show, whether it would be a fallback, and the reason if it is not ready to be shown.
     ///
     /// - Note: This does not account for entitlement status or targeting holdouts. A result of `canShow == true` means the paywall content is available, not that it will necessarily be presented to the user.
@@ -167,7 +146,7 @@ public class Helium {
     ///
     /// Requires that paywalls have finished downloading (see ``paywallsLoaded()``).
     ///
-    /// - Parameter trigger: The trigger name configured in the Helium dashboard.
+    /// - Parameter trigger: The trigger configured in the Helium dashboard.
     /// - Returns: A ``PaywallInfo`` containing the paywall template name and whether it should show, or `nil` if paywalls haven't loaded or no paywall is configured for this trigger.
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
         if !paywallsLoaded() {
@@ -210,7 +189,8 @@ public class Helium {
     }
     
     /// - Parameter url: Pass in a url like "helium-test://helium-test?trigger=trigger_name" or "helium-test://helium-test?puid=paywall_uuid"
-    /// - Returns: The result of the purchase.
+    /// - Returns: Whether the deep link was handled.
+    @available(*, deprecated, message: "Deep link handling is being replaced with paywall previews.")
     @discardableResult
     public func handleDeepLink(_ url: URL?) -> Bool {
         guard let url else {
@@ -271,7 +251,7 @@ public class Helium {
     ///
     /// - Parameters:
     ///   - clearUserTraits: Whether to clear user traits set via `Helium.identify`. Defaults to `true`.
-    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `true`.
+    ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `false`.
     ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
     ///   - clearCachedPaywalls: Whether to clear cached paywall bundle files from disk. Defaults to `false`.
     ///   - autoInitialize: If `true`, automatically re-initializes Helium with the last used API key after the reset completes.
@@ -279,7 +259,7 @@ public class Helium {
     ///   off.
     public static func resetHelium(
         clearUserTraits: Bool = true,
-        clearHeliumEventListeners: Bool = true,
+        clearHeliumEventListeners: Bool = false,
         clearExperimentAllocations: Bool = false,
         clearCachedPaywalls: Bool = false,
         autoInitialize: Bool = false,
@@ -430,12 +410,18 @@ public class HeliumIdentify {
     
     /// Replaces all custom user traits with the provided traits. Used for audience targeting and analytics.
     ///
+    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
+    /// To use updated traits for targeting, reset Helium and initialize again.
+    ///
     /// - Parameter traits: The new set of user traits.
     /// - SeeAlso: ``addUserTraits(_:)``
     public func setUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.setCustomUserTraits(traits)
     }
     /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
+    ///
+    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
+    /// To use updated traits for targeting, reset Helium and initialize again.
     ///
     /// - Parameter traits: The traits to add or update.
     /// - SeeAlso: ``setUserTraits(_:)``
@@ -513,7 +499,7 @@ public class HeliumExperiments {
     
     /// Get experiment allocation info for a specific trigger
     ///
-    /// - Parameter trigger: The trigger name to get experiment info for
+    /// - Parameter trigger: The trigger to get experiment info for
     /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
     ///
     /// ## Example Usage

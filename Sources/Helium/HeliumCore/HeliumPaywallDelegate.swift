@@ -16,35 +16,19 @@ public enum HeliumPaywallTransactionStatus {
     case pending
 }
 
+/// Delegate responsible for handling purchases and restores within Helium paywalls.
 public protocol HeliumPaywallDelegate: AnyObject {
-    
-    /// The delegate type identifier used for SDK analytics
+
+    /// The delegate type identifier used for SDK analytics.
     var delegateType: String { get }
-    
+
+    /// Execute a purchase for the given product. Return the transaction status.
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
-    
+
+    /// Attempt to restore previous purchases. Return `true` if any were restored.
     func restorePurchases() async -> Bool
-    
-    /// Called when any paywall-related event occurs
-    /// - Parameter event: The specific event that occurred. Cast to concrete types for access to event-specific properties.
-    /// - Note: Common event types include:
-    ///   - `PaywallOpenEvent`: Paywall displayed
-    ///   - `PurchaseSucceededEvent`: Purchase completed
-    ///   - `PurchaseFailedEvent`: Purchase failed
-    ///   - `PaywallCloseEvent`: Paywall closed
-    /// - Example:
-    /// ```swift
-    /// func onPaywallEvent(_ event: PaywallEvent) {
-    ///     switch event {
-    ///     case let openEvent as PaywallOpenEvent:
-    ///         print("Paywall opened: \(openEvent.paywallName)")
-    ///     case let purchaseEvent as PurchaseSucceededEvent:
-    ///         print("Purchased: \(purchaseEvent.productId)")
-    ///     default:
-    ///         print("Event: \(event.eventName)")
-    ///     }
-    /// }
-    /// ```
+
+    /// Optional: called when any paywall-related event occurs.
     func onPaywallEvent(_ event: HeliumEvent)
 }
 
