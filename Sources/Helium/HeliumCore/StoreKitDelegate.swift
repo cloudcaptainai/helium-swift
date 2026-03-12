@@ -70,10 +70,6 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         return await Helium.entitlements.hasAny()
     }
     
-    open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        // Override in a subclass if desired
-    }
-    
     open func onPaywallEvent(_ event: HeliumEvent) {
         // Override in a subclass if desired
     }

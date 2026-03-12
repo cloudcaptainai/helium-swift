@@ -25,6 +25,12 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     
     private let allowHeliumUserAttribute: Bool
     
+    private let stripePurchaseSyncDisabled: Bool
+    private let _stripeSyncLock = NSLock()
+    private var _isSyncingStripePurchase = false
+    private var _stripeSyncCompleted = false
+    private var _hasInvalidatedCache = false
+    
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
     }
@@ -35,19 +41,22 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// - Parameter productIds: (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     /// - Parameter revenueCatApiKey: (Optional). Only set if you want Helium to handle RevenueCat initialization for you. Otherwise make sure to [initialize RevenueCat](https://www.revenuecat.com/docs/getting-started/quickstart#initialize-and-configure-the-sdk) before initializing Helium.
     /// - Parameter allowHeliumUserAttribute: (Optional) Allow Helium to set [customer attributes](https://www.revenuecat.com/docs/customers/customer-attributes)
+    /// - Parameter stripePurchaseSyncDisabled: (Optional) Set to `true` to disable automatic RevenueCat customer info refresh after a Stripe purchase. Defaults to `false`.
     public init(
         entitlementId: String? = nil,
         productIds: [String]? = nil,
         revenueCatApiKey: String? = nil,
-        allowHeliumUserAttribute: Bool = true
+        allowHeliumUserAttribute: Bool = true,
+        stripePurchaseSyncDisabled: Bool = false
     ) {
         self.entitlementId = entitlementId
         self.allowHeliumUserAttribute = allowHeliumUserAttribute
+        self.stripePurchaseSyncDisabled = stripePurchaseSyncDisabled
         
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
         } else if !Purchases.isConfigured {
-            print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.") 
+            print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.")
         }
         
         // Keep this value as up-to-date as possible
@@ -168,12 +177,89 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         }
     }
     
-    open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        // Override in a subclass if desired
+    /// Subclasses that override this method should call `super.onPaywallEvent(event)`
+    /// to preserve built-in post-purchase sync behavior.
+    open func onPaywallEvent(_ event: HeliumEvent) {
+        if !stripePurchaseSyncDisabled,
+           let purchaseEvent = event as? PurchaseSucceededEvent,
+           isStripePurchase(event: purchaseEvent) {
+            Task { await syncRevenueCatAfterStripePurchase() }
+        }
     }
     
-    open func onPaywallEvent(_ event: HeliumEvent) {
-        // Override in a subclass if desired
+    // MARK: - Stripe Purchase Sync
+    
+    private func isStripePurchase(event: PurchaseSucceededEvent) -> Bool {
+        if let txnId = event.storeKitTransactionId, txnId.hasPrefix("si_") {
+            return true
+        }
+        let stripeProductPattern = #"^prod_\w+:price_\w+$"#
+        if event.productId.range(of: stripeProductPattern, options: .regularExpression) != nil {
+            return true
+        }
+        return false
+    }
+    
+    /// After a Stripe purchase completes, the RevenueCat SDK on-device has no way to
+    /// know that a new entitlement exists until its backend processes the Stripe webhook.
+    /// This method polls RevenueCat with progressive backoff to force a customer info
+    /// refresh, stopping early if the update listener fires (~50s max).
+    private func syncRevenueCatAfterStripePurchase() async {
+        // Atomic check-and-set to prevent concurrent syncs
+        let alreadySyncing: Bool = _stripeSyncLock.withLock {
+            if _isSyncingStripePurchase { return true }
+            _isSyncingStripePurchase = true
+            return false
+        }
+        guard !alreadySyncing else { return }
+        defer {
+            _stripeSyncLock.withLock { _isSyncingStripePurchase = false }
+        }
+
+        _stripeSyncLock.withLock {
+            _stripeSyncCompleted = false
+            _hasInvalidatedCache = false
+        }
+
+        // Listen for customer info updates from RevenueCat in the background.
+        // Ignore any emissions that arrive before we've invalidated the cache —
+        // customerInfoStream emits the current cached value immediately on subscribe,
+        // and we only care about fresh updates triggered by our polling.
+        let listenerTask = Task { [weak self] in
+            for await _ in Purchases.shared.customerInfoStream {
+                guard let self else { return }
+                let isRealUpdate = self._stripeSyncLock.withLock { self._hasInvalidatedCache }
+                if isRealUpdate {
+                    self._stripeSyncLock.withLock { self._stripeSyncCompleted = true }
+                    return
+                }
+            }
+        }
+
+        defer { listenerTask.cancel() }
+
+        await pollPhase(attempts: 5, intervalMs: 1_000)
+        await pollPhase(attempts: 3, intervalMs: 5_000)
+        await pollPhase(attempts: 2, intervalMs: 15_000)
+    }
+
+    private var stripeSyncCompleted: Bool {
+        _stripeSyncLock.withLock { _stripeSyncCompleted }
+    }
+
+    private func pollPhase(attempts: Int, intervalMs: UInt64) async {
+        for _ in 0..<attempts {
+            if stripeSyncCompleted { return }
+            try? await Task.sleep(nanoseconds: intervalMs * 1_000_000)
+            if stripeSyncCompleted { return }
+            do {
+                _stripeSyncLock.withLock { _hasInvalidatedCache = true }
+                Purchases.shared.invalidateCustomerInfoCache()
+                _ = try await Purchases.shared.customerInfo(fetchPolicy: .fetchCurrent)
+            } catch {
+                // Ignore transient errors (e.g. network failures)
+            }
+        }
     }
     
     public func getOfferingWithLatestPurchasedProduct() -> Offering? {
