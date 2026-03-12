@@ -29,6 +29,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private let _stripeSyncLock = NSLock()
     private var _isSyncingStripePurchase = false
     private var _stripeSyncCompleted = false
+    private var _hasInvalidatedCache = false
     
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
@@ -55,7 +56,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
         } else if !Purchases.isConfigured {
-            print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.") 
+            print("[Helium] RevenueCatDelegate - RevenueCat has not been configured. You must either configure it before initializing RevenueCatDelegate or pass in revenueCatApiKey to RevenueCatDelegate initializer.")
         }
         
         // Keep this value as up-to-date as possible
@@ -215,13 +216,23 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
             _stripeSyncLock.withLock { _isSyncingStripePurchase = false }
         }
 
-        _stripeSyncLock.withLock { _stripeSyncCompleted = false }
+        _stripeSyncLock.withLock {
+            _stripeSyncCompleted = false
+            _hasInvalidatedCache = false
+        }
 
-        // Listen for customer info updates from RevenueCat in the background
+        // Listen for customer info updates from RevenueCat in the background.
+        // Ignore any emissions that arrive before we've invalidated the cache —
+        // customerInfoStream emits the current cached value immediately on subscribe,
+        // and we only care about fresh updates triggered by our polling.
         let listenerTask = Task { [weak self] in
             for await _ in Purchases.shared.customerInfoStream {
-                self?._stripeSyncLock.withLock { self?._stripeSyncCompleted = true }
-                return
+                guard let self else { return }
+                let isRealUpdate = self._stripeSyncLock.withLock { self._hasInvalidatedCache }
+                if isRealUpdate {
+                    self._stripeSyncLock.withLock { self._stripeSyncCompleted = true }
+                    return
+                }
             }
         }
 
@@ -242,6 +253,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
             try? await Task.sleep(nanoseconds: intervalMs * 1_000_000)
             if stripeSyncCompleted { return }
             do {
+                _stripeSyncLock.withLock { _hasInvalidatedCache = true }
                 Purchases.shared.invalidateCustomerInfoCache()
                 _ = try await Purchases.shared.customerInfo(fetchPolicy: .fetchCurrent)
             } catch {
