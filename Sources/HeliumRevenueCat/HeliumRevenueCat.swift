@@ -26,8 +26,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private let allowHeliumUserAttribute: Bool
     
     private let stripePurchaseSyncDisabled: Bool
-    @HeliumAtomic private var isSyncingStripePurchase = false
-    @HeliumAtomic private var stripeSyncCompleted = false
+    private let _stripeSyncLock = NSLock()
+    private var _isSyncingStripePurchase = false
+    private var _stripeSyncCompleted = false
     
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
@@ -204,29 +205,35 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// refresh, stopping early if the update listener fires (~50s max).
     private func syncRevenueCatAfterStripePurchase() async {
         // Atomic check-and-set to prevent concurrent syncs
-        let alreadySyncing = _isSyncingStripePurchase.withValue { syncing -> Bool in
-            if syncing { return true }
-            syncing = true
+        let alreadySyncing: Bool = _stripeSyncLock.withLock {
+            if _isSyncingStripePurchase { return true }
+            _isSyncingStripePurchase = true
             return false
         }
         guard !alreadySyncing else { return }
-        defer { isSyncingStripePurchase = false }
-        
-        stripeSyncCompleted = false
-        
+        defer {
+            _stripeSyncLock.withLock { _isSyncingStripePurchase = false }
+        }
+
+        _stripeSyncLock.withLock { _stripeSyncCompleted = false }
+
         // Listen for customer info updates from RevenueCat in the background
         let listenerTask = Task { [weak self] in
             for await _ in Purchases.shared.customerInfoStream {
-                self?.stripeSyncCompleted = true
+                self?._stripeSyncLock.withLock { self?._stripeSyncCompleted = true }
                 return
             }
         }
-        
+
         defer { listenerTask.cancel() }
-        
+
         await pollPhase(attempts: 5, intervalMs: 1_000)
         await pollPhase(attempts: 3, intervalMs: 5_000)
         await pollPhase(attempts: 2, intervalMs: 15_000)
+    }
+
+    private var stripeSyncCompleted: Bool {
+        _stripeSyncLock.withLock { _stripeSyncCompleted }
     }
 
     private func pollPhase(attempts: Int, intervalMs: UInt64) async {
