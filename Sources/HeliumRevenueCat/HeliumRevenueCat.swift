@@ -26,7 +26,8 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private let allowHeliumUserAttribute: Bool
     
     private let stripePurchaseSyncDisabled: Bool
-    private var isSyncingStripePurchase = false
+    @HeliumAtomic private var isSyncingStripePurchase = false
+    @HeliumAtomic private var stripeSyncCompleted = false
     
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
@@ -202,32 +203,37 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// This method polls RevenueCat with progressive backoff to force a customer info
     /// refresh, stopping early if the update listener fires (~50s max).
     private func syncRevenueCatAfterStripePurchase() async {
-        guard !isSyncingStripePurchase else { return }
-        isSyncingStripePurchase = true
+        // Atomic check-and-set to prevent concurrent syncs
+        let alreadySyncing = _isSyncingStripePurchase.withValue { syncing -> Bool in
+            if syncing { return true }
+            syncing = true
+            return false
+        }
+        guard !alreadySyncing else { return }
         defer { isSyncingStripePurchase = false }
-
-        var synced = false
-
+        
+        stripeSyncCompleted = false
+        
         // Listen for customer info updates from RevenueCat in the background
-        let listenerTask = Task {
+        let listenerTask = Task { [weak self] in
             for await _ in Purchases.shared.customerInfoStream {
-                synced = true
+                self?.stripeSyncCompleted = true
                 return
             }
         }
-
+        
         defer { listenerTask.cancel() }
-
-        await pollPhase(attempts: 5, intervalSeconds: 1, synced: &synced)
-        await pollPhase(attempts: 3, intervalSeconds: 5, synced: &synced)
-        await pollPhase(attempts: 2, intervalSeconds: 15, synced: &synced)
+        
+        await pollPhase(attempts: 5, intervalMs: 1_000)
+        await pollPhase(attempts: 3, intervalMs: 5_000)
+        await pollPhase(attempts: 2, intervalMs: 15_000)
     }
-    
-    private func pollPhase(attempts: Int, intervalSeconds: UInt64, synced: inout Bool) async {
+
+    private func pollPhase(attempts: Int, intervalMs: UInt64) async {
         for _ in 0..<attempts {
-            if synced { return }
-            try? await Task.sleep(nanoseconds: intervalSeconds * 1_000_000_000)
-            if synced { return }
+            if stripeSyncCompleted { return }
+            try? await Task.sleep(nanoseconds: intervalMs * 1_000_000)
+            if stripeSyncCompleted { return }
             do {
                 Purchases.shared.invalidateCustomerInfoCache()
                 _ = try await Purchases.shared.customerInfo(fetchPolicy: .fetchCurrent)
