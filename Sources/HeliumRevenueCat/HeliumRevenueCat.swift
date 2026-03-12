@@ -25,6 +25,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     
     private let allowHeliumUserAttribute: Bool
     
+    private let stripePurchaseSyncDisabled: Bool
+    private var isSyncingStripePurchase = false
+    
     private func configureRevenueCat(revenueCatApiKey: String) {
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
     }
@@ -35,14 +38,17 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// - Parameter productIds: (Optional). A list of product IDs, configured in the App Store, that can be purchased via a Helium paywall. This is not required but may provide a slight performance benefit.
     /// - Parameter revenueCatApiKey: (Optional). Only set if you want Helium to handle RevenueCat initialization for you. Otherwise make sure to [initialize RevenueCat](https://www.revenuecat.com/docs/getting-started/quickstart#initialize-and-configure-the-sdk) before initializing Helium.
     /// - Parameter allowHeliumUserAttribute: (Optional) Allow Helium to set [customer attributes](https://www.revenuecat.com/docs/customers/customer-attributes)
+    /// - Parameter stripePurchaseSyncDisabled: (Optional) Set to `true` to disable automatic RevenueCat customer info refresh after a Stripe purchase. Defaults to `false`.
     public init(
         entitlementId: String? = nil,
         productIds: [String]? = nil,
         revenueCatApiKey: String? = nil,
-        allowHeliumUserAttribute: Bool = true
+        allowHeliumUserAttribute: Bool = true,
+        stripePurchaseSyncDisabled: Bool = false
     ) {
         self.entitlementId = entitlementId
         self.allowHeliumUserAttribute = allowHeliumUserAttribute
+        self.stripePurchaseSyncDisabled = stripePurchaseSyncDisabled
         
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
@@ -168,12 +174,67 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         }
     }
     
-    open func onHeliumPaywallEvent(event: HeliumPaywallEvent) {
-        // Override in a subclass if desired
+    /// Subclasses that override this method should call `super.onPaywallEvent(event)`
+    /// to preserve built-in post-purchase sync behavior.
+    open func onPaywallEvent(_ event: HeliumEvent) {
+        if !stripePurchaseSyncDisabled,
+           let purchaseEvent = event as? PurchaseSucceededEvent,
+           isStripePurchase(event: purchaseEvent) {
+            Task { await syncRevenueCatAfterStripePurchase() }
+        }
     }
     
-    open func onPaywallEvent(_ event: HeliumEvent) {
-        // Override in a subclass if desired
+    // MARK: - Stripe Purchase Sync
+    
+    private func isStripePurchase(event: PurchaseSucceededEvent) -> Bool {
+        if let txnId = event.storeKitTransactionId, txnId.hasPrefix("si_") {
+            return true
+        }
+        let stripeProductPattern = #"^prod_\w+:price_\w+$"#
+        if event.productId.range(of: stripeProductPattern, options: .regularExpression) != nil {
+            return true
+        }
+        return false
+    }
+    
+    /// After a Stripe purchase completes, the RevenueCat SDK on-device has no way to
+    /// know that a new entitlement exists until its backend processes the Stripe webhook.
+    /// This method polls RevenueCat with progressive backoff to force a customer info
+    /// refresh, stopping early if the update listener fires (~50s max).
+    private func syncRevenueCatAfterStripePurchase() async {
+        guard !isSyncingStripePurchase else { return }
+        isSyncingStripePurchase = true
+        defer { isSyncingStripePurchase = false }
+
+        var synced = false
+
+        // Listen for customer info updates from RevenueCat in the background
+        let listenerTask = Task {
+            for await _ in Purchases.shared.customerInfoStream {
+                synced = true
+                return
+            }
+        }
+
+        defer { listenerTask.cancel() }
+
+        await pollPhase(attempts: 5, intervalSeconds: 1, synced: &synced)
+        await pollPhase(attempts: 3, intervalSeconds: 5, synced: &synced)
+        await pollPhase(attempts: 2, intervalSeconds: 15, synced: &synced)
+    }
+    
+    private func pollPhase(attempts: Int, intervalSeconds: UInt64, synced: inout Bool) async {
+        for _ in 0..<attempts {
+            if synced { return }
+            try? await Task.sleep(nanoseconds: intervalSeconds * 1_000_000_000)
+            if synced { return }
+            do {
+                Purchases.shared.invalidateCustomerInfoCache()
+                _ = try await Purchases.shared.customerInfo(fetchPolicy: .fetchCurrent)
+            } catch {
+                // Ignore transient errors (e.g. network failures)
+            }
+        }
     }
     
     public func getOfferingWithLatestPurchasedProduct() -> Offering? {
