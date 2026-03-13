@@ -5,6 +5,7 @@ struct HeliumControlPanelView: View {
     @State private var state: HeliumControlPanelState = .loading
     @State private var loadingVersionId: String? = nil
     @State private var fetchTask: Task<Void, Never>?
+    @State private var searchText: String = ""
 
     var body: some View {
         NavigationView {
@@ -22,9 +23,12 @@ struct HeliumControlPanelView: View {
                         Text("No paywalls found.")
                             .foregroundColor(.secondary)
                     } else {
+                        let filtered = response.paywalls.filter {
+                            searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
+                        }
                         ScrollView {
                             LazyVStack(spacing: 16) {
-                                ForEach(response.paywalls) { paywall in
+                                ForEach(filtered) { paywall in
                                     paywallCard(paywall)
                                 }
                             }
@@ -46,6 +50,7 @@ struct HeliumControlPanelView: View {
                 }
             }
             .navigationTitle("Paywall Previews")
+            .searchable(text: $searchText, prompt: "Search paywalls")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
@@ -72,7 +77,7 @@ struct HeliumControlPanelView: View {
     private func paywallCard(_ paywall: HeliumPaywallPreviewEntry) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // Single preview image spanning the full card height, from the first version
-            let previewUrl = paywall.versions.first?.eventPreviewUrl
+            let previewUrl = paywall.versions.first?.previewUrl
             if let previewUrl, let url = URL(string: previewUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -102,13 +107,12 @@ struct HeliumControlPanelView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
-                    .padding(.top, 12)
-                    .padding(.bottom, 14)
+                    .padding(.vertical, 14)
                 
                 Rectangle()
                     .fill(Color.gray.opacity(0.5))
                     .frame(height: 1.4)
-                    .padding(.leading, 4)
+                    .padding(.leading, 2)
 
                 // Version rows
                 ForEach(Array(paywall.versions.enumerated()), id: \.element.id) { index, version in

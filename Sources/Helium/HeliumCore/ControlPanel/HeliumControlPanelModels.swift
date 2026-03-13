@@ -18,7 +18,7 @@ struct HeliumPaywallPreviewVersion: Codable, Identifiable {
     let versionStatus: String
     let versionNumber: Int?
     let bundleUrl: String?
-    let eventPreviewUrl: String?
+    let previewUrl: String?
     let productIds: [String]?
     let stripeProductIds: [String]?
     let lastSavedAt: String?
