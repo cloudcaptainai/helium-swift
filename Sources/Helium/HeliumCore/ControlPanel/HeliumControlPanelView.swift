@@ -3,7 +3,7 @@ import SwiftUI
 struct HeliumControlPanelView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var state: HeliumControlPanelState = .loading
-    @State private var loadingPaywallId: String? = nil
+    @State private var loadingVersionId: String? = nil
     @State private var fetchTask: Task<Void, Never>?
 
     var body: some View {
@@ -17,26 +17,32 @@ struct HeliumControlPanelView: View {
                         Text("No paywalls found.")
                             .foregroundColor(.secondary)
                     } else {
-                        List(response.paywalls) { paywall in
-                            Button {
-                                selectPaywall(paywall)
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(paywall.paywallName)
-                                            .font(.body)
-                                            .foregroundColor(.primary)
-                                        Text("v\(paywall.versionNumber) · \(paywall.formattedPublishedDate)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                    if loadingPaywallId == paywall.id {
-                                        ProgressView()
+                        List {
+                            ForEach(response.paywalls) { paywall in
+                                Section(header: Text(paywall.paywallName)) {
+                                    ForEach(paywall.versions) { version in
+                                        Button {
+                                            selectVersion(version, paywall: paywall)
+                                        } label: {
+                                            HStack {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(version.displayLabel)
+                                                        .font(.body)
+                                                        .foregroundColor(.primary)
+                                                    Text(version.formattedSavedDate)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                Spacer()
+                                                if loadingVersionId == version.id {
+                                                    ProgressView()
+                                                }
+                                            }
+                                        }
+                                        .disabled(loadingVersionId != nil || version.bundleUrl == nil)
                                     }
                                 }
                             }
-                            .disabled(loadingPaywallId != nil)
                         }
                     }
                 case .error(let message):
@@ -61,13 +67,13 @@ struct HeliumControlPanelView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         state = .loading
-                        loadingPaywallId = nil
+                        loadingVersionId = nil
                         fetchTask?.cancel()
                         fetchTask = Task { await fetchPaywalls() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(state.isLoading || loadingPaywallId != nil)
+                    .disabled(state.isLoading || loadingVersionId != nil)
                 }
             }
         }
@@ -80,10 +86,10 @@ struct HeliumControlPanelView: View {
     private func fetchPaywalls() async {
         do {
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
-            
+
             // Fetch all products data
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
-            
+
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {
@@ -92,23 +98,24 @@ struct HeliumControlPanelView: View {
         }
     }
 
-    private func selectPaywall(_ paywall: HeliumPaywallPreview) {
-        guard loadingPaywallId == nil else { return }
-        loadingPaywallId = paywall.id
-        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) (\(paywall.paywallUuid))")
+    private func selectVersion(_ version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
+        guard loadingVersionId == nil else { return }
+        guard let bundleUrl = version.bundleUrl else { return }
+        loadingVersionId = version.id
+        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) version: \(version.versionId)")
 
         Task {
             do {
-                let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: paywall.bundleUrl)
+                let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: bundleUrl)
 
                 try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
                     bundleId: bundleId,
-                    bundleUrl: paywall.bundleUrl,
+                    bundleUrl: bundleUrl,
                     bundleHtml: html,
-                    productIds: paywall.productIds
+                    productIds: version.productIds ?? []
                 )
 
-                await MainActor.run { loadingPaywallId = nil }
+                await MainActor.run { loadingVersionId = nil }
                 HeliumPaywallPresenter.shared.presentUpsell(
                     trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
                     presentationContext: PaywallPresentationContext(
@@ -120,7 +127,7 @@ struct HeliumControlPanelView: View {
                 )
             } catch {
                 await MainActor.run {
-                    loadingPaywallId = nil
+                    loadingVersionId = nil
                     state = .error("Failed to load paywall: \(error.localizedDescription)")
                 }
             }
