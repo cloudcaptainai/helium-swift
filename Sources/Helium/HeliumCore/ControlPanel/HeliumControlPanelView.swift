@@ -5,7 +5,9 @@ struct HeliumControlPanelView: View {
     @State private var state: HeliumControlPanelState = .loading
     @State private var loadingVersionId: String? = nil
     @State private var fetchTask: Task<Void, Never>?
+    @State private var previewTask: Task<Void, Never>?
     @State private var searchText: String = ""
+    @State private var paywallLoadError: String? = nil
 
     var body: some View {
         NavigationView {
@@ -68,8 +70,20 @@ struct HeliumControlPanelView: View {
                 }
             }
         }
+        .alert("Error", isPresented: Binding(
+            get: { paywallLoadError != nil },
+            set: { if !$0 { paywallLoadError = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(paywallLoadError ?? "")
+        }
         .onAppear {
             fetchTask = Task { await fetchPaywalls() }
+        }
+        .onDisappear {
+            fetchTask?.cancel()
+            previewTask?.cancel()
         }
     }
 
@@ -200,7 +214,8 @@ struct HeliumControlPanelView: View {
         loadingVersionId = version.id
         HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) version: \(version.versionId)")
 
-        Task {
+        previewTask?.cancel()
+        previewTask = Task {
             do {
                 let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: bundleUrl)
 
@@ -212,6 +227,7 @@ struct HeliumControlPanelView: View {
                 )
 
                 await MainActor.run { loadingVersionId = nil }
+                guard !Task.isCancelled else { return }
                 HeliumPaywallPresenter.shared.presentUpsell(
                     trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
                     presentationContext: PaywallPresentationContext(
@@ -224,7 +240,7 @@ struct HeliumControlPanelView: View {
             } catch {
                 await MainActor.run {
                     loadingVersionId = nil
-                    state = .error("Failed to load paywall: \(error.localizedDescription)")
+                    paywallLoadError = "Failed to load paywall: \(error.localizedDescription)"
                 }
             }
         }
