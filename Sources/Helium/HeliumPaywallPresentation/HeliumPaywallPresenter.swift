@@ -602,6 +602,11 @@ extension HeliumPaywallPresenter {
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         
+        // Do not show fallback for a paywall preview
+        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
+        }
+        
         // Check existing fallback mechanisms
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
            let filePath = fallbackPaywallInfo.localBundlePath {

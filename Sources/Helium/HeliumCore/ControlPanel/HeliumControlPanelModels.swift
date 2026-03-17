@@ -2,22 +2,38 @@ import Foundation
 
 struct HeliumControlPanelResponse: Codable {
     let productIds: [String]
-    let paywalls: [HeliumPaywallPreview]
+    let stripeProductIds: [String]?
+    let paywalls: [HeliumPaywallPreviewEntry]
 }
 
-struct HeliumPaywallPreview: Codable, Identifiable {
-    let bundleUrl: String
+struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let paywallUuid: String
     let paywallName: String
-    let eventPreviewUrl: String?
-    let productIds: [String]
-    let versionNumber: Int
-    let versionId: String
-    let lastPublishedAt: String
+    let versions: [HeliumPaywallPreviewVersion]
     var id: String { paywallUuid }
+}
 
-    var formattedPublishedDate: String {
-        formatDateForDisplay(lastPublishedAt)
+struct HeliumPaywallPreviewVersion: Codable, Identifiable {
+    let versionId: String
+    let versionStatus: String
+    let versionNumber: Int?
+    let bundleUrl: String?
+    let previewUrl: String?
+    let productIds: [String]?
+    let stripeProductIds: [String]?
+    let lastSavedAt: String?
+    var id: String { versionId }
+
+    var formattedSavedDate: String {
+        guard let lastSavedAt else { return "—" }
+        return formatDateForDisplay(lastSavedAt)
+    }
+
+    var displayLabel: String {
+        if let versionNumber {
+            return "v\(versionNumber) (\(versionStatus))"
+        }
+        return versionStatus
     }
 }
 

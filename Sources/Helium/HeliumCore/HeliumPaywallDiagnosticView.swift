@@ -65,6 +65,10 @@ struct HeliumPaywallDiagnosticView: View {
             ? Color(red: 118/255, green: 44/255, blue: 200/255)
             : Color(red: 213/255, green: 248/255, blue: 239/255)
     }
+    
+    private var isForPreview: Bool {
+        return triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+    }
 
     var body: some View {
         ScrollView {
@@ -90,29 +94,31 @@ struct HeliumPaywallDiagnosticView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
 
-                Button(action: {
-                    UIPasteboard.general.string = triggerName
-                }) {
-                    HStack(spacing: 10) {
-                        VStack(spacing: 5) {
-                            Text("Trigger")
-                                .font(.subheadline)
-                                .foregroundColor(triggerTextColor)
-                            Text(triggerName)
-                                .font(.title3)
-                                .fontWeight(.semibold)
+                if !isForPreview {
+                    Button(action: {
+                        UIPasteboard.general.string = triggerName
+                    }) {
+                        HStack(spacing: 10) {
+                            VStack(spacing: 5) {
+                                Text("Trigger")
+                                    .font(.subheadline)
+                                    .foregroundColor(triggerTextColor)
+                                Text(triggerName)
+                                    .font(.title3)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(triggerTextColor)
+                            }
+                            Image(systemName: "doc.on.doc")
+                                .font(.caption)
                                 .foregroundColor(triggerTextColor)
                         }
-                        Image(systemName: "doc.on.doc")
-                            .font(.caption)
-                            .foregroundColor(triggerTextColor)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(triggerBackgroundColor)
+                        .cornerRadius(12)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(triggerBackgroundColor)
-                    .cornerRadius(12)
+                    .padding(.top, 40)
                 }
-                .padding(.top, 40)
 
                 // Body text
                 Text(content.bodyText)
@@ -147,21 +153,23 @@ struct HeliumPaywallDiagnosticView: View {
                 }
                 .padding(.top, 40)
 
-                // Checkbox + Footer
-                Toggle(isOn: $doNotShowAgain) {
-                    Text("Do not show again on this device")
-                        .font(.subheadline)
+                if !isForPreview {
+                    // Checkbox + Footer
+                    Toggle(isOn: $doNotShowAgain) {
+                        Text("Do not show again on this device")
+                            .font(.subheadline)
+                    }
+                    .toggleStyle(CheckboxToggleStyle())
+                    .onChange(of: doNotShowAgain) { newValue in
+                        UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
+                    }
+                    .padding(.top, 30)
+                    
+                    Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 38)
                 }
-                .toggleStyle(CheckboxToggleStyle())
-                .onChange(of: doNotShowAgain) { newValue in
-                    UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
-                }
-                .padding(.top, 30)
-
-                Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 38)
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 30)
@@ -213,17 +221,20 @@ extension HeliumPaywallDiagnosticView {
         trigger: String,
         message: String
     ) {
-        guard shouldPresent() else { return }
+        guard shouldPresent(trigger: trigger) else { return }
 
         let content = DiagnosticContent.from(bodyText: message)
         present(content: content, triggerName: trigger)
     }
 
     @MainActor
-    private static func shouldPresent() -> Bool {
+    private static func shouldPresent(trigger: String) -> Bool {
+        guard !isCurrentlyPresented else { return false }
+        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+            return true
+        }
         guard Helium.config.paywallNotShownDiagnosticDisplayEnabled else { return false }
         guard !UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain") else { return false }
-        guard !isCurrentlyPresented else { return false }
         return true
     }
 
