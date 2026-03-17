@@ -13,6 +13,22 @@ on:
   workflow_dispatch:
 
 jobs:
+  spm-tests:
+    if: inputs.test_scope == 'full'
+    runs-on: warp-macos-26-arm64-6x
+    timeout-minutes: 30
+    env:
+      SIMULATOR_NAME: iPhone 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run SwiftPM tests
+        run: |
+          xcodebuild test \
+            -scheme helium-swift \
+            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
   ui-tests:
     runs-on: warp-macos-26-arm64-6x
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
