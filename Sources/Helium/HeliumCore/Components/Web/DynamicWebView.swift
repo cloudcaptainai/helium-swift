@@ -97,10 +97,14 @@ struct DynamicWebView: View {
            }
            
            if let webView {
-               WebViewRepresentable(webView: webView, showControlPanel: $showControlPanel)
-                   .padding(.horizontal, -1)
-                   .ignoresSafeArea()
-                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+               WebViewRepresentable(
+                trigger: triggerName,
+                webView: webView,
+                showControlPanel: $showControlPanel
+               )
+               .padding(.horizontal, -1)
+               .ignoresSafeArea()
+               .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
            } else if showShimmer {
                VStack {}
                    .padding()
@@ -372,11 +376,12 @@ struct DynamicWebView: View {
 }
 
 fileprivate struct WebViewRepresentable: UIViewRepresentable {
+    let trigger: String?
     let webView: WKWebView
     @Binding var showControlPanel: Bool
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(showControlPanel: $showControlPanel)
+        Coordinator(trigger: trigger, showControlPanel: $showControlPanel)
     }
     
     func makeUIView(context: Context) -> WKWebView {
@@ -436,15 +441,22 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        let trigger: String?
         @Binding var showControlPanel: Bool
         var tripleTapRecognizer: UITapGestureRecognizer?
 
-        init(showControlPanel: Binding<Bool>) {
+        init(trigger: String?, showControlPanel: Binding<Bool>) {
+            self.trigger = trigger
             _showControlPanel = showControlPanel
         }
 
         @objc func handleTripleTap() {
             guard HeliumControlPanelService.shared.allowPaywallControlPanel else { return }
+            if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+                // Just return to underlying control panel instead of stacking
+                HeliumPaywallPresenter.shared.hideUpsell()
+                return
+            }
             showControlPanel = true
         }
 

@@ -155,7 +155,6 @@ struct HeliumControlPanelView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                     }
-//                    .background(Color(UIColor.secondarySystemGroupedBackground))
                     .disabled(loadingVersionId != nil || version.bundleUrl == nil)
                     .opacity(version.bundleUrl == nil ? 0.4 : 1.0)
                 }
