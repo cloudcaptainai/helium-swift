@@ -6,16 +6,16 @@ on:
   workflow_call:  # Allow other workflows to call this
     inputs:
       test_scope:
-        description: "Test scope: ui or full"
+        description: "Test scope: core or full"
         required: false
         type: string
-        default: "ui"
+        default: "core"
   workflow_dispatch:
 
 jobs:
-  spm-tests:
-    if: inputs.test_scope == 'full'
+  unit-tests:
     runs-on: warp-macos-26-arm64-6x
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 30
     env:
       SIMULATOR_NAME: iPhone 17
@@ -81,11 +81,11 @@ jobs:
       - name: Run UI tests with retry logic
         run: |
           TEST_SCOPE="${{ inputs.test_scope }}"
-          TEST_SCOPE="${TEST_SCOPE:-ui}"
+          TEST_SCOPE="${TEST_SCOPE:-core}"
 
           RUN_ONLY_TESTING=""
-          if [ "$TEST_SCOPE" = "ui" ]; then
-            RUN_ONLY_TESTING="-only-testing:HeliumExampleUITests"
+          if [ "$TEST_SCOPE" = "core" ]; then
+            RUN_ONLY_TESTING="-only-testing:HeliumExampleUITests/HeliumExampleUITests"
           fi
 
           run_tests() {
