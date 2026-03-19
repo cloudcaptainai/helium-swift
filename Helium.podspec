@@ -18,7 +18,10 @@ Pod::Spec.new do |s|
   
   # Core subspec - base Helium functionality without RevenueCat
   s.subspec 'Core' do |core|
-    core.source_files = 'Sources/Helium/**/*'
+    core.source_files = 'Sources/Helium/**/*.swift'
+    core.resource_bundles = {
+      'Helium' => ['Sources/Helium/Resources/**/*']
+    }
   end
   
   # RevenueCat subspec - adds RevenueCat integration

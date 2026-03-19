@@ -41,9 +41,7 @@ final class HeliumRestorePurchaseUITests: XCTestCase {
         sleep(2)
 
         let restoreButton = webView.buttons["Restore Purchases"].firstMatch
-        guard restoreButton.waitForExistence(timeout: 10) else {
-            throw XCTSkip("Restore Purchases button not found in this paywall configuration")
-        }
+        XCTAssert(restoreButton.waitForExistence(timeout: 10), "Subscribe button not found")
         restoreButton.tap()
 
         let alert = app.alerts.firstMatch
@@ -64,9 +62,7 @@ final class HeliumRestorePurchaseUITests: XCTestCase {
         sleep(2)
 
         let restoreButton = webView.buttons["Restore Purchases"].firstMatch
-        guard restoreButton.waitForExistence(timeout: 10) else {
-            throw XCTSkip("Restore Purchases button not found in this paywall configuration")
-        }
+        XCTAssert(restoreButton.waitForExistence(timeout: 10), "Subscribe button not found")
         restoreButton.tap()
 
         XCTAssert(webView.waitForNonExistence(timeout: 10), "Paywall did not dismiss after successful restore")

@@ -2,10 +2,9 @@
 //  HeliumPaywallDiagnosticView.swift
 //  Helium
 //
-//  Debug-only diagnostic modal shown when a paywall fails to display or is skipped.
+//  Diagnostic modal shown when a paywall fails to display or is skipped.
 //
 
-#if DEBUG
 import SwiftUI
 import UIKit
 
@@ -87,7 +86,7 @@ struct HeliumPaywallDiagnosticView: View {
                 .padding(.top, 8)
 
                 // Logo + Trigger group
-                Image("heliumlogo", bundle: .module)
+                Image("heliumlogo", bundle: .heliumResources)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 200)
@@ -269,5 +268,3 @@ extension HeliumPaywallDiagnosticView {
         containerVC.present(hostingController, animated: true)
     }
 }
-
-#endif
