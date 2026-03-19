@@ -22,7 +22,7 @@ struct HeliumFetchError {
     let summary: String
     let lastHttpStatusCode: Int?
     let lastServerMessage: String?
-    let failedBundleFilename: String?
+    let failedBundlePath: String?
     
     init(
         summary: String,
@@ -33,8 +33,7 @@ struct HeliumFetchError {
         self.summary = summary
         self.lastHttpStatusCode = lastHttpStatusCode
         self.lastServerMessage = lastServerMessage.map { String($0.prefix(Self.maxServerMessageLength)) }
-        // Extract just the filename from the URL (e.g., "bundle_1767639080410.html")
-        self.failedBundleFilename = failedBundleUrl.flatMap { URL(string: $0)?.lastPathComponent }
+        self.failedBundlePath = failedBundleUrl.flatMap { URL(string: $0)?.path }
     }
     
     var description: String {
@@ -45,8 +44,8 @@ struct HeliumFetchError {
         if let serverMessage = lastServerMessage, !serverMessage.isEmpty {
             parts.append(serverMessage)
         }
-        if let filename = failedBundleFilename {
-            parts.append(filename)
+        if let path = failedBundlePath {
+            parts.append(path)
         }
         let joined = parts.joined(separator: " | ")
         return String(joined.prefix(Self.maxDescriptionLength))
@@ -222,7 +221,7 @@ public class HeliumFetchedConfigManager {
     private(set) var downloadStep: PaywallsDownloadStep = .config
     
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
-    static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 5 // roughly 19 seconds of delays in between attempts
+    static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4 // roughly 7 seconds of delays in between attempts
     
     private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
@@ -416,7 +415,7 @@ public class HeliumFetchedConfigManager {
                     completion(.failure(
                         HeliumFetchError(
                             summary: "bundle_fetch",
-                            failedBundleUrl: bundlesResult.failedBundleUrls.first
+                            failedBundleUrl: bundlesResult.failedBundleUrls.sorted().first
                         ),
                         HeliumFetchMetrics(
                             numConfigAttempts: attemptCounter,
@@ -633,8 +632,11 @@ public class HeliumFetchedConfigManager {
         maxAttempts: Int,
         attemptCounter: Int
     ) async -> BundlesFetchResult {
-        // Increase timeout if on last attempt
-        let timeoutInterval: TimeInterval? = attemptCounter == maxAttempts ? 12 : nil
+        // shorter timeout on first bundle attempt, longer on last attempt
+        var timeoutInterval: TimeInterval? = attemptCounter == 1 ? 5 : nil
+        if attemptCounter == maxAttempts {
+            timeoutInterval = 15
+        }
         let result = await fetchBundles(bundleUrlToTriggersMap: bundleUrlToTriggersMap, timeoutInterval: timeoutInterval)
         
         if !result.bundleUrlsFailedToFetched.isEmpty {
@@ -752,7 +754,7 @@ public class HeliumFetchedConfigManager {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = timeoutInterval ?? 5
+        request.timeoutInterval = timeoutInterval ?? 7
 
         let (data, response) = try await session.data(for: request)
 
