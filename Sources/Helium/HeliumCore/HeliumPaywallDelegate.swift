@@ -254,15 +254,20 @@ class HeliumPaywallDelegateWrapper {
         HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
         
 #if DEBUG
-        if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
-            Task { @MainActor in
-                HeliumPaywallDiagnosticView.presentIfNeeded(
-                    trigger: trigger,
-                    message: notShownAddendum
-                )
+        let canShowDiagnosticView = true
+#else
+        let canShowDiagnosticView = trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+#endif
+        if canShowDiagnosticView {
+            if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
+                Task { @MainActor in
+                    HeliumPaywallDiagnosticView.presentIfNeeded(
+                        trigger: trigger,
+                        message: notShownAddendum
+                    )
+                }
             }
         }
-#endif
     }
     
     private func logPaywallSkip(

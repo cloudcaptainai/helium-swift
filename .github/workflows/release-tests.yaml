@@ -23,13 +23,15 @@ jobs:
           echo "Version extracted: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-  run-ui-tests:
+  run-tests:
     needs: extract-version
     uses: ./.github/workflows/run-tests.yml
+    with:
+      test_scope: full
     secrets: inherit
 
   create-release:
-    needs: [extract-version, run-ui-tests]
+    needs: [extract-version, run-tests]
     uses: ./.github/workflows/create-release.yaml
     with:
       version: ${{ needs.extract-version.outputs.version }}

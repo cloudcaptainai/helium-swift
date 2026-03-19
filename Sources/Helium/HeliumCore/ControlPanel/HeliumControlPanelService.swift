@@ -4,10 +4,24 @@ class HeliumControlPanelService {
     static let shared = HeliumControlPanelService()
     private init() {}
 
-    // Off for now. This value will be sent/derived from server once fully implemented.
-    @HeliumAtomic var allowPaywallControlPanel: Bool = false
+    var allowPaywallControlPanel: Bool {
+        let env = AppReceiptsHelper.shared.getEnvironment()
+        return env == AppReceiptsHelper.Environment.debug.rawValue
+            || env == AppReceiptsHelper.Environment.sandbox.rawValue
+    }
 
-    private let endpoint = "https://api-v2.tryhelium.com/preview-paywalls"
+    private let defaultHeliumBaseURL = "https://api-v2.tryhelium.com/"
+    private var heliumBaseURL: String {
+        guard let custom = Helium.config.customAPIEndpoint,
+              let url = URL(string: custom),
+              let scheme = url.scheme,
+              let host = url.host else {
+            return defaultHeliumBaseURL
+        }
+        let port = url.port.map { ":\($0)" } ?? ""
+        return "\(scheme)://\(host)\(port)/"
+    }
+    private var endpoint: String { heliumBaseURL + "paywall-previews" }
 
     /// Fetches a single bundle HTML from a URL for preview purposes.
     func fetchSingleBundle(bundleURL: String) async throws -> (bundleId: String, html: String) {
@@ -63,7 +77,7 @@ class HeliumControlPanelService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
 
-        let body: [String: Any] = ["apiKey": apiKey]
+        let body: [String: Any] = ["apiKey": apiKey, "platform": "ios"]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response): (Data, URLResponse)
