@@ -250,6 +250,7 @@ public class Helium {
     /// Reset Helium entirely so you can call initialize again. Only for advanced use cases.
     ///
     /// - Parameters:
+    ///   - clearUserId: Whether to clear custom user ID. Defaults to `false`.
     ///   - clearUserTraits: Whether to clear user traits set via `Helium.identify`. Defaults to `true`.
     ///   - clearHeliumEventListeners: Whether to remove all event listeners. Defaults to `false`.
     ///   - clearExperimentAllocations: Whether to clear experiment allocations. Defaults to `false`.
@@ -258,6 +259,7 @@ public class Helium {
     ///   - onComplete: Called when the reset has completed. If `autoInitialize` is true, `onComplete` will be called once Helium.shared.initialize has kicked
     ///   off.
     public static func resetHelium(
+        clearUserId: Bool = false,
         clearUserTraits: Bool = true,
         clearHeliumEventListeners: Bool = false,
         clearExperimentAllocations: Bool = false,
@@ -280,7 +282,7 @@ public class Helium {
                 ExperimentAllocationTracker.shared.reset()
             }
             
-            HeliumIdentityManager.reset(clearUserTraits: clearUserTraits)
+            HeliumIdentityManager.reset(clearUserId: clearUserId, clearUserTraits: clearUserTraits)
             
             if clearHeliumEventListeners {
                 HeliumEventListeners.shared.removeAllListeners()

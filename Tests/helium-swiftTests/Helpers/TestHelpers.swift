@@ -82,7 +82,7 @@ class HeliumTestCase: XCTestCase {
     override func setUp() {
         super.setUp()
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
-        Helium.resetHelium()
+        Helium.resetHelium(clearHeliumEventListeners: true)
         mockDelegate = MockHeliumPaywallDelegate()
         Helium.config.purchaseDelegate = mockDelegate
         listener = CapturingEventListener()
