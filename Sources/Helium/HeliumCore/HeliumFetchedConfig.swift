@@ -17,7 +17,7 @@ enum PaywallsDownloadStep {
 
 struct HeliumFetchError {
     private static let maxServerMessageLength = 60
-    private static let maxDescriptionLength = 150
+    private static let maxDescriptionLength = 200
     
     let summary: String
     let lastHttpStatusCode: Int?
@@ -80,6 +80,8 @@ private struct BundlesRetrieveResult {
     let numBundlesFromCache: Int
     let numBundleAttempts: Int
     let failedBundleUrls: [String]
+    let lastHttpStatusCode: Int?
+    let lastServerMessage: String?
 }
 
 private struct BundlesFetchResult {
@@ -87,6 +89,8 @@ private struct BundlesFetchResult {
     let bundleUrlsFailedToFetched: [String]
     let bundleUrlsSkipped: [(url: String, reason: PaywallUnavailableReason)]
     var numBundleAttempts: Int? = nil
+    let lastHttpStatusCode: Int?
+    let lastServerMessage: String?
 }
 
 private struct SingleBundleFetchResult {
@@ -94,10 +98,13 @@ private struct SingleBundleFetchResult {
     let html: String?
     let isPermanentFailure: Bool
     let failureReason: PaywallUnavailableReason?
+    let lastHttpStatusCode: Int?
+    let lastServerMessage: String?
 }
 
 enum BundleFetchError: Error {
     case permanentFailure(PaywallUnavailableReason)
+    case httpError(statusCode: Int, serverMessage: String?)
 }
 
 struct ConfigFetchError: LocalizedError {
@@ -415,6 +422,8 @@ public class HeliumFetchedConfigManager {
                     completion(.failure(
                         HeliumFetchError(
                             summary: "bundle_fetch",
+                            lastHttpStatusCode: bundlesResult.lastHttpStatusCode,
+                            lastServerMessage: bundlesResult.lastServerMessage,
                             failedBundleUrl: bundlesResult.failedBundleUrls.sorted().first
                         ),
                         HeliumFetchMetrics(
@@ -560,7 +569,9 @@ public class HeliumFetchedConfigManager {
                 numBundles: 0,
                 numBundlesFromCache: 0,
                 numBundleAttempts: 0,
-                failedBundleUrls: []
+                failedBundleUrls: [],
+                lastHttpStatusCode: nil,
+                lastServerMessage: nil
             )
         }
         
@@ -623,7 +634,9 @@ public class HeliumFetchedConfigManager {
             numBundles: bundleUrlToTriggersMap.count + cachedBundleIdToHtmlMap.count,
             numBundlesFromCache: cachedBundleIdToHtmlMap.count,
             numBundleAttempts: fetchResult.numBundleAttempts ?? 0,
-            failedBundleUrls: fetchResult.bundleUrlsFailedToFetched
+            failedBundleUrls: fetchResult.bundleUrlsFailedToFetched,
+            lastHttpStatusCode: fetchResult.lastHttpStatusCode,
+            lastServerMessage: fetchResult.lastServerMessage
         )
     }
     
@@ -664,14 +677,18 @@ public class HeliumFetchedConfigManager {
                     successMapBundleIdToHtml: fullSuccessMap,
                     bundleUrlsFailedToFetched: retryResult.bundleUrlsFailedToFetched,
                     bundleUrlsSkipped: result.bundleUrlsSkipped + retryResult.bundleUrlsSkipped,
-                    numBundleAttempts: retryResult.numBundleAttempts
+                    numBundleAttempts: retryResult.numBundleAttempts,
+                    lastHttpStatusCode: retryResult.lastHttpStatusCode ?? result.lastHttpStatusCode,
+                    lastServerMessage: retryResult.lastServerMessage ?? result.lastServerMessage
                 )
             } else {
                 return BundlesFetchResult(
                     successMapBundleIdToHtml: result.successMapBundleIdToHtml,
                     bundleUrlsFailedToFetched: result.bundleUrlsFailedToFetched,
                     bundleUrlsSkipped: result.bundleUrlsSkipped,
-                    numBundleAttempts: attemptCounter
+                    numBundleAttempts: attemptCounter,
+                    lastHttpStatusCode: result.lastHttpStatusCode,
+                    lastServerMessage: result.lastServerMessage
                 )
             }
         } else {
@@ -679,7 +696,9 @@ public class HeliumFetchedConfigManager {
                 successMapBundleIdToHtml: result.successMapBundleIdToHtml,
                 bundleUrlsFailedToFetched: result.bundleUrlsFailedToFetched,
                 bundleUrlsSkipped: result.bundleUrlsSkipped,
-                numBundleAttempts: attemptCounter
+                numBundleAttempts: attemptCounter,
+                lastHttpStatusCode: result.lastHttpStatusCode,
+                lastServerMessage: result.lastServerMessage
             )
         }
     }
@@ -690,6 +709,8 @@ public class HeliumFetchedConfigManager {
     ) async -> BundlesFetchResult {
         var bundleUrlsNotFetched: [String] = []
         var bundleUrlsSkipped: [(String, PaywallUnavailableReason)] = []
+        var lastHttpStatusCode: Int? = nil
+        var lastServerMessage: String? = nil
 
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.httpMaximumConnectionsPerHost = 15
@@ -704,17 +725,20 @@ public class HeliumFetchedConfigManager {
                     do {
                         let html = try await self.fetchBundleHTML(from: url, using: session, timeoutInterval: timeoutInterval)
                         HeliumLogger.log(.trace, category: .network, "Bundle fetched successfully", metadata: ["url": url])
-                        return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false, failureReason: nil)
+                        return SingleBundleFetchResult(url: url, html: html, isPermanentFailure: false, failureReason: nil, lastHttpStatusCode: nil, lastServerMessage: nil)
                     } catch {
                         if case let BundleFetchError.permanentFailure(reason) = error {
                             HeliumLogger.log(.error, category: .network, "Permanent bundle fetch failure", metadata: [
                                 "triggers": triggers.joined(separator: ", "),
                                 "reason": reason.rawValue
                             ])
-                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: true, failureReason: reason, lastHttpStatusCode: nil, lastServerMessage: nil)
+                        } else if case let BundleFetchError.httpError(statusCode, serverMessage) = error {
+                            HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url, "statusCode": String(statusCode)])
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil, lastHttpStatusCode: statusCode, lastServerMessage: serverMessage)
                         } else {
                             HeliumLogger.log(.debug, category: .network, "Bundle fetch error (will retry)", metadata: ["url": url, "error": error.localizedDescription])
-                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil)
+                            return SingleBundleFetchResult(url: url, html: nil, isPermanentFailure: false, failureReason: nil, lastHttpStatusCode: nil, lastServerMessage: nil)
                         }
                     }
                 }
@@ -732,6 +756,10 @@ public class HeliumFetchedConfigManager {
                         }
                     } else {
                         bundleUrlsNotFetched.append(result.url)
+                        if let statusCode = result.lastHttpStatusCode {
+                            lastHttpStatusCode = statusCode
+                            lastServerMessage = result.lastServerMessage
+                        }
                     }
                 }
             }
@@ -740,7 +768,9 @@ public class HeliumFetchedConfigManager {
         return BundlesFetchResult(
             successMapBundleIdToHtml: results,
             bundleUrlsFailedToFetched: bundleUrlsNotFetched,
-            bundleUrlsSkipped: bundleUrlsSkipped
+            bundleUrlsSkipped: bundleUrlsSkipped,
+            lastHttpStatusCode: lastHttpStatusCode,
+            lastServerMessage: lastServerMessage
         )
     }
 
@@ -779,8 +809,8 @@ public class HeliumFetchedConfigManager {
                 throw BundleFetchError.permanentFailure(.bundleFetch410)
             }
             // All other errors (5xx server errors, etc.) are retryable
-            HeliumLogger.log(.warn, category: .network, "HTTP error, will retry", metadata: ["statusCode": String(statusCode), "url": urlString])
-            throw URLError(.badServerResponse)
+            let serverMessage = String(data: data.prefix(100), encoding: .utf8)
+            throw BundleFetchError.httpError(statusCode: statusCode, serverMessage: serverMessage)
         }
 
         guard let html = String(data: data, encoding: .utf8) else {
