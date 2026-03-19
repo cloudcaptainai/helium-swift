@@ -22,7 +22,7 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.dismissAll(dispatchEvent: dispatchEvent)
     }
     
-    func showSecondaryPaywall(uuid: String) {
+    func showSecondaryPaywall(uuid: String?) {
         delegate.showSecondaryPaywall(uuid: uuid)
     }
     
@@ -136,25 +136,25 @@ class HeliumActionsDelegate: ObservableObject {
         }
     }
     
-    func showSecondaryPaywall(uuid: String) {
+    func showSecondaryPaywall(uuid: String?) {
         if !isLoading {
             // Re-use same presentation context as underlying paywall. Integrator can check
             // isSecondTry to distinguish events.
             let presentationContext = paywallSession.presentationContext
             let secondTryTrigger = "\(trigger)_second_try"
-            // use explicit second try trigger if possible
-            if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
-                lastShownSecondTryTrigger = secondTryTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: presentationContext)
-            } // otherwise look for a paywall that matches the uuid
-            else if let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+            // Try uuid lookup first
+            if let uuid, let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
+            } // Otherwise try second_try trigger
+            else if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
+                lastShownSecondTryTrigger = secondTryTrigger
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
                     paywallName: "",
-                    error: "Second try - no paywall found for trigger or uuid \(uuid).",
+                    error: "Second try - no paywall found for trigger or uuid \(uuid ?? "nil").",
                     paywallUnavailableReason: .secondTryNoMatch,
                     secondTry: true
                 )

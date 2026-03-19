@@ -5,7 +5,10 @@ import StoreKit
 public class HeliumIdentityManager {
     // MARK: - Singleton
     public static let shared = HeliumIdentityManager()
-    static func reset(clearUserTraits: Bool) {
+    static func reset(clearUserId: Bool, clearUserTraits: Bool) {
+        if clearUserId {
+            shared.setCustomUserId(nil)
+        }
         if clearUserTraits {
             shared.heliumUserTraits = HeliumUserTraits([:])
         }
