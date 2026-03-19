@@ -25,6 +25,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
 
         if message.name == "logging" {
+            replyHandler(nil, nil)
             return
         }
         
@@ -50,15 +51,19 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         Task { @MainActor in
             switch type {
             case "select-product":
-                if let productId = data["productId"] as? String {
-                    self.delegateWrapper?.selectProduct(productId: productId)
-                    respond(["status": "success", "selectedProduct": productId]);
+                guard let productId = data["productId"] as? String else {
+                    respond(["status": "error", "message": "Missing productId"])
+                    break
                 }
+                self.delegateWrapper?.selectProduct(productId: productId)
+                respond(["status": "success", "selectedProduct": productId])
             case "cta-pressed":
-                if let componentName = data["componentName"] as? String {
-                    self.delegateWrapper?.onCTAPress(contentComponentName: componentName)
-                    respond(["status": "success"])
+                guard let componentName = data["componentName"] as? String else {
+                    respond(["status": "error", "message": "Missing componentName"])
+                    break
                 }
+                self.delegateWrapper?.onCTAPress(contentComponentName: componentName)
+                respond(["status": "success"])
                 
             case "subscribe":
                 if let productId = data["product"] as? String {
@@ -92,17 +97,18 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 }
                 
             case "navigate":
-                if let target = data["target"] as? String {
-
-                    await UIApplication.shared.open(URL(string: target)!);
-                    respond(["status": "success"])
+                guard let target = data["target"] as? String,
+                      let url = URL(string: target) else {
+                    respond(["status": "error", "message": "Missing or invalid target"])
+                    break
                 }
+                await UIApplication.shared.open(url)
+                respond(["status": "success"])
                 
             case "show-secondary-paywall":
-                if let paywallUuid = data["uuid"] as? String {
-                    self.delegateWrapper?.showSecondaryPaywall(uuid: paywallUuid)
-                    respond(["status": "success"])
-                }
+                let paywallUuid = data["uuid"] as? String
+                self.delegateWrapper?.showSecondaryPaywall(uuid: paywallUuid)
+                respond(["status": "success"])
                 
             case "dismiss":
                 self.delegateWrapper?.dismiss()
