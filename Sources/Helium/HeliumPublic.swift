@@ -410,6 +410,23 @@ public class HeliumIdentify {
         }
     }
     
+    /// Anonymous ID from your third-party analytics tool, sent alongside every Helium analytics event
+    /// so you can correlate Helium data with your own analytics.
+    ///
+    /// - Amplitude: pass device ID
+    /// - Mixpanel: pass anonymous ID
+    /// - PostHog: pass anonymous ID
+    ///
+    /// Set this before calling `Helium.shared.initialize()` for best results. Can also be updated after initialization.
+    public var thirdPartyAnalyticsAnonymousId: String? {
+        get {
+            HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId()
+        }
+        set {
+            HeliumIdentityManager.shared.setThirdPartyAnalyticsAnonymousId(newValue)
+        }
+    }
+
     /// Replaces all custom user traits with the provided traits. Used for audience targeting and analytics.
     ///
     /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.

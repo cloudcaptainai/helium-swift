@@ -730,6 +730,7 @@ public struct HeliumPaywallLoggedEvent: Codable {
     var appAttributionToken: String?
     var appTransactionId: String?
     var revenueCatAppUserID: String?
+    var thirdPartyAnalyticsAnonymousId: String?
     var isFallback: Bool?
     
     var downloadStatus: HeliumFetchedConfigStatus?

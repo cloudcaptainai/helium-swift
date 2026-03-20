@@ -67,6 +67,7 @@ public class HeliumIdentityManager {
     private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
     private let heliumStripeCustomerIdKey = "heliumStripeCustomerId"
     private let heliumAppTransactionIDKey = "heliumAppTransactionID"
+    private let heliumThirdPartyAnalyticsAnonymousIdKey = "heliumThirdPartyAnalyticsAnonymousId"
     
     /// We may remove this at some point but for now it ensures a user id always set
     func getResolvedUserId() -> String {
@@ -146,6 +147,18 @@ public class HeliumIdentityManager {
     
     public func getAppTransactionID() -> String? {
         return appTransactionID
+    }
+
+    func getThirdPartyAnalyticsAnonymousId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumThirdPartyAnalyticsAnonymousIdKey)
+    }
+
+    func setThirdPartyAnalyticsAnonymousId(_ id: String?) {
+        if let id {
+            UserDefaults.standard.setValue(id, forKey: heliumThirdPartyAnalyticsAnonymousIdKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: heliumThirdPartyAnalyticsAnonymousIdKey)
+        }
     }
     
     /// Gets or creates the Helium first seen date
