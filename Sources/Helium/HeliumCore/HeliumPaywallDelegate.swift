@@ -177,12 +177,16 @@ class HeliumPaywallDelegateWrapper {
         }
         
         var metadata: [String: String] = [:]
-        if let productEvent = event as? ProductEvent {
-            metadata["productId"] = productEvent.productId
-        } else if let paywallEvent = event as? PaywallContextEvent {
+        if let paywallEvent = event as? PaywallContextEvent {
             metadata["trigger"] = paywallEvent.triggerName
         } else if let skipEvent = event as? PaywallSkippedEvent {
             metadata["trigger"] = skipEvent.triggerName
+        }
+        if let productEvent = event as? ProductEvent {
+            metadata["productId"] = productEvent.productId
+        }
+        if let purchaseFailError = (event as? PurchaseFailedEvent)?.error {
+            metadata["error"] = purchaseFailError.localizedDescription
         }
         if paywallSession?.isFallback == true {
             metadata["fallback"] = "true"
