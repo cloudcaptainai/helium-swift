@@ -195,6 +195,7 @@ class HeliumAnalyticsManager {
                 appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                 appTransactionId: HeliumIdentityManager.shared.appTransactionID,
                 revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
+                thirdPartyAnalyticsAnonymousId: HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId(),
                 isFallback: isFallback,
                 downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
                 additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
