@@ -410,8 +410,8 @@ public class HeliumIdentify {
         }
     }
     
-    /// Anonymous ID from your third-party analytics tool, sent alongside every Helium analytics event
-    /// so you can correlate Helium data with your own analytics.
+    /// An optional anonymous ID from your third-party analytics provider, sent alongside every Helium analytics event
+    /// so you can correlate Helium data with your own analytics before `userId` is set.
     ///
     /// - Amplitude: pass device ID
     /// - Mixpanel: pass anonymous ID
