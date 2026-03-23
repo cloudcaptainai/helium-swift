@@ -11,6 +11,7 @@ public class HeliumIdentityManager {
         }
         if clearUserTraits {
             shared.heliumUserTraits = HeliumUserTraits([:])
+            shared.persistUserTraits()
         }
         shared.heliumInitializeId = UUID().uuidString
     }
@@ -21,7 +22,7 @@ public class HeliumIdentityManager {
         
         self.heliumSessionId = UUID().uuidString
         self.heliumInitializeId = UUID().uuidString
-        self.heliumUserTraits = HeliumUserTraits([:])
+        self.heliumUserTraits = HeliumStorage.shared.codable(forKey: heliumUserTraitsKey) ?? HeliumUserTraits([:])
     }
     
     // MARK: - Properties
@@ -68,6 +69,7 @@ public class HeliumIdentityManager {
     private let heliumStripeCustomerIdKey = "heliumStripeCustomerId"
     private let heliumAppTransactionIDKey = "heliumAppTransactionID"
     private let heliumThirdPartyAnalyticsAnonymousIdKey = "heliumThirdPartyAnalyticsAnonymousId"
+    private let heliumUserTraitsKey = "heliumUserTraits"
     
     /// We may remove this at some point but for now it ensures a user id always set
     func getResolvedUserId() -> String {
@@ -97,10 +99,16 @@ public class HeliumIdentityManager {
     
     func setCustomUserTraits(_ traits: HeliumUserTraits) {
         heliumUserTraits = traits
+        persistUserTraits()
     }
-    
+
     func addToCustomUserTraits(_ additionalTraits: HeliumUserTraits) {
         heliumUserTraits.merge(additionalTraits)
+        persistUserTraits()
+    }
+
+    private func persistUserTraits() {
+        HeliumStorage.shared.setCodable(heliumUserTraits, forKey: heliumUserTraitsKey)
     }
     
     func getUserTraits() -> HeliumUserTraits {

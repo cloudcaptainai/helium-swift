@@ -437,6 +437,12 @@ public class HeliumIdentify {
     public func setUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.setCustomUserTraits(traits)
     }
+    /// Replaces all custom user traits with the provided dictionary.
+    ///
+    /// - Parameter traits: A dictionary of traits. Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    public func setUserTraits(_ traits: [String: Any]) {
+        HeliumIdentityManager.shared.setCustomUserTraits(HeliumUserTraits(traits))
+    }
     /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
     ///
     /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
@@ -446,6 +452,12 @@ public class HeliumIdentify {
     /// - SeeAlso: ``setUserTraits(_:)``
     public func addUserTraits(_ traits: HeliumUserTraits) {
         HeliumIdentityManager.shared.addToCustomUserTraits(traits)
+    }
+    /// Merges the provided dictionary into the existing custom user traits, overwriting any matching keys.
+    ///
+    /// - Parameter traits: A dictionary of traits. Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
+    public func addUserTraits(_ traits: [String: Any]) {
+        HeliumIdentityManager.shared.addToCustomUserTraits(HeliumUserTraits(traits))
     }
     /// Returns the current custom user traits as a dictionary.
     public func getUserTraits() -> [String : Any] {
