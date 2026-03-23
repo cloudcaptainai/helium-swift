@@ -300,6 +300,7 @@ public class Helium {
         }
     }
     
+    /// Returns whether the SDK has been initialized via `initialize(apiKey:)`.
     func isInitialized() -> Bool {
         return initialized
     }

@@ -5,6 +5,7 @@ import StoreKit
 public class HeliumIdentityManager {
     // MARK: - Singleton
     public static let shared = HeliumIdentityManager()
+    /// Resets identity state, optionally clearing the custom user ID and/or user traits.
     static func reset(clearUserId: Bool, clearUserTraits: Bool) {
         if clearUserId {
             shared.setCustomUserId(nil)
@@ -76,6 +77,7 @@ public class HeliumIdentityManager {
         return getCustomUserId() ?? getHeliumPersistentId()
     }
     
+    /// Returns whether a custom user ID has been set.
     func hasCustomUserId() -> Bool {
         return UserDefaults.standard.bool(forKey: heliumHasCustomUserIdKey)
     }
@@ -97,20 +99,24 @@ public class HeliumIdentityManager {
         }
     }
     
+    /// Replaces the current user traits and persists them to disk.
     func setCustomUserTraits(_ traits: HeliumUserTraits) {
         heliumUserTraits = traits
         persistUserTraits()
     }
 
+    /// Merges additional traits into the current set and persists the result to disk.
     func addToCustomUserTraits(_ additionalTraits: HeliumUserTraits) {
         heliumUserTraits.merge(additionalTraits)
         persistUserTraits()
     }
 
+    /// Writes the current user traits to `HeliumStorage` so they survive app restarts.
     private func persistUserTraits() {
         HeliumStorage.shared.setCodable(heliumUserTraits, forKey: heliumUserTraitsKey)
     }
     
+    /// Returns the current in-memory user traits.
     func getUserTraits() -> HeliumUserTraits {
         return heliumUserTraits
     }
@@ -133,14 +139,17 @@ public class HeliumIdentityManager {
         return heliumSessionId
     }
     
+    /// Sets a custom `appAccountToken` for StoreKit purchases.
     func setCustomAppAccountToken(_ token: UUID) {
         customAppAccountToken = token
     }
     
+    /// Stores the RevenueCat app user ID for cross-platform identity resolution.
     func setRevenueCatAppUserId(_ rcAppUserId: String) {
         revenueCatAppUserId = rcAppUserId
     }
     
+    /// Stores or clears the Stripe customer ID used for Stripe-based purchases.
     public func setStripeCustomerId(_ customerId: String?) {
         guard let customerId, !customerId.isEmpty else {
             UserDefaults.standard.removeObject(forKey: heliumStripeCustomerIdKey)
@@ -149,18 +158,22 @@ public class HeliumIdentityManager {
         UserDefaults.standard.setValue(customerId, forKey: heliumStripeCustomerIdKey)
     }
     
+    /// Returns the stored Stripe customer ID, if any.
     public func getStripeCustomerId() -> String? {
         return UserDefaults.standard.string(forKey: heliumStripeCustomerIdKey)
     }
     
+    /// Returns the App Store app transaction ID, if available.
     public func getAppTransactionID() -> String? {
         return appTransactionID
     }
 
+    /// Returns the third-party analytics anonymous ID, if set.
     func getThirdPartyAnalyticsAnonymousId() -> String? {
         return UserDefaults.standard.string(forKey: heliumThirdPartyAnalyticsAnonymousIdKey)
     }
 
+    /// Stores or clears the third-party analytics anonymous ID.
     func setThirdPartyAnalyticsAnonymousId(_ id: String?) {
         if let id {
             UserDefaults.standard.setValue(id, forKey: heliumThirdPartyAnalyticsAnonymousIdKey)
