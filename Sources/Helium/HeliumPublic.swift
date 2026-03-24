@@ -429,8 +429,8 @@ public class HeliumIdentify {
 
     /// Replaces all custom user traits with the provided traits. Used for audience targeting and analytics.
     ///
-    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
-    /// To use updated traits for targeting, reset Helium and initialize again.
+    /// Traits are persisted across app sessions. They are applied immediately for analytics, but paywall
+    /// targeting is evaluated at initialization time. To use updated traits for targeting, reset Helium and initialize again.
     ///
     /// - Parameter traits: The new set of user traits.
     /// - SeeAlso: ``addUserTraits(_:)``
@@ -445,8 +445,8 @@ public class HeliumIdentify {
     }
     /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
     ///
-    /// Traits are applied immediately for analytics, but paywall targeting is evaluated at initialization time.
-    /// To use updated traits for targeting, reset Helium and initialize again.
+    /// Traits are persisted across app sessions. They are applied immediately for analytics, but paywall
+    /// targeting is evaluated at initialization time. To use updated traits for targeting, reset Helium and initialize again.
     ///
     /// - Parameter traits: The traits to add or update.
     /// - SeeAlso: ``setUserTraits(_:)``
@@ -460,6 +460,9 @@ public class HeliumIdentify {
         HeliumIdentityManager.shared.addToCustomUserTraits(HeliumUserTraits(traits))
     }
     /// Returns the current custom user traits as a dictionary.
+    ///
+    /// - Note: Numeric values that were set as `Int` may be returned as `Double` after an app restart
+    ///   due to JSON serialization. Use `as? Double` when reading numeric traits.
     public func getUserTraits() -> [String : Any] {
         HeliumIdentityManager.shared.getUserTraits().dictionaryRepresentation
     }
