@@ -10,7 +10,7 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 ## Key principles
 
 - **Never crash the host app.** This SDK is distributed to apps with millions of users.
-- **Avoid using "fallback" in code and comments** unless referring to the Helium fallback paywall flow. This term has a specific meaning in this SDK.
+- **Never use the word "fallback" or any variation ("fall back", "falls back", "falling back") in code, comments, or conversation** unless referring to the Helium fallback paywall flow. This term has a specific meaning in this SDK. Use alternatives like "default", "safety net", or "otherwise".
 
 ## Repository structure
 
