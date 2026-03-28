@@ -137,39 +137,39 @@ struct HeliumControlPanelView: View {
                             .padding(.leading, 4)
                     }
 
-                    Button {
-                        selectVersion(version, paywall: paywall)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(version.versionStatus == "published" ? Color.green : Color.orange)
-                                .frame(width: 7, height: 7)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(version.versionStatus == "published" ? Color.green : Color.orange)
+                            .frame(width: 7, height: 7)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(version.displayLabel)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundColor(.primary)
-                                if version.lastSavedAt != nil {
-                                    Text(version.formattedSavedDate)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-
-                            Spacer()
-
-                            if loadingVersionId == version.id {
-                                ProgressView()
-                            } else if version.bundleUrl != nil {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.subheadline)
-                                    .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(version.displayLabel)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.primary)
+                            if version.lastSavedAt != nil {
+                                Text(version.formattedSavedDate)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+
+                        Spacer()
+
+                        if loadingVersionId == version.id {
+                            ProgressView()
+                        } else if version.bundleUrl != nil {
+                            Image(systemName: "magnifyingglass")
+                                .font(.subheadline)
+                                .foregroundColor(.accentColor)
+                        }
                     }
-                    .disabled(loadingVersionId != nil || version.bundleUrl == nil)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard loadingVersionId == nil, version.bundleUrl != nil else { return }
+                        selectVersion(version, paywall: paywall)
+                    }
                     .opacity(version.bundleUrl == nil ? 0.4 : 1.0)
                 }
             }
