@@ -176,16 +176,11 @@ struct DynamicWebView: View {
         do {
             let contextJSON = createHeliumContext(triggerName: triggerName)
             
-            let customContextValues = paywallSession?.presentationContext.getCustomVariableValues() ?? [:]
-            
-            _ = Date()
-            let customData = try JSONSerialization.data(withJSONObject: customContextValues.compactMapValues { $0 })
-            let customJSON = try JSON(data: customData)
-
             _ = Date()
             var mergedContext = contextJSON
-            for (key, value) in customJSON {
-                mergedContext[key] = value
+            if let customPaywallTraits = paywallSession?.presentationContext.customPaywallTraits {
+                let customData = try JSONEncoder().encode(customPaywallTraits)
+                mergedContext["customPaywallTraits"] = try JSON(data: customData)
             }
             
             // Get localized prices from HeliumFetchedConfigManager
