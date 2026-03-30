@@ -170,7 +170,7 @@ struct HeliumControlPanelView: View {
                         guard loadingVersionId == nil, version.bundleUrl != nil else { return }
                         selectVersion(version, paywall: paywall)
                     }
-                    .opacity(version.bundleUrl == nil ? 0.4 : 1.0)
+                    .opacity(version.bundleUrl == nil || (loadingVersionId != nil && loadingVersionId != version.id) ? 0.4 : 1.0)
                 }
             }
         }
