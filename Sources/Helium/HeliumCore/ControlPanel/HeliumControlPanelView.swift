@@ -130,6 +130,9 @@ struct HeliumControlPanelView: View {
 
                 // Version rows
                 ForEach(Array(paywall.versions.enumerated()), id: \.element.id) { index, version in
+                    let isEnabled = version.bundleUrl != nil && loadingVersionId == nil
+                    let isLoading = loadingVersionId == version.id
+
                     if index > 0 {
                         Rectangle()
                             .fill(Color.gray.opacity(0.5))
@@ -137,40 +140,46 @@ struct HeliumControlPanelView: View {
                             .padding(.leading, 4)
                     }
 
-                    Button {
-                        selectVersion(version, paywall: paywall)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(version.versionStatus == "published" ? Color.green : Color.orange)
-                                .frame(width: 7, height: 7)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(version.versionStatus == "published" ? Color.green : Color.orange)
+                            .frame(width: 7, height: 7)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(version.displayLabel)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundColor(.primary)
-                                if version.lastSavedAt != nil {
-                                    Text(version.formattedSavedDate)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-
-                            Spacer()
-
-                            if loadingVersionId == version.id {
-                                ProgressView()
-                            } else if version.bundleUrl != nil {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.subheadline)
-                                    .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(version.displayLabel)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.primary)
+                            if version.lastSavedAt != nil {
+                                Text(version.formattedSavedDate)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+
+                        Spacer()
+
+                        if isLoading {
+                            ProgressView()
+                        } else if version.bundleUrl != nil {
+                            Image(systemName: "magnifyingglass")
+                                .font(.subheadline)
+                                .foregroundColor(.accentColor)
+                        }
                     }
-                    .disabled(loadingVersionId != nil || version.bundleUrl == nil)
-                    .opacity(version.bundleUrl == nil ? 0.4 : 1.0)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard isEnabled else { return }
+                        selectVersion(version, paywall: paywall)
+                    }
+                    .opacity(isEnabled || isLoading ? 1.0 : 0.4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(isEnabled ? .isButton : [])
+                    .accessibilityAction {
+                        guard isEnabled else { return }
+                        selectVersion(version, paywall: paywall)
+                    }
                 }
             }
         }
