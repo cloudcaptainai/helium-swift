@@ -20,8 +20,8 @@ struct PaywallPresentationContext {
     let onEntitled: (() -> Void)?
     let onPaywallNotShown: ((PaywallNotShownReason) -> Void)?
     
-    func getCustomVariableValues() -> [String: Any] {
-        return config.customPaywallTraits ?? [:]
+    var customPaywallTraits: HeliumUserTraits? {
+        return config.customPaywallTraits
     }
     
     static let empty: PaywallPresentationContext = PaywallPresentationContext(

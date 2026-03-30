@@ -311,7 +311,7 @@ public class Helium {
     }
     
     @available(*, deprecated, message: "Use HeliumPaywall directly instead")
-    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: [String: Any]? = nil) -> AnyView? {
+    public func upsellViewForTrigger(trigger: String, eventHandlers: PaywallEventHandlers? = nil, customPaywallTraits: HeliumUserTraits? = nil) -> AnyView? {
         let config = PaywallPresentationConfig(customPaywallTraits: customPaywallTraits)
         let presentationContext = PaywallPresentationContext(
             config: config,
@@ -329,7 +329,7 @@ public class Helium {
 /// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
     var presentFromViewController: UIViewController?
-    var customPaywallTraits: [String: Any]?
+    var customPaywallTraits: HeliumUserTraits?
     var dontShowIfAlreadyEntitled: Bool
     var loadingBudget: TimeInterval?
 
@@ -341,7 +341,7 @@ public struct PaywallPresentationConfig {
     ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
         presentFromViewController: UIViewController? = nil,
-        customPaywallTraits: [String: Any]? = nil,
+        customPaywallTraits: HeliumUserTraits? = nil,
         dontShowIfAlreadyEntitled: Bool = false,
         loadingBudget: TimeInterval? = nil
     ) {
