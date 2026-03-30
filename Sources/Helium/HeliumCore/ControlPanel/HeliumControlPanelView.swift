@@ -130,6 +130,9 @@ struct HeliumControlPanelView: View {
 
                 // Version rows
                 ForEach(Array(paywall.versions.enumerated()), id: \.element.id) { index, version in
+                    let isEnabled = version.bundleUrl != nil && loadingVersionId == nil
+                    let isLoading = loadingVersionId == version.id
+
                     if index > 0 {
                         Rectangle()
                             .fill(Color.gray.opacity(0.5))
@@ -155,7 +158,7 @@ struct HeliumControlPanelView: View {
 
                         Spacer()
 
-                        if loadingVersionId == version.id {
+                        if isLoading {
                             ProgressView()
                         } else if version.bundleUrl != nil {
                             Image(systemName: "magnifyingglass")
@@ -167,10 +170,16 @@ struct HeliumControlPanelView: View {
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        guard loadingVersionId == nil, version.bundleUrl != nil else { return }
+                        guard isEnabled else { return }
                         selectVersion(version, paywall: paywall)
                     }
-                    .opacity(version.bundleUrl == nil || (loadingVersionId != nil && loadingVersionId != version.id) ? 0.4 : 1.0)
+                    .opacity(isEnabled || isLoading ? 1.0 : 0.4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(isEnabled ? .isButton : [])
+                    .accessibilityAction {
+                        guard isEnabled else { return }
+                        selectVersion(version, paywall: paywall)
+                    }
                 }
             }
         }
