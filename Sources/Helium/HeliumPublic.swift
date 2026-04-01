@@ -323,6 +323,38 @@ public class Helium {
             trigger: trigger, presentationContext: presentationContext
         ).viewAndSession?.view
     }
+
+    // MARK: - Stripe Checkout
+    
+    /// Creates a Stripe Customer Portal session and returns the portal URL.
+    /// The host app can open this URL in a browser or in-app webview to let
+    /// the user manage their subscriptions, payment methods, and invoices.
+    ///
+    /// - Parameter returnUrl: The URL Stripe redirects to after the user finishes in the portal.
+    /// - Returns: The portal session URL.
+    ///
+    /// ## Example
+    /// ```swift
+    /// do {
+    ///     let portalURL = try await Helium.shared.createStripePortalSession(returnUrl: "myapp://settings")
+    ///     await UIApplication.shared.open(portalURL)
+    /// } catch {
+    ///     print("Failed to create portal session: \(error)")
+    /// }
+    /// ```
+    public func createStripePortalSession(returnUrl: String) async throws -> URL {
+        return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
+    }
+    
+    /// Resets Stripe entitlements and optionally clears the user ID.
+    /// If your app can support multiple Stripe users on the same device, you'll want to call this to effectively "log out" a Stripe user.
+    public func resetStripeEntitlements(clearUserId: Bool) {
+        if clearUserId {
+            Helium.identify.userId = nil
+        }
+        Helium.config.thirdPartyEntitlementsSource?.clearEntitlements()
+        HeliumIdentityManager.shared.setStripeCustomerId(nil)
+    }
     
 }
 
@@ -380,6 +412,16 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
             if newValue != nil && userIdChanged {
                 HeliumAnalyticsManager.shared.identify()
+                // Sync Stripe customer metadata if Stripe is configured
+                if Helium.shared.getDownloadStatus() != .notDownloadedYet {
+                    Task {
+                        if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
+                            await Helium.config.thirdPartyEntitlementsSource?.refreshEntitlements()
+                        } else {
+                            try? await StripeCheckoutManager.shared.updateCustomerMetadata()
+                        }
+                    }
+                }
             }
         }
     }
@@ -525,7 +567,20 @@ public class HeliumConfig {
     /// The debug view also contains a "Do not show again" checkbox that persists per-device via UserDefaults (resets on app delete).
     /// Set this to `false` to disable the diagnostic view for all users in DEBUG builds.
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
-    
+
+    // MARK: - Stripe Checkout Configuration
+
+    /// Controls how Stripe Checkout is presented when Apple Pay is not available.
+    /// Set by `initializeWithStripeOneTap` or directly before presenting a paywall.
+    public var stripeCheckoutStyle: StripeCheckoutStyle? = nil
+
+    /// Custom success redirect URL for Stripe Checkout. If nil, a default Helium URL is used.
+    /// Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
+    public var stripeCheckoutSuccessURL: String? = nil
+
+    /// Custom cancel redirect URL for Stripe Checkout. If nil, a default Helium URL is used.
+    public var stripeCheckoutCancelURL: String? = nil
+
 }
 
 public class HeliumExperiments {
@@ -711,6 +766,15 @@ public class HeliumEntitlements {
     /// - Returns: The subscription status if found, `nil` otherwise
     public func subscriptionStatusFor(productId: String) async -> Product.SubscriptionInfo.Status? {
         return await HeliumEntitlementsManager.shared.subscriptionStatusFor(productId: productId)
+    }
+    
+    /// Returns `true` if the user has any active Stripe entitlement.
+    public func hasActiveStripeEntitlement() async -> Bool {
+        guard let source = Helium.config.thirdPartyEntitlementsSource else {
+            return false
+        }
+        let productIds = await source.entitledProductIds()
+        return !productIds.isEmpty
     }
     
 }
