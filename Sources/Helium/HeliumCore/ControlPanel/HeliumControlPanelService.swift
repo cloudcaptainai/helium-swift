@@ -10,17 +10,7 @@ class HeliumControlPanelService {
             || env == AppReceiptsHelper.Environment.sandbox.rawValue
     }
 
-    private let defaultHeliumBaseURL = "https://api-v2.tryhelium.com/"
-    private var heliumBaseURL: String {
-        guard let custom = Helium.config.customAPIEndpoint,
-              let url = URL(string: custom),
-              let scheme = url.scheme,
-              let host = url.host else {
-            return defaultHeliumBaseURL
-        }
-        let port = url.port.map { ":\($0)" } ?? ""
-        return "\(scheme)://\(host)\(port)/"
-    }
+    private var heliumBaseURL: String { HeliumAPIEndpoint.baseURL }
     private var endpoint: String { heliumBaseURL + "paywall-previews" }
 
     /// Fetches a single bundle HTML from a URL for preview purposes.
