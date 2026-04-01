@@ -6,7 +6,7 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
 
     public static let shared = StripeCheckoutManager()
 
-    private var entitlementsSource: ThirdPartyEntitlementsSource?
+    private var entitlementsSource: StripeEntitlementsSource?
 
     // Checkout state
     private var currentProductId: String?
@@ -26,7 +26,7 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
     // MARK: - Configuration
 
     /// Called during initialization (e.g. from `initializeWithStripeOneTap`) to wire up the entitlements source.
-    public func configure(entitlementsSource: ThirdPartyEntitlementsSource?) {
+    public func configure(entitlementsSource: StripeEntitlementsSource?) {
         self.entitlementsSource = entitlementsSource
     }
 

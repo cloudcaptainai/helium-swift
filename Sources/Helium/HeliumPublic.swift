@@ -352,7 +352,7 @@ public class Helium {
         if clearUserId {
             Helium.identify.userId = nil
         }
-        Helium.config.thirdPartyEntitlementsSource?.clearEntitlements()
+        (Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource)?.clearEntitlements()
         HeliumIdentityManager.shared.setStripeCustomerId(nil)
     }
     
@@ -413,10 +413,11 @@ public class HeliumIdentify {
             if newValue != nil && userIdChanged {
                 HeliumAnalyticsManager.shared.identify()
                 // Sync Stripe customer metadata if Stripe is configured
-                if Helium.shared.getDownloadStatus() != .notDownloadedYet {
+                if let stripeEntitlements = Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource,
+                   Helium.shared.getDownloadStatus() != .notDownloadedYet {
                     Task {
                         if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
-                            await Helium.config.thirdPartyEntitlementsSource?.refreshEntitlements()
+                            await stripeEntitlements.refreshEntitlements()
                         } else {
                             try? await StripeCheckoutManager.shared.updateCustomerMetadata()
                         }
