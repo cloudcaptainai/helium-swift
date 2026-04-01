@@ -68,8 +68,10 @@ class HeliumPaywallDelegateWrapper {
         
         let transactionStatus: HeliumPaywallTransactionStatus
         
+        var isStripePurchaseFlow: Bool = false
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
         if allStripeProductIds.contains(productKey) {
+            isStripePurchaseFlow = true
             transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(
                 for: productKey,
                 triggerName: triggerName,
@@ -90,11 +92,16 @@ class HeliumPaywallDelegateWrapper {
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
-            if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
-               let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
-                // Double-check to make sure correct transaction retrieved
-                if heliumTransactionIdResult.productId == productKey {
-                    transactionIds = heliumTransactionIdResult
+            
+            if isStripePurchaseFlow {
+                transactionIds = StripeCheckoutManager.shared.getLatestTransactionResult()
+            } else {
+                if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
+                   let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
+                    // Double-check to make sure correct transaction retrieved
+                    if heliumTransactionIdResult.productId == productKey {
+                        transactionIds = heliumTransactionIdResult
+                    }
                 }
             }
             if transactionIds == nil {

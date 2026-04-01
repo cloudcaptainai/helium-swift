@@ -139,6 +139,9 @@ public class StripeCheckoutManager: NSObject {
 
     private func onReturnedToForeground() {
         guard let sessionId = currentSessionId, purchaseContinuation != nil else { return }
+        if foregroundObserver == nil {
+            return // onReturnedToForeground may have already ran
+        }
         stopForegroundObserver()
 
         Task { [weak self] in
@@ -338,6 +341,7 @@ public class StripeCheckoutManager: NSObject {
 
 extension StripeCheckoutManager: SFSafariViewControllerDelegate {
     public func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        // Note that didBecomeActiveNotification will not fire in this case, so need to call here
         onReturnedToForeground()
     }
 }
