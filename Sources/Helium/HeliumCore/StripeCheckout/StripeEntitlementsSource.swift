@@ -78,7 +78,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     /// Authoritative once set — populated by a successful server fetch.
     private var cached: CachedSnapshot?
-    /// Cold-start fallback — loaded from disk, used only until first fetch completes.
+    /// Cold-start backup — loaded from disk, used only until first fetch completes.
     private var persisted: [ProductEntitlement] = []
     /// Tracks the in-flight fetch so concurrent callers coalesce onto one request.
     private var currentFetchTask: Task<Void, Never>?
@@ -120,7 +120,9 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
     }
 
     open func didCompletePurchase(heliumProductId: String, subscriptionExpiresAt: Date?) {
+        guard !heliumProductId.isEmpty else { return }
         let parts = heliumProductId.split(separator: ":", maxSplits: 1)
+        guard !parts.isEmpty else { return }
         let productId = String(parts[0])
         let priceId: String? = parts.count > 1 ? String(parts[1]) : nil
 
@@ -153,7 +155,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     // MARK: - Private
 
-    /// Best available product IDs: cached (authoritative) > persisted (fallback).
+    /// Best available product IDs: cached (authoritative) > persisted.
     /// Both tiers filter by per-product subscription expiration.
     private var currentProductIds: Set<String> {
         if let cached {

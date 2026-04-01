@@ -220,8 +220,7 @@ public class StripeCheckoutManager: NSObject {
     // MARK: - Checkout Completion
 
     private func completeCheckout(result: StripeCheckoutResult) {
-        guard currentSessionId != nil else { return }
-        let sessionId = currentSessionId ?? ""
+        guard let sessionId = currentSessionId else { return }
 
         switch result {
         case .success(let returnedSessionId):

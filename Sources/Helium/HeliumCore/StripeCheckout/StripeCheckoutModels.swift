@@ -31,11 +31,13 @@ enum StripeCheckoutRedirect {
     static var cancelURL: String { "\(basePath)\(cancelPath)" }
 
     static func isSuccess(_ url: URL) -> Bool {
-        url.absoluteString.hasPrefix("\(basePath)\(successPath)")
+        let successUrlPrefix = Helium.config.stripeCheckoutSuccessURL ?? "\(basePath)\(successPath)"
+        return url.absoluteString.hasPrefix(successUrlPrefix)
     }
 
     static func isCancelled(_ url: URL) -> Bool {
-        url.absoluteString.hasPrefix("\(basePath)\(cancelPath)")
+        let cancelUrlPrefix = Helium.config.stripeCheckoutCancelURL ?? "\(basePath)\(cancelPath)"
+        return url.absoluteString.hasPrefix(cancelUrlPrefix)
     }
 }
 
