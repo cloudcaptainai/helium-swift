@@ -25,9 +25,22 @@
 		278BFE732F0C46F6003347CF /* HeliumExampleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HeliumExampleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		27CE9DA02F7CEB1200F0F390 /* Exceptions for "HeliumExample" folder in "HeliumExample" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 271266D02ECBF5CA005479C2 /* HeliumExample */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		271266D32ECBF5CA005479C2 /* HeliumExample */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				27CE9DA02F7CEB1200F0F390 /* Exceptions for "HeliumExample" folder in "HeliumExample" target */,
+			);
 			path = HeliumExample;
 			sourceTree = "<group>";
 		};
@@ -340,6 +353,7 @@
 				DEVELOPMENT_TEAM = 6NH2CQ3V8N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HeliumExample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -373,6 +387,7 @@
 				DEVELOPMENT_TEAM = 6NH2CQ3V8N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HeliumExample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

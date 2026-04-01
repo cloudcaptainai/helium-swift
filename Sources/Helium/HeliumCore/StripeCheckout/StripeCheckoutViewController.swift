@@ -21,7 +21,7 @@ final class StripeCheckoutViewController: UIViewController, WKNavigationDelegate
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func viewDidLoad() {
         super.viewDidLoad()

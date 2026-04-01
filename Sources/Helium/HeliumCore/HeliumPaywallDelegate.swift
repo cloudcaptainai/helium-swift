@@ -281,6 +281,8 @@ class HeliumPaywallDelegateWrapper {
             notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
         case .stripeNoCustomUserId:
             notShownAddendum = "Stripe purchase flows require a custom user ID to be set"
+        case .stripeCheckoutMissingUrls:
+            notShownAddendum = "Stripe Checkout Flow requires success/cancel URLs to be set. See Helium.config.enableStripeCheckout"
         default:
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }

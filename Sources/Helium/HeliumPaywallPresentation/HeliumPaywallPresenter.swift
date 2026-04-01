@@ -554,6 +554,9 @@ extension HeliumPaywallPresenter {
             if hasStripeProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
             }
+            if hasStripeProducts && !Helium.config.stripeCheckoutEnabled {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeCheckoutMissingUrls, presentationContext: presentationContext)
+            }
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {

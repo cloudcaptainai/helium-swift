@@ -560,6 +560,7 @@ public class HeliumConfig {
     /// Registers a third-party entitlements source.
     /// The entitlements manager will query this source alongside StoreKit using OR-logic.
     /// Set this before calling `Helium.shared.initialize()`.
+    /// Note: if you set this, Helium will not handle Stripe entitlements for you.
     public var thirdPartyEntitlementsSource: ThirdPartyEntitlementsSource? = nil
     
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
@@ -573,16 +574,46 @@ public class HeliumConfig {
 
     // MARK: - Stripe Checkout Configuration
 
-    /// Controls how Stripe Checkout is presented when Apple Pay is not available.
-    /// Set by `initializeWithStripeOneTap` or directly before presenting a paywall.
-    public var stripeCheckoutStyle: StripeCheckoutStyle? = nil
+    /// Controls what style of Stripe Checkout Flow is used. Use .safariInApp and .webView at your own risk,
+    /// as they are not officially approved by Apple.
+    public var stripeCheckoutStyle: StripeCheckoutStyle = .externalBrowser
+    
+    /// Enables Stripe Checkout Flow for any Stripe products in your paywalls. If not enabled, paywalls with Stripe products
+    /// will not show. Your fallback paywall/s, if provided, will show instead.
+    ///
+    /// You must provide redirect URLs so Stripe knows where to send the user after checkout completes or is cancelled.
+    ///
+    /// - Parameters:
+    ///   - successURL: The URL Stripe redirects to after a successful payment.
+    ///     Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
+    ///   - cancelURL: The URL Stripe redirects to when the user cancels checkout.
+    public func enableStripeCheckout(successURL: String, cancelURL: String) {
+        guard let successParsed = URL(string: successURL), successParsed.scheme != nil,
+              let cancelParsed = URL(string: cancelURL), cancelParsed.scheme != nil else {
+            HeliumLogger.log(.error, category: .core, "enableStripeCheckout: invalid URLs provided. Both successURL and cancelURL must be valid URLs with a scheme (e.g. https://example.com or myapp://path).")
+            return
+        }
+        stripeCheckoutSuccessURL = successURL
+        stripeCheckoutCancelURL = cancelURL
+        Helium.config.thirdPartyEntitlementsSource = StripeEntitlementsSource()
+    }
 
-    /// Custom success redirect URL for Stripe Checkout. If nil, a default Helium URL is used.
-    /// Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
-    public var stripeCheckoutSuccessURL: String? = nil
+    /// Disables Stripe checkout flow. Paywalls with Stripe products
+    /// will not show. Your fallback paywall/s, if provided, will show instead.
+    public func disableStripeCheckout() {
+        stripeCheckoutSuccessURL = nil
+        stripeCheckoutCancelURL = nil
+    }
 
-    /// Custom cancel redirect URL for Stripe Checkout. If nil, a default Helium URL is used.
-    public var stripeCheckoutCancelURL: String? = nil
+    /// Custom success redirect URL for Stripe Checkout Flow.
+    var stripeCheckoutSuccessURL: String? = nil
+
+    /// Custom cancel redirect URL for Stripe Checkout Flow.
+    var stripeCheckoutCancelURL: String? = nil
+    
+    var stripeCheckoutEnabled: Bool {
+        return stripeCheckoutSuccessURL != nil && stripeCheckoutCancelURL != nil
+    }
 
 }
 
@@ -773,7 +804,7 @@ public class HeliumEntitlements {
     
     /// Returns `true` if the user has any active Stripe entitlement.
     public func hasActiveStripeEntitlement() async -> Bool {
-        guard let source = Helium.config.thirdPartyEntitlementsSource else {
+        guard let source = Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource else {
             return false
         }
         let productIds = await source.entitledProductIds()
