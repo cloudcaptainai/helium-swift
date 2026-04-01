@@ -36,8 +36,10 @@ public class StripeCheckoutManager: NSObject {
         paywallSessionId: String
     ) async -> sending HeliumPaywallTransactionStatus {
         let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
-        let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL ?? StripeCheckoutRedirect.successURL
-        let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL ?? StripeCheckoutRedirect.cancelURL
+        guard let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL,
+              let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL else {
+            return .failed(StripeCheckoutError.checkoutURLsNotConfigured)
+        }
 
         let checkoutURL: URL
         let sessionId: String
@@ -350,6 +352,7 @@ extension StripeCheckoutManager: SFSafariViewControllerDelegate {
 enum StripeCheckoutError: LocalizedError {
     case cannotPresentCheckout
     case notInitialized
+    case checkoutURLsNotConfigured
 
     var errorDescription: String? {
         switch self {
@@ -357,6 +360,8 @@ enum StripeCheckoutError: LocalizedError {
             return "Could not present the checkout view"
         case .notInitialized:
             return "Stripe checkout is not initialized. Call initializeWithStripeOneTap() or configure StripeCheckoutManager first."
+        case .checkoutURLsNotConfigured:
+            return "Stripe Checkout URLs not configured. Call Helium.config.enableStripeCheckout(successURL:cancelURL:) before presenting a paywall."
         }
     }
 }

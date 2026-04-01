@@ -23,21 +23,20 @@ public enum StripeCheckoutResult {
 // MARK: - URL Constants
 
 enum StripeCheckoutRedirect {
-    static var basePath: String { "\(HeliumStripeAPIClient.shared.heliumBaseURL)stripe/checkout" }
-    static let successPath = "/success"
-    static let cancelPath = "/cancel"
-
-    static var successURL: String { "\(basePath)\(successPath)?session_id={CHECKOUT_SESSION_ID}" }
-    static var cancelURL: String { "\(basePath)\(cancelPath)" }
-
     static func isSuccess(_ url: URL) -> Bool {
-        let successUrlPrefix = Helium.config.stripeCheckoutSuccessURL ?? "\(basePath)\(successPath)"
-        return url.absoluteString.hasPrefix(successUrlPrefix)
+        guard let successUrl = Helium.config.stripeCheckoutSuccessURL,
+              let configured = URL(string: successUrl) else { return false }
+        return url.scheme == configured.scheme
+            && url.host == configured.host
+            && url.path == configured.path
     }
 
     static func isCancelled(_ url: URL) -> Bool {
-        let cancelUrlPrefix = Helium.config.stripeCheckoutCancelURL ?? "\(basePath)\(cancelPath)"
-        return url.absoluteString.hasPrefix(cancelUrlPrefix)
+        guard let cancelUrl = Helium.config.stripeCheckoutCancelURL,
+              let configured = URL(string: cancelUrl) else { return false }
+        return url.scheme == configured.scheme
+            && url.host == configured.host
+            && url.path == configured.path
     }
 }
 
