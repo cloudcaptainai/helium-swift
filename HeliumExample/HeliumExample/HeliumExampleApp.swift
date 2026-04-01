@@ -33,6 +33,8 @@ struct HeliumExampleApp: App {
             AppConfig.apiKey
         }
         
+        Helium.config.enableStripeCheckout(successURL: "heliumexamplestripe://openapp", cancelURL: "heliumexamplestripe://openapp")
+        
         Helium.shared.initialize(
             apiKey: apiKey
         )

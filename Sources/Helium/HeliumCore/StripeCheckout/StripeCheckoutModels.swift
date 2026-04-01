@@ -4,7 +4,7 @@ import Foundation
 
 /// Controls how Stripe Checkout is presented
 public enum StripeCheckoutStyle: Sendable {
-    /// Embedded WKWebView (default). No deep link setup required.
+    /// Embedded WKWebView. No deep link setup required.
     case webView
     /// SFSafariViewController. The SDK automatically detects when the user returns.
     case safariInApp

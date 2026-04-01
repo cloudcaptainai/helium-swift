@@ -776,6 +776,7 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetchCannotDecodeContent
     case noProductsIOS
     case stripeNoCustomUserId
+    case stripeCheckoutMissingUrls
 }
 
 /// Reason a paywall was not shown.
