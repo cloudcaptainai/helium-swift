@@ -137,6 +137,7 @@ class HeliumAnalyticsManager {
     func trackPaywallEvent(
         _ event: HeliumEvent,
         paywallSession: PaywallSession?,
+        overridePaywallSessionId: String? = nil,
         destination: AnalyticsDestination = .standard
     ) {
         guard !analyticsDisabledForTesting else { return }
@@ -191,7 +192,7 @@ class HeliumAnalyticsManager {
                 hasCustomUserId: HeliumIdentityManager.shared.hasCustomUserId(),
                 heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
                 heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
-                heliumPaywallSessionId: paywallSession?.sessionId,
+                heliumPaywallSessionId: overridePaywallSessionId ?? paywallSession?.sessionId,
                 appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
                 appTransactionId: HeliumIdentityManager.shared.appTransactionID,
                 revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,

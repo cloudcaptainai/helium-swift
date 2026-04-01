@@ -70,7 +70,12 @@ class HeliumPaywallDelegateWrapper {
         
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
         if allStripeProductIds.contains(productKey) {
-            transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(for: productKey)
+            transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(
+                for: productKey,
+                triggerName: triggerName,
+                paywallName: paywallTemplateName,
+                paywallSessionId: paywallSession.sessionId
+            )
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
@@ -162,10 +167,19 @@ class HeliumPaywallDelegateWrapper {
     
     
     /// Fire a v2 typed event - main entry point for all SDK events
+    /// Convenience for firing events when only the paywall session ID is available (e.g. recovery from app termination).
+    func fireEvent(
+        _ event: HeliumEvent,
+        paywallSessionId: String?
+    ) {
+        fireEvent(event, paywallSession: nil, overridePaywallSessionId: paywallSessionId)
+    }
+
     func fireEvent(
         _ event: HeliumEvent,
         paywallSession: PaywallSession?,
-        overridePresentationContext: PaywallPresentationContext? = nil
+        overridePresentationContext: PaywallPresentationContext? = nil,
+        overridePaywallSessionId: String? = nil
     ) {
         Task { @MainActor in
             let context = overridePresentationContext ?? paywallSession?.presentationContext
@@ -220,10 +234,10 @@ class HeliumPaywallDelegateWrapper {
             logPaywallSkip(trigger: skipEvent.triggerName, skipReason: skipEvent.skipReason, logMetadata: metadata)
         }
         
-        HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession)
+        HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession, overridePaywallSessionId: overridePaywallSessionId)
         
         // Mark session for onEntitled callback on purchase/restore success
-        if let sessionId = paywallSession?.sessionId {
+        if let sessionId = overridePaywallSessionId ?? paywallSession?.sessionId {
             if event is PurchaseSucceededEvent ||
                 event is PurchaseRestoredEvent ||
                 event is PurchaseAlreadyEntitledEvent {

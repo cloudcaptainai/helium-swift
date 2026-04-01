@@ -45,6 +45,9 @@ enum StripeCheckoutRedirect {
 struct PendingCheckout: Codable {
     let productId: String
     let sessionId: String
+    let triggerName: String
+    let paywallName: String
+    let paywallSessionId: String?
     let timestamp: Date
 
     var isExpired: Bool {

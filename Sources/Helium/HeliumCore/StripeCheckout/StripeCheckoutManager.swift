@@ -6,7 +6,9 @@ public class StripeCheckoutManager: NSObject {
 
     public static let shared = StripeCheckoutManager()
 
-    private var entitlementsSource: StripeEntitlementsSource?
+    private var entitlementsSource: StripeEntitlementsSource? {
+        Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource
+    }
 
     // Checkout state
     private var currentSessionId: String?
@@ -22,20 +24,16 @@ public class StripeCheckoutManager: NSObject {
         purchaseContinuation?.resume(returning: .cancelled)
     }
 
-    // MARK: - Configuration
-
-    /// Called during initialization (e.g. from `initializeWithStripeOneTap`) to wire up the entitlements source.
-    public func configure(entitlementsSource: StripeEntitlementsSource?) {
-        self.entitlementsSource = entitlementsSource
-    }
-
     // MARK: - Public Checkout Flow
 
     /// Presents the Stripe Checkout flow using the specified style.
     /// Returns the transaction status when checkout completes.
     @MainActor
-    public func presentCheckoutFlow(
-        for productId: String
+    func presentCheckoutFlow(
+        for productId: String,
+        triggerName: String,
+        paywallName: String,
+        paywallSessionId: String
     ) async -> sending HeliumPaywallTransactionStatus {
         let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
         let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL ?? StripeCheckoutRedirect.successURL
@@ -61,10 +59,10 @@ public class StripeCheckoutManager: NSObject {
         case .webView:
             return await presentWebViewCheckout(checkoutURL: checkoutURL)
         case .safariInApp:
-            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, timestamp: Date()))
+            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, triggerName: triggerName, paywallName: paywallName, paywallSessionId: paywallSessionId, timestamp: Date()))
             return await presentSafariCheckout(checkoutURL: checkoutURL)
         case .externalBrowser:
-            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, timestamp: Date()))
+            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, triggerName: triggerName, paywallName: paywallName, paywallSessionId: paywallSessionId, timestamp: Date()))
             return await presentExternalBrowserCheckout(checkoutURL: checkoutURL)
         }
     }
@@ -198,6 +196,17 @@ public class StripeCheckoutManager: NSObject {
                 entitlementsSource?.didCompletePurchase(
                     heliumProductId: confirmation.productId,
                     subscriptionExpiresAt: confirmation.expiresAt
+                )
+
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PurchaseSucceededEvent(
+                        productId: confirmation.productId,
+                        triggerName: pending.triggerName,
+                        paywallName: pending.paywallName,
+                        storeKitTransactionId: txnId,
+                        storeKitOriginalTransactionId: txnId
+                    ),
+                    paywallSessionId: pending.paywallSessionId
                 )
             } catch {
                 // Session wasn't completed — nothing to recover
