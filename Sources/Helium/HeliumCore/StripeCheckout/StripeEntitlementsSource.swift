@@ -74,7 +74,6 @@ private struct PersistedStripeEntitlements: Codable {
 
 open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Sendable {
 
-    private let apiKey: String
     private let lock = NSLock()
 
     /// Authoritative once set — populated by a successful server fetch.
@@ -89,8 +88,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     private static let persistenceFileName = "helium_stripe_entitlements.json"
 
-    public init(apiKey: String) {
-        self.apiKey = apiKey
+    public init() {
         loadPersistedData()
         Task { await fetchFromServer() }
     }

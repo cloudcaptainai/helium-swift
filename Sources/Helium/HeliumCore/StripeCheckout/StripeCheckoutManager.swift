@@ -2,14 +2,13 @@ import UIKit
 import SafariServices
 
 /// Orchestrates the Stripe app2web checkout flow (WebView, Safari, external browser).
-public class StripeCheckoutManager: NSObject, @unchecked Sendable {
+public class StripeCheckoutManager: NSObject {
 
     public static let shared = StripeCheckoutManager()
 
     private var entitlementsSource: StripeEntitlementsSource?
 
     // Checkout state
-    private var currentProductId: String?
     private var currentSessionId: String?
     private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
     private var latestTransactionResult: HeliumTransactionIdResult?
@@ -36,14 +35,11 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
     /// Returns the transaction status when checkout completes.
     @MainActor
     public func presentCheckoutFlow(
-        for productId: String,
-        style: StripeCheckoutStyle?,
-        successURL: String?,
-        cancelURL: String?
+        for productId: String
     ) async -> sending HeliumPaywallTransactionStatus {
-        let resolvedStyle = style ?? .webView
-        let resolvedSuccessURL = successURL ?? StripeCheckoutRedirect.successURL
-        let resolvedCancelURL = cancelURL ?? StripeCheckoutRedirect.cancelURL
+        let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
+        let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL ?? StripeCheckoutRedirect.successURL
+        let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL ?? StripeCheckoutRedirect.cancelURL
 
         let checkoutURL: URL
         let sessionId: String
@@ -59,7 +55,6 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
             return .failed(error)
         }
 
-        currentProductId = productId
         currentSessionId = sessionId
 
         switch resolvedStyle {
@@ -160,14 +155,13 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
                     }
                 }
                 let txnId = confirmation.transactionId ?? sessionId
-                let productId = currentProductId ?? confirmation.productId
                 latestTransactionResult = HeliumTransactionIdResult(
-                    productId: productId,
+                    productId: confirmation.productId,
                     transactionId: txnId,
                     originalTransactionId: txnId
                 )
                 entitlementsSource?.didCompletePurchase(
-                    heliumProductId: productId,
+                    heliumProductId: confirmation.productId,
                     subscriptionExpiresAt: confirmation.expiresAt
                 )
                 resumePurchase(with: .purchased)
@@ -196,14 +190,13 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
             do {
                 let confirmation = try await confirmCheckoutSession(sessionId: pending.sessionId)
                 let txnId = confirmation.transactionId ?? pending.sessionId
-                let productId = confirmation.productId.isEmpty ? pending.productId : confirmation.productId
                 latestTransactionResult = HeliumTransactionIdResult(
-                    productId: productId,
+                    productId: confirmation.productId,
                     transactionId: txnId,
                     originalTransactionId: txnId
                 )
                 entitlementsSource?.didCompletePurchase(
-                    heliumProductId: pending.productId,
+                    heliumProductId: confirmation.productId,
                     subscriptionExpiresAt: confirmation.expiresAt
                 )
             } catch {
@@ -215,7 +208,7 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
     // MARK: - Checkout Completion
 
     private func completeCheckout(result: StripeCheckoutResult) {
-        guard let productId = currentProductId else { return }
+        guard currentSessionId != nil else { return }
         let sessionId = currentSessionId ?? ""
 
         switch result {
@@ -227,12 +220,12 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
                     let confirmation = try await confirmCheckoutSession(sessionId: resolvedSessionId)
                     let txnId = confirmation.transactionId ?? resolvedSessionId
                     latestTransactionResult = HeliumTransactionIdResult(
-                        productId: confirmation.productId.isEmpty ? productId : confirmation.productId,
+                        productId: confirmation.productId,
                         transactionId: txnId,
                         originalTransactionId: txnId
                     )
                     entitlementsSource?.didCompletePurchase(
-                        heliumProductId: productId,
+                        heliumProductId: confirmation.productId,
                         subscriptionExpiresAt: confirmation.expiresAt
                     )
                     resumePurchase(with: .purchased)
@@ -251,7 +244,6 @@ public class StripeCheckoutManager: NSObject, @unchecked Sendable {
         stopForegroundObserver()
         purchaseContinuation?.resume(returning: status)
         purchaseContinuation = nil
-        currentProductId = nil
         currentSessionId = nil
     }
 

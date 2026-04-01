@@ -66,7 +66,15 @@ class HeliumPaywallDelegateWrapper {
         
         StoreKit1Listener.ensureListening()
         
-        let transactionStatus = await delegate.makePurchase(productId: productKey)
+        let transactionStatus: HeliumPaywallTransactionStatus
+        
+        let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
+        if allStripeProductIds.contains(productKey) {
+            transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(for: productKey)
+        } else {
+            transactionStatus = await delegate.makePurchase(productId: productKey)
+        }
+        
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
