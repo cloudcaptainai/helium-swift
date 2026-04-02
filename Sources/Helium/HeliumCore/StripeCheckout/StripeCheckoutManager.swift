@@ -160,6 +160,8 @@ public class StripeCheckoutManager: NSObject {
                     }
                 }
                 resumePurchase(with: .purchased)
+            } catch StripeCheckoutError.confirmationAlreadyInProgress {
+                // Another caller is already confirming — let it handle the result.
             } catch HeliumStripeAPIError.checkoutSessionNotCompleted {
                 // Session not completed yet — don't clear pending state,
                 // user may return to the browser to finish checkout.
@@ -215,6 +217,8 @@ public class StripeCheckoutManager: NSObject {
                 do {
                     try await confirmAndFulfill(sessionId: resolvedSessionId)
                     resumePurchase(with: .purchased)
+                } catch StripeCheckoutError.confirmationAlreadyInProgress {
+                    // Another caller is already confirming — let it handle the result.
                 } catch {
                     resumePurchase(with: .failed(error))
                 }
@@ -250,7 +254,9 @@ public class StripeCheckoutManager: NSObject {
         defer { isConfirmingCheckout = false }
 
         let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
-        PendingCheckout.clear()
+        if PendingCheckout.load()?.sessionId == sessionId {
+            PendingCheckout.clear()
+        }
         let txnId = confirmation.transactionId ?? sessionId
         latestTransactionResult = HeliumTransactionIdResult(
             productId: confirmation.productId,
