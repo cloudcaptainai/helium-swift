@@ -261,17 +261,13 @@ actor HeliumEntitlementsManager {
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
+            // Check products and associated subscription groups
             let thirdPartyIds = await allThirdPartyEntitledProductIds()
-            if productIds.contains(where: { thirdPartyIds.contains($0) }) {
-                result = true
-            } else {
-                // Check products and associated subscription groups
-                result = false
-                for productId in productIds {
-                    if await hasActiveEntitlementFor(productId: productId, checkThirdPartyIds: false) {
-                        result = true
-                        break
-                    }
+            result = false
+            for productId in productIds {
+                if await hasActiveEntitlementFor(productId: productId, thirdPartyIds: thirdPartyIds) {
+                    result = true
+                    break
                 }
             }
         }
@@ -373,15 +369,13 @@ actor HeliumEntitlementsManager {
         return nil
     }
     
-    func hasActiveEntitlementFor(productId: String, checkThirdPartyIds: Bool = true) async -> Bool {
-        if checkThirdPartyIds {
-            // Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
-            // just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
-            let ids = await allThirdPartyEntitledProductIds()
-            let productIdPrefix = String(productId.prefix(while: { $0 != ":" }))
-            if ids.contains(where: { $0.hasPrefix(productIdPrefix) }) {
-                return true
-            }
+    func hasActiveEntitlementFor(productId: String, thirdPartyIds: Set<String>? = nil) async -> Bool {
+        // Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
+        // just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
+        let ids = thirdPartyIds ?? await allThirdPartyEntitledProductIds()
+        let productIdPrefix = String(productId.prefix(while: { $0 != ":" }))
+        if ids.contains(where: { $0.hasPrefix(productIdPrefix) }) {
+            return true
         }
         
         // If transactions haven't loaded yet, use persisted data immediately for faster response

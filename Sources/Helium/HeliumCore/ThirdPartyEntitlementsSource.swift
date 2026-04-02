@@ -8,7 +8,7 @@
 /// StoreKit using OR-logic: the user is entitled if StoreKit OR the third-party
 /// source says so.
 ///
-/// Implementations handle their own caching and persistence.
+/// Implementations handle their own caching and persistence. Caching is highly recommended.
 public protocol ThirdPartyEntitlementsSource: AnyObject, Sendable {
 
     /// Returns a set of all purchased product IDs that the user currently has access to.
