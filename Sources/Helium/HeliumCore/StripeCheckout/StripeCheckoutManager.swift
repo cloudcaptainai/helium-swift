@@ -111,16 +111,14 @@ public class StripeCheckoutManager: NSObject {
 
     @MainActor
     private func presentExternalBrowserCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
+        let opened = await UIApplication.shared.open(checkoutURL)
+        guard opened else {
+            return .failed(StripeCheckoutError.cannotPresentCheckout)
+        }
+
         return await withCheckedContinuation { continuation in
             self.purchaseContinuation = continuation
             startForegroundObserver()
-            Task { @MainActor in
-                let opened = await UIApplication.shared.open(checkoutURL)
-                if !opened {
-                    self.stopForegroundObserver()
-                    self.resumePurchase(with: .failed(StripeCheckoutError.cannotPresentCheckout))
-                }
-            }
         }
     }
 
