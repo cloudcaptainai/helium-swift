@@ -53,16 +53,12 @@ private struct CachedSnapshot {
 
     var needsRefresh: Bool { Date() > refreshAfter }
 
-    var activeProductIds: Set<String> {
-        Set(products.filter { $0.isActive }.map { $0.productId })
-    }
-
     var activeHeliumProductIds: Set<String> {
         Set(products.filter { $0.isActive }.map { $0.heliumProductId })
     }
 
     var activeSubscriptionProductIds: Set<String> {
-        Set(products.filter { $0.subscriptionExpiresAt != nil && $0.isActive }.map { $0.productId })
+        Set(products.filter { $0.subscriptionExpiresAt != nil && $0.isActive }.map { $0.heliumProductId })
     }
 }
 
@@ -102,19 +98,14 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         return lock.withLock { currentHeliumProductIds }
     }
 
-    open func entitledProductIds() async -> Set<String> {
-        await refreshIfNeeded()
-        return lock.withLock { currentProductIds }
-    }
-
     open func hasAnyActiveSubscription() async -> Bool {
         await refreshIfNeeded()
-        return lock.withLock { !currentSubscriptionProductIds.isEmpty }
+        return lock.withLock { !currentSubscriptionHeliumProductIds.isEmpty }
     }
 
     open func activeSubscriptions() async -> Set<String> {
         await refreshIfNeeded()
-        return lock.withLock { currentSubscriptionProductIds }
+        return lock.withLock { currentSubscriptionHeliumProductIds }
     }
 
     open func refreshEntitlements() async {
@@ -155,16 +146,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
     }
 
     // MARK: - Private
-
-    /// Best available product IDs: cached (authoritative) > persisted.
-    /// Both tiers filter by per-product subscription expiration.
-    private var currentProductIds: Set<String> {
-        if let cached {
-            return cached.activeProductIds
-        }
-        return Set(persisted.filter { $0.isActive }.map { $0.productId })
-    }
-
+    
     private var currentHeliumProductIds: Set<String> {
         if let cached {
             return cached.activeHeliumProductIds
@@ -172,11 +154,11 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         return Set(persisted.filter { $0.isActive }.map { $0.heliumProductId })
     }
 
-    private var currentSubscriptionProductIds: Set<String> {
+    private var currentSubscriptionHeliumProductIds: Set<String> {
         if let cached {
             return cached.activeSubscriptionProductIds
         }
-        return Set(persisted.filter { $0.subscriptionExpiresAt != nil && $0.isActive }.map { $0.productId })
+        return Set(persisted.filter { $0.subscriptionExpiresAt != nil && $0.isActive }.map { $0.heliumProductId })
     }
 
     private func refreshIfNeeded() async {

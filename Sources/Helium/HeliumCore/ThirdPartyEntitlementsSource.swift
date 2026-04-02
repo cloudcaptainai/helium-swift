@@ -14,9 +14,6 @@ public protocol ThirdPartyEntitlementsSource: AnyObject, Sendable {
     /// Returns a set of all purchased product IDs that the user currently has access to.
     func purchasedHeliumProductIds() async -> Set<String>
     
-    /// Product IDs the user is currently entitled to, whether through direct purchase or otherwise.
-    func entitledProductIds() async -> Set<String>
-
     /// Whether the user has any active subscription from this source.
     func hasAnyActiveSubscription() async -> Bool
     

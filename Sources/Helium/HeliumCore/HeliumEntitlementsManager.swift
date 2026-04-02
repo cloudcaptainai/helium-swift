@@ -27,7 +27,7 @@ actor HeliumEntitlementsManager {
     private func allThirdPartyEntitledProductIds() async -> Set<String> {
         var result = Set<String>()
         for source in allThirdPartySources {
-            result.formUnion(await source.entitledProductIds())
+            result.formUnion(await source.purchasedHeliumProductIds())
         }
         return result
     }
@@ -261,10 +261,8 @@ actor HeliumEntitlementsManager {
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
-            // Check third-party sources (paywall productIds may be "prod_id:price_id", extract prefix to compare)
-            let paywallProductIdPrefixes = productIds.map { String($0.prefix(while: { $0 != ":" })) }
             let thirdPartyIds = await allThirdPartyEntitledProductIds()
-            if paywallProductIdPrefixes.contains(where: { thirdPartyIds.contains($0) }) {
+            if productIds.contains(where: { thirdPartyIds.contains($0) }) {
                 result = true
             } else {
                 // Check products and associated subscription groups
@@ -377,8 +375,13 @@ actor HeliumEntitlementsManager {
     
     func hasActiveEntitlementFor(productId: String, checkThirdPartyIds: Bool = true) async -> Bool {
         if checkThirdPartyIds {
+            // Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
+            // just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
             let ids = await allThirdPartyEntitledProductIds()
-            if ids.contains(productId) { return true }
+            let productIdPrefix = String(productId.prefix(while: { $0 != ":" }))
+            if ids.contains(where: { $0.hasPrefix(productIdPrefix) }) {
+                return true
+            }
         }
         
         // If transactions haven't loaded yet, use persisted data immediately for faster response
