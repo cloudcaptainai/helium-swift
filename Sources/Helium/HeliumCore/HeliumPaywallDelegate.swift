@@ -94,7 +94,12 @@ class HeliumPaywallDelegateWrapper {
             var transactionIds: HeliumTransactionIdResult? = nil
             
             if isStripePurchaseFlow {
-                transactionIds = StripeCheckoutManager.shared.getLatestTransactionResult()
+                if let heliumTransactionIdResult = StripeCheckoutManager.shared.getLatestTransactionResult() {
+                    // Double-check to make sure correct transaction retrieved
+                    if heliumTransactionIdResult.productId == productKey {
+                        transactionIds = heliumTransactionIdResult
+                    }
+                }
             } else {
                 if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                    let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {

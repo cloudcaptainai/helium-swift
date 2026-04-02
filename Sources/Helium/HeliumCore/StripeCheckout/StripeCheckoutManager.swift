@@ -285,14 +285,20 @@ public class StripeCheckoutManager: NSObject {
 
         let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
         PendingCheckout.clearIfMatches(sessionId: sessionId)
+        
+        var heliumProductId = confirmation.productId
+        if let priceId = confirmation.priceId {
+            heliumProductId += ":\(priceId)"
+        }
         let txnId = confirmation.transactionId ?? sessionId
         latestTransactionResult = HeliumTransactionIdResult(
-            productId: confirmation.productId,
+            productId: heliumProductId,
             transactionId: txnId,
             originalTransactionId: txnId
         )
         HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(
-            heliumProductId: confirmation.productId,
+            productId: confirmation.productId,
+            priceId: confirmation.priceId,
             subscriptionExpiresAt: confirmation.expiresAt
         )
         return (productId: confirmation.productId, transactionId: txnId)

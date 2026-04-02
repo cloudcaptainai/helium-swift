@@ -81,11 +81,13 @@ struct PendingCheckout: Codable {
 
 public struct PaymentSuccessResponse: Sendable {
     public let productId: String
+    public let priceId: String?
     public let expiresAt: Date?
     public let transactionId: String?
 
-    public init(productId: String, expiresAt: Date? = nil, transactionId: String? = nil) {
+    public init(productId: String, priceId: String?, expiresAt: Date? = nil, transactionId: String? = nil) {
         self.productId = productId
+        self.priceId = priceId
         self.expiresAt = expiresAt
         self.transactionId = transactionId
     }
@@ -111,6 +113,7 @@ struct ExecutePurchaseResponse: Decodable {
     func toPaymentSuccessResponse(backupProductId: String = "") -> PaymentSuccessResponse {
         PaymentSuccessResponse(
             productId: productId ?? backupProductId,
+            priceId: priceId,
             expiresAt: parseISODate(expiresAt),
             transactionId: transactionId
         )

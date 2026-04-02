@@ -121,13 +121,9 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         await fetchFromServer(forceNew: true)
     }
 
-    open func didCompletePurchase(heliumProductId: String, subscriptionExpiresAt: Date?) {
-        guard !heliumProductId.isEmpty else { return }
-        let parts = heliumProductId.split(separator: ":", maxSplits: 1)
-        guard !parts.isEmpty else { return }
-        let productId = String(parts[0])
-        let priceId: String? = parts.count > 1 ? String(parts[1]) : nil
-
+    open func didCompletePurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
+        guard !productId.isEmpty else { return }
+        
         let newEntitlement = ProductEntitlement(
             productId: productId,
             priceId: priceId,
