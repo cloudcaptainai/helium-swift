@@ -32,7 +32,12 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private var _hasInvalidatedCache = false
     
     private func configureRevenueCat(revenueCatApiKey: String) {
-        Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
+        var appUserID: String? = nil
+        // Maintain app user ID for existing users, otherwise just let RC manage it.
+        if !HeliumIdentityManager.shared.isNewHeliumUser() {
+            appUserID = HeliumIdentityManager.shared.getHeliumPersistentId()
+        }
+        Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: appUserID)
     }
     
     /// Initialize the delegate.
