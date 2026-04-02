@@ -121,7 +121,9 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
             subscriptionExpiresAt: subscriptionExpiresAt
         )
         lock.withLock {
-            var products = cached?.products ?? []
+            currentFetchTask?.cancel()
+            currentFetchTask = nil
+            var products = cached?.products ?? persisted
             products.removeAll { $0.productId == productId }
             products.append(newEntitlement)
             cached = CachedSnapshot(

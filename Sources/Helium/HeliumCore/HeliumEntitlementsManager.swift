@@ -372,9 +372,14 @@ actor HeliumEntitlementsManager {
     func hasActiveEntitlementFor(productId: String, thirdPartyIds: Set<String>? = nil) async -> Bool {
         // Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
         // just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
-        let ids = thirdPartyIds ?? await allThirdPartyEntitledProductIds()
+        let ids: Set<String>
+        if let thirdPartyIds {
+            ids = thirdPartyIds
+        } else {
+            ids = await allThirdPartyEntitledProductIds()
+        }
         let productIdPrefix = String(productId.prefix(while: { $0 != ":" }))
-        if ids.contains(where: { $0.hasPrefix(productIdPrefix) }) {
+        if ids.contains(where: { String($0.prefix(while: { $0 != ":" })) == productIdPrefix }) {
             return true
         }
         

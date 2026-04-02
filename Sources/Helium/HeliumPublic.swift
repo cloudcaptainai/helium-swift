@@ -805,7 +805,7 @@ public class HeliumEntitlements {
     
     /// Returns `true` if the user has any active Stripe entitlement.
     public func hasActiveStripeEntitlement() async -> Bool {
-        let productIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.entitledProductIds()
+        let productIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
         return !productIds.isEmpty
     }
     
