@@ -6,10 +6,6 @@ public class StripeCheckoutManager: NSObject {
 
     public static let shared = StripeCheckoutManager()
 
-    private var entitlementsSource: StripeEntitlementsSource? {
-        Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource
-    }
-
     // Checkout state
     private var currentSessionId: String?
     private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
@@ -295,7 +291,7 @@ public class StripeCheckoutManager: NSObject {
             transactionId: txnId,
             originalTransactionId: txnId
         )
-        entitlementsSource?.didCompletePurchase(
+        HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(
             heliumProductId: confirmation.productId,
             subscriptionExpiresAt: confirmation.expiresAt
         )

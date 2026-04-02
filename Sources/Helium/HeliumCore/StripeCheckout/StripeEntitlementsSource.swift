@@ -88,7 +88,9 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     private static let persistenceFileName = "helium_stripe_entitlements.json"
 
-    public init() {
+    public init() {}
+
+    func configure() {
         loadPersistedData()
         Task { await fetchFromServer() }
     }
@@ -126,25 +128,28 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         let productId = String(parts[0])
         let priceId: String? = parts.count > 1 ? String(parts[1]) : nil
 
-        let didUpdate: Bool = lock.withLock {
-            guard var products = cached?.products else { return false }
+        let newEntitlement = ProductEntitlement(
+            productId: productId,
+            priceId: priceId,
+            subscriptionExpiresAt: subscriptionExpiresAt
+        )
+        lock.withLock {
+            var products = cached?.products ?? []
             products.removeAll { $0.productId == productId }
-            products.append(ProductEntitlement(
-                productId: productId,
-                priceId: priceId,
-                subscriptionExpiresAt: subscriptionExpiresAt
-            ))
+            products.append(newEntitlement)
             cached = CachedSnapshot(
                 products: products,
                 refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
             )
-            return true
+            persisted = products
         }
-        if didUpdate { persistData() }
+        persistData()
     }
 
     open func clearEntitlements() {
         lock.withLock {
+            currentFetchTask?.cancel()
+            currentFetchTask = nil
             cached = nil
             persisted = []
         }
@@ -225,11 +230,9 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             // Build per-product entries from subscription expiration dates
-            let productEntitlements: [ProductEntitlement] = activeSubscriptions.compactMap { sub in
+            let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
                 let dateString = sub.currentPeriodEnd ?? sub.trialEnd
-                guard let expiresAt = parseISODate(dateString) else {
-                    return nil
-                }
+                let expiresAt = parseISODate(dateString)
                 return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionExpiresAt: expiresAt)
             }
 

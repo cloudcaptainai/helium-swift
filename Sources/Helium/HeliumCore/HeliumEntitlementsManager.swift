@@ -11,8 +11,25 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
-    private var thirdPartySource: ThirdPartyEntitlementsSource? {
-        Helium.config.thirdPartyEntitlementsSource
+    nonisolated let stripeEntitlementsSource = StripeEntitlementsSource()
+
+    private var allThirdPartySources: [ThirdPartyEntitlementsSource] {
+        var sources: [ThirdPartyEntitlementsSource] = []
+        if let thirdParty = Helium.config.thirdPartyEntitlementsSource {
+            sources.append(thirdParty)
+        }
+        if Helium.config.stripeCheckoutEnabled {
+            sources.append(stripeEntitlementsSource)
+        }
+        return sources
+    }
+
+    private func allThirdPartyEntitledProductIds() async -> Set<String> {
+        var result = Set<String>()
+        for source in allThirdPartySources {
+            result.formUnion(await source.entitledProductIds())
+        }
+        return result
     }
     
     private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
@@ -155,6 +172,10 @@ actor HeliumEntitlementsManager {
         startTransactionListener()
         await loadEntitlementsIfNeeded()
 
+        if Helium.config.stripeCheckoutEnabled {
+            stripeEntitlementsSource.configure()
+        }
+
         // Refresh trigger entitlement cache now or when config finishes downloading
         if Helium.shared.paywallsLoaded() {
             await refreshEntitledForTriggerCache()
@@ -240,10 +261,10 @@ actor HeliumEntitlementsManager {
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
-            // Check third-party source (paywall productIds may be "prod_id:price_id", extract prefix to compare)
+            // Check third-party sources (paywall productIds may be "prod_id:price_id", extract prefix to compare)
             let paywallProductIdPrefixes = productIds.map { String($0.prefix(while: { $0 != ":" })) }
-            if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
-               paywallProductIdPrefixes.contains(where: { thirdPartyIds.contains($0) }) {
+            let thirdPartyIds = await allThirdPartyEntitledProductIds()
+            if paywallProductIdPrefixes.contains(where: { thirdPartyIds.contains($0) }) {
                 result = true
             } else {
                 // Check products and associated subscription groups
@@ -267,10 +288,10 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
-        // Check third-party source
-        if let source = thirdPartySource,
-           await source.hasAnyActiveSubscription() {
-            return true
+        for source in allThirdPartySources {
+            if await source.hasAnyActiveSubscription() {
+                return true
+            }
         }
         
         // If transactions haven't loaded yet, use persisted data immediately for faster response
@@ -297,11 +318,7 @@ actor HeliumEntitlementsManager {
     }
     
     func hasAnyEntitlement() async -> Bool {
-        // Check third-party source
-        if let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
-           !thirdPartyIds.isEmpty {
-            return true
-        }
+        if await !allThirdPartyEntitledProductIds().isEmpty { return true }
         
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
@@ -359,10 +376,9 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveEntitlementFor(productId: String, checkThirdPartyIds: Bool = true) async -> Bool {
-        if checkThirdPartyIds,
-           let thirdPartyIds = await thirdPartySource?.entitledProductIds(),
-           thirdPartyIds.contains(productId) {
-            return true
+        if checkThirdPartyIds {
+            let ids = await allThirdPartyEntitledProductIds()
+            if ids.contains(productId) { return true }
         }
         
         // If transactions haven't loaded yet, use persisted data immediately for faster response
@@ -400,9 +416,9 @@ actor HeliumEntitlementsManager {
     
     // Note that this should return true if user has purchased product OR a different subscription within same subscription group as supplied product.
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
-        if let thirdPartySubs = await thirdPartySource?.activeSubscriptions(),
-           thirdPartySubs.contains(productId) {
-            return true
+        for source in allThirdPartySources {
+            let subs = await source.activeSubscriptions()
+            if subs.contains(productId) { return true }
         }
 
         let entitlements = await getCachedEntitlements()
@@ -513,7 +529,8 @@ actor HeliumEntitlementsManager {
     
     private func purchaseProductIdsWithThirdPartyIncluded(_ ids: Set<String>) async -> [String] {
         var result = ids
-        if let thirdPartyIds = await thirdPartySource?.purchasedHeliumProductIds() {
+        for source in allThirdPartySources {
+            let thirdPartyIds = await source.purchasedHeliumProductIds()
             result.formUnion(thirdPartyIds)
         }
         return Array(result)

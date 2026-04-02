@@ -354,7 +354,7 @@ public class Helium {
         if clearUserId {
             Helium.identify.userId = nil
         }
-        (Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource)?.clearEntitlements()
+        HeliumEntitlementsManager.shared.stripeEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setStripeCustomerId(nil)
     }
     
@@ -414,12 +414,13 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.setCustomUserId(newValue)
             if newValue != nil && userIdChanged {
                 HeliumAnalyticsManager.shared.identify()
+                
                 // Sync Stripe customer metadata if Stripe is configured
-                if let stripeEntitlements = Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource,
-                   Helium.shared.getDownloadStatus() != .notDownloadedYet {
+                if Helium.config.stripeCheckoutEnabled,
+                   Helium.shared.isInitialized() {
                     Task {
                         if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
-                            await stripeEntitlements.refreshEntitlements()
+                            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
                         } else {
                             try? await StripeCheckoutManager.shared.updateCustomerMetadata()
                         }
@@ -577,7 +578,15 @@ public class HeliumConfig {
     /// Controls what style of Stripe Checkout Flow is used. Use .safariInApp and .webView at your own risk,
     /// as they are not officially approved by Apple.
     public var stripeCheckoutStyle: StripeCheckoutStyle = .externalBrowser
+
+    private(set) var stripeCheckoutEnabled: Bool = false
     
+    /// Custom success redirect URL for Stripe Checkout Flow.
+    private(set) var stripeCheckoutSuccessURL: String? = nil
+
+    /// Custom cancel redirect URL for Stripe Checkout Flow.
+    private(set) var stripeCheckoutCancelURL: String? = nil
+
     /// Enables Stripe Checkout Flow for any Stripe products in your paywalls. If not enabled, paywalls with Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
     ///
@@ -595,24 +604,16 @@ public class HeliumConfig {
         }
         stripeCheckoutSuccessURL = successURL
         stripeCheckoutCancelURL = cancelURL
-        Helium.config.thirdPartyEntitlementsSource = StripeEntitlementsSource()
+        stripeCheckoutEnabled = true
     }
 
     /// Disables Stripe checkout flow. Paywalls with Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
+    /// NOTE - if you have existing Stripe customers, Helium will stop respecting their entitlements.
     public func disableStripeCheckout() {
         stripeCheckoutSuccessURL = nil
         stripeCheckoutCancelURL = nil
-    }
-
-    /// Custom success redirect URL for Stripe Checkout Flow.
-    var stripeCheckoutSuccessURL: String? = nil
-
-    /// Custom cancel redirect URL for Stripe Checkout Flow.
-    var stripeCheckoutCancelURL: String? = nil
-    
-    var stripeCheckoutEnabled: Bool {
-        return stripeCheckoutSuccessURL != nil && stripeCheckoutCancelURL != nil
+        stripeCheckoutEnabled = false
     }
 
 }
@@ -804,10 +805,7 @@ public class HeliumEntitlements {
     
     /// Returns `true` if the user has any active Stripe entitlement.
     public func hasActiveStripeEntitlement() async -> Bool {
-        guard let source = Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource else {
-            return false
-        }
-        let productIds = await source.entitledProductIds()
+        let productIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.entitledProductIds()
         return !productIds.isEmpty
     }
     
