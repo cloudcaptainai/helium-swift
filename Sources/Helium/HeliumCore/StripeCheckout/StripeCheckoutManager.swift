@@ -6,10 +6,6 @@ public class StripeCheckoutManager: NSObject {
 
     public static let shared = StripeCheckoutManager()
 
-    private var entitlementsSource: StripeEntitlementsSource? {
-        Helium.config.thirdPartyEntitlementsSource as? StripeEntitlementsSource
-    }
-
     // Checkout state
     private var currentSessionId: String?
     private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
@@ -289,14 +285,20 @@ public class StripeCheckoutManager: NSObject {
 
         let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
         PendingCheckout.clearIfMatches(sessionId: sessionId)
+        
+        var heliumProductId = confirmation.productId
+        if let priceId = confirmation.priceId {
+            heliumProductId += ":\(priceId)"
+        }
         let txnId = confirmation.transactionId ?? sessionId
         latestTransactionResult = HeliumTransactionIdResult(
-            productId: confirmation.productId,
+            productId: heliumProductId,
             transactionId: txnId,
             originalTransactionId: txnId
         )
-        entitlementsSource?.didCompletePurchase(
-            heliumProductId: confirmation.productId,
+        HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(
+            productId: confirmation.productId,
+            priceId: confirmation.priceId,
             subscriptionExpiresAt: confirmation.expiresAt
         )
         return (productId: confirmation.productId, transactionId: txnId)
