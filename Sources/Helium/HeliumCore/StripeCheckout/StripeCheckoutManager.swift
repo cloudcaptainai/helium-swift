@@ -177,7 +177,11 @@ public class StripeCheckoutManager: NSObject {
 
     /// Call on init to recover any checkout that was in progress when the app was terminated.
     public func resolvePendingCheckoutIfNeeded() {
-        guard let pending = PendingCheckout.load(), !pending.isExpired else { return }
+        guard let pending = PendingCheckout.load() else { return }
+        guard !pending.isExpired else {
+            PendingCheckout.clear()
+            return
+        }
 
         Task { [weak self] in
             guard let self else { return }
