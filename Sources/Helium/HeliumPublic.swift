@@ -72,7 +72,7 @@ public class Helium {
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
 
-            StripeCheckoutManager.shared.resolvePendingCheckoutIfNeeded()
+            StripeCheckoutManager.shared.startPendingCheckoutRecovery()
         }
     }
     

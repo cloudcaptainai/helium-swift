@@ -70,6 +70,11 @@ struct PendingCheckout: Codable {
     static func clear() {
         UserDefaults.standard.removeObject(forKey: key)
     }
+
+    static func clearIfMatches(sessionId: String) {
+        guard let pending = load(), pending.sessionId == sessionId else { return }
+        clear()
+    }
 }
 
 // MARK: - Payment Success Response
