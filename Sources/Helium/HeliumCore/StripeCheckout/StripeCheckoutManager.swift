@@ -209,14 +209,15 @@ public class StripeCheckoutManager: NSObject {
            Date().timeIntervalSince(lastResolve) < Self.pendingCheckoutResolveCooldown {
             return
         }
-        lastPendingCheckoutResolveTime = Date()
 
-        guard foregroundObserver == nil else { return }
+        guard purchaseContinuation == nil else { return }
         guard let pending = PendingCheckout.load() else { return }
         guard !pending.isExpired else {
             PendingCheckout.clear()
             return
         }
+
+        lastPendingCheckoutResolveTime = Date()
 
         Task { [weak self] in
             guard let self else { return }
