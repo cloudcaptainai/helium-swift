@@ -15,7 +15,7 @@ public class StripeCheckoutManager: NSObject {
     private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
     private var latestTransactionResult: HeliumTransactionIdResult?
     private var foregroundObserver: NSObjectProtocol?
-    @HeliumAtomic private var isConfirmingCheckout = false
+    @HeliumAtomic private var confirmingSessionIds: Set<String> = []
 
     private override init() {
         super.init()
@@ -243,15 +243,13 @@ public class StripeCheckoutManager: NSObject {
     /// Returns the confirmed transaction ID.
     @discardableResult
     private func confirmAndFulfill(sessionId: String) async throws -> (productId: String, transactionId: String) {
-        let didClaim = _isConfirmingCheckout.withValue { flag -> Bool in
-            guard !flag else { return false }
-            flag = true
-            return true
+        let didClaim = _confirmingSessionIds.withValue { ids -> Bool in
+            ids.insert(sessionId).inserted
         }
         guard didClaim else {
             throw StripeCheckoutError.confirmationAlreadyInProgress
         }
-        defer { isConfirmingCheckout = false }
+        defer { _confirmingSessionIds.withValue { $0.remove(sessionId) } }
 
         let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
         if PendingCheckout.load()?.sessionId == sessionId {
