@@ -4,7 +4,7 @@ import WebKit
 // MARK: - StripeCheckoutViewController
 
 @MainActor
-final class StripeCheckoutViewController: UIViewController, WKNavigationDelegate, UIAdaptivePresentationControllerDelegate {
+final class StripeCheckoutViewController: UIViewController, WKNavigationDelegate {
 
     private let checkoutURL: URL
     private var completion: ((StripeCheckoutResult) -> Void)?
@@ -66,10 +66,6 @@ final class StripeCheckoutViewController: UIViewController, WKNavigationDelegate
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
 
-        // Detect interactive dismissal (swipe down)
-        navigationController?.presentationController?.delegate = self
-        presentationController?.delegate = self
-
         activityIndicator.startAnimating()
         webView.load(URLRequest(url: checkoutURL))
     }
@@ -88,12 +84,6 @@ final class StripeCheckoutViewController: UIViewController, WKNavigationDelegate
         completion?(result)
         completion = nil
         dismiss(animated: true)
-    }
-
-    // MARK: - UIAdaptivePresentationControllerDelegate
-
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        complete(with: .cancelled)
     }
 
     // MARK: - WKNavigationDelegate

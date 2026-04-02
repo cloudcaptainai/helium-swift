@@ -16,6 +16,10 @@ public class StripeCheckoutManager: NSObject {
     private var latestTransactionResult: HeliumTransactionIdResult?
     private var foregroundObserver: NSObjectProtocol?
     @HeliumAtomic private var confirmingSessionIds: Set<String> = []
+    private var lastPendingCheckoutResolveTime: Date?
+    private static let pendingCheckoutResolveCooldown: TimeInterval = 30
+
+    private var appDidBecomeActiveObserver: NSObjectProtocol?
 
     private override init() {
         super.init()
@@ -23,6 +27,21 @@ public class StripeCheckoutManager: NSObject {
 
     deinit {
         purchaseContinuation?.resume(returning: .cancelled)
+    }
+
+    /// Starts observing `didBecomeActive` for pending checkout recovery.
+    /// Called after the SDK is initialized and the API key is available.
+    func startPendingCheckoutRecovery() {
+        resolvePendingCheckoutIfNeeded()
+
+        guard appDidBecomeActiveObserver == nil else { return }
+        appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resolvePendingCheckoutIfNeeded()
+        }
     }
 
     // MARK: - Public Checkout Flow
@@ -104,7 +123,6 @@ public class StripeCheckoutManager: NSObject {
 
         return await withCheckedContinuation { continuation in
             self.purchaseContinuation = continuation
-            startForegroundObserver()
             topVC.present(safariVC, animated: true)
         }
     }
@@ -150,7 +168,15 @@ public class StripeCheckoutManager: NSObject {
             return // onReturnedToForeground may have already ran
         }
         stopForegroundObserver()
+        confirmActiveSession(sessionId: sessionId)
+    }
 
+    private func onSafariViewControllerDismissed() {
+        guard let sessionId = currentSessionId, purchaseContinuation != nil else { return }
+        confirmActiveSession(sessionId: sessionId)
+    }
+
+    private func confirmActiveSession(sessionId: String) {
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -176,13 +202,22 @@ public class StripeCheckoutManager: NSObject {
 
     // MARK: - Pending Checkout Recovery (app terminated)
 
-    /// Call on init to recover any checkout that was in progress when the app was terminated.
-    public func resolvePendingCheckoutIfNeeded() {
+    /// Resolves any pending checkout that was in progress when the app was terminated or backgrounded.
+    /// Debounced to avoid excessive API calls on rapid foreground events.
+    func resolvePendingCheckoutIfNeeded() {
+        if let lastResolve = lastPendingCheckoutResolveTime,
+           Date().timeIntervalSince(lastResolve) < Self.pendingCheckoutResolveCooldown {
+            return
+        }
+
+        guard purchaseContinuation == nil else { return }
         guard let pending = PendingCheckout.load() else { return }
         guard !pending.isExpired else {
             PendingCheckout.clear()
             return
         }
+
+        lastPendingCheckoutResolveTime = Date()
 
         Task { [weak self] in
             guard let self else { return }
@@ -253,9 +288,7 @@ public class StripeCheckoutManager: NSObject {
         defer { _confirmingSessionIds.withValue { $0.remove(sessionId) } }
 
         let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
-        if PendingCheckout.load()?.sessionId == sessionId {
-            PendingCheckout.clear()
-        }
+        PendingCheckout.clearIfMatches(sessionId: sessionId)
         let txnId = confirmation.transactionId ?? sessionId
         latestTransactionResult = HeliumTransactionIdResult(
             productId: confirmation.productId,
@@ -300,7 +333,12 @@ public class StripeCheckoutManager: NSObject {
         var body = HeliumStripeAPIClient.shared.baseRequestBody()
         body["sessionId"] = sessionId
 
-        let response: ExecutePurchaseResponse = try await HeliumStripeAPIClient.shared.post("stripe/confirm-checkout", body: body)
+        let response: ExecutePurchaseResponse
+        do {
+            response = try await HeliumStripeAPIClient.shared.post("stripe/confirm-checkout", body: body)
+        } catch HeliumStripeAPIError.serverError(let statusCode, let message) where statusCode == 400 && message.contains("session_not_complete") {
+            throw HeliumStripeAPIError.checkoutSessionNotCompleted
+        }
 
         guard response.status == "complete" || response.transactionId != nil else {
             throw HeliumStripeAPIError.checkoutSessionNotCompleted
@@ -354,8 +392,9 @@ public class StripeCheckoutManager: NSObject {
 
 extension StripeCheckoutManager: SFSafariViewControllerDelegate {
     public func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
-        // Note that didBecomeActiveNotification will not fire in this case, so need to call here
-        onReturnedToForeground()
+        // Note that we specifically avoid foreground listener here because it can incorrectly fire any time app becomes
+        // active even if safari view controller still showing.
+        onSafariViewControllerDismissed()
     }
 }
 
