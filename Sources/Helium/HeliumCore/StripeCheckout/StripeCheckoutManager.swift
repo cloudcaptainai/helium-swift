@@ -15,6 +15,7 @@ public class StripeCheckoutManager: NSObject {
     private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
     private var latestTransactionResult: HeliumTransactionIdResult?
     private var foregroundObserver: NSObjectProtocol?
+    @HeliumAtomic private var confirmingSessionIds: Set<String> = []
 
     private override init() {
         super.init()
@@ -110,7 +111,11 @@ public class StripeCheckoutManager: NSObject {
 
     @MainActor
     private func presentExternalBrowserCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
-        await UIApplication.shared.open(checkoutURL)
+        let opened = await UIApplication.shared.open(checkoutURL)
+        guard opened else {
+            PendingCheckout.clear()
+            return .failed(StripeCheckoutError.cannotPresentCheckout)
+        }
 
         return await withCheckedContinuation { continuation in
             self.purchaseContinuation = continuation
@@ -149,28 +154,18 @@ public class StripeCheckoutManager: NSObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
-                PendingCheckout.clear()
-                // Dismiss SFSafariViewController if present
+                try await confirmAndFulfill(sessionId: sessionId)
                 await MainActor.run {
                     if let topVC = UIWindowHelper.findTopMostViewController(), topVC is SFSafariViewController {
                         topVC.dismiss(animated: true)
                     }
                 }
-                let txnId = confirmation.transactionId ?? sessionId
-                latestTransactionResult = HeliumTransactionIdResult(
-                    productId: confirmation.productId,
-                    transactionId: txnId,
-                    originalTransactionId: txnId
-                )
-                entitlementsSource?.didCompletePurchase(
-                    heliumProductId: confirmation.productId,
-                    subscriptionExpiresAt: confirmation.expiresAt
-                )
                 resumePurchase(with: .purchased)
+            } catch StripeCheckoutError.confirmationAlreadyInProgress {
+                // Another caller is already confirming — let it handle the result.
             } catch HeliumStripeAPIError.checkoutSessionNotCompleted {
-                // Session not completed — user came back without paying
-                PendingCheckout.clear()
+                // Session not completed yet — don't clear pending state,
+                // user may return to the browser to finish checkout.
                 resumePurchase(with: .cancelled)
             } catch {
                 // Network/server error — don't clear pending state, keep it for retry
@@ -184,32 +179,23 @@ public class StripeCheckoutManager: NSObject {
     /// Call on init to recover any checkout that was in progress when the app was terminated.
     public func resolvePendingCheckoutIfNeeded() {
         guard let pending = PendingCheckout.load() else { return }
-        PendingCheckout.clear()
-
-        guard !pending.isExpired else { return }
+        guard !pending.isExpired else {
+            PendingCheckout.clear()
+            return
+        }
 
         Task { [weak self] in
             guard let self else { return }
             do {
-                let confirmation = try await confirmCheckoutSession(sessionId: pending.sessionId)
-                let txnId = confirmation.transactionId ?? pending.sessionId
-                latestTransactionResult = HeliumTransactionIdResult(
-                    productId: confirmation.productId,
-                    transactionId: txnId,
-                    originalTransactionId: txnId
-                )
-                entitlementsSource?.didCompletePurchase(
-                    heliumProductId: confirmation.productId,
-                    subscriptionExpiresAt: confirmation.expiresAt
-                )
+                let result = try await confirmAndFulfill(sessionId: pending.sessionId)
 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PurchaseSucceededEvent(
-                        productId: confirmation.productId,
+                        productId: result.productId,
                         triggerName: pending.triggerName,
                         paywallName: pending.paywallName,
-                        storeKitTransactionId: txnId,
-                        storeKitOriginalTransactionId: txnId
+                        storeKitTransactionId: result.transactionId,
+                        storeKitOriginalTransactionId: result.transactionId
                     ),
                     paywallSessionId: pending.paywallSessionId
                 )
@@ -230,18 +216,10 @@ public class StripeCheckoutManager: NSObject {
             Task { [weak self] in
                 guard let self else { return }
                 do {
-                    let confirmation = try await confirmCheckoutSession(sessionId: resolvedSessionId)
-                    let txnId = confirmation.transactionId ?? resolvedSessionId
-                    latestTransactionResult = HeliumTransactionIdResult(
-                        productId: confirmation.productId,
-                        transactionId: txnId,
-                        originalTransactionId: txnId
-                    )
-                    entitlementsSource?.didCompletePurchase(
-                        heliumProductId: confirmation.productId,
-                        subscriptionExpiresAt: confirmation.expiresAt
-                    )
+                    try await confirmAndFulfill(sessionId: resolvedSessionId)
                     resumePurchase(with: .purchased)
+                } catch StripeCheckoutError.confirmationAlreadyInProgress {
+                    // Another caller is already confirming — let it handle the result.
                 } catch {
                     resumePurchase(with: .failed(error))
                 }
@@ -258,6 +236,37 @@ public class StripeCheckoutManager: NSObject {
         purchaseContinuation?.resume(returning: status)
         purchaseContinuation = nil
         currentSessionId = nil
+    }
+
+    // MARK: - Shared Confirmation Logic
+
+    /// Confirms the session, stores the transaction result, and notifies entitlements.
+    /// Returns the confirmed transaction ID.
+    @discardableResult
+    private func confirmAndFulfill(sessionId: String) async throws -> (productId: String, transactionId: String) {
+        let didClaim = _confirmingSessionIds.withValue { ids -> Bool in
+            ids.insert(sessionId).inserted
+        }
+        guard didClaim else {
+            throw StripeCheckoutError.confirmationAlreadyInProgress
+        }
+        defer { _confirmingSessionIds.withValue { $0.remove(sessionId) } }
+
+        let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
+        if PendingCheckout.load()?.sessionId == sessionId {
+            PendingCheckout.clear()
+        }
+        let txnId = confirmation.transactionId ?? sessionId
+        latestTransactionResult = HeliumTransactionIdResult(
+            productId: confirmation.productId,
+            transactionId: txnId,
+            originalTransactionId: txnId
+        )
+        entitlementsSource?.didCompletePurchase(
+            heliumProductId: confirmation.productId,
+            subscriptionExpiresAt: confirmation.expiresAt
+        )
+        return (productId: confirmation.productId, transactionId: txnId)
     }
 
     // MARK: - API Calls
@@ -279,7 +288,10 @@ public class StripeCheckoutManager: NSObject {
         guard let checkoutUrlString = response.checkoutURL, let url = URL(string: checkoutUrlString) else {
             throw HeliumStripeAPIError.serverError(statusCode: 200, message: "No checkout URL returned from the server.")
         }
-        return (checkoutURL: url, sessionId: response.sessionId ?? "")
+        guard let sessionId = response.sessionId, !sessionId.isEmpty else {
+            throw HeliumStripeAPIError.serverError(statusCode: 200, message: "No session ID returned from the server.")
+        }
+        return (checkoutURL: url, sessionId: sessionId)
     }
 
     /// Confirms a completed Stripe Checkout Session and returns the purchase details.
@@ -353,6 +365,7 @@ enum StripeCheckoutError: LocalizedError {
     case cannotPresentCheckout
     case notInitialized
     case checkoutURLsNotConfigured
+    case confirmationAlreadyInProgress
 
     var errorDescription: String? {
         switch self {
@@ -362,6 +375,8 @@ enum StripeCheckoutError: LocalizedError {
             return "Stripe checkout is not initialized. Call initializeWithStripeOneTap() or configure StripeCheckoutManager first."
         case .checkoutURLsNotConfigured:
             return "Stripe Checkout URLs not configured. Call Helium.config.enableStripeCheckout(successURL:cancelURL:) before presenting a paywall."
+        case .confirmationAlreadyInProgress:
+            return "A checkout confirmation is already in progress."
         }
     }
 }
