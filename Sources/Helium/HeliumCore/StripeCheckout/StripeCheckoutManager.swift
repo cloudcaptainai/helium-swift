@@ -40,21 +40,18 @@ public class StripeCheckoutManager: NSObject {
         }
     }
 
-    // MARK: - Public Checkout Flow
+    // MARK: - Checkout Flow
 
-    /// Presents the Stripe Checkout flow using the specified style.
-    /// Returns the transaction status when checkout completes.
+    /// Creates a Stripe Checkout session and returns the checkout URL and metadata
+    /// without presenting it. The caller is responsible for enriching the URL and
+    /// calling `openEnrichedCheckoutURL` to present.
     @MainActor
     func presentCheckoutFlow(
-        for productId: String,
-        triggerName: String,
-        paywallName: String,
-        paywallSessionId: String
-    ) async -> sending HeliumPaywallTransactionStatus {
-        let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
+        for productId: String
+    ) async -> CheckoutFlowResult {
         guard let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL,
               let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL else {
-            return .failed(StripeCheckoutError.checkoutURLsNotConfigured)
+            return .clientManaged(.failed(StripeCheckoutError.checkoutURLsNotConfigured))
         }
 
         let checkoutURL: URL
@@ -68,20 +65,67 @@ public class StripeCheckoutManager: NSObject {
             checkoutURL = result.checkoutURL
             sessionId = result.sessionId
         } catch {
-            return .failed(error)
+            return .clientManaged(.failed(error))
         }
 
         currentSessionId = sessionId
 
+        return .serverManaged(checkoutURL: checkoutURL, successURL: resolvedSuccessURL, cancelURL: resolvedCancelURL)
+    }
+
+    /// Appends analytics, identity, and routing query parameters to a checkout URL.
+    func buildEnrichedCheckoutURL(
+        baseURL: URL,
+        analyticsEvent: HeliumPaywallLoggedEvent,
+        productKey: String,
+        triggerName: String,
+        successURL: String,
+        cancelURL: String
+    ) -> URL {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return baseURL
+        }
+
+        var queryItems = components.queryItems ?? []
+
+        // Base64-encoded analytics event
+        if let jsonData = try? JSONEncoder().encode(analyticsEvent) {
+            queryItems.append(URLQueryItem(name: "analyticsProperties", value: jsonData.base64EncodedString()))
+        }
+
+        queryItems.append(URLQueryItem(name: "productKey", value: productKey))
+        queryItems.append(URLQueryItem(name: "trigger", value: triggerName))
+        queryItems.append(URLQueryItem(name: "successUrl", value: successURL))
+        queryItems.append(URLQueryItem(name: "cancelUrl", value: cancelURL))
+
+        // Identity fields from baseRequestBody, minus apiKey
+        let baseBody = HeliumStripeAPIClient.shared.baseRequestBody()
+        for (key, value) in baseBody where key != "apiKey" {
+            if let stringValue = value as? String {
+                queryItems.append(URLQueryItem(name: key, value: stringValue))
+            }
+        }
+
+        components.queryItems = queryItems
+        return components.url ?? baseURL
+    }
+
+    /// Opens the enriched checkout URL using the configured checkout style. Fire-and-forget.
+    @MainActor
+    func openEnrichedCheckoutURL(_ url: URL) {
+        let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
+
         switch resolvedStyle {
         case .webView:
-            return await presentWebViewCheckout(checkoutURL: checkoutURL)
+            guard let topVC = UIWindowHelper.findTopMostViewController() else { return }
+            let checkoutVC = StripeCheckoutViewController(checkoutURL: url) { _ in }
+            topVC.present(checkoutVC, animated: true)
         case .safariInApp:
-            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, triggerName: triggerName, paywallName: paywallName, paywallSessionId: paywallSessionId, timestamp: Date()))
-            return await presentSafariCheckout(checkoutURL: checkoutURL)
+            guard let topVC = UIWindowHelper.findTopMostViewController() else { return }
+            let safariVC = SFSafariViewController(url: url)
+            topVC.present(safariVC, animated: true)
         case .externalBrowser:
-            PendingCheckout.save(PendingCheckout(productId: productId, sessionId: sessionId, triggerName: triggerName, paywallName: paywallName, paywallSessionId: paywallSessionId, timestamp: Date()))
-            return await presentExternalBrowserCheckout(checkoutURL: checkoutURL)
+            UIApplication.shared.open(url)
         }
     }
 

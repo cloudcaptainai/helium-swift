@@ -12,6 +12,13 @@ public enum StripeCheckoutStyle: Sendable {
     case externalBrowser
 }
 
+// MARK: - Checkout Flow Result
+
+enum CheckoutFlowResult {
+    case serverManaged(checkoutURL: URL, successURL: String, cancelURL: String)
+    case clientManaged(HeliumPaywallTransactionStatus)
+}
+
 // MARK: - Checkout Result
 
 public enum StripeCheckoutResult {

@@ -59,7 +59,7 @@ class HeliumPaywallDelegateWrapper {
         return Helium.config.purchaseDelegate
     }
     
-    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
+    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus {
         let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
         } ?? false
@@ -72,12 +72,36 @@ class HeliumPaywallDelegateWrapper {
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
         if allStripeProductIds.contains(productKey) {
             isStripePurchaseFlow = true
-            transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(
-                for: productKey,
-                triggerName: triggerName,
-                paywallName: paywallTemplateName,
-                paywallSessionId: paywallSession.sessionId
+            let checkoutResult = await StripeCheckoutManager.shared.presentCheckoutFlow(
+                for: productKey
             )
+            
+            switch checkoutResult {
+            case .clientManaged(let status):
+                transactionStatus = status
+            case .serverManaged(let checkoutURL, let successURL, let cancelURL):
+                let templateEvent = PurchaseSucceededEvent(
+                    productId: productKey,
+                    triggerName: triggerName,
+                    paywallName: paywallTemplateName,
+                    storeKitTransactionId: nil,
+                    storeKitOriginalTransactionId: nil
+                )
+                let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+                    for: templateEvent,
+                    paywallSession: paywallSession
+                )
+                let enrichedURL = StripeCheckoutManager.shared.buildEnrichedCheckoutURL(
+                    baseURL: checkoutURL,
+                    analyticsEvent: loggedEvent,
+                    productKey: productKey,
+                    triggerName: triggerName,
+                    successURL: successURL,
+                    cancelURL: cancelURL
+                )
+                await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL)
+                return .cancelled // technically not a cancel, but the client-purchase-flow is completed at this point
+            }
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
