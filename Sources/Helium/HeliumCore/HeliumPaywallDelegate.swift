@@ -100,7 +100,7 @@ class HeliumPaywallDelegateWrapper {
                         successURL: successURL,
                         cancelURL: cancelURL
                     )
-                    await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
+                    try await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
                     // technically not a cancel, but the client-purchase-flow is completed at this point
                     return .cancelled
 
@@ -286,6 +286,10 @@ class HeliumPaywallDelegateWrapper {
                 event is PurchaseAlreadyEntitledEvent {
                 HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
             }
+        }
+
+        if event is PaywallCloseEvent, let paywallSession {
+            StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
         }
     }
     

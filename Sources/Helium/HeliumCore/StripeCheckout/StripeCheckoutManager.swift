@@ -117,10 +117,14 @@ public class StripeCheckoutManager: NSObject {
     /// Opens the enriched checkout URL in external browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async {
+    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async throws {
         entitledProductIdsBeforeCheckout = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+        let opened = await UIApplication.shared.open(url)
+        guard opened else {
+            entitledProductIdsBeforeCheckout = []
+            throw StripeCheckoutError.failedToOpenEnrichedURL
+        }
         observingPaywallSession = paywallSession
-        UIApplication.shared.open(url)
         startForegroundObserver()
     }
 
@@ -482,6 +486,7 @@ enum StripeCheckoutError: LocalizedError {
     case checkoutURLsNotConfigured
     case confirmationAlreadyInProgress
     case failedToBuildEnrichedURL
+    case failedToOpenEnrichedURL
 
     var errorDescription: String? {
         switch self {
@@ -495,6 +500,8 @@ enum StripeCheckoutError: LocalizedError {
             return "A checkout confirmation is already in progress."
         case .failedToBuildEnrichedURL:
             return "Failed to build enriched checkout URL."
+        case .failedToOpenEnrichedURL:
+            return "Could not open enriched checkout URL in browser."
         }
     }
 }
