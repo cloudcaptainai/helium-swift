@@ -17,6 +17,9 @@ public class StripeCheckoutManager: NSObject {
 
     private var appDidBecomeActiveObserver: NSObjectProtocol?
 
+    // Server-managed checkout observation
+    private var observingPaywallSession: PaywallSession?
+
     private override init() {
         super.init()
     }
@@ -81,24 +84,21 @@ public class StripeCheckoutManager: NSObject {
         triggerName: String,
         successURL: String,
         cancelURL: String
-    ) -> URL {
+    ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            return baseURL
+            throw StripeCheckoutError.failedToBuildEnrichedURL
         }
 
         var queryItems = components.queryItems ?? []
 
-        // Base64-encoded analytics event
-        if let jsonData = try? JSONEncoder().encode(analyticsEvent) {
-            queryItems.append(URLQueryItem(name: "analyticsProperties", value: jsonData.base64EncodedString()))
-        }
+        let jsonData = try JSONEncoder().encode(analyticsEvent)
+        queryItems.append(URLQueryItem(name: "analyticsProperties", value: jsonData.base64EncodedString()))
 
         queryItems.append(URLQueryItem(name: "productKey", value: productKey))
         queryItems.append(URLQueryItem(name: "trigger", value: triggerName))
         queryItems.append(URLQueryItem(name: "successUrl", value: successURL))
         queryItems.append(URLQueryItem(name: "cancelUrl", value: cancelURL))
 
-        // Identity fields from baseRequestBody, minus apiKey
         let baseBody = HeliumStripeAPIClient.shared.baseRequestBody()
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
@@ -107,26 +107,26 @@ public class StripeCheckoutManager: NSObject {
         }
 
         components.queryItems = queryItems
-        return components.url ?? baseURL
+        guard let url = components.url else {
+            throw StripeCheckoutError.failedToBuildEnrichedURL
+        }
+        return url
     }
 
-    /// Opens the enriched checkout URL using the configured checkout style. Fire-and-forget.
+    /// Opens the enriched checkout URL in external browser and starts observing
+    /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL) {
-        let resolvedStyle = Helium.config.stripeCheckoutStyle ?? .externalBrowser
+    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) {
+        observingPaywallSession = paywallSession
+        UIApplication.shared.open(url)
+        startForegroundObserver()
+    }
 
-        switch resolvedStyle {
-        case .webView:
-            guard let topVC = UIWindowHelper.findTopMostViewController() else { return }
-            let checkoutVC = StripeCheckoutViewController(checkoutURL: url) { _ in }
-            topVC.present(checkoutVC, animated: true)
-        case .safariInApp:
-            guard let topVC = UIWindowHelper.findTopMostViewController() else { return }
-            let safariVC = SFSafariViewController(url: url)
-            topVC.present(safariVC, animated: true)
-        case .externalBrowser:
-            UIApplication.shared.open(url)
-        }
+    /// Stops observing for purchase completion if the session matches.
+    func stopObserving(paywallSession: PaywallSession) {
+        guard observingPaywallSession?.sessionId == paywallSession.sessionId else { return }
+        stopForegroundObserver()
+        observingPaywallSession = nil
     }
 
     /// Returns the latest transaction ID result after a successful checkout.
@@ -203,12 +203,37 @@ public class StripeCheckoutManager: NSObject {
     }
 
     private func onReturnedToForeground() {
-        guard let sessionId = currentSessionId, purchaseContinuation != nil else { return }
-        if foregroundObserver == nil {
-            return // onReturnedToForeground may have already ran
-        }
+        guard let paywallSession = observingPaywallSession else { return }
+        guard foregroundObserver != nil else { return }
         stopForegroundObserver()
-        confirmActiveSession(sessionId: sessionId)
+
+        Task { [weak self] in
+            guard let self else { return }
+            guard let stripeProducts = paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
+                return
+            }
+            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+            
+            let entitledStripeProductIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+            let isEntitled = entitledStripeProductIds.contains { stripeProducts.contains($0) }
+            if isEntitled {
+                observingPaywallSession = nil
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PurchaseSucceededEvent(
+                        productId: "",
+                        triggerName: paywallSession.trigger,
+                        paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                        storeKitTransactionId: nil,
+                        storeKitOriginalTransactionId: nil
+                    ),
+                    paywallSession: paywallSession,
+                    sendToAnalytics: false
+                )
+            } else {
+                // Not entitled yet — resume observing for next foreground return
+                startForegroundObserver()
+            }
+        }
     }
 
     private func onSafariViewControllerDismissed() {
@@ -451,6 +476,7 @@ enum StripeCheckoutError: LocalizedError {
     case notInitialized
     case checkoutURLsNotConfigured
     case confirmationAlreadyInProgress
+    case failedToBuildEnrichedURL
 
     var errorDescription: String? {
         switch self {
@@ -462,6 +488,8 @@ enum StripeCheckoutError: LocalizedError {
             return "Stripe Checkout URLs not configured. Call Helium.config.enableStripeCheckout(successURL:cancelURL:) before presenting a paywall."
         case .confirmationAlreadyInProgress:
             return "A checkout confirmation is already in progress."
+        case .failedToBuildEnrichedURL:
+            return "Failed to build enriched checkout URL."
         }
     }
 }

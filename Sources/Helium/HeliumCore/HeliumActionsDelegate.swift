@@ -105,6 +105,7 @@ class HeliumActionsDelegate: ObservableObject {
     func dismiss(dispatchEvent: Bool) {
         HeliumLogger.log(.debug, category: .ui, "Dismiss action triggered", metadata: ["trigger": trigger, "dispatchEvent": String(dispatchEvent)])
         if (!isLoading) {
+            StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
             if dispatchEvent {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
@@ -122,6 +123,7 @@ class HeliumActionsDelegate: ObservableObject {
     
     func dismissAll(dispatchEvent: Bool) {
         if (!isLoading) {
+            StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
             if dispatchEvent {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
