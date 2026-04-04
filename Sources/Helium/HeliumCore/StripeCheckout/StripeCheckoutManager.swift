@@ -217,6 +217,8 @@ public class StripeCheckoutManager: NSObject {
         Task { [weak self] in
             guard let self else { return }
             guard let stripeProducts = paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
+                observingPaywallSession = nil
+                entitledProductIdsBeforeCheckout = []
                 return
             }
             await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
@@ -238,6 +240,8 @@ public class StripeCheckoutManager: NSObject {
                     paywallSession: paywallSession,
                     sendToAnalytics: false
                 )
+                // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case
+                Helium.shared.hideAllPaywalls()
             } else {
                 // Not entitled yet — resume observing for next foreground return
                 startForegroundObserver()

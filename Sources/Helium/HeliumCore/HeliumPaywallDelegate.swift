@@ -101,8 +101,7 @@ class HeliumPaywallDelegateWrapper {
                         cancelURL: cancelURL
                     )
                     try await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
-                    // technically not a cancel, but the client-purchase-flow is completed at this point
-                    return .cancelled
+                    return .pending
 
                 } catch {
                     transactionStatus = .failed(error)
