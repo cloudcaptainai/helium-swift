@@ -224,6 +224,12 @@ public class StripeCheckoutManager: NSObject {
             await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
             
             let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+
+            // We intentionally don't re-check observingPaywallSession here. Even if the paywall
+            // was dismissed during the async refresh, a real purchase still happened,
+            // the paywall was very recently still visible (right before the refresh call),
+            // and consumers should be notified.
+            
             let newlyEntitledIds = currentEntitledIds.subtracting(entitledProductIdsBeforeCheckout)
             let purchasedProductId = newlyEntitledIds.first { stripeProducts.contains($0) }
             if let purchasedProductId {

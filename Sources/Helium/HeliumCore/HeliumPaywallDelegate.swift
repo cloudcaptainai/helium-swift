@@ -101,7 +101,7 @@ class HeliumPaywallDelegateWrapper {
                         cancelURL: cancelURL
                     )
                     try await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
-                    return .pending
+                    transactionStatus = .pending
 
                 } catch {
                     transactionStatus = .failed(error)
@@ -158,8 +158,10 @@ class HeliumPaywallDelegateWrapper {
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            let detachedSession = paywallSession.withPresentationContext(.empty)
-            observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
+            if !isStripePurchaseFlow {
+                let detachedSession = paywallSession.withPresentationContext(.empty)
+                observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
+            }
         }
         return transactionStatus;
     }
