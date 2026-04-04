@@ -140,11 +140,6 @@ public class StripeCheckoutManager: NSObject {
         entitledProductIdsBeforeCheckout = []
     }
 
-    /// Returns the latest transaction ID result after a successful checkout.
-    public func getLatestTransactionResult() -> HeliumTransactionIdResult? {
-        return latestTransactionResult
-    }
-
     // MARK: - Foreground Observer
 
     private func startForegroundObserver() {
