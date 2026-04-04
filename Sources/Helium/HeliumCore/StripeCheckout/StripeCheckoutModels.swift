@@ -83,7 +83,7 @@ public struct PaymentSuccessResponse: Sendable {
 
 // MARK: - API Response Types
 
-struct ExecutePurchaseResponse: Decodable {
+public struct ExecutePurchaseResponse: Decodable {
     let subscriptionId: String?
     let subscriptionItemId: String?
     let productId: String?
@@ -126,6 +126,7 @@ public enum HeliumStripeAPIError: LocalizedError {
     case serverError(statusCode: Int, message: String)
     case invalidEndpoint(path: String)
     case checkoutSessionNotCompleted
+    case notInitialized
 
     public var errorDescription: String? {
         switch self {
@@ -135,6 +136,8 @@ public enum HeliumStripeAPIError: LocalizedError {
             return "Invalid endpoint \(path)"
         case .checkoutSessionNotCompleted:
             return "Checkout session has not been completed"
+        case .notInitialized:
+            return "Helium has not been initialized. Call Helium.initialize() before making Stripe API calls."
         }
     }
 }
