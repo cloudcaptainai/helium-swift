@@ -189,18 +189,8 @@ class HeliumActionsDelegate: ObservableObject {
         HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent, paywallSession: paywallSession)
 
         isLoading = true
-        let status = await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession)
         defer { isLoading = false }
-        
-        if (status == nil) {
-            return .failed(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unknown error making purchase - delegate method returned nil"]))
-        }
-        switch (status) {
-            case .none:
-                return .failed(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unknown error making purchase - delegate method returned none"]))
-            default:
-                return status!;
-        }
+        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession)
     }
     
     @MainActor

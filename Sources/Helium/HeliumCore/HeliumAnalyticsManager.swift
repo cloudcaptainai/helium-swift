@@ -128,6 +128,72 @@ class HeliumAnalyticsManager {
     
     // MARK: - Event Tracking
     
+    /// Builds a `HeliumPaywallLoggedEvent` with full context enrichment.
+    func buildLoggedEvent(
+        for event: HeliumEvent,
+        paywallSession: PaywallSession?,
+        overridePaywallSessionId: String? = nil
+    ) -> HeliumPaywallLoggedEvent {
+        let legacyEvent = event.toLegacyEvent()
+        let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
+        
+        var experimentID: String? = nil
+        var modelID: String? = nil
+        var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
+        var experimentInfo: ExperimentInfo? = nil
+        var isFallback: Bool? = nil
+        if let paywallSession {
+            isFallback = paywallSession.fallbackType != .notFallback
+        }
+        if let triggerName = (legacyEvent.getTriggerIfExists() ?? paywallSession?.trigger) {
+            experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
+            modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
+            experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
+
+            if paywallInfo == nil && paywallSession == nil {
+                paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
+            }
+            if isFallback == nil {
+                // Old isFallback determination. This can likely be removed at some point.
+                if paywallInfo == nil {
+                    isFallback = true
+                } else {
+                    let eventPaywallTemplateName = legacyEvent.getPaywallTemplateNameIfExists() ?? ""
+                    isFallback = eventPaywallTemplateName.starts(with: "fallback_")
+                }
+            }
+        }
+        
+        let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
+        let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
+        return HeliumPaywallLoggedEvent(
+            heliumEvent: legacyEvent,
+            fetchedConfigId: fetchedConfigId,
+            timestamp: formatAsTimestamp(date: Date()),
+            contextTraits: HeliumIdentityManager.shared.getUserContext(),
+            experimentID: experimentID,
+            modelID: modelID,
+            paywallID: paywallInfo?.paywallID,
+            paywallUUID: paywallInfo?.paywallUUID,
+            organizationID: organizationID,
+            heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
+            userId: HeliumIdentityManager.shared.getResolvedUserId(),
+            hasCustomUserId: HeliumIdentityManager.shared.hasCustomUserId(),
+            heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
+            heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
+            heliumPaywallSessionId: overridePaywallSessionId ?? paywallSession?.sessionId,
+            appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
+            appTransactionId: HeliumIdentityManager.shared.appTransactionID,
+            revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
+            thirdPartyAnalyticsAnonymousId: HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId(),
+            isFallback: isFallback,
+            downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
+            additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
+            additionalPaywallFields: paywallInfo?.additionalPaywallFields,
+            experimentInfo: experimentInfo
+        )
+    }
+
     /// Tracks a paywall event, building the logged event and sending to analytics.
     /// Handles conversion to legacy format, event enrichment, and flushing for critical events.
     /// - Parameters:
@@ -145,66 +211,14 @@ class HeliumAnalyticsManager {
         dispatchQueue.async { [weak self] in
             guard let self else { return }
             
-            let legacyEvent = event.toLegacyEvent()
-            let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
-            
-            var experimentID: String? = nil
-            var modelID: String? = nil
-            var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
-            var experimentInfo: ExperimentInfo? = nil
-            var isFallback: Bool? = nil
-            if let paywallSession {
-                isFallback = paywallSession.fallbackType != .notFallback
-            }
-            if let triggerName = (legacyEvent.getTriggerIfExists() ?? paywallSession?.trigger) {
-                experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
-                modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
-                experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
-
-                if paywallInfo == nil && paywallSession == nil {
-                    paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
-                }
-                if isFallback == nil {
-                    // Old isFallback determination. This can likely be removed at some point.
-                    if paywallInfo == nil {
-                        isFallback = true
-                    } else {
-                        let eventPaywallTemplateName = legacyEvent.getPaywallTemplateNameIfExists() ?? ""
-                        isFallback = eventPaywallTemplateName.starts(with: "fallback_")
-                    }
-                }
-            }
-            
-            let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
-            let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
-            let eventForLogging = HeliumPaywallLoggedEvent(
-                heliumEvent: legacyEvent,
-                fetchedConfigId: fetchedConfigId,
-                timestamp: formatAsTimestamp(date: Date()),
-                contextTraits: HeliumIdentityManager.shared.getUserContext(),
-                experimentID: experimentID,
-                modelID: modelID,
-                paywallID: paywallInfo?.paywallID,
-                paywallUUID: paywallInfo?.paywallUUID,
-                organizationID: organizationID,
-                heliumPersistentID: HeliumIdentityManager.shared.getHeliumPersistentId(),
-                userId: HeliumIdentityManager.shared.getResolvedUserId(),
-                hasCustomUserId: HeliumIdentityManager.shared.hasCustomUserId(),
-                heliumSessionID: HeliumIdentityManager.shared.getHeliumSessionId(),
-                heliumInitializeId: HeliumIdentityManager.shared.heliumInitializeId,
-                heliumPaywallSessionId: overridePaywallSessionId ?? paywallSession?.sessionId,
-                appAttributionToken: HeliumIdentityManager.shared.appAttributionToken.uuidString,
-                appTransactionId: HeliumIdentityManager.shared.appTransactionID,
-                revenueCatAppUserID: HeliumIdentityManager.shared.revenueCatAppUserId,
-                thirdPartyAnalyticsAnonymousId: HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId(),
-                isFallback: isFallback,
-                downloadStatus: HeliumFetchedConfigManager.shared.downloadStatus,
-                additionalFields: HeliumFetchedConfigManager.shared.fetchedConfig?.additionalFields,
-                additionalPaywallFields: paywallInfo?.additionalPaywallFields,
-                experimentInfo: experimentInfo
+            let eventForLogging = buildLoggedEvent(
+                for: event,
+                paywallSession: paywallSession,
+                overridePaywallSessionId: overridePaywallSessionId
             )
             
             // Track event and flush for critical events
+            let legacyEvent = eventForLogging.heliumEvent
             let eventName = "helium_" + legacyEvent.caseString()
             let trackAndFlush: (Analytics) -> Void = { analytics in
                 analytics.track(name: eventName, properties: eventForLogging)

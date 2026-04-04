@@ -59,7 +59,7 @@ class HeliumPaywallDelegateWrapper {
         return Helium.config.purchaseDelegate
     }
     
-    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus? {
+    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus {
         let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
         } ?? false
@@ -72,12 +72,41 @@ class HeliumPaywallDelegateWrapper {
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
         if allStripeProductIds.contains(productKey) {
             isStripePurchaseFlow = true
-            transactionStatus = await StripeCheckoutManager.shared.presentCheckoutFlow(
-                for: productKey,
-                triggerName: triggerName,
-                paywallName: paywallTemplateName,
-                paywallSessionId: paywallSession.sessionId
+            let checkoutResult = await StripeCheckoutManager.shared.presentCheckoutFlow(
+                for: productKey
             )
+            
+            switch checkoutResult {
+            case .clientManaged(let status):
+                transactionStatus = status
+            case .serverManaged(let checkoutURL, let successURL, let cancelURL):
+                let templateEvent = PurchaseSucceededEvent(
+                    productId: productKey,
+                    triggerName: triggerName,
+                    paywallName: paywallTemplateName,
+                    storeKitTransactionId: nil,
+                    storeKitOriginalTransactionId: nil
+                )
+                let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+                    for: templateEvent,
+                    paywallSession: paywallSession
+                )
+                do {
+                    let enrichedURL = try StripeCheckoutManager.shared.buildEnrichedCheckoutURL(
+                        baseURL: checkoutURL,
+                        analyticsEvent: loggedEvent,
+                        productKey: productKey,
+                        triggerName: triggerName,
+                        successURL: successURL,
+                        cancelURL: cancelURL
+                    )
+                    try await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
+                    transactionStatus = .pending
+
+                } catch {
+                    transactionStatus = .failed(error)
+                }
+            }
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
@@ -129,10 +158,10 @@ class HeliumPaywallDelegateWrapper {
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            let detachedSession = paywallSession.withPresentationContext(.empty)
-            observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
-        default:
-            break
+            if !isStripePurchaseFlow {
+                let detachedSession = paywallSession.withPresentationContext(.empty)
+                observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
+            }
         }
         return transactionStatus;
     }
@@ -191,7 +220,8 @@ class HeliumPaywallDelegateWrapper {
         _ event: HeliumEvent,
         paywallSession: PaywallSession?,
         overridePresentationContext: PaywallPresentationContext? = nil,
-        overridePaywallSessionId: String? = nil
+        overridePaywallSessionId: String? = nil,
+        sendToAnalytics: Bool = true
     ) {
         Task { @MainActor in
             let context = overridePresentationContext ?? paywallSession?.presentationContext
@@ -246,7 +276,9 @@ class HeliumPaywallDelegateWrapper {
             logPaywallSkip(trigger: skipEvent.triggerName, skipReason: skipEvent.skipReason, logMetadata: metadata)
         }
         
-        HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession, overridePaywallSessionId: overridePaywallSessionId)
+        if sendToAnalytics {
+            HeliumAnalyticsManager.shared.trackPaywallEvent(event, paywallSession: paywallSession, overridePaywallSessionId: overridePaywallSessionId)
+        }
         
         // Mark session for onEntitled callback on purchase/restore success
         if let sessionId = overridePaywallSessionId ?? paywallSession?.sessionId {
@@ -255,6 +287,10 @@ class HeliumPaywallDelegateWrapper {
                 event is PurchaseAlreadyEntitledEvent {
                 HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId)
             }
+        }
+
+        if event is PaywallCloseEvent, let paywallSession {
+            StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
         }
     }
     
