@@ -71,8 +71,6 @@ public class Helium {
 
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
-
-            StripeCheckoutManager.shared.startPendingCheckoutRecovery()
         }
     }
     
@@ -574,11 +572,7 @@ public class HeliumConfig {
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
 
     // MARK: - Stripe Checkout Configuration
-
-    /// Controls what style of Stripe Checkout Flow is used. Use .safariInApp and .webView at your own risk,
-    /// as they are not officially approved by Apple.
-    public var stripeCheckoutStyle: StripeCheckoutStyle = .externalBrowser
-
+    
     private(set) var stripeCheckoutEnabled: Bool = false
     
     /// Custom success redirect URL for Stripe Checkout Flow.

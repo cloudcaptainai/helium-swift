@@ -72,40 +72,15 @@ class HeliumPaywallDelegateWrapper {
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
         if allStripeProductIds.contains(productKey) {
             isStripePurchaseFlow = true
-            let checkoutResult = await StripeCheckoutManager.shared.presentCheckoutFlow(
-                for: productKey
-            )
-            
-            switch checkoutResult {
-            case .clientManaged(let status):
-                transactionStatus = status
-            case .serverManaged(let checkoutURL, let successURL, let cancelURL):
-                let templateEvent = PurchaseSucceededEvent(
-                    productId: productKey,
+            do {
+                try await StripeCheckoutManager.shared.startCheckoutFlow(
+                    for: productKey,
                     triggerName: triggerName,
-                    paywallName: paywallTemplateName,
-                    storeKitTransactionId: nil,
-                    storeKitOriginalTransactionId: nil
-                )
-                let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
-                    for: templateEvent,
                     paywallSession: paywallSession
                 )
-                do {
-                    let enrichedURL = try StripeCheckoutManager.shared.buildEnrichedCheckoutURL(
-                        baseURL: checkoutURL,
-                        analyticsEvent: loggedEvent,
-                        productKey: productKey,
-                        triggerName: triggerName,
-                        successURL: successURL,
-                        cancelURL: cancelURL
-                    )
-                    try await StripeCheckoutManager.shared.openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
-                    transactionStatus = .pending
-
-                } catch {
-                    transactionStatus = .failed(error)
-                }
+                transactionStatus = .pending
+            } catch {
+                transactionStatus = .failed(error)
             }
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)

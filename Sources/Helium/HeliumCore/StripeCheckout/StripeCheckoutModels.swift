@@ -1,24 +1,5 @@
 import Foundation
 
-// MARK: - Checkout Style
-
-/// Controls how Stripe Checkout is presented
-public enum StripeCheckoutStyle: Sendable {
-    /// Embedded WKWebView. No deep link setup required.
-    case webView
-    /// SFSafariViewController. The SDK automatically detects when the user returns.
-    case safariInApp
-    /// Opens in the default browser. The SDK automatically detects when the user returns.
-    case externalBrowser
-}
-
-// MARK: - Checkout Flow Result
-
-enum CheckoutFlowResult {
-    case serverManaged(checkoutURL: URL, successURL: String, cancelURL: String)
-    case clientManaged(HeliumPaywallTransactionStatus)
-}
-
 // MARK: - Checkout Result
 
 public enum StripeCheckoutResult {
@@ -125,12 +106,6 @@ struct ExecutePurchaseResponse: Decodable {
             transactionId: transactionId
         )
     }
-}
-
-struct CheckoutSessionResponse: Decodable {
-    let checkoutURL: String?
-    let sessionId: String?
-    let stripeCustomerId: String?
 }
 
 struct PortalSessionResponse: Decodable {

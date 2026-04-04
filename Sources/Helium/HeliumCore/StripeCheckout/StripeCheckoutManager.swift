@@ -29,55 +29,52 @@ public class StripeCheckoutManager: NSObject {
         purchaseContinuation?.resume(returning: .cancelled)
     }
 
-    /// Starts observing `didBecomeActive` for pending checkout recovery.
-    /// Called after the SDK is initialized and the API key is available.
-    func startPendingCheckoutRecovery() {
-        resolvePendingCheckoutIfNeeded()
-
-        guard appDidBecomeActiveObserver == nil else { return }
-        appDidBecomeActiveObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.resolvePendingCheckoutIfNeeded()
-        }
-    }
-
     // MARK: - Checkout Flow
 
-    /// Creates a Stripe Checkout session and returns the checkout URL and metadata
-    /// without presenting it. The caller is responsible for enriching the URL and
-    /// calling `openEnrichedCheckoutURL` to present.
+    /// Builds the enriched checkout URL from the paywall's web bundle URL
+    /// and opens it in an external browser, then starts observing for purchase completion.
     @MainActor
-    func presentCheckoutFlow(
-        for productId: String
-    ) async -> CheckoutFlowResult {
+    func startCheckoutFlow(
+        for productKey: String,
+        triggerName: String,
+        paywallSession: PaywallSession
+    ) async throws {
         guard let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL,
               let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL else {
-            return .clientManaged(.failed(StripeCheckoutError.checkoutURLsNotConfigured))
+            throw StripeCheckoutError.checkoutURLsNotConfigured
         }
 
-        let checkoutURL: URL
-        let sessionId: String
-        do {
-            let result = try await createCheckoutSession(
-                productPriceId: productId,
-                successURL: resolvedSuccessURL,
-                cancelURL: resolvedCancelURL
-            )
-            checkoutURL = result.checkoutURL
-            sessionId = result.sessionId
-        } catch {
-            return .clientManaged(.failed(error))
+        guard let bundleUrlString = paywallSession.paywallInfoWithBackups?.webPaywallBundleUrl,
+              let baseURL = URL(string: bundleUrlString) else {
+            throw StripeCheckoutError.webPaywallBundleUrlMissing
         }
 
-        currentSessionId = sessionId
+        let templateEvent = PurchaseSucceededEvent(
+            productId: productKey,
+            triggerName: triggerName,
+            paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+            storeKitTransactionId: nil,
+            storeKitOriginalTransactionId: nil
+        )
+        let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: paywallSession
+        )
 
-        return .serverManaged(checkoutURL: checkoutURL, successURL: resolvedSuccessURL, cancelURL: resolvedCancelURL)
+        let enrichedURL = try buildEnrichedCheckoutURL(
+            baseURL: baseURL,
+            analyticsEvent: loggedEvent,
+            productKey: productKey,
+            triggerName: triggerName,
+            successURL: resolvedSuccessURL,
+            cancelURL: resolvedCancelURL
+        )
+
+        try await openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
     }
 
-    /// Appends analytics, identity, and routing query parameters to a checkout URL.
+    /// Appends analytics, identity, and routing query parameters to a checkout URL
+    /// as a single base64-encoded JSON `ctx` query parameter.
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -90,24 +87,30 @@ public class StripeCheckoutManager: NSObject {
             throw StripeCheckoutError.failedToBuildEnrichedURL
         }
 
-        var queryItems = components.queryItems ?? []
+        var ctx: [String: Any] = [:]
 
-        let jsonData = try JSONEncoder().encode(analyticsEvent)
-        queryItems.append(URLQueryItem(name: "analyticsProperties", value: jsonData.base64EncodedString()))
+        let analyticsData = try JSONEncoder().encode(analyticsEvent)
+        ctx["analytics"] = analyticsData.base64EncodedString()
 
-        queryItems.append(URLQueryItem(name: "productKey", value: productKey))
-        queryItems.append(URLQueryItem(name: "trigger", value: triggerName))
-        queryItems.append(URLQueryItem(name: "successUrl", value: successURL))
-        queryItems.append(URLQueryItem(name: "cancelUrl", value: cancelURL))
+        ctx["initialStripeSelection"] = productKey
+        ctx["trigger"] = triggerName
+        ctx["successUrl"] = successURL
+        ctx["cancelUrl"] = cancelURL
 
         let baseBody = HeliumStripeAPIClient.shared.baseRequestBody()
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
-                queryItems.append(URLQueryItem(name: key, value: stringValue))
+                ctx[key] = stringValue
             }
         }
 
+        let ctxData = try JSONSerialization.data(withJSONObject: ctx)
+        let ctxBase64 = ctxData.base64EncodedString()
+
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "ctx", value: ctxBase64))
         components.queryItems = queryItems
+
         guard let url = components.url else {
             throw StripeCheckoutError.failedToBuildEnrichedURL
         }
@@ -119,12 +122,13 @@ public class StripeCheckoutManager: NSObject {
     @MainActor
     func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async throws {
         entitledProductIdsBeforeCheckout = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+        observingPaywallSession = paywallSession
         let opened = await UIApplication.shared.open(url)
         guard opened else {
+            observingPaywallSession = nil
             entitledProductIdsBeforeCheckout = []
             throw StripeCheckoutError.failedToOpenEnrichedURL
         }
-        observingPaywallSession = paywallSession
         startForegroundObserver()
     }
 
@@ -139,53 +143,6 @@ public class StripeCheckoutManager: NSObject {
     /// Returns the latest transaction ID result after a successful checkout.
     public func getLatestTransactionResult() -> HeliumTransactionIdResult? {
         return latestTransactionResult
-    }
-
-    // MARK: - Presentation Modes
-
-    @MainActor
-    private func presentWebViewCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
-        guard let topVC = UIWindowHelper.findTopMostViewController() else {
-            return .failed(StripeCheckoutError.cannotPresentCheckout)
-        }
-
-        return await withCheckedContinuation { continuation in
-            self.purchaseContinuation = continuation
-            let checkoutVC = StripeCheckoutViewController(checkoutURL: checkoutURL) { [weak self] result in
-                guard let self else { return }
-                completeCheckout(result: result)
-            }
-            topVC.present(checkoutVC, animated: true)
-        }
-    }
-
-    @MainActor
-    private func presentSafariCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
-        guard let topVC = UIWindowHelper.findTopMostViewController() else {
-            return .failed(StripeCheckoutError.cannotPresentCheckout)
-        }
-
-        let safariVC = SFSafariViewController(url: checkoutURL)
-        safariVC.delegate = self
-
-        return await withCheckedContinuation { continuation in
-            self.purchaseContinuation = continuation
-            topVC.present(safariVC, animated: true)
-        }
-    }
-
-    @MainActor
-    private func presentExternalBrowserCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
-        let opened = await UIApplication.shared.open(checkoutURL)
-        guard opened else {
-            PendingCheckout.clear()
-            return .failed(StripeCheckoutError.cannotPresentCheckout)
-        }
-
-        return await withCheckedContinuation { continuation in
-            self.purchaseContinuation = continuation
-            startForegroundObserver()
-        }
     }
 
     // MARK: - Foreground Observer
@@ -214,228 +171,58 @@ public class StripeCheckoutManager: NSObject {
         guard foregroundObserver != nil else { return }
         stopForegroundObserver()
 
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             guard let stripeProducts = paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
                 observingPaywallSession = nil
                 entitledProductIdsBeforeCheckout = []
                 return
             }
-            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
-            
-            let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
 
-            // We intentionally don't re-check observingPaywallSession here. Even if the paywall
-            // was dismissed during the async refresh, a real purchase still happened,
-            // the paywall was very recently still visible (right before the refresh call),
-            // and consumers should be notified.
-            
-            let newlyEntitledIds = currentEntitledIds.subtracting(entitledProductIdsBeforeCheckout)
-            let purchasedProductId = newlyEntitledIds.first { stripeProducts.contains($0) }
-            if let purchasedProductId {
-                observingPaywallSession = nil
-                entitledProductIdsBeforeCheckout = []
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PurchaseSucceededEvent(
-                        productId: purchasedProductId,
-                        triggerName: paywallSession.trigger,
-                        paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                        storeKitTransactionId: nil,
-                        storeKitOriginalTransactionId: nil
-                    ),
-                    paywallSession: paywallSession,
-                    sendToAnalytics: false
-                )
-                // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case
-                Helium.shared.hideAllPaywalls()
-            } else {
-                // Not entitled yet — resume observing for next foreground return
+            // Capture before any async work so a concurrent stopObserving can't clear it to []
+            let previousEntitledIds = entitledProductIdsBeforeCheckout
+
+            // Stripe entitlements may not be available immediately after an external purchase.
+            // Wait 2s before the first check, then retry up to 2 more times with 3s delays
+            // (8s total delay, not counting request time).
+            let delays: [UInt64] = [2_000_000_000, 3_000_000_000, 3_000_000_000]
+
+            for delay in delays {
+                try? await Task.sleep(nanoseconds: delay)
+                guard observingPaywallSession != nil else { return }
+
+                await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+                let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+
+                let newlyEntitledIds = currentEntitledIds.subtracting(previousEntitledIds)
+                if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
+                    observingPaywallSession = nil
+                    entitledProductIdsBeforeCheckout = []
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(
+                        PurchaseSucceededEvent(
+                            productId: purchasedProductId,
+                            triggerName: paywallSession.trigger,
+                            paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                            storeKitTransactionId: nil,
+                            storeKitOriginalTransactionId: nil
+                        ),
+                        paywallSession: paywallSession,
+                        sendToAnalytics: false
+                    )
+                    // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case...
+                    Helium.shared.hideAllPaywalls()
+                    return
+                }
+            }
+
+            // All retries exhausted — resume observing for next foreground return
+            if observingPaywallSession != nil {
                 startForegroundObserver()
             }
         }
     }
 
-    private func onSafariViewControllerDismissed() {
-        guard let sessionId = currentSessionId, purchaseContinuation != nil else { return }
-        confirmActiveSession(sessionId: sessionId)
-    }
-
-    private func confirmActiveSession(sessionId: String) {
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await confirmAndFulfill(sessionId: sessionId)
-                await MainActor.run {
-                    if let topVC = UIWindowHelper.findTopMostViewController(), topVC is SFSafariViewController {
-                        topVC.dismiss(animated: true)
-                    }
-                }
-                resumePurchase(with: .purchased)
-            } catch StripeCheckoutError.confirmationAlreadyInProgress {
-                // Another caller is already confirming — let it handle the result.
-            } catch HeliumStripeAPIError.checkoutSessionNotCompleted {
-                // Session not completed yet — don't clear pending state,
-                // user may return to the browser to finish checkout.
-                resumePurchase(with: .cancelled)
-            } catch {
-                // Network/server error — don't clear pending state, keep it for retry
-                resumePurchase(with: .failed(error))
-            }
-        }
-    }
-
-    // MARK: - Pending Checkout Recovery (app terminated)
-
-    /// Resolves any pending checkout that was in progress when the app was terminated or backgrounded.
-    /// Debounced to avoid excessive API calls on rapid foreground events.
-    func resolvePendingCheckoutIfNeeded() {
-        if let lastResolve = lastPendingCheckoutResolveTime,
-           Date().timeIntervalSince(lastResolve) < Self.pendingCheckoutResolveCooldown {
-            return
-        }
-
-        guard purchaseContinuation == nil else { return }
-        guard let pending = PendingCheckout.load() else { return }
-        guard !pending.isExpired else {
-            PendingCheckout.clear()
-            return
-        }
-
-        lastPendingCheckoutResolveTime = Date()
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await confirmAndFulfill(sessionId: pending.sessionId)
-
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PurchaseSucceededEvent(
-                        productId: result.productId,
-                        triggerName: pending.triggerName,
-                        paywallName: pending.paywallName,
-                        storeKitTransactionId: result.transactionId,
-                        storeKitOriginalTransactionId: result.transactionId
-                    ),
-                    paywallSessionId: pending.paywallSessionId
-                )
-            } catch {
-                // Session wasn't completed — nothing to recover
-            }
-        }
-    }
-
-    // MARK: - Checkout Completion
-
-    private func completeCheckout(result: StripeCheckoutResult) {
-        guard let sessionId = currentSessionId else { return }
-
-        switch result {
-        case .success(let returnedSessionId):
-            let resolvedSessionId = returnedSessionId ?? sessionId
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await confirmAndFulfill(sessionId: resolvedSessionId)
-                    resumePurchase(with: .purchased)
-                } catch StripeCheckoutError.confirmationAlreadyInProgress {
-                    // Another caller is already confirming — let it handle the result.
-                } catch {
-                    resumePurchase(with: .failed(error))
-                }
-            }
-        case .cancelled:
-            resumePurchase(with: .cancelled)
-        case .failed(let error):
-            resumePurchase(with: .failed(error))
-        }
-    }
-
-    private func resumePurchase(with status: sending HeliumPaywallTransactionStatus) {
-        stopForegroundObserver()
-        purchaseContinuation?.resume(returning: status)
-        purchaseContinuation = nil
-        currentSessionId = nil
-    }
-
-    // MARK: - Shared Confirmation Logic
-
-    /// Confirms the session, stores the transaction result, and notifies entitlements.
-    /// Returns the confirmed transaction ID.
-    @discardableResult
-    private func confirmAndFulfill(sessionId: String) async throws -> (productId: String, transactionId: String) {
-        let didClaim = _confirmingSessionIds.withValue { ids -> Bool in
-            ids.insert(sessionId).inserted
-        }
-        guard didClaim else {
-            throw StripeCheckoutError.confirmationAlreadyInProgress
-        }
-        defer { _confirmingSessionIds.withValue { $0.remove(sessionId) } }
-
-        let confirmation = try await confirmCheckoutSession(sessionId: sessionId)
-        PendingCheckout.clearIfMatches(sessionId: sessionId)
-        
-        var heliumProductId = confirmation.productId
-        if let priceId = confirmation.priceId {
-            heliumProductId += ":\(priceId)"
-        }
-        let txnId = confirmation.transactionId ?? sessionId
-        latestTransactionResult = HeliumTransactionIdResult(
-            productId: heliumProductId,
-            transactionId: txnId,
-            originalTransactionId: txnId
-        )
-        HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(
-            productId: confirmation.productId,
-            priceId: confirmation.priceId,
-            subscriptionExpiresAt: confirmation.expiresAt
-        )
-        return (productId: confirmation.productId, transactionId: txnId)
-    }
-
     // MARK: - API Calls
-
-    /// Creates a Stripe Checkout Session and returns the hosted checkout URL.
-    func createCheckoutSession(
-        productPriceId: String,
-        successURL: String,
-        cancelURL: String
-    ) async throws -> (checkoutURL: URL, sessionId: String) {
-        var body = HeliumStripeAPIClient.shared.baseRequestBody(productId: productPriceId)
-        body["successUrl"] = successURL
-        body["cancelUrl"] = cancelURL
-
-        let response: CheckoutSessionResponse = try await HeliumStripeAPIClient.shared.post("stripe/create-checkout-session", body: body)
-        if let stripeCustomerId = response.stripeCustomerId {
-            HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
-        }
-        guard let checkoutUrlString = response.checkoutURL, let url = URL(string: checkoutUrlString) else {
-            throw HeliumStripeAPIError.serverError(statusCode: 200, message: "No checkout URL returned from the server.")
-        }
-        guard let sessionId = response.sessionId, !sessionId.isEmpty else {
-            throw HeliumStripeAPIError.serverError(statusCode: 200, message: "No session ID returned from the server.")
-        }
-        return (checkoutURL: url, sessionId: sessionId)
-    }
-
-    /// Confirms a completed Stripe Checkout Session and returns the purchase details.
-    /// Throws if the session has not been completed yet.
-    func confirmCheckoutSession(sessionId: String) async throws -> PaymentSuccessResponse {
-        var body = HeliumStripeAPIClient.shared.baseRequestBody()
-        body["sessionId"] = sessionId
-
-        let response: ExecutePurchaseResponse
-        do {
-            response = try await HeliumStripeAPIClient.shared.post("stripe/confirm-checkout", body: body)
-        } catch HeliumStripeAPIError.serverError(let statusCode, let message) where statusCode == 400 && message.contains("session_not_complete") {
-            throw HeliumStripeAPIError.checkoutSessionNotCompleted
-        }
-
-        guard response.status == "complete" || response.transactionId != nil else {
-            throw HeliumStripeAPIError.checkoutSessionNotCompleted
-        }
-
-        return response.toPaymentSuccessResponse()
-    }
 
     /// Syncs Stripe customer metadata with the current user identity.
     @discardableResult
@@ -478,40 +265,27 @@ public class StripeCheckoutManager: NSObject {
     }
 }
 
-// MARK: - SFSafariViewControllerDelegate
-
-extension StripeCheckoutManager: SFSafariViewControllerDelegate {
-    public func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
-        // Note that we specifically avoid foreground listener here because it can incorrectly fire any time app becomes
-        // active even if safari view controller still showing.
-        onSafariViewControllerDismissed()
-    }
-}
-
 // MARK: - Error
 
 enum StripeCheckoutError: LocalizedError {
     case cannotPresentCheckout
-    case notInitialized
     case checkoutURLsNotConfigured
-    case confirmationAlreadyInProgress
     case failedToBuildEnrichedURL
     case failedToOpenEnrichedURL
+    case webPaywallBundleUrlMissing
 
     var errorDescription: String? {
         switch self {
         case .cannotPresentCheckout:
             return "Could not present the checkout view"
-        case .notInitialized:
-            return "Stripe checkout is not initialized. Call initializeWithStripeOneTap() or configure StripeCheckoutManager first."
         case .checkoutURLsNotConfigured:
             return "Stripe Checkout URLs not configured. Call Helium.config.enableStripeCheckout(successURL:cancelURL:) before presenting a paywall."
-        case .confirmationAlreadyInProgress:
-            return "A checkout confirmation is already in progress."
         case .failedToBuildEnrichedURL:
             return "Failed to build enriched checkout URL."
         case .failedToOpenEnrichedURL:
             return "Could not open enriched checkout URL in browser."
+        case .webPaywallBundleUrlMissing:
+            return "No web paywall bundle URL available for this paywall."
         }
     }
 }
