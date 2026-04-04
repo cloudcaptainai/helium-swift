@@ -80,6 +80,13 @@ public struct HeliumPaywallInfo: Codable {
         return nil
     }
     
+    var webPaywallBundleUrl: String? {
+        if let bundleUrl = additionalPaywallFields?["webPaywallBundleUrl"].string, !bundleUrl.isEmpty {
+            return bundleUrl
+        }
+        return nil
+    }
+    
     /// Local file path for the bundle - converts extractedBundleUrl to local path
     var localBundlePath: String? {
         guard let bundleUrl = extractedBundleUrl else { return nil }
