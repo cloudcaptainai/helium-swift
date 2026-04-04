@@ -19,6 +19,7 @@ public class StripeCheckoutManager: NSObject {
 
     // Server-managed checkout observation
     private var observingPaywallSession: PaywallSession?
+    private var entitledProductIdsBeforeCheckout: Set<String> = []
 
     private override init() {
         super.init()
@@ -116,7 +117,8 @@ public class StripeCheckoutManager: NSObject {
     /// Opens the enriched checkout URL in external browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) {
+    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async {
+        entitledProductIdsBeforeCheckout = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
         observingPaywallSession = paywallSession
         UIApplication.shared.open(url)
         startForegroundObserver()
@@ -127,6 +129,7 @@ public class StripeCheckoutManager: NSObject {
         guard observingPaywallSession?.sessionId == paywallSession.sessionId else { return }
         stopForegroundObserver()
         observingPaywallSession = nil
+        entitledProductIdsBeforeCheckout = []
     }
 
     /// Returns the latest transaction ID result after a successful checkout.
@@ -214,13 +217,15 @@ public class StripeCheckoutManager: NSObject {
             }
             await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
             
-            let entitledStripeProductIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
-            let isEntitled = entitledStripeProductIds.contains { stripeProducts.contains($0) }
-            if isEntitled {
+            let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+            let newlyEntitledIds = currentEntitledIds.subtracting(entitledProductIdsBeforeCheckout)
+            let purchasedProductId = newlyEntitledIds.first { stripeProducts.contains($0) }
+            if let purchasedProductId {
                 observingPaywallSession = nil
+                entitledProductIdsBeforeCheckout = []
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PurchaseSucceededEvent(
-                        productId: "",
+                        productId: purchasedProductId,
                         triggerName: paywallSession.trigger,
                         paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                         storeKitTransactionId: nil,
