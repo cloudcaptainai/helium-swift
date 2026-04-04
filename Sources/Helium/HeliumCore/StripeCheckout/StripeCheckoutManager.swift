@@ -7,20 +7,13 @@ public class StripeCheckoutManager: NSObject {
     public static let shared = StripeCheckoutManager()
 
     // Checkout state
-    private var currentSessionId: String?
-    private var purchaseContinuation: CheckedContinuation<HeliumPaywallTransactionStatus, Never>?
-    private var latestTransactionResult: HeliumTransactionIdResult?
     private var foregroundObserver: NSObjectProtocol?
-    @HeliumAtomic private var confirmingSessionIds: Set<String> = []
-    private var lastPendingCheckoutResolveTime: Date?
-    private static let pendingCheckoutResolveCooldown: TimeInterval = 30
-
-    private var appDidBecomeActiveObserver: NSObjectProtocol?
 
     // Server-managed checkout observation
     private struct CheckoutObservation {
         let paywallSession: PaywallSession
         let entitledProductIdsBeforeCheckout: Set<String>
+        let addedAt: Date
     }
     // Usually there will only be one checkout per paywall but second try paywall would have
     // different paywall session and products, so track per session to be safer.
@@ -28,10 +21,6 @@ public class StripeCheckoutManager: NSObject {
 
     private override init() {
         super.init()
-    }
-
-    deinit {
-        purchaseContinuation?.resume(returning: .cancelled)
     }
 
     // MARK: - Checkout Flow
@@ -129,7 +118,8 @@ public class StripeCheckoutManager: NSObject {
         let entitledBefore = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
         let observation = CheckoutObservation(
             paywallSession: paywallSession,
-            entitledProductIdsBeforeCheckout: entitledBefore
+            entitledProductIdsBeforeCheckout: entitledBefore,
+            addedAt: Date()
         )
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
@@ -193,6 +183,7 @@ public class StripeCheckoutManager: NSObject {
 
                 var purchaseDetected = false
                 let observationsSnapshot = activeCheckoutObservations
+                    .sorted { $0.value.addedAt > $1.value.addedAt }
                 for (sessionId, observation) in observationsSnapshot {
                     guard let stripeProducts = observation.paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
                         activeCheckoutObservations.removeValue(forKey: sessionId)
@@ -202,6 +193,9 @@ public class StripeCheckoutManager: NSObject {
                     let newlyEntitledIds = currentEntitledIds
                         .subtracting(observation.entitledProductIdsBeforeCheckout)
 
+                    // If multiple sessions offer the same product, we attribute to the most
+                    // recently added session (likely the one the user just interacted with).
+                    // In practice, second-try paywalls offer different products.
                     if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
                         purchaseDetected = true
                         HeliumPaywallDelegateWrapper.shared.fireEvent(

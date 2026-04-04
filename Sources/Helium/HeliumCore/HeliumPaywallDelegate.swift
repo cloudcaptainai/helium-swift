@@ -256,7 +256,9 @@ class HeliumPaywallDelegateWrapper {
         }
 
         if event is PaywallCloseEvent, let paywallSession {
-            StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
+            Task { @MainActor in
+                StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
+            }
         }
     }
     
