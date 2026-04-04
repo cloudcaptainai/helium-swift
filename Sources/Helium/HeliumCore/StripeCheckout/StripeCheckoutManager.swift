@@ -145,22 +145,6 @@ public class StripeCheckoutManager: NSObject {
         return latestTransactionResult
     }
 
-    // MARK: - Presentation Modes
-
-    @MainActor
-    private func presentExternalBrowserCheckout(checkoutURL: URL) async -> sending HeliumPaywallTransactionStatus {
-        let opened = await UIApplication.shared.open(checkoutURL)
-        guard opened else {
-            PendingCheckout.clear()
-            return .failed(StripeCheckoutError.cannotPresentCheckout)
-        }
-
-        return await withCheckedContinuation { continuation in
-            self.purchaseContinuation = continuation
-            startForegroundObserver()
-        }
-    }
-
     // MARK: - Foreground Observer
 
     private func startForegroundObserver() {
@@ -211,7 +195,7 @@ public class StripeCheckoutManager: NSObject {
                 let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
 
                 let newlyEntitledIds = currentEntitledIds.subtracting(previousEntitledIds)
-                if let purchasedProductId = newlyEntitledIds.first { //temp for testing
+                if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
                     observingPaywallSession = nil
                     entitledProductIdsBeforeCheckout = []
                     HeliumPaywallDelegateWrapper.shared.fireEvent(
