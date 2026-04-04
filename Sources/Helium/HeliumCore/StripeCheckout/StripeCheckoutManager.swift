@@ -18,8 +18,13 @@ public class StripeCheckoutManager: NSObject {
     private var appDidBecomeActiveObserver: NSObjectProtocol?
 
     // Server-managed checkout observation
-    private var observingPaywallSession: PaywallSession?
-    private var entitledProductIdsBeforeCheckout: Set<String> = []
+    private struct CheckoutObservation {
+        let paywallSession: PaywallSession
+        let entitledProductIdsBeforeCheckout: Set<String>
+    }
+    // Usually there will only be one checkout per paywall but second try paywall would have
+    // different paywall session and products, so track per session to be safer.
+    private var activeCheckoutObservations: [String: CheckoutObservation] = [:]
 
     private override init() {
         super.init()
@@ -121,23 +126,28 @@ public class StripeCheckoutManager: NSObject {
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
     func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async throws {
-        entitledProductIdsBeforeCheckout = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
-        observingPaywallSession = paywallSession
+        let entitledBefore = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+        let observation = CheckoutObservation(
+            paywallSession: paywallSession,
+            entitledProductIdsBeforeCheckout: entitledBefore
+        )
+        activeCheckoutObservations[paywallSession.sessionId] = observation
+
         let opened = await UIApplication.shared.open(url)
         guard opened else {
-            observingPaywallSession = nil
-            entitledProductIdsBeforeCheckout = []
+            activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
             throw StripeCheckoutError.failedToOpenEnrichedURL
         }
         startForegroundObserver()
     }
 
     /// Stops observing for purchase completion if the session matches.
+    @MainActor
     func stopObserving(paywallSession: PaywallSession) {
-        guard observingPaywallSession?.sessionId == paywallSession.sessionId else { return }
-        stopForegroundObserver()
-        observingPaywallSession = nil
-        entitledProductIdsBeforeCheckout = []
+        activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
+        if activeCheckoutObservations.isEmpty {
+            stopForegroundObserver()
+        }
     }
 
     // MARK: - Foreground Observer
@@ -162,20 +172,12 @@ public class StripeCheckoutManager: NSObject {
     }
 
     private func onReturnedToForeground() {
-        guard let paywallSession = observingPaywallSession else { return }
+        guard !activeCheckoutObservations.isEmpty else { return }
         guard foregroundObserver != nil else { return }
         stopForegroundObserver()
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard let stripeProducts = paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
-                observingPaywallSession = nil
-                entitledProductIdsBeforeCheckout = []
-                return
-            }
-
-            // Capture before any async work so a concurrent stopObserving can't clear it to []
-            let previousEntitledIds = entitledProductIdsBeforeCheckout
 
             // Stripe entitlements may not be available immediately after an external purchase.
             // Wait 2s before the first check, then retry up to 2 more times with 3s delays
@@ -184,26 +186,41 @@ public class StripeCheckoutManager: NSObject {
 
             for delay in delays {
                 try? await Task.sleep(nanoseconds: delay)
-                guard observingPaywallSession != nil else { return }
+                guard !activeCheckoutObservations.isEmpty else { return }
 
                 await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
                 let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
 
-                let newlyEntitledIds = currentEntitledIds.subtracting(previousEntitledIds)
-                if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
-                    observingPaywallSession = nil
-                    entitledProductIdsBeforeCheckout = []
-                    HeliumPaywallDelegateWrapper.shared.fireEvent(
-                        PurchaseSucceededEvent(
-                            productId: purchasedProductId,
-                            triggerName: paywallSession.trigger,
-                            paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                            storeKitTransactionId: nil,
-                            storeKitOriginalTransactionId: nil
-                        ),
-                        paywallSession: paywallSession,
-                        sendToAnalytics: false
-                    )
+                var purchaseDetected = false
+                let observationsSnapshot = activeCheckoutObservations
+                for (sessionId, observation) in observationsSnapshot {
+                    guard let stripeProducts = observation.paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
+                        activeCheckoutObservations.removeValue(forKey: sessionId)
+                        continue
+                    }
+
+                    let newlyEntitledIds = currentEntitledIds
+                        .subtracting(observation.entitledProductIdsBeforeCheckout)
+
+                    if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
+                        purchaseDetected = true
+                        HeliumPaywallDelegateWrapper.shared.fireEvent(
+                            PurchaseSucceededEvent(
+                                productId: purchasedProductId,
+                                triggerName: observation.paywallSession.trigger,
+                                paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                                storeKitTransactionId: nil,
+                                storeKitOriginalTransactionId: nil
+                            ),
+                            paywallSession: observation.paywallSession,
+                            sendToAnalytics: false
+                        )
+                        break
+                    }
+                }
+
+                if purchaseDetected {
+                    activeCheckoutObservations.removeAll()
                     // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case...
                     Helium.shared.hideAllPaywalls()
                     return
@@ -211,7 +228,7 @@ public class StripeCheckoutManager: NSObject {
             }
 
             // All retries exhausted — resume observing for next foreground return
-            if observingPaywallSession != nil {
+            if !activeCheckoutObservations.isEmpty {
                 startForegroundObserver()
             }
         }
