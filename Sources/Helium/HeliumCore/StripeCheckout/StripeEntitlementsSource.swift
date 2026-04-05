@@ -198,10 +198,8 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
     }
 
     private func performFetch() async {
-        let body = HeliumStripeAPIClient.shared.baseRequestBody()
-        guard !body.isEmpty else { return }
-
         do {
+            let body = try HeliumStripeAPIClient.shared.baseRequestBody()
             let response: StripeEntitlementResponse = try await HeliumStripeAPIClient.shared.post("stripe/check-entitlement", body: body)
 
             // If superseded by a newer fetch, discard this result

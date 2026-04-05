@@ -84,14 +84,15 @@ public class StripeCheckoutManager: NSObject {
         var ctx: [String: Any] = [:]
 
         let analyticsData = try JSONEncoder().encode(analyticsEvent)
-        ctx["analytics"] = analyticsData.base64EncodedString()
+        let analyticsJSON = try JSONSerialization.jsonObject(with: analyticsData)
+        ctx["analytics"] = analyticsJSON
 
         ctx["initialStripeSelection"] = productKey
         ctx["trigger"] = triggerName
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
 
-        let baseBody = HeliumStripeAPIClient.shared.baseRequestBody()
+        let baseBody = try HeliumStripeAPIClient.shared.baseRequestBody()
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
                 ctx[key] = stringValue
@@ -99,7 +100,7 @@ public class StripeCheckoutManager: NSObject {
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
-        let ctxBase64 = ctxData.base64EncodedString()
+        let ctxBase64 = ctxData.base64URLEncodedString()
 
         var queryItems = components.queryItems ?? []
         queryItems.append(URLQueryItem(name: "ctx", value: ctxBase64))
@@ -169,13 +170,14 @@ public class StripeCheckoutManager: NSObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            // Stripe entitlements may not be available immediately after an external purchase.
-            // Wait 2s before the first check, then retry up to 2 more times with 3s delays
-            // (8s total delay, not counting request time).
-            let delays: [UInt64] = [2_000_000_000, 3_000_000_000, 3_000_000_000]
+            // Stripe entitlements may not be immediately available after an external purchase.
+            // Retry a few times (if needed) with increasing delays.
+            let delays: [UInt64] = [0, 2_000_000_000, 3_000_000_000, 5_000_000_000]
 
             for delay in delays {
-                try? await Task.sleep(nanoseconds: delay)
+                if delay > 0 {
+                    try? await Task.sleep(nanoseconds: delay)
+                }
                 guard !activeCheckoutObservations.isEmpty else { return }
 
                 await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
@@ -227,18 +229,23 @@ public class StripeCheckoutManager: NSObject {
             }
         }
     }
+    
+    // Used by Stripe one-tap Apple Pay flow
+    public func handleNewPurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
+        HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(productId: productId, priceId: priceId, subscriptionExpiresAt: subscriptionExpiresAt)
+    }
 
     // MARK: - API Calls
 
     /// Syncs Stripe customer metadata with the current user identity.
     @discardableResult
-    public func updateCustomerMetadata(
+    func updateCustomerMetadata(
         name: String? = nil,
         email: String? = nil,
         phone: String? = nil,
         description: String? = nil
     ) async throws -> Bool {
-        var body = HeliumStripeAPIClient.shared.baseRequestBody()
+        var body = try HeliumStripeAPIClient.shared.baseRequestBody()
         body["metadata"] = [
             "userId": body["userId"] as? String ?? "",
             "rcUserId": body["rcUserId"] as? String ?? "",
@@ -259,8 +266,8 @@ public class StripeCheckoutManager: NSObject {
     }
 
     /// Creates a Stripe Customer Portal session and returns the portal URL.
-    public func createPortalSession(returnUrl: String) async throws -> URL {
-        var body = HeliumStripeAPIClient.shared.baseRequestBody()
+    func createPortalSession(returnUrl: String) async throws -> URL {
+        var body = try HeliumStripeAPIClient.shared.baseRequestBody()
         body["returnUrl"] = returnUrl
 
         let response: PortalSessionResponse = try await HeliumStripeAPIClient.shared.post("stripe/create-portal-session", body: body)
@@ -293,5 +300,16 @@ enum StripeCheckoutError: LocalizedError {
         case .webPaywallBundleUrlMissing:
             return "No web paywall bundle URL available for this paywall."
         }
+    }
+}
+
+// MARK: - Base64URL
+
+extension Data {
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
     }
 }

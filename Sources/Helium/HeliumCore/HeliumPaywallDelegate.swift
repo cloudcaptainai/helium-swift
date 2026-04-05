@@ -68,10 +68,11 @@ class HeliumPaywallDelegateWrapper {
         
         let transactionStatus: HeliumPaywallTransactionStatus
         
-        var isStripePurchaseFlow: Bool = false
+        var isStripeCheckoutFlow: Bool = false
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
-        if allStripeProductIds.contains(productKey) {
-            isStripePurchaseFlow = true
+        let stripeApplePayFlow = ApplePayHelper.shared.getStripeApplePayAvailable()
+        if !stripeApplePayFlow && allStripeProductIds.contains(productKey) {
+            isStripeCheckoutFlow = true
             do {
                 try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -124,7 +125,7 @@ class HeliumPaywallDelegateWrapper {
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            if !isStripePurchaseFlow {
+            if !isStripeCheckoutFlow {
                 let detachedSession = paywallSession.withPresentationContext(.empty)
                 observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
             }
@@ -133,7 +134,12 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
-        let result = await delegate.restorePurchases()
+        var result = await delegate.restorePurchases()
+        
+        if !result && Helium.config.stripeCheckoutEnabled {
+            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+            result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
+        }
         if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
         } else {
@@ -290,7 +296,7 @@ class HeliumPaywallDelegateWrapper {
             notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
         case .stripeNoCustomUserId:
             notShownAddendum = "Stripe purchase flows require a custom user ID to be set"
-        case .stripeCheckoutMissingUrls:
+        case .stripeCheckoutNotEnabled:
             notShownAddendum = "Stripe Checkout Flow requires success/cancel URLs to be set. See Helium.config.enableStripeCheckout"
         default:
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""

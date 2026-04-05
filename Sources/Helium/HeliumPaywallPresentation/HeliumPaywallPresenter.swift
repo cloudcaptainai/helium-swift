@@ -555,7 +555,7 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
             }
             if hasStripeProducts && !Helium.config.stripeCheckoutEnabled {
-                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeCheckoutMissingUrls, presentationContext: presentationContext)
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeCheckoutNotEnabled, presentationContext: presentationContext)
             }
             
             do {

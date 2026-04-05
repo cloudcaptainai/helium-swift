@@ -34,9 +34,9 @@ public class HeliumStripeAPIClient {
 
     // MARK: - Request Body Builder
 
-    public func baseRequestBody(productId: String? = nil) -> [String: Any] {
+    public func baseRequestBody(productId: String? = nil) throws -> [String: Any] {
         guard let apiKey = Helium.lastApiKeyUsed else {
-            return [:]
+            throw HeliumStripeAPIError.notInitialized
         }
         var body: [String: Any] = [
             "apiKey": apiKey,
