@@ -327,12 +327,12 @@ public class ApplePayHelper {
     @HeliumAtomic private var cachedCanMakePayments: Bool?
 
     private init() {
-        cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
+        cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
     }
 
     /// Checks if the device supports Apple Pay (cached)
     func canMakePayments() -> Bool {
-        return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
+        return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
     }
     
     @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
@@ -341,6 +341,15 @@ public class ApplePayHelper {
     }
     public func getStripeApplePayAvailable() -> Bool {
         return isStripeApplePayAvailable && canMakePayments()
+    }
+
+    private static let defaultPaymentNetworks: [PKPaymentNetwork] = [
+        .amex, .masterCard, .visa, .discover
+    ]
+
+    func isStripeCheckoutEligible() -> Bool {
+        guard Helium.config.stripeCheckoutEnabled, canMakePayments() else { return false }
+        if #available(iOS 16.4, *) { return true } else { return false }
     }
 }
 

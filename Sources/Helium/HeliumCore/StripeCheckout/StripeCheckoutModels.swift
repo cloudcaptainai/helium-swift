@@ -98,7 +98,7 @@ public struct ExecutePurchaseResponse: Decodable {
         subscriptionItemId ?? subscriptionId ?? paymentIntentId
     }
 
-    func toPaymentSuccessResponse(backupProductId: String = "") -> PaymentSuccessResponse {
+    public func toPaymentSuccessResponse(backupProductId: String = "") -> PaymentSuccessResponse {
         PaymentSuccessResponse(
             productId: productId ?? backupProductId,
             priceId: priceId,
