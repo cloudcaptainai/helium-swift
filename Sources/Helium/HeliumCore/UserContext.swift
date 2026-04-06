@@ -203,7 +203,8 @@ public struct CodableUserContext: Codable {
             "heliumFirstSeenDate": heliumFirstSeenDate,
             "isFirstHeliumSession": HeliumIdentityManager.shared.isFirstHeliumSession,
             "userSeed": userSeed,
-            "additionalParams": self.additionalParams.dictionaryRepresentation
+            "additionalParams": self.additionalParams.dictionaryRepresentation,
+            "stripeCheckoutEligible": ApplePayHelper.shared.isStripeCheckoutEligible()
         ]
     }
 

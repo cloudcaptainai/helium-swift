@@ -166,6 +166,8 @@ public class StripeCheckoutManager: NSObject {
         guard !activeCheckoutObservations.isEmpty else { return }
         guard foregroundObserver != nil else { return }
         stopForegroundObserver()
+        
+        HeliumLogger.log(.debug, category: .entitlements, "Checking for new Stripe entitlements...")
 
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -174,7 +176,7 @@ public class StripeCheckoutManager: NSObject {
             // Retry a few times (if needed) with increasing delays.
             let delays: [UInt64] = [0, 2_000_000_000, 3_000_000_000, 5_000_000_000]
 
-            for delay in delays {
+            for (i, delay) in delays.enumerated() {
                 if delay > 0 {
                     try? await Task.sleep(nanoseconds: delay)
                 }
@@ -214,6 +216,8 @@ public class StripeCheckoutManager: NSObject {
                         break
                     }
                 }
+                
+                HeliumLogger.log(.debug, category: .entitlements, "Detected new Stripe purchase? \(purchaseDetected) (attempt #\(i + 1))")
 
                 if purchaseDetected {
                     activeCheckoutObservations.removeAll()
