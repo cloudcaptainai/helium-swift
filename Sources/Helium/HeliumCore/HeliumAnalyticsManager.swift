@@ -122,7 +122,9 @@ class HeliumAnalyticsManager {
     
     private func performIdentify(on analytics: Analytics) {
         let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
-        let userContext = HeliumIdentityManager.shared.getUserContext()
+        var userContext = HeliumIdentityManager.shared.getUserContext()
+        userContext.hasCustomUserId = HeliumIdentityManager.shared.hasCustomUserId()
+        userContext.thirdPartyAnalyticsAnonymousId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId()
         analytics.identify(userId: resolvedUserId, traits: userContext)
     }
     
