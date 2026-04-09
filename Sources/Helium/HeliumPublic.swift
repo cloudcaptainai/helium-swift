@@ -460,6 +460,7 @@ public class HeliumIdentify {
     /// - Amplitude: pass device ID
     /// - Mixpanel: pass anonymous ID
     /// - PostHog: pass anonymous ID
+    /// - Statsig: pass stable ID
     ///
     /// Set this before calling `Helium.shared.initialize()` for best results. Can also be updated after initialization.
     public var thirdPartyAnalyticsAnonymousId: String? {

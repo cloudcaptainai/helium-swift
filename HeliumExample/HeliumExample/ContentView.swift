@@ -73,6 +73,10 @@ struct ContentView: View {
             }
             .accessibilityIdentifier("presentFallbackInvalidTrigger")
             
+            Button("set random user id") {
+                Helium.identify.userId = UUID().uuidString
+            }
+
             Button("check entitlement") {
                 Task {
                     let hasAny = await Helium.entitlements.hasAny()
