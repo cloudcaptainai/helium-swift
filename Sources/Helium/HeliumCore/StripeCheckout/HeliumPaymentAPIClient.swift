@@ -1,19 +1,18 @@
 import Foundation
 
-/// Networking client for Stripe-related API calls.
-public class HeliumStripeAPIClient {
+/// Networking client for payment-related API calls (Stripe, Paddle, etc.).
+public class HeliumPaymentAPIClient {
 
-    public static let shared = HeliumStripeAPIClient()
+    public static let shared = HeliumPaymentAPIClient()
     private init() {}
 
-    /// The resolved base URL.
     public var heliumBaseURL: String { HeliumAPIEndpoint.baseURL }
 
     // MARK: - Networking
 
     public func post<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
         guard let url = URL(string: heliumBaseURL + path) else {
-            throw HeliumStripeAPIError.invalidEndpoint(path: path)
+            throw HeliumPaymentAPIError.invalidEndpoint(path: path)
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -26,7 +25,7 @@ public class HeliumStripeAPIClient {
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
             let http = response as? HTTPURLResponse
             let message = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw HeliumStripeAPIError.serverError(statusCode: http?.statusCode ?? 0, message: message)
+            throw HeliumPaymentAPIError.serverError(statusCode: http?.statusCode ?? 0, message: message)
         }
 
         return try JSONDecoder().decode(T.self, from: data)
@@ -34,15 +33,15 @@ public class HeliumStripeAPIClient {
 
     // MARK: - Request Body Builder
 
-    public func baseRequestBody(productId: String? = nil) throws -> [String: Any] {
+    func baseRequestBody(provider: PaymentProviderConfig, productId: String? = nil) throws -> [String: Any] {
         guard let apiKey = Helium.lastApiKeyUsed else {
-            throw HeliumStripeAPIError.notInitialized
+            throw HeliumPaymentAPIError.notInitialized
         }
         var body: [String: Any] = [
             "apiKey": apiKey,
             "userId": Helium.identify.userId ?? HeliumIdentityManager.shared.getHeliumPersistentId(),
             "rcUserId": Helium.identify.revenueCatAppUserId ?? "",
-            "stripeCustomerId": HeliumIdentityManager.shared.getStripeCustomerId() ?? "",
+            provider.customerIdBodyKey: provider.getCustomerId() ?? "",
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
             "appTransactionId": HeliumIdentityManager.shared.getAppTransactionID() ?? ""
         ]
@@ -51,4 +50,11 @@ public class HeliumStripeAPIClient {
         }
         return body
     }
+
+    /// Convenience that defaults to Stripe for backward compatibility.
+    public func baseRequestBody(productId: String? = nil) throws -> [String: Any] {
+        try baseRequestBody(provider: .stripe, productId: productId)
+    }
 }
+
+public typealias HeliumStripeAPIClient = HeliumPaymentAPIClient

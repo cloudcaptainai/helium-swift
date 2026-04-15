@@ -1,54 +1,9 @@
 import Foundation
 
-// MARK: - API Response Types
+// MARK: - Cached Snapshot
 
-struct StripeEntitlementResponse: Codable, Sendable {
-    let hasActiveEntitlement: Bool
-    let subscriptions: [StripeSubscriptionInfo]
-    let customerId: String?
-}
-
-struct StripeSubscriptionInfo: Codable, Sendable {
-    let subscriptionId: String
-    let productId: String
-    let status: String
-    let priceId: String?
-    let productName: String?
-    let productDescription: String?
-    let currentPeriodEnd: String?
-    let cancelAtPeriodEnd: Bool?
-    let trialEnd: String?
-
-    var isActive: Bool {
-        ["active", "trialing"].contains(status)
-    }
-}
-
-// MARK: - Snapshots
-
-/// A product entitlement with its subscription expiration date.
-private struct ProductEntitlement: Codable {
-    let productId: String
-    let priceId: String?
-    /// When the subscription period actually ends (from Stripe's currentPeriodEnd/trialEnd).
-    /// Nil for one-time purchases (permanent entitlement).
-    let subscriptionExpiresAt: Date?
-
-    var isActive: Bool {
-        guard let subscriptionExpiresAt else { return true }
-        return Date() < subscriptionExpiresAt
-    }
-
-    var heliumProductId: String {
-        if let priceId { return "\(productId):\(priceId)" }
-        return productId
-    }
-}
-
-/// In-memory cache from the latest server fetch.
 private struct CachedSnapshot {
     let products: [ProductEntitlement]
-    /// TTL — when to re-fetch from the server. Independent of per-product expiration.
     let refreshAfter: Date
 
     var needsRefresh: Bool { Date() > refreshAfter }
@@ -62,29 +17,23 @@ private struct CachedSnapshot {
     }
 }
 
-private struct PersistedStripeEntitlements: Codable {
-    let products: [ProductEntitlement]
-}
+// MARK: - HeliumPaymentEntitlementsSource
 
-// MARK: - StripeEntitlementsSource
+open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Sendable {
 
-open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Sendable {
+    let provider: PaymentProviderConfig
 
     private let lock = NSLock()
-
-    /// Authoritative once set — populated by a successful server fetch.
     private var cached: CachedSnapshot?
-    /// Cold-start backup — loaded from disk, used only until first fetch completes.
     private var persisted: [ProductEntitlement] = []
-    /// Tracks the in-flight fetch so concurrent callers coalesce onto one request.
     private var currentFetchTask: Task<Void, Never>?
     private var fetchId: UInt = 0
 
-    private static let cacheTTL: TimeInterval = 60 * 60 // 60 minutes
+    private static let cacheTTL: TimeInterval = 60 * 60
 
-    private static let persistenceFileName = "helium_stripe_entitlements.json"
-
-    public init() {}
+    init(provider: PaymentProviderConfig) {
+        self.provider = provider
+    }
 
     func configure() {
         loadPersistedData()
@@ -114,7 +63,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     open func didCompletePurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
         guard !productId.isEmpty else { return }
-        
+
         let newEntitlement = ProductEntitlement(
             productId: productId,
             priceId: priceId,
@@ -148,7 +97,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
     }
 
     // MARK: - Private
-    
+
     private var currentHeliumProductIds: Set<String> {
         if let cached {
             return cached.activeHeliumProductIds
@@ -175,8 +124,6 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     private func fetchFromServer(forceNew: Bool = false) async {
         let (task, myId): (Task<Void, Never>, UInt) = lock.withLock {
-            // If there's already an in-flight fetch, just await it.
-            // Only force a new fetch when explicitly requested.
             if !forceNew, let existing = currentFetchTask {
                 return (existing, fetchId)
             }
@@ -188,8 +135,6 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
             return (t, id)
         }
         await task.value
-        // Clear the task ref so future calls (e.g. after cache TTL) create a new fetch.
-        // Only clear if no newer fetch has replaced ours.
         lock.withLock {
             if fetchId == myId {
                 currentFetchTask = nil
@@ -199,15 +144,13 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
 
     private func performFetch() async {
         do {
-            let body = try HeliumStripeAPIClient.shared.baseRequestBody()
-            let response: StripeEntitlementResponse = try await HeliumStripeAPIClient.shared.post("stripe/check-entitlement", body: body)
+            let body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
+            let response: PaymentEntitlementResponse = try await HeliumPaymentAPIClient.shared.post(provider.checkEntitlementPath, body: body)
 
-            // If superseded by a newer fetch, discard this result
             guard !Task.isCancelled else { return }
 
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
-            // Build per-product entries from subscription expiration dates
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
                 let dateString = sub.currentPeriodEnd ?? sub.trialEnd
                 let expiresAt = parseISODate(dateString)
@@ -233,13 +176,13 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent("Helium", isDirectory: true)
-            .appendingPathComponent(Self.persistenceFileName)
+            .appendingPathComponent(provider.entitlementsPersistenceFileName)
     }
 
     private func loadPersistedData() {
         guard let fileURL = persistenceFileURL,
               let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode(PersistedStripeEntitlements.self, from: data) else {
+              let decoded = try? JSONDecoder().decode(PersistedPaymentEntitlements.self, from: data) else {
             return
         }
         let active = decoded.products.filter { $0.isActive }
@@ -252,7 +195,7 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         guard let fileURL = persistenceFileURL else { return }
 
         let encoded: Data? = lock.withLock {
-            let snapshot = PersistedStripeEntitlements(products: persisted)
+            let snapshot = PersistedPaymentEntitlements(products: persisted)
             return try? JSONEncoder().encode(snapshot)
         }
         guard let encoded else { return }
@@ -264,5 +207,13 @@ open class StripeEntitlementsSource: ThirdPartyEntitlementsSource, @unchecked Se
         } catch {
             // Silently fail
         }
+    }
+}
+
+// MARK: - StripeEntitlementsSource
+
+public class StripeEntitlementsSource: HeliumPaymentEntitlementsSource {
+    public init() {
+        super.init(provider: .stripe)
     }
 }
