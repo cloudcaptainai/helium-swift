@@ -1,10 +1,18 @@
 import UIKit
 import SafariServices
 
-/// Orchestrates the Stripe app2web checkout flow (WebView, Safari, external browser).
-public class StripeCheckoutManager: NSObject {
+public typealias StripeCheckoutManager = ExternalWebCheckoutManager
 
-    public static let shared = StripeCheckoutManager()
+/// Orchestrates the external web checkout flow (browser-based) for payment providers.
+public class ExternalWebCheckoutManager: NSObject {
+
+    public static let shared = ExternalWebCheckoutManager(
+        provider: .stripe,
+        entitlementsSource: HeliumEntitlementsManager.shared.stripeEntitlementsSource
+    )
+
+    private let provider: PaymentProviderConfig
+    private let entitlementsSource: HeliumPaymentEntitlementsSource
 
     // Checkout state
     private var foregroundObserver: NSObjectProtocol?
@@ -19,7 +27,9 @@ public class StripeCheckoutManager: NSObject {
     // different paywall session and products, so track per session to be safer.
     private var activeCheckoutObservations: [String: CheckoutObservation] = [:]
 
-    private override init() {
+    init(provider: PaymentProviderConfig, entitlementsSource: HeliumPaymentEntitlementsSource) {
+        self.provider = provider
+        self.entitlementsSource = entitlementsSource
         super.init()
     }
 
@@ -33,14 +43,14 @@ public class StripeCheckoutManager: NSObject {
         triggerName: String,
         paywallSession: PaywallSession
     ) async throws {
-        guard let resolvedSuccessURL = Helium.config.stripeCheckoutSuccessURL,
-              let resolvedCancelURL = Helium.config.stripeCheckoutCancelURL else {
-            throw StripeCheckoutError.checkoutURLsNotConfigured
+        guard let resolvedSuccessURL = provider.getSuccessURL(),
+              let resolvedCancelURL = provider.getCancelURL() else {
+            throw WebCheckoutError.checkoutURLsNotConfigured
         }
 
         guard let bundleUrlString = paywallSession.paywallInfoWithBackups?.webPaywallBundleUrl,
               let baseURL = URL(string: bundleUrlString) else {
-            throw StripeCheckoutError.webPaywallBundleUrlMissing
+            throw WebCheckoutError.webPaywallBundleUrlMissing
         }
 
         let templateEvent = PurchaseSucceededEvent(
@@ -78,7 +88,7 @@ public class StripeCheckoutManager: NSObject {
         cancelURL: String
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw StripeCheckoutError.failedToBuildEnrichedURL
+            throw WebCheckoutError.failedToBuildEnrichedURL
         }
 
         var ctx: [String: Any] = [:]
@@ -92,7 +102,7 @@ public class StripeCheckoutManager: NSObject {
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
 
-        let baseBody = try HeliumStripeAPIClient.shared.baseRequestBody()
+        let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
                 ctx[key] = stringValue
@@ -107,7 +117,7 @@ public class StripeCheckoutManager: NSObject {
         components.queryItems = queryItems
 
         guard let url = components.url else {
-            throw StripeCheckoutError.failedToBuildEnrichedURL
+            throw WebCheckoutError.failedToBuildEnrichedURL
         }
         return url
     }
@@ -116,7 +126,7 @@ public class StripeCheckoutManager: NSObject {
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
     func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async throws {
-        let entitledBefore = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+        let entitledBefore = await entitlementsSource.purchasedHeliumProductIds()
         let observation = CheckoutObservation(
             paywallSession: paywallSession,
             entitledProductIdsBeforeCheckout: entitledBefore,
@@ -127,7 +137,7 @@ public class StripeCheckoutManager: NSObject {
         let opened = await UIApplication.shared.open(url)
         guard opened else {
             activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
-            throw StripeCheckoutError.failedToOpenEnrichedURL
+            throw WebCheckoutError.failedToOpenEnrichedURL
         }
         startForegroundObserver()
     }
@@ -166,13 +176,13 @@ public class StripeCheckoutManager: NSObject {
         guard !activeCheckoutObservations.isEmpty else { return }
         guard foregroundObserver != nil else { return }
         stopForegroundObserver()
-        
-        HeliumLogger.log(.debug, category: .entitlements, "Checking for new Stripe entitlements...")
+
+        HeliumLogger.log(.debug, category: .entitlements, "Checking for new \(provider.displayName) entitlements...")
 
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            // Stripe entitlements may not be immediately available after an external purchase.
+            // Entitlements may not be immediately available after an external purchase.
             // Retry a few times (if needed) with increasing delays.
             let delays: [UInt64] = [0, 2_000_000_000, 3_000_000_000, 5_000_000_000]
 
@@ -182,14 +192,14 @@ public class StripeCheckoutManager: NSObject {
                 }
                 guard !activeCheckoutObservations.isEmpty else { return }
 
-                await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
-                let currentEntitledIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+                await entitlementsSource.refreshEntitlements()
+                let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
 
                 var purchaseDetected = false
                 let observationsSnapshot = activeCheckoutObservations
                     .sorted { $0.value.addedAt > $1.value.addedAt }
                 for (sessionId, observation) in observationsSnapshot {
-                    guard let stripeProducts = observation.paywallSession.paywallInfoWithBackups?.productsOfferedStripe else {
+                    guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0) }) else {
                         activeCheckoutObservations.removeValue(forKey: sessionId)
                         continue
                     }
@@ -200,7 +210,7 @@ public class StripeCheckoutManager: NSObject {
                     // If multiple sessions offer the same product, we attribute to the most
                     // recently added session (likely the one the user just interacted with).
                     // In practice, second-try paywalls offer different products.
-                    if let purchasedProductId = newlyEntitledIds.first(where: { stripeProducts.contains($0) }) {
+                    if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
                         purchaseDetected = true
                         HeliumPaywallDelegateWrapper.shared.fireEvent(
                             PurchaseSucceededEvent(
@@ -216,8 +226,8 @@ public class StripeCheckoutManager: NSObject {
                         break
                     }
                 }
-                
-                HeliumLogger.log(.debug, category: .entitlements, "Detected new Stripe purchase? \(purchaseDetected) (attempt #\(i + 1))")
+
+                HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
 
                 if purchaseDetected {
                     activeCheckoutObservations.removeAll()
@@ -233,10 +243,10 @@ public class StripeCheckoutManager: NSObject {
             }
         }
     }
-    
-    // Used by Stripe one-tap Apple Pay flow
+
+    // Used by Stripe one-tap Apple Pay flow (so must be public)
     public func handleNewPurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
-        HeliumEntitlementsManager.shared.stripeEntitlementsSource.didCompletePurchase(productId: productId, priceId: priceId, subscriptionExpiresAt: subscriptionExpiresAt)
+        entitlementsSource.didCompletePurchase(productId: productId, priceId: priceId, subscriptionExpiresAt: subscriptionExpiresAt)
     }
 
     // MARK: - API Calls
@@ -249,7 +259,7 @@ public class StripeCheckoutManager: NSObject {
         phone: String? = nil,
         description: String? = nil
     ) async throws -> Bool {
-        var body = try HeliumStripeAPIClient.shared.baseRequestBody()
+        var body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         body["metadata"] = [
             "userId": body["userId"] as? String ?? "",
             "rcUserId": body["rcUserId"] as? String ?? "",
@@ -262,48 +272,23 @@ public class StripeCheckoutManager: NSObject {
         if let phone { body["phone"] = phone }
         if let description { body["description"] = description }
 
-        let response: UpdateCustomerMetadataResponse = try await HeliumStripeAPIClient.shared.post("stripe/update-customer-metadata", body: body)
-        if let customerId = response.customerId, HeliumIdentityManager.shared.getStripeCustomerId() == nil {
-            HeliumIdentityManager.shared.setStripeCustomerId(customerId)
+        let response: UpdateCustomerMetadataResponse = try await HeliumPaymentAPIClient.shared.post(provider.updateCustomerMetadataPath, body: body)
+        if let customerId = response.customerId, provider.getCustomerId() == nil {
+            provider.setCustomerId(customerId)
         }
         return response.updated ?? false
     }
 
-    /// Creates a Stripe Customer Portal session and returns the portal URL.
+    /// Creates a Customer Portal session and returns the portal URL.
     func createPortalSession(returnUrl: String) async throws -> URL {
-        var body = try HeliumStripeAPIClient.shared.baseRequestBody()
+        var body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         body["returnUrl"] = returnUrl
 
-        let response: PortalSessionResponse = try await HeliumStripeAPIClient.shared.post("stripe/create-portal-session", body: body)
+        let response: PortalSessionResponse = try await HeliumPaymentAPIClient.shared.post(provider.createPortalSessionPath, body: body)
         guard let portalUrl = response.portalUrl, let url = URL(string: portalUrl) else {
-            throw HeliumStripeAPIError.serverError(statusCode: 200, message: "No portal URL returned from the server.")
+            throw HeliumPaymentAPIError.serverError(statusCode: 200, message: "No portal URL returned from the server.")
         }
         return url
-    }
-}
-
-// MARK: - Error
-
-enum StripeCheckoutError: LocalizedError {
-    case cannotPresentCheckout
-    case checkoutURLsNotConfigured
-    case failedToBuildEnrichedURL
-    case failedToOpenEnrichedURL
-    case webPaywallBundleUrlMissing
-
-    var errorDescription: String? {
-        switch self {
-        case .cannotPresentCheckout:
-            return "Could not present the checkout view"
-        case .checkoutURLsNotConfigured:
-            return "Stripe Checkout URLs not configured. Call Helium.config.enableStripeCheckout(successURL:cancelURL:) before presenting a paywall."
-        case .failedToBuildEnrichedURL:
-            return "Failed to build enriched checkout URL."
-        case .failedToOpenEnrichedURL:
-            return "Could not open enriched checkout URL in browser."
-        case .webPaywallBundleUrlMissing:
-            return "No web paywall bundle URL available for this paywall."
-        }
     }
 }
 
