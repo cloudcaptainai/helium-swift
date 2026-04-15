@@ -4,7 +4,7 @@ import Foundation
 
 enum WebCheckoutRedirect {
     static func isSuccess(_ url: URL, provider: PaymentProviderConfig) -> Bool {
-        guard let successUrl = provider.getSuccessURL(),
+        guard let successUrl = provider.getCheckoutSuccessURL(),
               let configured = URL(string: successUrl) else { return false }
         return url.scheme == configured.scheme
             && url.host == configured.host
@@ -12,7 +12,7 @@ enum WebCheckoutRedirect {
     }
 
     static func isCancelled(_ url: URL, provider: PaymentProviderConfig) -> Bool {
-        guard let cancelUrl = provider.getCancelURL(),
+        guard let cancelUrl = provider.getCheckoutCancelURL(),
               let configured = URL(string: cancelUrl) else { return false }
         return url.scheme == configured.scheme
             && url.host == configured.host

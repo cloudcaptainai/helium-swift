@@ -9,8 +9,8 @@ struct PaymentProviderConfig {
     let getCustomerId: () -> String?
     let setCustomerId: (String) -> Void
     let entitlementsPersistenceFileName: String
-    let getSuccessURL: () -> String?
-    let getCancelURL: () -> String?
+    let getCheckoutSuccessURL: () -> String?
+    let getCheckoutCancelURL: () -> String?
     let getOfferedProducts: (HeliumPaywallInfo) -> [String]?
 
     var checkEntitlementPath: String { "\(providerSlug)/check-entitlement" }
@@ -24,8 +24,8 @@ struct PaymentProviderConfig {
         getCustomerId: { HeliumIdentityManager.shared.getStripeCustomerId() },
         setCustomerId: { HeliumIdentityManager.shared.setStripeCustomerId($0) },
         entitlementsPersistenceFileName: "helium_stripe_entitlements.json",
-        getSuccessURL: { Helium.config.stripeCheckoutSuccessURL },
-        getCancelURL: { Helium.config.stripeCheckoutCancelURL },
+        getCheckoutSuccessURL: { Helium.config.stripeCheckoutSuccessURL },
+        getCheckoutCancelURL: { Helium.config.stripeCheckoutCancelURL },
         getOfferedProducts: { $0.productsOfferedStripe }
     )
 }

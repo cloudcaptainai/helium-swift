@@ -43,8 +43,8 @@ public class ExternalWebCheckoutManager: NSObject {
         triggerName: String,
         paywallSession: PaywallSession
     ) async throws {
-        guard let resolvedSuccessURL = provider.getSuccessURL(),
-              let resolvedCancelURL = provider.getCancelURL() else {
+        guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
+              let resolvedCancelURL = provider.getCheckoutCancelURL() else {
             throw WebCheckoutError.checkoutURLsNotConfigured
         }
 
