@@ -414,7 +414,7 @@ public class HeliumIdentify {
                 HeliumAnalyticsManager.shared.identify()
                 
                 // Sync Stripe customer metadata if Stripe is configured
-                if Helium.config.stripeCheckoutEnabled,
+                if Helium.config.webCheckoutEnabled,
                    Helium.shared.isInitialized() {
                     Task {
                         if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
@@ -572,15 +572,15 @@ public class HeliumConfig {
     /// Set this to `false` to disable the diagnostic view for all users in DEBUG builds.
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
 
-    // MARK: - Stripe Checkout Configuration
+    // MARK: - External Web Checkout Configuration
     
-    private(set) var stripeCheckoutEnabled: Bool = false
+    private(set) var webCheckoutEnabled: Bool = false
     
-    /// Custom success redirect URL for Stripe Checkout Flow.
-    private(set) var stripeCheckoutSuccessURL: String? = nil
+    /// Custom success redirect URL for External Checkout Flow.
+    private(set) var checkoutSuccessURL: String? = nil
 
-    /// Custom cancel redirect URL for Stripe Checkout Flow.
-    private(set) var stripeCheckoutCancelURL: String? = nil
+    /// Custom cancel redirect URL for External Checkout Flow.
+    private(set) var checkoutCancelURL: String? = nil
 
     /// Enables Stripe Checkout Flow for any Stripe products in your paywalls. If not enabled, paywalls with Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
@@ -591,24 +591,24 @@ public class HeliumConfig {
     ///   - successURL: The URL Stripe redirects to after a successful payment.
     ///     Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
     ///   - cancelURL: The URL Stripe redirects to when the user cancels checkout.
-    public func enableStripeCheckout(successURL: String, cancelURL: String) {
+    public func enableExternalWebCheckout(successURL: String, cancelURL: String) {
         guard let successParsed = URL(string: successURL), successParsed.scheme != nil,
               let cancelParsed = URL(string: cancelURL), cancelParsed.scheme != nil else {
             HeliumLogger.log(.error, category: .core, "enableStripeCheckout: invalid URLs provided. Both successURL and cancelURL must be valid URLs with a scheme (e.g. https://example.com or myapp://path).")
             return
         }
-        stripeCheckoutSuccessURL = successURL
-        stripeCheckoutCancelURL = cancelURL
-        stripeCheckoutEnabled = true
+        checkoutSuccessURL = successURL
+        checkoutCancelURL = cancelURL
+        webCheckoutEnabled = true
     }
 
     /// Disables Stripe checkout flow. Paywalls with Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
     /// NOTE - if you have existing Stripe customers, Helium will stop respecting their entitlements.
     public func disableStripeCheckout() {
-        stripeCheckoutSuccessURL = nil
-        stripeCheckoutCancelURL = nil
-        stripeCheckoutEnabled = false
+        checkoutSuccessURL = nil
+        checkoutCancelURL = nil
+        webCheckoutEnabled = false
     }
 
 }

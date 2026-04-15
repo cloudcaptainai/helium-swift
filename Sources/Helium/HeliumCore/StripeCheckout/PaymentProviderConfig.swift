@@ -24,8 +24,21 @@ struct PaymentProviderConfig {
         getCustomerId: { HeliumIdentityManager.shared.getStripeCustomerId() },
         setCustomerId: { HeliumIdentityManager.shared.setStripeCustomerId($0) },
         entitlementsPersistenceFileName: "helium_stripe_entitlements.json",
-        getCheckoutSuccessURL: { Helium.config.stripeCheckoutSuccessURL },
-        getCheckoutCancelURL: { Helium.config.stripeCheckoutCancelURL },
+        getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
+        getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
         getOfferedProducts: { $0.productsOfferedStripe }
+    )
+    
+    static let paddle = PaymentProviderConfig(
+        displayName: "Paddle",
+        providerSlug: "paddle",
+        customerIdBodyKey: "paddleCustomerId",
+        // todo
+        getCustomerId: { nil },
+        setCustomerId: { _ in /* TODO */ },
+        entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
+        getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
+        getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
+        getOfferedProducts: { _ in return [] /* TODO */ }
     )
 }

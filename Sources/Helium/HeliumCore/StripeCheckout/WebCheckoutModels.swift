@@ -158,7 +158,7 @@ enum WebCheckoutError: LocalizedError {
         case .cannotPresentCheckout:
             return "Could not present the checkout view"
         case .checkoutURLsNotConfigured:
-            return "Checkout URLs not configured. Call Helium.config.enableCheckout() before presenting a paywall."
+            return "Checkout URLs not configured. Call Helium.config.enableExternalWebCheckout() before presenting a paywall."
         case .failedToBuildEnrichedURL:
             return "Failed to build enriched checkout URL."
         case .failedToOpenEnrichedURL:

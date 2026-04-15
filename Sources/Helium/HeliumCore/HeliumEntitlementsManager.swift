@@ -18,7 +18,7 @@ actor HeliumEntitlementsManager {
         if let thirdParty = Helium.config.thirdPartyEntitlementsSource {
             sources.append(thirdParty)
         }
-        if Helium.config.stripeCheckoutEnabled {
+        if Helium.config.webCheckoutEnabled {
             sources.append(stripeEntitlementsSource)
         }
         return sources
@@ -172,7 +172,7 @@ actor HeliumEntitlementsManager {
         startTransactionListener()
         await loadEntitlementsIfNeeded()
 
-        if Helium.config.stripeCheckoutEnabled {
+        if Helium.config.webCheckoutEnabled {
             stripeEntitlementsSource.configure()
         }
 
