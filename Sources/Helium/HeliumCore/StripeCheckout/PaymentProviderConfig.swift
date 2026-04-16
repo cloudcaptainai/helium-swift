@@ -39,6 +39,6 @@ struct PaymentProviderConfig {
         entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
-        getOfferedProducts: { _ in return [] /* TODO */ }
+        getOfferedProducts: { $0.productsOfferedPaddle }
     )
 }

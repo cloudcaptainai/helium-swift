@@ -550,11 +550,13 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
+            let hasPaddleProducts = !(templatePaywallInfo.productsOfferedPaddle ?? []).isEmpty
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
-            if hasStripeProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
+            let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
+            if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
             }
-            if hasStripeProducts && !Helium.config.webCheckoutEnabled {
+            if hasAppToWebProducts && !Helium.config.webCheckoutEnabled {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeCheckoutNotEnabled, presentationContext: presentationContext)
             }
             
