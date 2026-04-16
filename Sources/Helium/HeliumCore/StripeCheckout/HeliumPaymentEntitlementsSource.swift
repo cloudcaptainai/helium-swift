@@ -210,10 +210,16 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
     }
 }
 
-// MARK: - StripeEntitlementsSource
+// MARK: - Provider-specific implementations
 
 public class StripeEntitlementsSource: HeliumPaymentEntitlementsSource {
     public init() {
         super.init(provider: .stripe)
+    }
+}
+
+public class PaddleEntitlementsSource: HeliumPaymentEntitlementsSource {
+    public init() {
+        super.init(provider: .paddle)
     }
 }

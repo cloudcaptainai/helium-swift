@@ -136,9 +136,13 @@ class HeliumPaywallDelegateWrapper {
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
         var result = await delegate.restorePurchases()
         
-        if !result && Helium.config.stripeCheckoutEnabled {
-            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
-            result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
+        if !result && Helium.config.webCheckoutEnabled {
+            await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
+            result = await !HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds().isEmpty
+            if !result {
+                await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+                result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
+            }
         }
         if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)

@@ -350,7 +350,7 @@ public class ApplePayHelper {
     }
 
     func isStripeCheckoutEligible() -> Bool {
-        if !Helium.config.stripeCheckoutEnabled {
+        if !Helium.config.webCheckoutEnabled {
             return false
         }
         let hasCards = cachedCanMakePaymentsWithCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
