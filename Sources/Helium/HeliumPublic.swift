@@ -615,9 +615,9 @@ public class HeliumConfig {
         webCheckoutEnabled = true
     }
 
-    /// Disables Stripe checkout flow. Paywalls with Stripe products
+    /// Disables External Web Checkout Flow. Paywalls with Paddle or Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
-    /// NOTE - if you have existing Stripe customers, Helium will stop respecting their entitlements.
+    /// NOTE - if you have existing Paddle/Stripe customers, Helium will stop respecting their entitlements.
     public func disableStripeCheckout() {
         checkoutSuccessURL = nil
         checkoutCancelURL = nil
