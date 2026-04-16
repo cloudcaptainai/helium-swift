@@ -1,15 +1,21 @@
 import UIKit
 import SafariServices
 
-public typealias StripeCheckoutManager = ExternalWebCheckoutManager
-
-/// Orchestrates the external web checkout flow (browser-based) for payment providers.
-public class ExternalWebCheckoutManager: NSObject {
-
+public class StripeCheckoutManager {
     public static let shared = ExternalWebCheckoutManager(
         provider: .stripe,
         entitlementsSource: HeliumEntitlementsManager.shared.stripeEntitlementsSource
     )
+}
+public class PaddleCheckoutManager {
+    public static let shared = ExternalWebCheckoutManager(
+        provider: .paddle,
+        entitlementsSource: HeliumEntitlementsManager.shared.paddleEntitlementsSource
+    )
+}
+
+/// Orchestrates the external web checkout flow (browser-based) for payment providers.
+public class ExternalWebCheckoutManager: NSObject {
 
     private let provider: PaymentProviderConfig
     private let entitlementsSource: HeliumPaymentEntitlementsSource
