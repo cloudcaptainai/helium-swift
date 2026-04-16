@@ -618,7 +618,7 @@ public class HeliumConfig {
     /// Disables External Web Checkout Flow. Paywalls with Paddle or Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
     /// NOTE - if you have existing Paddle/Stripe customers, Helium will stop respecting their entitlements.
-    public func disableStripeCheckout() {
+    public func disableExternalWebCheckout() {
         checkoutSuccessURL = nil
         checkoutCancelURL = nil
         webCheckoutEnabled = false
