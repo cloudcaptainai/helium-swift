@@ -103,7 +103,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let analyticsJSON = try JSONSerialization.jsonObject(with: analyticsData)
         ctx["analytics"] = analyticsJSON
 
-        ctx["initialStripeSelection"] = productKey
+        ctx[provider.initialProductKey] = productKey
         ctx["trigger"] = triggerName
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL

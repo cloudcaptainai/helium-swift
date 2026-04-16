@@ -8,6 +8,7 @@ struct PaymentProviderConfig {
     let customerIdBodyKey: String
     let getCustomerId: () -> String?
     let setCustomerId: (String) -> Void
+    let initialProductKey: String
     let entitlementsPersistenceFileName: String
     let getCheckoutSuccessURL: () -> String?
     let getCheckoutCancelURL: () -> String?
@@ -23,6 +24,7 @@ struct PaymentProviderConfig {
         customerIdBodyKey: "stripeCustomerId",
         getCustomerId: { HeliumIdentityManager.shared.getStripeCustomerId() },
         setCustomerId: { HeliumIdentityManager.shared.setStripeCustomerId($0) },
+        initialProductKey: "initialStripeSelection",
         entitlementsPersistenceFileName: "helium_stripe_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
@@ -36,6 +38,7 @@ struct PaymentProviderConfig {
         // todo
         getCustomerId: { nil },
         setCustomerId: { _ in /* TODO */ },
+        initialProductKey: "initialPaddleSelection",
         entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
