@@ -997,7 +997,9 @@ public class HeliumFetchedConfigManager {
         bundleId: String,
         bundleUrl: String,
         bundleHtml: String,
-        productIds: [String]
+        productIds: [String],
+        productIdsStripe: [String],
+        productIdsPaddle: [String]
     ) throws {
         guard var config = fetchedConfig else {
             throw HeliumControlPanelError.noConfigAvailable
@@ -1029,11 +1031,11 @@ public class HeliumFetchedConfigManager {
 
         // Update product IDs
         previewPaywallInfo.productsOfferedIOS = productIds
+        previewPaywallInfo.productsOfferedStripe = productIdsStripe
+        previewPaywallInfo.productsOfferedPaddle = productIdsPaddle
 
         // Clear fields inherited from source trigger that would interfere with preview
         previewPaywallInfo.forceShowFallback = nil
-        previewPaywallInfo.productsOfferedStripe = nil
-        previewPaywallInfo.productsOfferedPaddle = nil
 
         // Store the preview trigger config
         config.triggerToPaywalls[Self.HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
