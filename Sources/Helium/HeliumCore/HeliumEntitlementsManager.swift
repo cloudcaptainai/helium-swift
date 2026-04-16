@@ -11,6 +11,7 @@ actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
+    nonisolated let paddleEntitlementsSource = PaddleEntitlementsSource()
     nonisolated let stripeEntitlementsSource = StripeEntitlementsSource()
 
     private var allThirdPartySources: [ThirdPartyEntitlementsSource] {
@@ -19,6 +20,7 @@ actor HeliumEntitlementsManager {
             sources.append(thirdParty)
         }
         if Helium.config.webCheckoutEnabled {
+            sources.append(paddleEntitlementsSource)
             sources.append(stripeEntitlementsSource)
         }
         return sources
@@ -173,6 +175,7 @@ actor HeliumEntitlementsManager {
         await loadEntitlementsIfNeeded()
 
         if Helium.config.webCheckoutEnabled {
+            paddleEntitlementsSource.configure()
             stripeEntitlementsSource.configure()
         }
 
