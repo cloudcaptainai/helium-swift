@@ -122,7 +122,7 @@ public struct HeliumFetchedConfig: Codable {
     var stripeCustomerId: String?
     
     var paddleProducts: [String: ServerProductPrice]?
-//    var paddleCustomerId: String? // todo figure out how we handle paddle customer ids
+    var paddleCustomerId: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for

@@ -192,6 +192,7 @@ public struct CodableUserContext: Codable {
             "thirdPartyAnalyticsAnonymousId": HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId() ?? "",
             "rcUserId": HeliumIdentityManager.shared.revenueCatAppUserId ?? "",
             "stripeCustomerId": HeliumIdentityManager.shared.getStripeCustomerId() ?? "",
+            "paddleCustomerId": HeliumIdentityManager.shared.getPaddleCustomerId() ?? "",
             "organizationId": HeliumFetchedConfigManager.shared.getOrganizationID() ?? "unknown",
             "appTransactionId": HeliumIdentityManager.shared.appTransactionID ?? "",
             "locale": localeDict,

@@ -143,6 +143,13 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
     }
 
     private func performFetch() async {
+        guard Helium.identify.userId != nil
+                || Helium.identify.revenueCatAppUserId != nil
+                || provider.getCustomerId() != nil else {
+            // We can safely assume entitlements result will be empty if no stripe/paddle customer id and no id
+            // set by host app that may persist across app installs / device change.
+            return
+        }
         do {
             let body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
             let response: PaymentEntitlementResponse = try await HeliumPaymentAPIClient.shared.post(provider.checkEntitlementPath, body: body)

@@ -35,9 +35,8 @@ struct PaymentProviderConfig {
         displayName: "Paddle",
         providerSlug: "paddle",
         customerIdBodyKey: "paddleCustomerId",
-        // todo
-        getCustomerId: { nil },
-        setCustomerId: { _ in /* TODO */ },
+        getCustomerId: { HeliumIdentityManager.shared.getPaddleCustomerId() },
+        setCustomerId: { HeliumIdentityManager.shared.setPaddleCustomerId($0) },
         initialProductKey: "initialPaddleSelection",
         entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
