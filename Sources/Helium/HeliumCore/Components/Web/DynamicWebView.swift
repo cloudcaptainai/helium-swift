@@ -236,6 +236,7 @@ struct DynamicWebView: View {
                 }
                 
                 _ = Date()
+                preparedWebView.configuration.userContentController.removeAllUserScripts()
                 preparedWebView.configuration.userContentController.addUserScript(combinedScript)
                 
                 // File loading timing
