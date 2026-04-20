@@ -365,8 +365,7 @@ public class Helium {
             Helium.identify.userId = nil
         }
         HeliumEntitlementsManager.shared.paddleEntitlementsSource.clearEntitlements()
-        // todo clear paddle customer id
-//        HeliumIdentityManager.shared.setStripeCustomerId(nil)
+        HeliumIdentityManager.shared.setPaddleCustomerId(nil)
     }
     
 }
@@ -426,7 +425,7 @@ public class HeliumIdentify {
             if newValue != nil && userIdChanged {
                 HeliumAnalyticsManager.shared.identify()
                 
-                // Sync Stripe customer metadata if Stripe is configured
+                // Sync Stripe/Paddle customer metadata if web checkout is configured
                 if Helium.config.webCheckoutEnabled,
                    Helium.shared.isInitialized() {
                     Task {
@@ -434,6 +433,11 @@ public class HeliumIdentify {
                             await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
                         } else {
                             try? await StripeCheckoutManager.shared.updateCustomerMetadata()
+                        }
+                        if HeliumIdentityManager.shared.getPaddleCustomerId() == nil {
+                            await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
+                        } else {
+                            try? await PaddleCheckoutManager.shared.updateCustomerMetadata()
                         }
                     }
                 }
@@ -814,6 +818,12 @@ public class HeliumEntitlements {
     /// Returns `true` if the user has any active Stripe entitlement.
     public func hasActiveStripeEntitlement() async -> Bool {
         let productIds = await HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds()
+        return !productIds.isEmpty
+    }
+    
+    /// Returns `true` if the user has any active Paddle entitlement.
+    public func hasActivePaddleEntitlement() async -> Bool {
+        let productIds = await HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds()
         return !productIds.isEmpty
     }
     

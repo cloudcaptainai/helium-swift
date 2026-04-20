@@ -347,6 +347,10 @@ public class HeliumFetchedConfigManager {
             if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
                 HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
             }
+
+            if let paddleCustomerId = fetchedConfig?.paddleCustomerId {
+                HeliumIdentityManager.shared.setPaddleCustomerId(paddleCustomerId)
+            }
             
             // Download assets
             
@@ -864,6 +868,12 @@ public class HeliumFetchedConfigManager {
                 map.merge(converted) { storeKitValue, _ in storeKitValue }
             }
         }
+        if let serverPrices = config?.paddleProducts {
+            let converted = serverPrices.mapValues { $0.toLocalizedPrice() }
+            _localizedPriceMap.withValue { map in
+                map.merge(converted) { storeKitValue, _ in storeKitValue }
+            }
+        }
 
         var allFound = false
         _localizedPriceMap.withValue { map in
@@ -896,8 +906,11 @@ public class HeliumFetchedConfigManager {
 
     // NOTE - be careful about removing the public declaration here because this is in use
     // by some sdk integrations.
-    public func getServerProductsPriceMap() -> [String: ServerProductPrice]? {
+    public func getStripeProductsPriceMap() -> [String: ServerProductPrice]? {
         return fetchedConfig?.stripeProducts
+    }
+    public func getPaddleProductsPriceMap() -> [String: ServerProductPrice]? {
+        return fetchedConfig?.paddleProducts
     }
     
     /// Get localized prices filtered by a specific trigger's product IDs

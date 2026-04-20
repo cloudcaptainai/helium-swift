@@ -68,13 +68,28 @@ class HeliumPaywallDelegateWrapper {
         
         let transactionStatus: HeliumPaywallTransactionStatus
         
-        var isStripeCheckoutFlow: Bool = false
-        let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getServerProductsPriceMap() ?? [:]).keys)
+        var isExternalCheckoutFlow: Bool = false
+        let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
         let stripeApplePayFlow = ApplePayHelper.shared.getStripeApplePayAvailable()
+        
+        let allPaddleProductIds = Array((HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]).keys)
+        
         if !stripeApplePayFlow && allStripeProductIds.contains(productKey) {
-            isStripeCheckoutFlow = true
+            isExternalCheckoutFlow = true
             do {
                 try await StripeCheckoutManager.shared.startCheckoutFlow(
+                    for: productKey,
+                    triggerName: triggerName,
+                    paywallSession: paywallSession
+                )
+                transactionStatus = .pending
+            } catch {
+                transactionStatus = .failed(error)
+            }
+        } else if allPaddleProductIds.contains(productKey) {
+            isExternalCheckoutFlow = true
+            do {
+                try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
@@ -125,7 +140,7 @@ class HeliumPaywallDelegateWrapper {
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            if !isStripeCheckoutFlow {
+            if !isExternalCheckoutFlow {
                 let detachedSession = paywallSession.withPresentationContext(.empty)
                 observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
             }
@@ -267,6 +282,7 @@ class HeliumPaywallDelegateWrapper {
 
         if event is PaywallCloseEvent, let paywallSession {
             Task { @MainActor in
+                PaddleCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
                 StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
             }
         }

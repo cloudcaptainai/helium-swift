@@ -67,6 +67,7 @@ public class HeliumIdentityManager {
     private let heliumUserSeedKey = "heliumUserSeed"
     private let heliumHasCustomUserIdKey = "heliumHasCustomUserId"
     private let heliumStripeCustomerIdKey = "heliumStripeCustomerId"
+    private let heliumPaddleCustomerIdKey = "heliumPaddleCustomerId"
     private let heliumAppTransactionIDKey = "heliumAppTransactionID"
     private let heliumThirdPartyAnalyticsAnonymousIdKey = "heliumThirdPartyAnalyticsAnonymousId"
     private let heliumUserTraitsKey = "heliumUserTraits"
@@ -152,7 +153,19 @@ public class HeliumIdentityManager {
     public func getStripeCustomerId() -> String? {
         return UserDefaults.standard.string(forKey: heliumStripeCustomerIdKey)
     }
-    
+
+    public func setPaddleCustomerId(_ customerId: String?) {
+        guard let customerId, !customerId.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: heliumPaddleCustomerIdKey)
+            return
+        }
+        UserDefaults.standard.setValue(customerId, forKey: heliumPaddleCustomerIdKey)
+    }
+
+    public func getPaddleCustomerId() -> String? {
+        return UserDefaults.standard.string(forKey: heliumPaddleCustomerIdKey)
+    }
+
     public func getAppTransactionID() -> String? {
         return appTransactionID
     }

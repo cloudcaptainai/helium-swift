@@ -83,6 +83,11 @@ struct PaymentEntitlementResponse: Codable, Sendable {
     let customerId: String?
 }
 
+// Stripe and Paddle don't return identical shapes. Stripe emits `trialEnd`;
+// Paddle emits `trialStartsAt`/`trialEndsAt` and additional fields
+// (`startedAt`, `nextBilledAt`, `currentPeriodStart`, `canceledAt`,
+// `scheduledChange`) that we don't currently consume. Add them here if a
+// consumer ever needs them.
 struct PaymentSubscriptionInfo: Codable, Sendable {
     let subscriptionId: String
     let productId: String
@@ -93,6 +98,7 @@ struct PaymentSubscriptionInfo: Codable, Sendable {
     let currentPeriodEnd: String?
     let cancelAtPeriodEnd: Bool?
     let trialEnd: String?
+    let trialEndsAt: String?
 
     var isActive: Bool {
         ["active", "trialing"].contains(status)

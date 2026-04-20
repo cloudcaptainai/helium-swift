@@ -19,8 +19,10 @@ actor HeliumEntitlementsManager {
         if let thirdParty = Helium.config.thirdPartyEntitlementsSource {
             sources.append(thirdParty)
         }
-        if Helium.config.webCheckoutEnabled {
+        if paddleEntitlementsSource.isConfigured {
             sources.append(paddleEntitlementsSource)
+        }
+        if stripeEntitlementsSource.isConfigured {
             sources.append(stripeEntitlementsSource)
         }
         return sources
@@ -174,8 +176,10 @@ actor HeliumEntitlementsManager {
         startTransactionListener()
         await loadEntitlementsIfNeeded()
 
-        if Helium.config.webCheckoutEnabled {
+        if Helium.config.webCheckoutEnabled || HeliumIdentityManager.shared.getPaddleCustomerId() != nil {
             paddleEntitlementsSource.configure()
+        }
+        if Helium.config.webCheckoutEnabled || HeliumIdentityManager.shared.getStripeCustomerId() != nil {
             stripeEntitlementsSource.configure()
         }
 
