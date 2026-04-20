@@ -300,7 +300,7 @@ class HeliumPaywallDelegateWrapper {
         case .notInitialized:
             notShownAddendum = "Helium is not initialized"
         case .triggerHasNoPaywall:
-            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow https://app.tryhelium.com/workflows"
+            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow. Note that changes to a workflow may take a few minutes to be reflected here. https://app.tryhelium.com/workflows"
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
         case .paywallsDownloadFail:
@@ -314,10 +314,14 @@ class HeliumPaywallDelegateWrapper {
                 paywallLink += "/\(paywallId)"
             }
             notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
-        case .stripeNoCustomUserId:
-            notShownAddendum = "Stripe purchase flows require a custom user ID to be set"
-        case .stripeCheckoutNotEnabled:
-            notShownAddendum = "Stripe Checkout Flow requires success/cancel URLs to be set. See Helium.config.enableStripeCheckout"
+        case .webCheckoutNoCustomUserId:
+            notShownAddendum = "External Web Checkout requires a custom user ID to be set"
+        case .webCheckoutNotEnabled:
+            notShownAddendum = "External Web Checkout requires success/cancel URLs to be set. See Helium.config.enableStripeCheckout"
+        case .bundleFetchCannotDecodeContent:
+            notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
+        case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:
+            notShownAddendum = "Could not retrieve paywall. Contact Helium if this continues to be an issue."
         default:
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }

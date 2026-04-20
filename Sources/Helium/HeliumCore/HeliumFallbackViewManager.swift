@@ -22,8 +22,7 @@ public class HeliumFallbackViewManager {
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
     
-    // **MARK: - Public Methods**
-    public func setUpFallbackBundle() {
+    func setUpFallbackBundle() {
         var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
         if let customURL = Helium.config.customFallbacksURL {
             // This is synchronous but very fast (typically < 1 ms).
