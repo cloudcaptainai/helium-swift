@@ -529,12 +529,13 @@ extension HeliumPaywallPresenter {
     func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
         if !Helium.shared.isInitialized() {
+            // Note - no fallback paywall here since fallbacks not initialized yet either
             HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
             return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
         }
         
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-        if Helium.shared.paywallsLoaded() && HeliumFetchedConfigManager.shared.hasBundles() {
+        if Helium.shared.paywallsLoaded() {
             guard let templatePaywallInfo = paywallInfo else {
                 return fallbackViewFor(trigger: trigger, paywallInfo: nil, fallbackReason: .triggerHasNoPaywall, presentationContext: presentationContext)
             }
@@ -554,10 +555,10 @@ extension HeliumPaywallPresenter {
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
             let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
             if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
-                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeNoCustomUserId, presentationContext: presentationContext)
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNoCustomUserId, presentationContext: presentationContext)
             }
             if hasAppToWebProducts && !Helium.config.webCheckoutEnabled {
-                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .stripeCheckoutNotEnabled, presentationContext: presentationContext)
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
             
             do {
@@ -597,7 +598,8 @@ extension HeliumPaywallPresenter {
                     fallbackReason = .productsFetchInProgress
                 }
             case .downloadSuccess:
-                fallbackReason = .paywallBundlesMissing
+                // Not reachable with current code paths, but include so all switch cases are accounted for.
+                fallbackReason = .triggerHasNoPaywall
             case .downloadFailure:
                 fallbackReason = .paywallsDownloadFail
             }

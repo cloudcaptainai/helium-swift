@@ -772,7 +772,6 @@ public enum PaywallUnavailableReason: String, Codable {
     case configFetchInProgress
     case bundlesFetchInProgress
     case productsFetchInProgress
-    case paywallBundlesMissing
     case paywallsDownloadFail
     case secondTryNoMatch
     case alreadyPresented
@@ -787,8 +786,8 @@ public enum PaywallUnavailableReason: String, Codable {
     case bundleFetch410
     case bundleFetchCannotDecodeContent
     case noProductsIOS
-    case stripeNoCustomUserId
-    case stripeCheckoutNotEnabled
+    case webCheckoutNoCustomUserId
+    case webCheckoutNotEnabled
 }
 
 /// Reason a paywall was not shown.
