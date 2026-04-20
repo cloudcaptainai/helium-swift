@@ -317,7 +317,7 @@ class HeliumPaywallDelegateWrapper {
         case .webCheckoutNoCustomUserId:
             notShownAddendum = "External Web Checkout requires a custom user ID to be set"
         case .webCheckoutNotEnabled:
-            notShownAddendum = "External Web Checkout requires success/cancel URLs to be set. See Helium.config.enableStripeCheckout"
+            notShownAddendum = "External Web Checkout requires success/cancel URLs to be set. See Helium.config.enableExternalWebCheckout"
         case .bundleFetchCannotDecodeContent:
             notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
         case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:
