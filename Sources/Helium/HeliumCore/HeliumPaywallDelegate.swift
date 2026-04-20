@@ -322,6 +322,8 @@ class HeliumPaywallDelegateWrapper {
             notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
         case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:
             notShownAddendum = "Could not retrieve paywall. Contact Helium if this continues to be an issue."
+        case .couldNotFindBundleUrl:
+            notShownAddendum = "Could not extract paywall url. Contact Helium if this continues to be an issue."
         default:
             notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
         }

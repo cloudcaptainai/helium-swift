@@ -934,10 +934,6 @@ public class HeliumFetchedConfigManager {
         return fetchedConfig
     }
     
-    func hasBundles() -> Bool {
-        return fetchedConfig?.bundles?.count ?? 0 > 0
-    }
-    
     public func getConfigId() -> UUID? {
         return fetchedConfig?.fetchedConfigID
     }

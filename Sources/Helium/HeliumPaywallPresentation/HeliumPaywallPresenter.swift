@@ -598,6 +598,7 @@ extension HeliumPaywallPresenter {
                     fallbackReason = .productsFetchInProgress
                 }
             case .downloadSuccess:
+                // Not reachable with current code paths, but include so all switch cases are accounted for.
                 fallbackReason = .triggerHasNoPaywall
             case .downloadFailure:
                 fallbackReason = .paywallsDownloadFail
