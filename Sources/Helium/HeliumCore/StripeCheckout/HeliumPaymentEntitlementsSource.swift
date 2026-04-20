@@ -159,7 +159,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
-                let dateString = sub.currentPeriodEnd ?? sub.trialEnd
+                let dateString = sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt
                 let expiresAt = parseISODate(dateString)
                 return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionExpiresAt: expiresAt)
             }

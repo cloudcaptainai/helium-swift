@@ -821,6 +821,12 @@ public class HeliumEntitlements {
         return !productIds.isEmpty
     }
     
+    /// Returns `true` if the user has any active Paddle entitlement.
+    public func hasActivePaddleEntitlement() async -> Bool {
+        let productIds = await HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds()
+        return !productIds.isEmpty
+    }
+    
 }
 
 @available(iOS 15.0, *)
