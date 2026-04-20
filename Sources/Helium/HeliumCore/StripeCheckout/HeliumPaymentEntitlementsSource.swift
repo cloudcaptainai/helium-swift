@@ -35,7 +35,9 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         self.provider = provider
     }
 
+    private(set) var isConfigured = false
     func configure() {
+        guard !isConfigured else { return }
         loadPersistedData()
         Task { await fetchFromServer() }
     }
