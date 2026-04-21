@@ -372,7 +372,54 @@ public class Helium {
         HeliumEntitlementsManager.shared.paddleEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setPaddleCustomerId(nil)
     }
-    
+
+    // MARK: - URL Handling
+
+    /// Forward incoming deep links / universal links to Helium so the SDK can react to
+    /// external web checkout success/cancel redirects without waiting for the app to foreground.
+    ///
+    /// Safe to call with unrelated URLs — returns `false` if external web checkout is
+    /// disabled or the URL does not match the success/cancel URLs configured via
+    /// ``HeliumConfig/enableExternalWebCheckout(successURL:cancelURL:)``.
+    ///
+    /// Call this from `.onOpenURL`, `SceneDelegate.scene(_:openURLContexts:)`, or
+    /// `AppDelegate.application(_:open:options:)`.
+    ///
+    /// ## Example
+    /// ```swift
+    /// .onOpenURL { url in
+    ///     if !Helium.shared.handleURL(url) {
+    ///         // your own deep link handling
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameter url: The URL the host app received.
+    /// - Returns: `true` if the URL was a Helium checkout redirect and is being processed.
+    @discardableResult
+    public func handleURL(_ url: URL) -> Bool {
+        guard Helium.config.webCheckoutEnabled else {
+            return false
+        }
+
+        // Stripe and Paddle read from the same configured success/cancel URLs, so
+        // checking against either provider is sufficient to classify the URL.
+        let redirectKind: CheckoutRedirectKind
+        if WebCheckoutRedirect.isSuccess(url, provider: .stripe) {
+            redirectKind = .success
+        } else if WebCheckoutRedirect.isCancelled(url, provider: .stripe) {
+            redirectKind = .cancel
+        } else {
+            return false
+        }
+
+        Task { @MainActor in
+            await StripeCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
+            await PaddleCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
+        }
+        return true
+    }
+
 }
 
 /// Configuration options for presenting a paywall.

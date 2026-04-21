@@ -345,11 +345,11 @@ public class HeliumFetchedConfigManager {
             triggersWithSkippedBundleAndReason = []
             
             if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
-                HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
+                applyCustomerIdFromConfig(stripeCustomerId, provider: .stripe)
             }
 
             if let paddleCustomerId = fetchedConfig?.paddleCustomerId {
-                HeliumIdentityManager.shared.setPaddleCustomerId(paddleCustomerId)
+                applyCustomerIdFromConfig(paddleCustomerId, provider: .paddle)
             }
             
             // Download assets
@@ -912,7 +912,24 @@ public class HeliumFetchedConfigManager {
     public func getPaddleProductsPriceMap() -> [String: ServerProductPrice]? {
         return fetchedConfig?.paddleProducts
     }
-    
+
+    /// When config fetch returns a customerId for a payment provider, persist it and
+    /// ensure entitlements reflect the new value. If the source was already configured
+    /// before this customerId landed, force a refresh on change; otherwise configure()'s
+    /// initial fetch will pick up the newly-set value.
+    private func applyCustomerIdFromConfig(_ customerId: String, provider: PaymentProviderConfig) {
+        let previousCustomerId = provider.getCustomerId()
+        provider.setCustomerId(customerId)
+        let source = provider.getEntitlementsSource()
+        if source.isConfigured {
+            if previousCustomerId != customerId {
+                Task { await source.refreshEntitlements() }
+            }
+        } else {
+            source.configure()
+        }
+    }
+
     /// Get localized prices filtered by a specific trigger's product IDs
     /// - Parameter triggerName: The trigger name to get products for
     /// - Returns: Dictionary containing only prices for products in the specified trigger

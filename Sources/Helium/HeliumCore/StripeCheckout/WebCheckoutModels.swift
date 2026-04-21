@@ -1,5 +1,11 @@
 import Foundation
 
+/// Which of the configured checkout redirect URLs the user returned through.
+enum CheckoutRedirectKind {
+    case success
+    case cancel
+}
+
 // MARK: - URL Constants
 
 enum WebCheckoutRedirect {

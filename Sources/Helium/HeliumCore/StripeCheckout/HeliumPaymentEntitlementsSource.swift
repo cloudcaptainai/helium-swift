@@ -37,8 +37,12 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
 
     private(set) var isConfigured = false
     func configure() {
-        guard !isConfigured else { return }
-        isConfigured = true
+        let shouldConfigure: Bool = lock.withLock {
+            guard !isConfigured else { return false }
+            isConfigured = true
+            return true
+        }
+        guard shouldConfigure else { return }
         loadPersistedData()
         Task { await fetchFromServer() }
     }
@@ -151,6 +155,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             let response: PaymentEntitlementResponse = try await HeliumPaymentAPIClient.shared.post(provider.checkEntitlementPath, body: body)
 
             guard !Task.isCancelled else { return }
+
+            if let customerId = response.customerId, !customerId.isEmpty {
+                provider.setCustomerId(customerId)
+            }
 
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
