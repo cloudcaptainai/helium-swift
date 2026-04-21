@@ -67,8 +67,7 @@ class HeliumPaywallDelegateWrapper {
         StoreKit1Listener.ensureListening()
         
         let transactionStatus: HeliumPaywallTransactionStatus
-        
-        var isExternalCheckoutFlow: Bool = false
+
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
         let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
 
@@ -82,9 +81,8 @@ class HeliumPaywallDelegateWrapper {
         } else {
             paymentProcessor = .appStore
         }
-        
+
         if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
-            isExternalCheckoutFlow = true
             do {
                 try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -96,7 +94,6 @@ class HeliumPaywallDelegateWrapper {
                 transactionStatus = .failed(error)
             }
         } else if paymentProcessor == .paddle {
-            isExternalCheckoutFlow = true
             do {
                 try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -158,7 +155,9 @@ class HeliumPaywallDelegateWrapper {
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
-            if !isExternalCheckoutFlow {
+            // Add a listener for pending appStore purchases.
+            // Other processors have their own mechanisms for handling pending purchases.
+            if paymentProcessor == .appStore {
                 let detachedSession = paywallSession.withPresentationContext(.empty)
                 observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
             }

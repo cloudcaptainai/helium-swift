@@ -449,7 +449,7 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
 /// - Note: Event fired when selectProduct() is called from JavaScript 'select-product' message. Occurs when user taps on a product option in the paywall UI to select it.
 public struct ProductSelectedEvent: ProductEvent {
     /// The product identifier that was selected
-    /// - Note: StoreKit product ID from App Store Connect (e.g., "com.app.premium.monthly")
+    /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
     
     /// The trigger identifier for the paywall where selection occurred
@@ -493,7 +493,7 @@ public struct ProductSelectedEvent: ProductEvent {
 /// - Note: Event fired immediately when makePurchase() is called, before StoreKit transaction begins. Always followed by exactly one of: PurchaseSucceeded, PurchaseFailed, PurchaseCancelled, or PurchasePending.
 public struct PurchasePressedEvent: ProductEvent {
     /// The product identifier being purchased
-    /// - Note: StoreKit product ID from App Store Connect
+    /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
     
     /// The trigger identifier for the paywall where purchase was initiated
@@ -543,8 +543,8 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
 /// Event fired when a purchase completes successfully.
 /// See `paymentProcessor` to identify which payment processor completed the purchase.
 public struct PurchaseSucceededEvent: ProductEvent {
-    /// The product identifier that was successfully purchased
-    /// - Note: StoreKit product ID from App Store Connect
+    /// The Helium product identifier that was successfully purchased
+    /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
     
     /// The trigger identifier for the paywall where purchase succeeded
@@ -616,7 +616,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
 /// - Note: User explicitly cancelled in StoreKit payment sheet
 public struct PurchaseCancelledEvent: ProductEvent {
     /// The product identifier that user was attempting to purchase
-    /// - Note: StoreKit product ID from App Store Connect
+    /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
     
     /// The trigger identifier for the paywall where purchase was cancelled
@@ -660,7 +660,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
 /// - Note: Event fired when StoreKit returns .failed status from makePurchase() delegate method. Contains the actual Error object from StoreKit for debugging.
 public struct PurchaseFailedEvent: ProductEvent {
     /// The product identifier that failed to purchase
-    /// - Note: StoreKit product ID from App Store Connect
+    /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
     
     /// The trigger identifier for the paywall where purchase failed
