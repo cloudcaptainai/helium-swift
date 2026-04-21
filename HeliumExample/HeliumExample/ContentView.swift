@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var showEntitlementAlert: Bool = false
     @State private var entitlementInfo: String = ""
     @State private var trigger: String = AppConfig.triggerKey
+    @State private var userId: String = Helium.identify.userId ?? "nil"
 
     var body: some View {
         VStack(spacing: 20) {
