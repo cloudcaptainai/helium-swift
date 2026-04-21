@@ -126,13 +126,6 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
     }
 
     private func fetchFromServer(forceNew: Bool = false) async {
-        guard Helium.identify.userId != nil
-                || Helium.identify.revenueCatAppUserId != nil
-                || provider.getCustomerId() != nil else {
-            // We can safely assume entitlements result will be empty if no stripe/paddle customer id and no id
-            // set by host app that may persist across app installs / device change.
-            return
-        }
         let (task, myId): (Task<Void, Never>, UInt) = lock.withLock {
             if !forceNew, let existing = currentFetchTask {
                 return (existing, fetchId)
