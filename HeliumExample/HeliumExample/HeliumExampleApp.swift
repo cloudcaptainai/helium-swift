@@ -17,6 +17,9 @@ struct HeliumExampleApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onOpenURL { url in
+                    Helium.shared.handleURL(url)
+                }
         }
     }
     

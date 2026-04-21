@@ -169,9 +169,12 @@ class HeliumPaywallDelegateWrapper {
         var result = await delegate.restorePurchases()
         
         if !result && Helium.config.webCheckoutEnabled {
-            await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
-            result = await !HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds().isEmpty
-            if !result {
+            let processors = Helium.config.webCheckoutProcessors
+            if processors.contains(.paddle) {
+                await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
+                result = await !HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds().isEmpty
+            }
+            if !result && processors.contains(.stripe) {
                 await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
                 result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
             }
@@ -334,7 +337,7 @@ class HeliumPaywallDelegateWrapper {
         case .webCheckoutNoCustomUserId:
             notShownAddendum = "External Web Checkout requires a custom user ID to be set"
         case .webCheckoutNotEnabled:
-            notShownAddendum = "External Web Checkout requires success/cancel URLs to be set. See Helium.config.enableExternalWebCheckout"
+            notShownAddendum = "External Web Checkout is not enabled for a payment processor this paywall requires. See Helium.config.enableExternalWebCheckout. Enabled processors: \(Helium.config.webCheckoutProcessors))"
         case .bundleFetchCannotDecodeContent:
             notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
         case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:

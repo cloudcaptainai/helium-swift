@@ -378,6 +378,8 @@ public class Helium {
     /// Forward incoming deep links / universal links to Helium so the SDK can react to
     /// external web checkout success/cancel redirects without waiting for the app to foreground.
     ///
+    /// This is not required, but encouraged for smoother post-purchase experience.
+    ///
     /// Safe to call with unrelated URLs — returns `false` if external web checkout is
     /// disabled or the URL does not match the success/cancel URLs configured via
     /// ``HeliumConfig/enableExternalWebCheckout(successURL:cancelURL:)``.
@@ -480,16 +482,21 @@ public class HeliumIdentify {
                 // Sync Stripe/Paddle customer metadata if web checkout is configured
                 if Helium.config.webCheckoutEnabled,
                    Helium.shared.isInitialized() {
+                    let processors = Helium.config.webCheckoutProcessors
                     Task {
-                        if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
-                            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
-                        } else {
-                            try? await StripeCheckoutManager.shared.updateCustomerMetadata()
+                        if processors.contains(.paddle) {
+                            if HeliumIdentityManager.shared.getPaddleCustomerId() == nil {
+                                await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
+                            } else {
+                                try? await PaddleCheckoutManager.shared.updateCustomerMetadata()
+                            }
                         }
-                        if HeliumIdentityManager.shared.getPaddleCustomerId() == nil {
-                            await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
-                        } else {
-                            try? await PaddleCheckoutManager.shared.updateCustomerMetadata()
+                        if processors.contains(.stripe) {
+                            if HeliumIdentityManager.shared.getStripeCustomerId() == nil {
+                                await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+                            } else {
+                                try? await StripeCheckoutManager.shared.updateCustomerMetadata()
+                            }
                         }
                     }
                 }
@@ -584,7 +591,7 @@ public class HeliumIdentify {
 }
 
 public class HeliumConfig {
-    
+
     init() {}
     
     /// Sets the Helium SDK log level.
@@ -642,9 +649,13 @@ public class HeliumConfig {
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
 
     // MARK: - External Web Checkout Configuration
-    
-    private(set) var webCheckoutEnabled: Bool = false
-    
+
+    /// Which External Web Checkout payment processors are enabled. Empty means disabled.
+    private(set) var webCheckoutProcessors: WebCheckoutProcessors = []
+
+    /// True if any External Web Checkout payment processor is enabled.
+    var webCheckoutEnabled: Bool { !webCheckoutProcessors.isEmpty }
+
     /// Custom success redirect URL for External Checkout Flow.
     private(set) var checkoutSuccessURL: String? = nil
 
@@ -659,25 +670,37 @@ public class HeliumConfig {
     /// - Parameters:
     ///   - successURL: The URL to redirect to after a successful payment.
     ///     Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
-    ///   - cancelURL: The URL Stripe redirects to when the user cancels checkout.
-    public func enableExternalWebCheckout(successURL: String, cancelURL: String) {
+    ///   - cancelURL: The URL the provider redirects to when the user cancels checkout.
+    ///   - paymentProcessors: Which payment processors to enable. Defaults to `.all` (both Paddle and Stripe).
+    ///     Pass `.paddle` or `.stripe` if your app only uses one to skip the unused processor's
+    ///     entitlement network calls.
+    public func enableExternalWebCheckout(
+        successURL: String,
+        cancelURL: String,
+        paymentProcessors: WebCheckoutProcessors = .all
+    ) {
         guard let successParsed = URL(string: successURL), successParsed.scheme != nil,
               let cancelParsed = URL(string: cancelURL), cancelParsed.scheme != nil else {
             HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: invalid URLs provided. Both successURL and cancelURL must be valid URLs with a scheme (e.g. https://example.com or myapp://path).")
             return
         }
+        guard !paymentProcessors.isEmpty else {
+            HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: paymentProcessors must not be empty. Pass .all, .paddle, or .stripe.")
+            return
+        }
         checkoutSuccessURL = successURL
         checkoutCancelURL = cancelURL
-        webCheckoutEnabled = true
+        webCheckoutProcessors = paymentProcessors
     }
 
     /// Disables External Web Checkout Flow. Paywalls with Paddle or Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
-    /// NOTE - if you have existing Paddle/Stripe customers, Helium will stop respecting their entitlements.
+    /// NOTE - if you have existing Paddle/Stripe customers, Helium will attempt to continue respecting their entitlements but is
+    /// not guaranteed to do so.
     public func disableExternalWebCheckout() {
         checkoutSuccessURL = nil
         checkoutCancelURL = nil
-        webCheckoutEnabled = false
+        webCheckoutProcessors = []
     }
 
 }
