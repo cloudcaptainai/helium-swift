@@ -3,7 +3,7 @@ import Foundation
 /// Captures the provider-specific values that differ between Stripe, Paddle, etc.
 struct PaymentProviderConfig {
     let displayName: String
-    
+
     let providerSlug: String
     let customerIdBodyKey: String
     let getCustomerId: () -> String?
@@ -14,6 +14,7 @@ struct PaymentProviderConfig {
     let getCheckoutSuccessURL: () -> String?
     let getCheckoutCancelURL: () -> String?
     let getOfferedProducts: (HeliumPaywallInfo) -> [String]?
+    let purchaseEventPaymentProcessor: HeliumPaymentProcessor
 
     var checkEntitlementPath: String { "\(providerSlug)/check-entitlement" }
     var updateCustomerMetadataPath: String { "\(providerSlug)/update-customer-metadata" }
@@ -30,9 +31,10 @@ struct PaymentProviderConfig {
         entitlementsPersistenceFileName: "helium_stripe_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
-        getOfferedProducts: { $0.productsOfferedStripe }
+        getOfferedProducts: { $0.productsOfferedStripe },
+        purchaseEventPaymentProcessor: .stripe
     )
-    
+
     static let paddle = PaymentProviderConfig(
         displayName: "Paddle",
         providerSlug: "paddle",
@@ -44,6 +46,7 @@ struct PaymentProviderConfig {
         entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
-        getOfferedProducts: { $0.productsOfferedPaddle }
+        getOfferedProducts: { $0.productsOfferedPaddle },
+        purchaseEventPaymentProcessor: .paddle
     )
 }

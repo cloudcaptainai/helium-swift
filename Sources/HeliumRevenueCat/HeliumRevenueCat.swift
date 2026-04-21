@@ -24,14 +24,19 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     private var latestSuccessfulPurchaseOffering: Offering? = nil
     
     private let allowHeliumUserAttribute: Bool
-    
+
     private let stripePurchaseSyncDisabled: Bool
-    private let _stripeSyncLock = NSLock()
-    private var _isSyncingStripePurchase = false
-    private var _stripeSyncCompleted = false
+    private let paddlePurchaseSyncDisabled: Bool
+    private let _thirdPartyPaymentSyncLock = NSLock()
+    private var _isSyncingThirdPartyPayment = false
+    private var _thirdPartyPaymentSyncCompleted = false
     private var _hasInvalidatedCache = false
     
     private func configureRevenueCat(revenueCatApiKey: String) {
+        if Purchases.isConfigured {
+            print("[Helium] RevenueCat has already been configured. Skipping configuration.")
+            return
+        }
         Purchases.configure(withAPIKey: revenueCatApiKey, appUserID: HeliumIdentityManager.shared.getHeliumPersistentId())
     }
     
@@ -42,16 +47,19 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// - Parameter revenueCatApiKey: (Optional). Only set if you want Helium to handle RevenueCat initialization for you. Otherwise make sure to [initialize RevenueCat](https://www.revenuecat.com/docs/getting-started/quickstart#initialize-and-configure-the-sdk) before initializing Helium.
     /// - Parameter allowHeliumUserAttribute: (Optional) Allow Helium to set [customer attributes](https://www.revenuecat.com/docs/customers/customer-attributes)
     /// - Parameter stripePurchaseSyncDisabled: (Optional) Set to `true` to disable automatic RevenueCat customer info refresh after a Stripe purchase. Defaults to `false`.
+    /// - Parameter paddlePurchaseSyncDisabled: (Optional) Set to `true` to disable automatic RevenueCat customer info refresh after a Paddle purchase. Defaults to `false`.
     public init(
         entitlementId: String? = nil,
         productIds: [String]? = nil,
         revenueCatApiKey: String? = nil,
         allowHeliumUserAttribute: Bool = true,
-        stripePurchaseSyncDisabled: Bool = false
+        stripePurchaseSyncDisabled: Bool = false,
+        paddlePurchaseSyncDisabled: Bool = false
     ) {
         self.entitlementId = entitlementId
         self.allowHeliumUserAttribute = allowHeliumUserAttribute
         self.stripePurchaseSyncDisabled = stripePurchaseSyncDisabled
+        self.paddlePurchaseSyncDisabled = paddlePurchaseSyncDisabled
         
         if let revenueCatApiKey {
             configureRevenueCat(revenueCatApiKey: revenueCatApiKey)
@@ -180,44 +188,44 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     /// Subclasses that override this method should call `super.onPaywallEvent(event)`
     /// to preserve built-in post-purchase sync behavior.
     open func onPaywallEvent(_ event: HeliumEvent) {
-        if !stripePurchaseSyncDisabled,
-           let purchaseEvent = event as? PurchaseSucceededEvent,
-           isStripePurchase(event: purchaseEvent) {
-            Task { await syncRevenueCatAfterStripePurchase() }
+        if let purchaseEvent = event as? PurchaseSucceededEvent,
+           shouldSyncAfterThirdPartyPayment(event: purchaseEvent) {
+            Task { await syncRevenueCatAfterThirdPartyPayment() }
         }
     }
-    
-    // MARK: - Stripe Purchase Sync
-    
-    private func isStripePurchase(event: PurchaseSucceededEvent) -> Bool {
-        if let txnId = event.storeKitTransactionId, txnId.hasPrefix("si_") {
-            return true
+
+    // MARK: - Third-Party Payment Sync
+
+    private func shouldSyncAfterThirdPartyPayment(event: PurchaseSucceededEvent) -> Bool {
+        switch event.paymentProcessor {
+        case .stripe:
+            return !stripePurchaseSyncDisabled
+        case .paddle:
+            return !paddlePurchaseSyncDisabled
+        case .appStore:
+            return false
         }
-        let stripeProductPattern = #"^prod_\w+:price_\w+$"#
-        if event.productId.range(of: stripeProductPattern, options: .regularExpression) != nil {
-            return true
-        }
-        return false
     }
-    
-    /// After a Stripe purchase completes, the RevenueCat SDK on-device has no way to
-    /// know that a new entitlement exists until its backend processes the Stripe webhook.
-    /// This method polls RevenueCat with progressive backoff to force a customer info
-    /// refresh, stopping early if the update listener fires (~50s max).
-    private func syncRevenueCatAfterStripePurchase() async {
+
+    /// After a third-party payment (Stripe or Paddle) completes, the RevenueCat SDK
+    /// on-device has no way to know that a new entitlement exists until its backend
+    /// processes the provider webhook. This method polls RevenueCat with progressive
+    /// backoff to force a customer info refresh, stopping early if the update listener
+    /// fires (~50s max).
+    private func syncRevenueCatAfterThirdPartyPayment() async {
         // Atomic check-and-set to prevent concurrent syncs
-        let alreadySyncing: Bool = _stripeSyncLock.withLock {
-            if _isSyncingStripePurchase { return true }
-            _isSyncingStripePurchase = true
+        let alreadySyncing: Bool = _thirdPartyPaymentSyncLock.withLock {
+            if _isSyncingThirdPartyPayment { return true }
+            _isSyncingThirdPartyPayment = true
             return false
         }
         guard !alreadySyncing else { return }
         defer {
-            _stripeSyncLock.withLock { _isSyncingStripePurchase = false }
+            _thirdPartyPaymentSyncLock.withLock { _isSyncingThirdPartyPayment = false }
         }
 
-        _stripeSyncLock.withLock {
-            _stripeSyncCompleted = false
+        _thirdPartyPaymentSyncLock.withLock {
+            _thirdPartyPaymentSyncCompleted = false
             _hasInvalidatedCache = false
         }
 
@@ -228,9 +236,9 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         let listenerTask = Task { [weak self] in
             for await _ in Purchases.shared.customerInfoStream {
                 guard let self else { return }
-                let isRealUpdate = self._stripeSyncLock.withLock { self._hasInvalidatedCache }
+                let isRealUpdate = self._thirdPartyPaymentSyncLock.withLock { self._hasInvalidatedCache }
                 if isRealUpdate {
-                    self._stripeSyncLock.withLock { self._stripeSyncCompleted = true }
+                    self._thirdPartyPaymentSyncLock.withLock { self._thirdPartyPaymentSyncCompleted = true }
                     return
                 }
             }
@@ -243,17 +251,17 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
         await pollPhase(attempts: 2, intervalMs: 15_000)
     }
 
-    private var stripeSyncCompleted: Bool {
-        _stripeSyncLock.withLock { _stripeSyncCompleted }
+    private var thirdPartyPaymentSyncCompleted: Bool {
+        _thirdPartyPaymentSyncLock.withLock { _thirdPartyPaymentSyncCompleted }
     }
 
     private func pollPhase(attempts: Int, intervalMs: UInt64) async {
         for _ in 0..<attempts {
-            if stripeSyncCompleted { return }
+            if thirdPartyPaymentSyncCompleted { return }
             try? await Task.sleep(nanoseconds: intervalMs * 1_000_000)
-            if stripeSyncCompleted { return }
+            if thirdPartyPaymentSyncCompleted { return }
             do {
-                _stripeSyncLock.withLock { _hasInvalidatedCache = true }
+                _thirdPartyPaymentSyncLock.withLock { _hasInvalidatedCache = true }
                 Purchases.shared.invalidateCustomerInfoCache()
                 _ = try await Purchases.shared.customerInfo(fetchPolicy: .fetchCurrent)
             } catch {
