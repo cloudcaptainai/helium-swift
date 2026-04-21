@@ -263,6 +263,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// retry loop can still detect a later purchase.
     @MainActor
     func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
+        guard !activeCheckoutObservations.isEmpty else { return }
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
