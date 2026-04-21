@@ -37,8 +37,12 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
 
     private(set) var isConfigured = false
     func configure() {
-        guard !isConfigured else { return }
-        isConfigured = true
+        let shouldConfigure: Bool = lock.withLock {
+            guard !isConfigured else { return false }
+            isConfigured = true
+            return true
+        }
+        guard shouldConfigure else { return }
         loadPersistedData()
         Task { await fetchFromServer() }
     }
