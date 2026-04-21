@@ -540,8 +540,8 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
     case paddle
 }
 
-/// Event fired when a purchase completes successfully
-/// - Note: Event fired when StoreKit returns .purchased status from makePurchase() delegate method. Transaction has been verified and finished by StoreKit.
+/// Event fired when a purchase completes successfully.
+/// See `paymentProcessor` to identify which payment processor completed the purchase.
 public struct PurchaseSucceededEvent: ProductEvent {
     /// The product identifier that was successfully purchased
     /// - Note: StoreKit product ID from App Store Connect
@@ -591,7 +591,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
-            "paymentProvider": paymentProcessor.rawValue,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let storeKitTransactionId {
