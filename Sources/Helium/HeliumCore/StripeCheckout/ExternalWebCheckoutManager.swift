@@ -107,6 +107,10 @@ public class ExternalWebCheckoutManager: NSObject {
         ctx["trigger"] = triggerName
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
+        ctx["paymentFailureUrl"] = cancelURL // We currently do nothing special with paymentFailureUrl
+        if let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() {
+            ctx["organizationId"] = organizationId
+        }
 
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
@@ -188,9 +192,8 @@ public class ExternalWebCheckoutManager: NSObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            // Entitlements may not be immediately available after an external purchase.
-            // Retry a few times (if needed) with increasing delays.
-            let delays: [UInt64] = [0, 2_000_000_000, 3_000_000_000, 5_000_000_000]
+            // Check entitlements with retry in case they are not immediately available after external purchase.
+            let delays: [UInt64] = [0, 2_000_000_000]
 
             for (i, delay) in delays.enumerated() {
                 if delay > 0 {
@@ -246,6 +249,59 @@ public class ExternalWebCheckoutManager: NSObject {
                 )
                 activeCheckoutObservations.removeAll()
                 // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case.....
+                Helium.shared.hideAllPaywalls()
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Called when the host app forwards a Helium-tagged success/cancel redirect URL.
+    /// Success: refresh entitlements once and, if a purchase is detected, fire
+    /// PurchaseSucceededEvent and close paywalls. Cancel: no-op — the browser tab
+    /// may still be open, so observations are kept so the existing foreground
+    /// retry loop can still detect a later purchase.
+    @MainActor
+    func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
+        switch redirectKind {
+        case .success:
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
+            let matched = await checkForNewPurchase()
+            if !matched {
+                _ = await checkForExistingEntitlement()
+            }
+        case .cancel:
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) cancel redirect handled — observations kept in case user resumes checkout")
+        }
+    }
+
+    /// Success-redirect-only safety net: the server confirmed checkout but no newly-entitled
+    /// product was found (e.g. user attempted to re-purchase a product they already own).
+    /// If any active observation's paywall offers a product the user is currently entitled
+    /// to, fire PurchaseAlreadyEntitledEvent and close paywalls.
+    @MainActor
+    private func checkForExistingEntitlement() async -> Bool {
+        let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
+        let observationsSnapshot = activeCheckoutObservations
+            .sorted { $0.value.addedAt > $1.value.addedAt }
+        for (sessionId, observation) in observationsSnapshot {
+            guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0) }) else {
+                activeCheckoutObservations.removeValue(forKey: sessionId)
+                continue
+            }
+            if let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) }) {
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PurchaseAlreadyEntitledEvent(
+                        productId: entitledProductId,
+                        triggerName: observation.paywallSession.trigger,
+                        paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                        storeKitTransactionId: nil,
+                        storeKitOriginalTransactionId: nil
+                    ),
+                    paywallSession: observation.paywallSession,
+                    sendToAnalytics: false
+                )
+                activeCheckoutObservations.removeAll()
                 Helium.shared.hideAllPaywalls()
                 return true
             }

@@ -152,6 +152,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
 
             guard !Task.isCancelled else { return }
 
+            if let customerId = response.customerId, !customerId.isEmpty {
+                provider.setCustomerId(customerId)
+            }
+
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in

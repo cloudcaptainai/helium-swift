@@ -346,10 +346,12 @@ public class HeliumFetchedConfigManager {
             
             if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
                 HeliumIdentityManager.shared.setStripeCustomerId(stripeCustomerId)
+                HeliumEntitlementsManager.shared.stripeEntitlementsSource.configure()
             }
 
             if let paddleCustomerId = fetchedConfig?.paddleCustomerId {
                 HeliumIdentityManager.shared.setPaddleCustomerId(paddleCustomerId)
+                HeliumEntitlementsManager.shared.paddleEntitlementsSource.configure()
             }
             
             // Download assets
