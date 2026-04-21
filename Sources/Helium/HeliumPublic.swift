@@ -346,12 +346,10 @@ public class Helium {
         return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
     }
     
-    /// Resets Stripe entitlements and optionally clears the user ID.
+    /// Resets Stripe entitlements and clears the user ID.
     /// If your app can support multiple Stripe users on the same device, you'll want to call this to effectively "log out" a Stripe user.
-    public func resetStripeEntitlements(clearUserId: Bool) {
-        if clearUserId {
-            Helium.identify.userId = nil
-        }
+    public func resetStripeEntitlements() {
+        Helium.identify.userId = nil
         HeliumEntitlementsManager.shared.stripeEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setStripeCustomerId(nil)
     }
@@ -367,12 +365,10 @@ public class Helium {
         return try await PaddleCheckoutManager.shared.createPortalSession()
     }
     
-    /// Resets Paddle entitlements and optionally clears the user ID.
+    /// Resets Paddle entitlements and clears the user ID.
     /// If your app can support multiple Paddle users on the same device, you'll want to call this to effectively "log out" a Paddle user.
-    public func resetPaddleEntitlements(clearUserId: Bool) {
-        if clearUserId {
-            Helium.identify.userId = nil
-        }
+    public func resetPaddleEntitlements() {
+        Helium.identify.userId = nil
         HeliumEntitlementsManager.shared.paddleEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setPaddleCustomerId(nil)
     }
