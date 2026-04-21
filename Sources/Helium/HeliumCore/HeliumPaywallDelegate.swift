@@ -74,11 +74,17 @@ class HeliumPaywallDelegateWrapper {
 
         let allPaddleProductIds = Array((HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]).keys)
 
-        var paymentProcessor: HeliumPaymentProcessor = .appStore
-
-        if !stripeApplePayFlowEnabled && allStripeProductIds.contains(productKey) {
-            isExternalCheckoutFlow = true
+        let paymentProcessor: HeliumPaymentProcessor
+        if allStripeProductIds.contains(productKey) {
             paymentProcessor = .stripe
+        } else if allPaddleProductIds.contains(productKey) {
+            paymentProcessor = .paddle
+        } else {
+            paymentProcessor = .appStore
+        }
+        
+        if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
+            isExternalCheckoutFlow = true
             do {
                 try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -89,9 +95,8 @@ class HeliumPaywallDelegateWrapper {
             } catch {
                 transactionStatus = .failed(error)
             }
-        } else if allPaddleProductIds.contains(productKey) {
+        } else if paymentProcessor == .paddle {
             isExternalCheckoutFlow = true
-            paymentProcessor = .paddle
             do {
                 try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -103,9 +108,6 @@ class HeliumPaywallDelegateWrapper {
                 transactionStatus = .failed(error)
             }
         } else {
-            if stripeApplePayFlowEnabled && allStripeProductIds.contains(productKey) {
-                paymentProcessor = .stripe
-            }
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
         
