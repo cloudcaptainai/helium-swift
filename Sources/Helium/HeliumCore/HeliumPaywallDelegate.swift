@@ -70,12 +70,15 @@ class HeliumPaywallDelegateWrapper {
         
         var isExternalCheckoutFlow: Bool = false
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
-        let stripeApplePayFlow = ApplePayHelper.shared.getStripeApplePayAvailable()
-        
+        let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
+
         let allPaddleProductIds = Array((HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]).keys)
-        
-        if !stripeApplePayFlow && allStripeProductIds.contains(productKey) {
+
+        var paymentProcessor: HeliumPaymentProcessor = .appStore
+
+        if !stripeApplePayFlowEnabled && allStripeProductIds.contains(productKey) {
             isExternalCheckoutFlow = true
+            paymentProcessor = .stripe
             do {
                 try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -88,6 +91,7 @@ class HeliumPaywallDelegateWrapper {
             }
         } else if allPaddleProductIds.contains(productKey) {
             isExternalCheckoutFlow = true
+            paymentProcessor = .paddle
             do {
                 try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
@@ -99,6 +103,9 @@ class HeliumPaywallDelegateWrapper {
                 transactionStatus = .failed(error)
             }
         } else {
+            if stripeApplePayFlowEnabled && allStripeProductIds.contains(productKey) {
+                paymentProcessor = .stripe
+            }
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
         
@@ -136,7 +143,16 @@ class HeliumPaywallDelegateWrapper {
                 #endif
                 
                 let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
-                fireEvent(PurchaseSucceededEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS), paywallSession: paywallSession)
+                let purchaseSucceededEvent = PurchaseSucceededEvent(
+                    productId: productKey,
+                    triggerName: triggerName,
+                    paywallName: paywallTemplateName,
+                    storeKitTransactionId: transactionIds?.transactionId,
+                    storeKitOriginalTransactionId: transactionIds?.originalTransactionId,
+                    skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS,
+                    paymentProcessor: paymentProcessor
+                )
+                fireEvent(purchaseSucceededEvent, paywallSession: paywallSession)
             }
         case .pending:
             self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)

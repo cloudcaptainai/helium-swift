@@ -533,6 +533,13 @@ public struct PurchasePressedEvent: ProductEvent {
     }
 }
 
+/// Identifies which payment processor completed a purchase.
+public enum HeliumPaymentProcessor: String, Codable, Sendable {
+    case appStore
+    case stripe
+    case paddle
+}
+
 /// Event fired when a purchase completes successfully
 /// - Note: Event fired when StoreKit returns .purchased status from makePurchase() delegate method. Transaction has been verified and finished by StoreKit.
 public struct PurchaseSucceededEvent: ProductEvent {
@@ -556,23 +563,27 @@ public struct PurchaseSucceededEvent: ProductEvent {
     
     /// Time taken to retrieve StoreKit transaction IDs after purchase successs in milliseconds
     public let skPostPurchaseTxnTimeMS: UInt64?
-    
+
+    /// Which payment processor completed this purchase.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
         self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
         self.skPostPurchaseTxnTimeMS = skPostPurchaseTxnTimeMS
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchaseSucceeded" }
-    
+
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "type": eventName,
@@ -580,6 +591,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProvider": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let storeKitTransactionId {

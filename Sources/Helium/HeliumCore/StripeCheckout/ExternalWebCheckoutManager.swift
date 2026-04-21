@@ -64,7 +64,8 @@ public class ExternalWebCheckoutManager: NSObject {
             triggerName: triggerName,
             paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
             storeKitTransactionId: nil,
-            storeKitOriginalTransactionId: nil
+            storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
         )
         let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -242,7 +243,8 @@ public class ExternalWebCheckoutManager: NSObject {
                         triggerName: observation.paywallSession.trigger,
                         paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                         storeKitTransactionId: nil,
-                        storeKitOriginalTransactionId: nil
+                        storeKitOriginalTransactionId: nil,
+                        paymentProcessor: provider.purchaseEventPaymentProcessor
                     ),
                     paywallSession: observation.paywallSession,
                     sendToAnalytics: false
