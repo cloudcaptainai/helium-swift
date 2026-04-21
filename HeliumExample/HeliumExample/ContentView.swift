@@ -18,7 +18,7 @@ struct ContentView: View {
     @State private var trigger: String = AppConfig.triggerKey
 
     var body: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Trigger").font(.caption).foregroundStyle(.secondary)
                 TextField("Trigger key", text: $trigger)
@@ -27,6 +27,15 @@ struct ContentView: View {
                 Spacer().frame(height: 10)
                 
                 Toggle("dontShowIfAlreadyEntitled", isOn: $dontShowIfAlreadyEntitled)
+
+                Spacer().frame(height: 10)
+
+                Text("User ID").font(.caption).foregroundStyle(.secondary)
+                Text(userId)
+                    .font(.footnote)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 30)
@@ -73,8 +82,12 @@ struct ContentView: View {
             }
             .accessibilityIdentifier("presentFallbackInvalidTrigger")
             
+            Spacer().frame(height: 20)
+            
             Button("set random user id") {
-                Helium.identify.userId = UUID().uuidString
+                let newId = UUID().uuidString
+                Helium.identify.userId = newId
+                userId = newId
             }
 
             Button("check entitlement") {

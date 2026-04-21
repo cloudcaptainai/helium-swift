@@ -289,9 +289,11 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Creates a Customer Portal session and returns the portal URL.
-    func createPortalSession(returnUrl: String) async throws -> URL {
+    func createPortalSession(returnUrl: String? = nil) async throws -> URL {
         var body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
-        body["returnUrl"] = returnUrl
+        if let returnUrl {
+            body["returnUrl"] = returnUrl
+        }
 
         let response: PortalSessionResponse = try await HeliumPaymentAPIClient.shared.post(provider.createPortalSessionPath, body: body)
         guard let portalUrl = response.portalUrl, let url = URL(string: portalUrl) else {

@@ -39,12 +39,20 @@ public class HeliumPaymentAPIClient {
         }
         var body: [String: Any] = [
             "apiKey": apiKey,
-            "userId": Helium.identify.userId ?? HeliumIdentityManager.shared.getHeliumPersistentId(),
-            "rcUserId": Helium.identify.revenueCatAppUserId ?? "",
-            provider.customerIdBodyKey: provider.getCustomerId() ?? "",
-            "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
-            "appTransactionId": HeliumIdentityManager.shared.getAppTransactionID() ?? ""
+            "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId()
         ]
+        if let userId = Helium.identify.userId {
+            body["userId"] = userId
+        }
+        if let rcUserId = Helium.identify.revenueCatAppUserId {
+            body["rcUserId"] = rcUserId
+        }
+        if let appTransactionId = HeliumIdentityManager.shared.getAppTransactionID() {
+            body["appTransactionId"] = appTransactionId
+        }
+        if let customerId = provider.getCustomerId(), !customerId.isEmpty {
+            body[provider.customerIdBodyKey] = customerId
+        }
         if let productId {
             body["productPriceId"] = productId
         }
