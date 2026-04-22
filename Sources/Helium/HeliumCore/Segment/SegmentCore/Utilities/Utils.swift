@@ -68,12 +68,8 @@ internal func eventStorageDirectory(writeKey: String) -> URL {
 private func migrateFromOldLocations(writeKey: String, to newLocation: URL) {
     let fm = FileManager.default
 
-    // Get the parent of where our new segment directory should live
-    let appSupportURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    let newSegmentDir = appSupportURL.appendingPathComponent("segment")
-
-    // If segment dir already exists in app support, we're done
-    guard !fm.fileExists(atPath: newSegmentDir.path) else { return }
+    // If the new location already exists in app support, we're done
+    guard !fm.fileExists(atPath: newLocation.path) else { return }
 
     // Only check the old location that was actually used on this platform
     #if (os(iOS) || os(watchOS)) && !targetEnvironment(macCatalyst)
@@ -83,14 +79,14 @@ private func migrateFromOldLocations(writeKey: String, to newLocation: URL) {
     #endif
 
     guard let oldBaseURL = fm.urls(for: oldSearchPath, in: .userDomainMask).first else { return }
-    let oldSegmentDir = oldBaseURL.appendingPathComponent("segment")
+    let oldLocation = oldBaseURL.appendingPathComponent("segment/\(writeKey)/")
 
-    guard fm.fileExists(atPath: oldSegmentDir.path) else { return }
+    guard fm.fileExists(atPath: oldLocation.path) else { return }
 
     do {
-        try fm.moveItem(at: oldSegmentDir, to: newSegmentDir)
-        Analytics.segmentLog(message: "Migrated analytics data from \(oldSegmentDir.path)", kind: .debug)
+        try fm.moveItem(at: oldLocation, to: newLocation)
+        Analytics.segmentLog(message: "Migrated analytics data from \(oldLocation.path)", kind: .debug)
     } catch {
-        Analytics.segmentLog(message: "Failed to migrate from \(oldSegmentDir.path): \(error)", kind: .error)
+        Analytics.segmentLog(message: "Failed to migrate from \(oldLocation.path): \(error)", kind: .error)
     }
 }
