@@ -176,10 +176,11 @@ actor HeliumEntitlementsManager {
         startTransactionListener()
         await loadEntitlementsIfNeeded()
 
-        if Helium.config.webCheckoutEnabled || HeliumIdentityManager.shared.getPaddleCustomerId() != nil {
+        let processors = Helium.config.webCheckoutProcessors
+        if processors.contains(.paddle) || HeliumIdentityManager.shared.getPaddleCustomerId() != nil {
             paddleEntitlementsSource.configure()
         }
-        if Helium.config.webCheckoutEnabled || HeliumIdentityManager.shared.getStripeCustomerId() != nil {
+        if processors.contains(.stripe) || HeliumIdentityManager.shared.getStripeCustomerId() != nil {
             stripeEntitlementsSource.configure()
         }
 

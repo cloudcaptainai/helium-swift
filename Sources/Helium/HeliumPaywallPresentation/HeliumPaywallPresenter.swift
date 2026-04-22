@@ -557,7 +557,10 @@ extension HeliumPaywallPresenter {
             if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNoCustomUserId, presentationContext: presentationContext)
             }
-            if hasAppToWebProducts && !Helium.config.webCheckoutEnabled {
+            let processors = Helium.config.webCheckoutProcessors
+            let paddleUsable = hasPaddleProducts && processors.contains(.paddle)
+            let stripeUsable = hasStripeProducts && processors.contains(.stripe)
+            if hasAppToWebProducts && !(paddleUsable || stripeUsable) {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
             

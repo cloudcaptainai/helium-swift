@@ -827,3 +827,22 @@ public enum HeliumLightDarkMode {
     case dark
     case system
 }
+
+/// Selects which External Web Checkout payment processors are enabled.
+/// Use `.all` for both, or `.paddle` / `.stripe` individually.
+public struct WebCheckoutProcessors: OptionSet, Sendable, CustomStringConvertible {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    public static let paddle = WebCheckoutProcessors(rawValue: 1 << 0)
+    public static let stripe = WebCheckoutProcessors(rawValue: 1 << 1)
+    public static let all: WebCheckoutProcessors = [.paddle, .stripe]
+
+    public var description: String {
+        if isEmpty { return "none" }
+        var names: [String] = []
+        if contains(.paddle) { names.append("paddle") }
+        if contains(.stripe) { names.append("stripe") }
+        return names.joined(separator: ", ")
+    }
+}
