@@ -703,6 +703,22 @@ public class HeliumConfig {
         webCheckoutProcessors = []
     }
 
+    /// Allows Web Checkout paywalls (Paddle/Stripe) to show even when no custom user ID
+    /// has been set via `Helium.identify.userId`.
+    ///
+    /// By default, paywalls with Paddle or Stripe products will not show if user ID is not set.
+    /// Your fallback paywall/s, if provided, will show instead.
+    /// Set this to `true` if your app supports purchase-before-signup flows. Once `Helium.identify.userId`
+    /// is set later, Helium will automatically link the Paddle/Stripe customer to that user ID.
+    ///
+    /// - Warning: Use with caution. If the user purchases via web checkout and your app never sets a
+    ///   `userId` (or uninstalls the app before doing so), the purchase may be unrecoverable for that user.
+    ///   Only enable this if your app has a clear path for the user to set
+    ///   `Helium.identify.userId` post-purchase.
+    ///
+    /// Defaults to `false`.
+    public var allowWebCheckoutWithoutUserId: Bool = false
+
 }
 
 public class HeliumExperiments {
