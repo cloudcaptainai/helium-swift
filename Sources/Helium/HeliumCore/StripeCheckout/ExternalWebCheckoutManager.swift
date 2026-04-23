@@ -211,8 +211,19 @@ public class ExternalWebCheckoutManager: NSObject {
     /// already-scheduled didBecomeActive must not trigger a check, and we can't
     /// rely on URL-vs-didBecomeActive ordering. didEnterBackground is an
     /// unambiguous "user left the app" signal.
+    @MainActor
     private func armForegroundObserverAfterBackground() {
         stopPendingBackgroundObserver()
+        // If the app is already backgrounded (e.g. user backgrounded while we
+        // were awaiting the post-redirect purchase check), didEnterBackground
+        // won't fire again until they go foreground first — which is exactly
+        // what we want to observe. Skip the indirection and arm the foreground
+        // observer directly.
+        if UIApplication.shared.applicationState != .active {
+            guard !activeCheckoutObservations.isEmpty else { return }
+            startForegroundObserver()
+            return
+        }
         pendingBackgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
@@ -364,10 +375,11 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Called when the host app forwards a Helium-tagged success/cancel redirect URL.
-    /// Success: refresh entitlements once and let `checkForNewPurchase` handle both
-    /// the newly-entitled and already-entitled cases. Cancel: no-op — the browser
-    /// tab may still be open, so observations are kept so the existing foreground
-    /// retry loop can still detect a later purchase.
+    /// Success: run `checkForNewPurchaseWithRetry` to handle both the newly-entitled
+    /// and already-entitled cases, then re-arm the foreground observer for the next
+    /// app return. Cancel: no-op on entitlements — the browser tab may still be open,
+    /// so observations are kept and the foreground observer is re-armed so a later
+    /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
         guard !activeCheckoutObservations.isEmpty else { return }
