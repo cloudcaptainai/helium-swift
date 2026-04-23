@@ -517,6 +517,12 @@ class WebViewManager {
         )
     }
     
+    /// Returns a `WKWebView` for presentation. WebViews are pooled and reused across presentations,
+    /// so any state installed on the webview, its configuration, userContentController, scrollView,
+    /// or gesture recognizers persists until explicitly reset. When adding new per-presentation state:
+    ///   1. Reset it here (or in `createWebViewHolder` if it's truly one-time setup).
+    ///   2. Verify it doesn't accumulate on the reused instance (see `removeAllUserScripts()` in
+    ///      `DynamicWebView.loadWebView` for the canonical example).
     fileprivate func prepareForShowing(
         filePath: String,
         shouldEnableScroll: Bool,

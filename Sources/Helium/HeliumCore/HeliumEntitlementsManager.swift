@@ -408,6 +408,8 @@ actor HeliumEntitlementsManager {
 
     /// Checks if user has personally purchased this exact product (excludes family sharing).
     /// Note: This checks the exact productId only, not subscription group membership.
+    /// Note: StoreKit-only — does not consult third-party payment sources (Stripe, Paddle).
+    /// For web-checkout entitlement checks, use the provider's `entitlementsSource` directly.
     func hasPersonallyPurchased(productId: String) async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
