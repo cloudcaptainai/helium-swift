@@ -710,7 +710,7 @@ public struct PurchaseFailedEvent: ProductEvent {
 }
 
 /// Distinguishes how an existing entitlement was surfaced to the SDK.
-public enum PurchaseRestoredOrigin: String {
+public enum PurchaseRestoredOrigin: String, Codable, Sendable {
     /// User tapped the "Restore Purchases" button.
     case restorePurchases
     /// User tapped Buy and the purchase action itself resolved as a restoration —

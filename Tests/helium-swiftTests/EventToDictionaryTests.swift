@@ -80,7 +80,7 @@ final class EventToDictionaryTests: XCTestCase {
             PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
             PurchaseCancelledEvent(productId: "prod", triggerName: "t", paywallName: "p"),
             PurchaseFailedEvent(productId: "prod", triggerName: "t", paywallName: "p"),
-            PurchaseRestoredEvent(productId: "prod", triggerName: "t", paywallName: "p"),
+            PurchaseRestoredEvent(productId: "prod", triggerName: "t", paywallName: "p", origin: .restorePurchases),
             PurchaseRestoreFailedEvent(triggerName: "t", paywallName: "p"),
             PurchaseAlreadyEntitledEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
             PurchasePendingEvent(productId: "prod", triggerName: "t", paywallName: "p"),
