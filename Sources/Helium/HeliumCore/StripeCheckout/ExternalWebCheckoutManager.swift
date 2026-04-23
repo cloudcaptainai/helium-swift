@@ -225,27 +225,36 @@ public class ExternalWebCheckoutManager: NSObject {
             guard let self else { return }
             defer { self.foregroundCheckTask = nil }
 
-            // Check entitlements with retry in case they are not immediately available after external purchase.
-            let delays: [UInt64] = [0, 2_000_000_000]
-
-            for (i, delay) in delays.enumerated() {
-                if delay > 0 {
-                    try? await Task.sleep(nanoseconds: delay)
-                }
-                if Task.isCancelled { return }
-                guard !activeCheckoutObservations.isEmpty else { return }
-
-                let purchaseDetected = await checkForNewPurchase()
-                if Task.isCancelled { return }
-                HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
-                if purchaseDetected { return }
-            }
+            let purchaseDetected = await checkForNewPurchaseWithRetry()
+            if Task.isCancelled { return }
 
             // All retries exhausted — resume observing for next foreground return
-            if !activeCheckoutObservations.isEmpty {
+            if !purchaseDetected && !activeCheckoutObservations.isEmpty {
                 startForegroundObserver()
             }
         }
+    }
+
+    /// Runs `checkForNewPurchase` with a retry — entitlements may not be
+    /// immediately available after an external purchase. Returns true if a
+    /// purchase was detected.
+    @MainActor
+    private func checkForNewPurchaseWithRetry() async -> Bool {
+        let delays: [UInt64] = [0, 2_000_000_000]
+
+        for (i, delay) in delays.enumerated() {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            if Task.isCancelled { return false }
+            guard !activeCheckoutObservations.isEmpty else { return false }
+
+            let purchaseDetected = await checkForNewPurchase()
+            if Task.isCancelled { return false }
+            HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
+            if purchaseDetected { return true }
+        }
+        return false
     }
 
     /// Refreshes entitlements once and, across active observations (newest-first),
@@ -307,7 +316,7 @@ public class ExternalWebCheckoutManager: NSObject {
             // Record newest session with an already-entitled offered product as a
             // restored candidate. Only fires if no session produces a Succeeded match.
             if restoredCandidate == nil,
-               let entitledProductId = currentEntitledIds.first  {
+               let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) })  {
                 restoredCandidate = (entitledProductId, observation)
             }
         }
@@ -349,7 +358,7 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
-            _ = await checkForNewPurchase()
+            _ = await checkForNewPurchaseWithRetry()
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()
             }
