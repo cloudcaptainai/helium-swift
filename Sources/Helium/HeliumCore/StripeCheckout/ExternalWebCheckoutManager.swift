@@ -14,6 +14,22 @@ public class PaddleCheckoutManager {
     )
 }
 
+/// Outcome of an attempted external web checkout flow.
+enum WebCheckoutOutcome {
+    /// Browser was opened; observation is pending until the user returns.
+    case opened
+    /// Pre-checkout entitlement check found the user already owns the product;
+    /// browser was not opened and the flow is fully resolved.
+    case preCheckResolved
+
+    var transactionStatus: HeliumPaywallTransactionStatus {
+        switch self {
+        case .opened: return .pending
+        case .preCheckResolved: return .restored
+        }
+    }
+}
+
 /// Orchestrates the external web checkout flow (browser-based) for payment providers.
 public class ExternalWebCheckoutManager: NSObject {
 
@@ -45,12 +61,14 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Builds the enriched checkout URL from the paywall's web bundle URL
     /// and opens it in an external browser, then starts observing for purchase completion.
+    /// Returns `.opened` when the browser was launched, or `.preCheckResolved` if the
+    /// pre-checkout entitlement check resolved the flow without opening the browser.
     @MainActor
     func startCheckoutFlow(
         for productKey: String,
         triggerName: String,
         paywallSession: PaywallSession
-    ) async throws {
+    ) async throws -> WebCheckoutOutcome {
         guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
               let resolvedCancelURL = provider.getCheckoutCancelURL() else {
             throw WebCheckoutError.checkoutURLsNotConfigured
@@ -83,7 +101,7 @@ public class ExternalWebCheckoutManager: NSObject {
             cancelURL: resolvedCancelURL
         )
 
-        try await openEnrichedCheckoutURL(enrichedURL, paywallSession: paywallSession)
+        return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
     /// Appends analytics, identity, and routing query parameters to a checkout URL
@@ -137,9 +155,17 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Opens the enriched checkout URL in external browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
+    /// Returns `.preCheckResolved` if cached entitlements already include `productKey`;
+    /// otherwise `.opened`.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, paywallSession: PaywallSession) async throws {
+    func openEnrichedCheckoutURL(_ url: URL, productKey: String, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
         let entitledBefore = await entitlementsSource.purchasedHeliumProductIds()
+
+        if entitledBefore.contains(productKey) {
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
+            return .preCheckResolved
+        }
+
         let observation = CheckoutObservation(
             paywallSession: paywallSession,
             entitledProductIdsBeforeCheckout: entitledBefore,
@@ -153,6 +179,7 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.failedToOpenEnrichedURL
         }
         startForegroundObserver()
+        return .opened
     }
 
     /// Stops observing for purchase completion if the session matches.
@@ -193,8 +220,19 @@ public class ExternalWebCheckoutManager: NSObject {
     /// already-scheduled didBecomeActive must not trigger a check, and we can't
     /// rely on URL-vs-didBecomeActive ordering. didEnterBackground is an
     /// unambiguous "user left the app" signal.
+    @MainActor
     private func armForegroundObserverAfterBackground() {
         stopPendingBackgroundObserver()
+        // If the app is already backgrounded (e.g. user backgrounded while we
+        // were awaiting the post-redirect purchase check), didEnterBackground
+        // won't fire again until they go foreground first — which is exactly
+        // what we want to observe. Skip the indirection and arm the foreground
+        // observer directly.
+        if UIApplication.shared.applicationState != .active {
+            guard !activeCheckoutObservations.isEmpty else { return }
+            startForegroundObserver()
+            return
+        }
         pendingBackgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
@@ -225,39 +263,61 @@ public class ExternalWebCheckoutManager: NSObject {
             guard let self else { return }
             defer { self.foregroundCheckTask = nil }
 
-            // Check entitlements with retry in case they are not immediately available after external purchase.
-            let delays: [UInt64] = [0, 2_000_000_000]
-
-            for (i, delay) in delays.enumerated() {
-                if delay > 0 {
-                    try? await Task.sleep(nanoseconds: delay)
-                }
-                if Task.isCancelled { return }
-                guard !activeCheckoutObservations.isEmpty else { return }
-
-                let purchaseDetected = await checkForNewPurchase()
-                if Task.isCancelled { return }
-                HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
-                if purchaseDetected { return }
-            }
+            let purchaseDetected = await checkForNewPurchaseWithRetry()
+            if Task.isCancelled { return }
 
             // All retries exhausted — resume observing for next foreground return
-            if !activeCheckoutObservations.isEmpty {
+            if !purchaseDetected && !activeCheckoutObservations.isEmpty {
                 startForegroundObserver()
             }
         }
     }
 
-    /// Refreshes entitlements once, looks for a newly-entitled offered product
-    /// across active observations (newest-first), and if found fires
-    /// PurchaseSucceededEvent, clears all observations, and hides paywalls.
+    /// Runs `checkForNewPurchase` with a retry — entitlements may not be
+    /// immediately available after an external purchase. Returns true if a
+    /// purchase was detected.
     @MainActor
-    private func checkForNewPurchase() async -> Bool {
+    private func checkForNewPurchaseWithRetry(restoreOnAnyEntitledOffered: Bool = false) async -> Bool {
+        let delays: [UInt64] = [0, 2_000_000_000]
+
+        for (i, delay) in delays.enumerated() {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            if Task.isCancelled { return false }
+            guard !activeCheckoutObservations.isEmpty else { return false }
+
+            let purchaseDetected = await checkForNewPurchase(restoreOnAnyEntitledOffered: restoreOnAnyEntitledOffered)
+            if Task.isCancelled { return false }
+            HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
+            if purchaseDetected { return true }
+        }
+        return false
+    }
+
+    /// Refreshes entitlements once and scans active observations (newest-first).
+    /// A newly-entitled offered product always fires `PurchaseSucceededEvent`.
+    /// An already-entitled offered product fires `PurchaseRestoredEvent` only
+    /// when `restoreOnAnyEntitledOffered` is true (success-redirect path —
+    /// positive evidence a checkout completed). On a generic foreground
+    /// return, the restored path is suppressed to avoid spurious events when
+    /// the user opens checkout for one product while already owning another
+    /// offered on the same paywall. In either case, observations are cleared
+    /// and paywalls hidden. Succeeded wins over Restored across all sessions.
+    @MainActor
+    private func checkForNewPurchase(restoreOnAnyEntitledOffered: Bool = false) async -> Bool {
         await entitlementsSource.refreshEntitlements()
         let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
+        HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase", metadata: [
+            "observations": "\(activeCheckoutObservations.count)",
+            "currentEntitledIds": "\(currentEntitledIds)"
+        ])
 
         let observationsSnapshot = activeCheckoutObservations
             .sorted { $0.value.addedAt > $1.value.addedAt }
+
+        var restoredCandidate: (productId: String, observation: CheckoutObservation)?
+
         for (sessionId, observation) in observationsSnapshot {
             guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0) }) else {
                 activeCheckoutObservations.removeValue(forKey: sessionId)
@@ -266,8 +326,13 @@ public class ExternalWebCheckoutManager: NSObject {
 
             let newlyEntitledIds = currentEntitledIds
                 .subtracting(observation.entitledProductIdsBeforeCheckout)
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase session", metadata: [
+                "sessionId": sessionId,
+                "offered": "\(offeredProducts)",
+                "newlyEntitled": "\(newlyEntitledIds)"
+            ])
 
-            // If multiple sessions offer the same product, we attribute to the most
+            // If multiple sessions offer the same product, attribute to the most
             // recently added session (likely the one the user just interacted with).
             // In practice, second-try paywalls offer different products.
             if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
@@ -288,15 +353,42 @@ public class ExternalWebCheckoutManager: NSObject {
                 Helium.shared.hideAllPaywalls()
                 return true
             }
+
+            // Record newest session with an already-entitled offered product as a
+            // restored candidate. Only fires if no session produces a Succeeded match
+            // and the caller has positive evidence of checkout completion.
+            if restoreOnAnyEntitledOffered,
+               restoredCandidate == nil,
+               let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) })  {
+                restoredCandidate = (entitledProductId, observation)
+            }
         }
+
+        if let restored = restoredCandidate {
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PurchaseRestoredEvent(
+                    productId: restored.productId,
+                    triggerName: restored.observation.paywallSession.trigger,
+                    paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                    origin: .detected
+                ),
+                paywallSession: restored.observation.paywallSession,
+                sendToAnalytics: false
+            )
+            activeCheckoutObservations.removeAll()
+            Helium.shared.hideAllPaywalls()
+            return true
+        }
+
         return false
     }
 
     /// Called when the host app forwards a Helium-tagged success/cancel redirect URL.
-    /// Success: refresh entitlements once and, if a purchase is detected, fire
-    /// PurchaseSucceededEvent and close paywalls. Cancel: no-op — the browser tab
-    /// may still be open, so observations are kept so the existing foreground
-    /// retry loop can still detect a later purchase.
+    /// Success: run `checkForNewPurchaseWithRetry` to handle both the newly-entitled
+    /// and already-entitled cases, then re-arm the foreground observer for the next
+    /// app return. Cancel: no-op on entitlements — the browser tab may still be open,
+    /// so observations are kept and the foreground observer is re-armed so a later
+    /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
         guard !activeCheckoutObservations.isEmpty else { return }
@@ -310,10 +402,7 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
-            let matched = await checkForNewPurchase()
-            if !matched {
-                _ = await checkForExistingEntitlement()
-            }
+            _ = await checkForNewPurchaseWithRetry(restoreOnAnyEntitledOffered: true)
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()
             }
@@ -321,40 +410,6 @@ public class ExternalWebCheckoutManager: NSObject {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) cancel redirect handled — observations kept in case user resumes checkout")
             armForegroundObserverAfterBackground()
         }
-    }
-
-    /// Success-redirect-only safety net: the server confirmed checkout but no newly-entitled
-    /// product was found (e.g. user attempted to re-purchase a product they already own).
-    /// If any active observation's paywall offers a product the user is currently entitled
-    /// to, fire PurchaseAlreadyEntitledEvent and close paywalls.
-    @MainActor
-    private func checkForExistingEntitlement() async -> Bool {
-        let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
-        let observationsSnapshot = activeCheckoutObservations
-            .sorted { $0.value.addedAt > $1.value.addedAt }
-        for (sessionId, observation) in observationsSnapshot {
-            guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0) }) else {
-                activeCheckoutObservations.removeValue(forKey: sessionId)
-                continue
-            }
-            if let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PurchaseAlreadyEntitledEvent(
-                        productId: entitledProductId,
-                        triggerName: observation.paywallSession.trigger,
-                        paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                        storeKitTransactionId: nil,
-                        storeKitOriginalTransactionId: nil
-                    ),
-                    paywallSession: observation.paywallSession,
-                    sendToAnalytics: false
-                )
-                activeCheckoutObservations.removeAll()
-                Helium.shared.hideAllPaywalls()
-                return true
-            }
-        }
-        return false
     }
 
     // Used by Stripe one-tap Apple Pay flow (so must be public)
