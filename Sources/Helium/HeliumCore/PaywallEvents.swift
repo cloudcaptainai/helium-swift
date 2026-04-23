@@ -709,8 +709,17 @@ public struct PurchaseFailedEvent: ProductEvent {
     }
 }
 
-/// Event fired when StoreKit returns .restored status from makePurchase() or restorePurchases() returns true
-/// - Note: Previous purchase has been successfully restored
+/// Distinguishes how an existing entitlement was surfaced to the SDK.
+public enum PurchaseRestoredOrigin: String {
+    /// User tapped "restore purchases", or StoreKit's makePurchase returned .restored.
+    case userInitiated
+    /// Detected an entitled product while paywall open. e.g. After the user returned from an external web checkout.
+    case detected
+}
+
+/// Event fired when an existing entitlement is surfaced — either via StoreKit restore
+/// (explicit restorePurchases() or makePurchase returning .restored) or by detecting an
+/// already-entitled product on return from an external web checkout.
 public struct PurchaseRestoredEvent: ProductEvent {
     /// The product identifier that was restored
     /// - Note: Set to "HELIUM_GENERIC_PRODUCT" when restoring all purchases via restorePurchases()
@@ -724,14 +733,18 @@ public struct PurchaseRestoredEvent: ProductEvent {
     /// - Note: Template name from Helium configuration
     public let paywallName: String
     
+    /// How this restore was surfaced — see `PurchaseRestoredOrigin`.
+    public let origin: PurchaseRestoredOrigin
+    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, origin: PurchaseRestoredOrigin = .userInitiated, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.origin = origin
         self.timestamp = timestamp
     }
     
@@ -743,6 +756,7 @@ public struct PurchaseRestoredEvent: ProductEvent {
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
+            "origin": origin.rawValue,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
