@@ -14,6 +14,22 @@ public class PaddleCheckoutManager {
     )
 }
 
+/// Outcome of an attempted external web checkout flow.
+enum WebCheckoutOutcome {
+    /// Browser was opened; observation is pending until the user returns.
+    case opened
+    /// Pre-checkout entitlement check found the user already owns the product;
+    /// browser was not opened and the flow is fully resolved.
+    case preCheckResolved
+
+    var transactionStatus: HeliumPaywallTransactionStatus {
+        switch self {
+        case .opened: return .pending
+        case .preCheckResolved: return .restored
+        }
+    }
+}
+
 /// Orchestrates the external web checkout flow (browser-based) for payment providers.
 public class ExternalWebCheckoutManager: NSObject {
 
@@ -45,12 +61,14 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Builds the enriched checkout URL from the paywall's web bundle URL
     /// and opens it in an external browser, then starts observing for purchase completion.
+    /// Returns `.opened` when the browser was launched, or `.preCheckResolved` if the
+    /// pre-checkout entitlement check resolved the flow without opening the browser.
     @MainActor
     func startCheckoutFlow(
         for productKey: String,
         triggerName: String,
         paywallSession: PaywallSession
-    ) async throws {
+    ) async throws -> WebCheckoutOutcome {
         guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
               let resolvedCancelURL = provider.getCheckoutCancelURL() else {
             throw WebCheckoutError.checkoutURLsNotConfigured
@@ -83,7 +101,7 @@ public class ExternalWebCheckoutManager: NSObject {
             cancelURL: resolvedCancelURL
         )
 
-        try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
+        return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
     /// Appends analytics, identity, and routing query parameters to a checkout URL
@@ -137,25 +155,15 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Opens the enriched checkout URL in external browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
+    /// Returns `.preCheckResolved` if cached entitlements already include `productKey`;
+    /// otherwise `.opened`.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, productKey: String, paywallSession: PaywallSession) async throws {
+    func openEnrichedCheckoutURL(_ url: URL, productKey: String, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
         let entitledBefore = await entitlementsSource.purchasedHeliumProductIds()
 
-        // If cached entitlements already include this product, dismiss paywall & fire restore
-        // without ever opening the browser.
         if entitledBefore.contains(productKey) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PurchaseRestoredEvent(
-                    productId: productKey,
-                    triggerName: paywallSession.trigger,
-                    paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                    origin: .detected
-                ),
-                paywallSession: paywallSession
-            )
-            Helium.shared.hideAllPaywalls()
-            return
+            return .preCheckResolved
         }
 
         let observation = CheckoutObservation(
@@ -171,6 +179,7 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.failedToOpenEnrichedURL
         }
         startForegroundObserver()
+        return .opened
     }
 
     /// Stops observing for purchase completion if the session matches.

@@ -711,9 +711,15 @@ public struct PurchaseFailedEvent: ProductEvent {
 
 /// Distinguishes how an existing entitlement was surfaced to the SDK.
 public enum PurchaseRestoredOrigin: String {
-    /// User tapped "restore purchases", or StoreKit's makePurchase returned .restored.
-    case userInitiated
-    /// Detected an entitled product while paywall open. e.g. After the user returned from an external web checkout.
+    /// User tapped the "Restore Purchases" button.
+    case restorePurchases
+    /// User tapped Buy and the purchase action itself resolved as a restoration —
+    /// e.g. StoreKit's makePurchase returned .restored, or a web pre-checkout
+    /// entitlement check detected the user already owns the product.
+    case duringPurchase
+    /// Entitlement was passively observed (not signalled directly by a purchase
+    /// action) — e.g. the entitlement refresh after returning from an external
+    /// web checkout success redirect found the user already owns an offered product.
     case detected
 }
 
@@ -740,7 +746,7 @@ public struct PurchaseRestoredEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, origin: PurchaseRestoredOrigin = .userInitiated, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, origin: PurchaseRestoredOrigin, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName

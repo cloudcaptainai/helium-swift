@@ -84,23 +84,21 @@ class HeliumPaywallDelegateWrapper {
 
         if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
             do {
-                try await StripeCheckoutManager.shared.startCheckoutFlow(
+                transactionStatus = try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                )
-                transactionStatus = .pending
+                ).transactionStatus
             } catch {
                 transactionStatus = .failed(error)
             }
         } else if paymentProcessor == .paddle {
             do {
-                try await PaddleCheckoutManager.shared.startCheckoutFlow(
+                transactionStatus = try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                )
-                transactionStatus = .pending
+                ).transactionStatus
             } catch {
                 transactionStatus = .failed(error)
             }
@@ -114,7 +112,7 @@ class HeliumPaywallDelegateWrapper {
         case .failed(let error):
             self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, origin: .duringPurchase), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
@@ -178,7 +176,7 @@ class HeliumPaywallDelegateWrapper {
             result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
         }
         if result {
-            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName, origin: .restorePurchases), paywallSession: paywallSession)
         } else {
             self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
             if Helium.config.restorePurchasesDialog.showHeliumDialog {
