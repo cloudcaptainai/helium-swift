@@ -9,20 +9,66 @@ enum CheckoutRedirectKind {
 // MARK: - URL Constants
 
 enum WebCheckoutRedirect {
-    static func isSuccess(_ url: URL, provider: PaymentProviderConfig) -> Bool {
-        guard let successUrl = provider.getCheckoutSuccessURL(),
-              let configured = URL(string: successUrl) else { return false }
-        return url.scheme == configured.scheme
-            && url.host == configured.host
-            && url.path == configured.path
+    /// Classifies an incoming URL forwarded via `Helium.shared.handleURL(_:)`.
+    ///
+    /// When the configured success and cancel URLs have distinct paths, the match
+    /// alone is authoritative. When they're identical, query params appended by
+    /// our checkout flow disambiguate. Returns `nil` if the URL doesn't match, or
+    /// if success/cancel collide and query params aren't conclusive — those go to
+    /// the didBecomeActive observer, which reconciles against real entitlement state.
+    static func classify(_ url: URL) -> CheckoutRedirectKind? {
+        let matchesSuccess = matchesBase(url, configured: Helium.config.checkoutSuccessURL)
+        let matchesCancel = matchesBase(url, configured: Helium.config.checkoutCancelURL)
+
+        switch (matchesSuccess, matchesCancel) {
+        case (false, false):
+            return nil
+        case (true, false):
+            return .success
+        case (false, true):
+            return .cancel
+        case (true, true):
+            return classifyByQueryParams(url)
+        }
     }
 
-    static func isCancelled(_ url: URL, provider: PaymentProviderConfig) -> Bool {
-        guard let cancelUrl = provider.getCheckoutCancelURL(),
-              let configured = URL(string: cancelUrl) else { return false }
-        return url.scheme == configured.scheme
-            && url.host == configured.host
-            && url.path == configured.path
+    private static func classifyByQueryParams(_ url: URL) -> CheckoutRedirectKind? {
+        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? {
+            queryItems.first(where: { $0.name == name })?.value
+        }
+
+        if let transactionId = value("transactionId"), !transactionId.isEmpty {
+            return .success
+        }
+        if value("alreadySubscribed") == "true" {
+            return .success
+        }
+        if let error = value("error"), !error.isEmpty {
+            return .cancel
+        }
+        return nil
+    }
+
+    private static func matchesBase(_ url: URL, configured: String?) -> Bool {
+        guard let configured, let configuredURL = URL(string: configured) else { return false }
+        guard url.scheme == configuredURL.scheme, url.host == configuredURL.host else { return false }
+
+        let configPath = normalizedPath(configuredURL.path)
+        let incomingPath = normalizedPath(url.path)
+
+        // Stripe substitutes {CHECKOUT_SESSION_ID} in the URL server-side.
+        // If the developer put the placeholder in the path, match the prefix up to it.
+        if let marker = configPath.range(of: "{CHECKOUT_SESSION_ID}") {
+            return incomingPath.hasPrefix(String(configPath[..<marker.lowerBound]))
+        }
+        return incomingPath == configPath
+    }
+
+    private static func normalizedPath(_ path: String) -> String {
+        let value = path.isEmpty ? "/" : path
+        guard value.count > 1, value.hasSuffix("/") else { return value }
+        return String(value.dropLast())
     }
 }
 

@@ -22,6 +22,8 @@ public class ExternalWebCheckoutManager: NSObject {
 
     // Checkout state
     private var foregroundObserver: NSObjectProtocol?
+    private var foregroundCheckTask: Task<Void, Never>?
+    private var pendingBackgroundObserver: NSObjectProtocol?
 
     // Server-managed checkout observation
     private struct CheckoutObservation {
@@ -158,7 +160,10 @@ public class ExternalWebCheckoutManager: NSObject {
     func stopObserving(paywallSession: PaywallSession) {
         activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
         if activeCheckoutObservations.isEmpty {
+            foregroundCheckTask?.cancel()
+            foregroundCheckTask = nil
             stopForegroundObserver()
+            stopPendingBackgroundObserver()
         }
     }
 
@@ -183,6 +188,32 @@ public class ExternalWebCheckoutManager: NSObject {
         foregroundObserver = nil
     }
 
+    /// Arms the foreground observer only once the app next enters the background.
+    /// Used after a redirect lands while the app is still foregrounded — the
+    /// already-scheduled didBecomeActive must not trigger a check, and we can't
+    /// rely on URL-vs-didBecomeActive ordering. didEnterBackground is an
+    /// unambiguous "user left the app" signal.
+    private func armForegroundObserverAfterBackground() {
+        stopPendingBackgroundObserver()
+        pendingBackgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.stopPendingBackgroundObserver()
+            guard !self.activeCheckoutObservations.isEmpty else { return }
+            self.startForegroundObserver()
+        }
+    }
+
+    private func stopPendingBackgroundObserver() {
+        if let pendingBackgroundObserver {
+            NotificationCenter.default.removeObserver(pendingBackgroundObserver)
+        }
+        pendingBackgroundObserver = nil
+    }
+
     private func onReturnedToForeground() {
         guard !activeCheckoutObservations.isEmpty else { return }
         guard foregroundObserver != nil else { return }
@@ -190,8 +221,9 @@ public class ExternalWebCheckoutManager: NSObject {
 
         HeliumLogger.log(.debug, category: .entitlements, "Checking for new \(provider.displayName) entitlements...")
 
-        Task { @MainActor [weak self] in
+        foregroundCheckTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer { self.foregroundCheckTask = nil }
 
             // Check entitlements with retry in case they are not immediately available after external purchase.
             let delays: [UInt64] = [0, 2_000_000_000]
@@ -200,9 +232,11 @@ public class ExternalWebCheckoutManager: NSObject {
                 if delay > 0 {
                     try? await Task.sleep(nanoseconds: delay)
                 }
+                if Task.isCancelled { return }
                 guard !activeCheckoutObservations.isEmpty else { return }
 
                 let purchaseDetected = await checkForNewPurchase()
+                if Task.isCancelled { return }
                 HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
                 if purchaseDetected { return }
             }
@@ -266,6 +300,13 @@ public class ExternalWebCheckoutManager: NSObject {
     @MainActor
     func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
         guard !activeCheckoutObservations.isEmpty else { return }
+
+        // Redirect is authoritative — suppress the foreground-observer safety net
+        // while we run explicit logic for this redirect.
+        foregroundCheckTask?.cancel()
+        foregroundCheckTask = nil
+        stopForegroundObserver()
+
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
@@ -273,8 +314,12 @@ public class ExternalWebCheckoutManager: NSObject {
             if !matched {
                 _ = await checkForExistingEntitlement()
             }
+            if !activeCheckoutObservations.isEmpty {
+                armForegroundObserverAfterBackground()
+            }
         case .cancel:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) cancel redirect handled — observations kept in case user resumes checkout")
+            armForegroundObserverAfterBackground()
         }
     }
 
