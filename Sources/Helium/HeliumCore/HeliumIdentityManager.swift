@@ -362,20 +362,16 @@ public class ApplePayHelper {
         return isStripeApplePayAvailable && canMakePayments()
     }
 
+    private func canUseApplePayCards() -> Bool {
+        cachedCanMakePaymentsWithCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
+    }
+
+    func isPaddleCheckoutEligible() -> Bool {
+        return Helium.config.webCheckoutProcessors.contains(.paddle) && canUseApplePayCards()
+    }
+
     func isStripeCheckoutEligible() -> Bool {
-        if !Helium.config.webCheckoutEnabled {
-            return false
-        }
-        let hasCards = cachedCanMakePaymentsWithCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
-        if !hasCards {
-            return false
-        }
-        // Our Stripe Apple pay flow on web requires 16.4+ 
-        if #available(iOS 16.4, *) {
-            return true
-        } else {
-            return false
-        }
+        return Helium.config.webCheckoutProcessors.contains(.stripe) && canUseApplePayCards()
     }
 }
 
