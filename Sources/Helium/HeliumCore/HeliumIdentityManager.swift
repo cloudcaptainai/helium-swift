@@ -338,7 +338,7 @@ public class ApplePayHelper {
     public static let shared = ApplePayHelper()
 
     @HeliumAtomic private var cachedCanMakePayments: Bool?
-    @HeliumAtomic private var cachedCanMakePaymentsWithCards: Bool?
+    @HeliumAtomic private var cachedCanMakePaymentsWithCreditCards: Bool?
 
     private static let defaultPaymentNetworks: [PKPaymentNetwork] = [
         .amex, .masterCard, .visa, .discover
@@ -346,7 +346,7 @@ public class ApplePayHelper {
 
     private init() {
         cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
-        cachedCanMakePaymentsWithCards = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
+        cachedCanMakePaymentsWithCreditCards = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
     }
 
     /// Checks if the device supports Apple Pay (cached)
@@ -362,16 +362,18 @@ public class ApplePayHelper {
         return isStripeApplePayAvailable && canMakePayments()
     }
 
-    private func canUseApplePayCards() -> Bool {
-        cachedCanMakePaymentsWithCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks)
+    /// Excludes debit and prepaid cards — trial-to-paid conversion is materially
+    /// worse on those, so we gate web-checkout eligibility on having a credit card.
+    private func canUseApplePayCreditCards() -> Bool {
+        cachedCanMakePaymentsWithCreditCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
     }
 
     func isPaddleCheckoutEligible() -> Bool {
-        return Helium.config.webCheckoutProcessors.contains(.paddle) && canUseApplePayCards()
+        return Helium.config.webCheckoutProcessors.contains(.paddle) && canUseApplePayCreditCards()
     }
 
     func isStripeCheckoutEligible() -> Bool {
-        return Helium.config.webCheckoutProcessors.contains(.stripe) && canUseApplePayCards()
+        return Helium.config.webCheckoutProcessors.contains(.stripe) && canUseApplePayCreditCards()
     }
 }
 
