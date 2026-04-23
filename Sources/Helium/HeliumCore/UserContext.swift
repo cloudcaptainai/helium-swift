@@ -207,6 +207,7 @@ public struct CodableUserContext: Codable {
             "isFirstHeliumSession": HeliumIdentityManager.shared.isFirstHeliumSession,
             "userSeed": userSeed,
             "additionalParams": self.additionalParams.dictionaryRepresentation,
+            "paddleCheckoutEligible": ApplePayHelper.shared.isPaddleCheckoutEligible(),
             "stripeCheckoutEligible": ApplePayHelper.shared.isStripeCheckoutEligible()
         ]
     }

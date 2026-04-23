@@ -650,10 +650,10 @@ public class HeliumConfig {
     var webCheckoutEnabled: Bool { !webCheckoutProcessors.isEmpty }
 
     /// Custom success redirect URL for External Checkout Flow.
-    private(set) var checkoutSuccessURL: String? = nil
+    @HeliumAtomic private(set) var checkoutSuccessURL: String? = nil
 
     /// Custom cancel redirect URL for External Checkout Flow.
-    private(set) var checkoutCancelURL: String? = nil
+    @HeliumAtomic private(set) var checkoutCancelURL: String? = nil
 
     /// Enables External Web Checkout Flow for any Paddle or Stripe products in your paywalls. If not enabled, paywalls with Paddle/Stripe products
     /// will not show. Your fallback paywall/s, if provided, will show instead.
@@ -691,9 +691,9 @@ public class HeliumConfig {
     /// NOTE - if you have existing Paddle/Stripe customers, Helium will attempt to continue respecting their entitlements but is
     /// not guaranteed to do so.
     public func disableExternalWebCheckout() {
+        webCheckoutProcessors = []
         checkoutSuccessURL = nil
         checkoutCancelURL = nil
-        webCheckoutProcessors = []
     }
 
     /// Allows Web Checkout paywalls (Paddle/Stripe) to show even when no custom user ID
