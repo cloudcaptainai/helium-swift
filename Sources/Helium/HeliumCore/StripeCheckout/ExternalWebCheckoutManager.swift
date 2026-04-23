@@ -160,6 +160,8 @@ public class ExternalWebCheckoutManager: NSObject {
     func stopObserving(paywallSession: PaywallSession) {
         activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
         if activeCheckoutObservations.isEmpty {
+            foregroundCheckTask?.cancel()
+            foregroundCheckTask = nil
             stopForegroundObserver()
             stopPendingBackgroundObserver()
         }
