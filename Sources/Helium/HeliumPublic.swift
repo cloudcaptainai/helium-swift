@@ -404,14 +404,7 @@ public class Helium {
             return false
         }
 
-        // Stripe and Paddle read from the same configured success/cancel URLs, so
-        // checking against either provider is sufficient to classify the URL.
-        let redirectKind: CheckoutRedirectKind
-        if WebCheckoutRedirect.isSuccess(url, provider: .stripe) {
-            redirectKind = .success
-        } else if WebCheckoutRedirect.isCancelled(url, provider: .stripe) {
-            redirectKind = .cancel
-        } else {
+        guard let redirectKind = WebCheckoutRedirect.classify(url) else {
             return false
         }
 
