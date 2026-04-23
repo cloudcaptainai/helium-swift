@@ -98,10 +98,22 @@ public class ExternalWebCheckoutManager: NSObject {
             productKey: productKey,
             triggerName: triggerName,
             successURL: resolvedSuccessURL,
-            cancelURL: resolvedCancelURL
+            cancelURL: resolvedCancelURL,
+            introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups)
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
+    }
+
+    /// True if every offered product is intro-offer eligible.
+    private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) -> Bool {
+        guard let paywallInfo,
+              let products = provider.getOfferedProducts(paywallInfo, false),
+              !products.isEmpty else {
+            return false
+        }
+        let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
+        return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
     }
 
     /// Appends analytics, identity, and routing query parameters to a checkout URL
@@ -112,7 +124,8 @@ public class ExternalWebCheckoutManager: NSObject {
         productKey: String,
         triggerName: String,
         successURL: String,
-        cancelURL: String
+        cancelURL: String,
+        introOfferEligible: Bool
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
@@ -132,6 +145,7 @@ public class ExternalWebCheckoutManager: NSObject {
         if let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             ctx["organizationId"] = organizationId
         }
+        ctx["introOfferEligible"] = introOfferEligible
 
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
