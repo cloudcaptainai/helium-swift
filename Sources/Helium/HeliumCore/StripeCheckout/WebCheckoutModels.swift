@@ -52,9 +52,23 @@ enum WebCheckoutRedirect {
 
     private static func matchesBase(_ url: URL, configured: String?) -> Bool {
         guard let configured, let configuredURL = URL(string: configured) else { return false }
-        return url.scheme == configuredURL.scheme
-            && url.host == configuredURL.host
-            && url.path == configuredURL.path
+        guard url.scheme == configuredURL.scheme, url.host == configuredURL.host else { return false }
+
+        let configPath = normalizedPath(configuredURL.path)
+        let incomingPath = normalizedPath(url.path)
+
+        // Stripe substitutes {CHECKOUT_SESSION_ID} in the URL server-side.
+        // If the developer put the placeholder in the path, match the prefix up to it.
+        if let marker = configPath.range(of: "{CHECKOUT_SESSION_ID}") {
+            return incomingPath.hasPrefix(String(configPath[..<marker.lowerBound]))
+        }
+        return incomingPath == configPath
+    }
+
+    private static func normalizedPath(_ path: String) -> String {
+        let value = path.isEmpty ? "/" : path
+        guard value.count > 1, value.hasSuffix("/") else { return value }
+        return String(value.dropLast())
     }
 }
 
