@@ -38,6 +38,7 @@ public struct HeliumPaywallInfo: Codable {
     var productsOfferedIOS: [String]?
     var productsOfferedStripe: [String]?
     var productsOfferedPaddle: [String]?
+    var webProductsOfferedPaddle: [String]?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -58,7 +59,11 @@ public struct HeliumPaywallInfo: Codable {
     var productIds: [String] {
         productIdsIOS + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
     }
-    
+
+    var productIdsIncludingWebProductIds: [String] {
+        productIds + (webProductsOfferedPaddle ?? [])
+    }
+
     var hasProducts: Bool {
         !productIds.isEmpty
     }
