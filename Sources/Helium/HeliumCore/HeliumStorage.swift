@@ -12,6 +12,11 @@ import Foundation
 /// Returns nil only if the user-domain Application Support URL cannot be resolved,
 /// which doesn't happen on real Apple devices; callers should tolerate the optional
 /// rather than force-unwrapping.
+///
+/// Future consideration: the `Helium` directory name could collide with a host app
+/// that happens to use the same subdirectory for its own data. Consider migrating
+/// to a reverse-DNS name like `com.tryhelium.sdk` (matching the UserDefaults suite)
+/// to guarantee uniqueness. Would require a one-time migration of existing files.
 internal var heliumAppSupportDirectory: URL? {
     FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         .first?
