@@ -552,6 +552,7 @@ extension HeliumPaywallPresenter {
             }
             
             let hasPaddleProducts = !(templatePaywallInfo.productsOfferedPaddle ?? []).isEmpty
+                || !(templatePaywallInfo.webProductsOfferedPaddle ?? []).isEmpty
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
             let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
             if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() && !Helium.config.allowWebCheckoutWithoutUserId {

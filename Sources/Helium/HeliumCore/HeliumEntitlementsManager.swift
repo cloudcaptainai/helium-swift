@@ -261,7 +261,7 @@ actor HeliumEntitlementsManager {
 
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
 
-        let productIds = paywallInfo?.productIds ?? []
+        let productIds = paywallInfo?.productIdsIncludingWebProductIds ?? []
 
         var result: Bool
 

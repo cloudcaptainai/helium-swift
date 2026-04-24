@@ -59,7 +59,11 @@ public struct HeliumPaywallInfo: Codable {
     var productIds: [String] {
         productIdsIOS + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
     }
-    
+
+    var productIdsIncludingWebProductIds: [String] {
+        productIds + (webProductsOfferedPaddle ?? [])
+    }
+
     var hasProducts: Bool {
         !productIds.isEmpty
     }

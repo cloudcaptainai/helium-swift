@@ -234,7 +234,8 @@ struct HeliumControlPanelView: View {
                     bundleHtml: html,
                     productIds: version.productIds ?? [],
                     productIdsStripe: version.stripeProductIds ?? [],
-                    productIdsPaddle: version.paddleProductIds ?? []
+                    productIdsPaddle: version.paddleProductIds ?? [],
+                    productIdsPaddleWeb: version.webPaddleProductIds ?? []
                 )
 
                 await MainActor.run { loadingVersionId = nil }
