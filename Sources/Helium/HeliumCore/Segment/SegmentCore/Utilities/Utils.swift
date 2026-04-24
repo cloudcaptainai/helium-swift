@@ -56,7 +56,7 @@ internal func eventStorageDirectory(writeKey: String) -> URL {
     // so this SDK can never trap inside a host app. Temp dir is a session-only safety net.
     let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
-    let storageURL = baseURL.appendingPathComponent("helium/analytics/\(writeKey)/")
+    let storageURL = baseURL.appendingPathComponent("Helium/analytics/\(writeKey)/")
 
     // Handle one-time migration from old locations
     migrateFromOldLocations(writeKey: writeKey, to: storageURL)
