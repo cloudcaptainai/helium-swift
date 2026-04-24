@@ -334,7 +334,9 @@ public class ExternalWebCheckoutManager: NSObject {
 
         for (sessionId, observation) in observationsSnapshot {
             guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) else {
-                activeCheckoutObservations.removeValue(forKey: sessionId)
+                // Skip, don't remove. Offered-products is static for the
+                // observation's lifetime, so removing here would also kill the
+                // redirect path where the in-app-set safety net would match.
                 continue
             }
 
