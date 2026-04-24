@@ -184,10 +184,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
     // MARK: - Persistence
 
     private var persistenceFileURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("Helium", isDirectory: true)
-            .appendingPathComponent(provider.entitlementsPersistenceFileName)
+        heliumAppSupportDirectory?.appendingPathComponent(provider.entitlementsPersistenceFileName)
     }
 
     private func loadPersistedData() {

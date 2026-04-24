@@ -77,10 +77,7 @@ actor HeliumEntitlementsManager {
     
     /// File URL for entitlements storage.
     private nonisolated var entitlementsFileURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("Helium", isDirectory: true)
-            .appendingPathComponent(entitlementsFileName)
+        heliumAppSupportDirectory?.appendingPathComponent(entitlementsFileName)
     }
     
     /// Loads persisted entitlements from file storage

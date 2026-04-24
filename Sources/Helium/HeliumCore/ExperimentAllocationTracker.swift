@@ -46,10 +46,7 @@ class ExperimentAllocationTracker {
     
     /// File URL for allocations storage, as a backup to UserDefaults
     private var allocationsFileURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("Helium", isDirectory: true)
-            .appendingPathComponent(allocationsFileName)
+        heliumAppSupportDirectory?.appendingPathComponent(allocationsFileName)
     }
     
     /// Loads stored allocations - tries UserDefaults first, falls back to file
