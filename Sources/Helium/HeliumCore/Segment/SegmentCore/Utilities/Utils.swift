@@ -54,43 +54,49 @@ extension Optional: Flattenable {
 internal func eventStorageDirectory(writeKey: String) -> URL {
     let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
     let appSupportURL = urls[0]
-    let segmentURL = appSupportURL.appendingPathComponent("segment/\(writeKey)/")
+    let storageURL = appSupportURL.appendingPathComponent("helium/analytics/\(writeKey)/")
 
     // Handle one-time migration from old locations
-    migrateFromOldLocations(writeKey: writeKey, to: segmentURL)
+    migrateFromOldLocations(writeKey: writeKey, to: storageURL)
 
     // try to create it, will fail if already exists, nbd.
     // tvOS, watchOS regularly clear out data.
-    try? FileManager.default.createDirectory(at: segmentURL, withIntermediateDirectories: true, attributes: nil)
-    return segmentURL
+    try? FileManager.default.createDirectory(at: storageURL, withIntermediateDirectories: true, attributes: nil)
+    return storageURL
 }
 
 private func migrateFromOldLocations(writeKey: String, to newLocation: URL) {
     let fm = FileManager.default
 
-    // Get the parent of where our new segment directory should live
+    guard !fm.fileExists(atPath: newLocation.path) else { return }
+
     let appSupportURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    let newSegmentDir = appSupportURL.appendingPathComponent("segment")
+    let appSupportSegmentDir = appSupportURL.appendingPathComponent("segment/\(writeKey)/")
 
-    // If segment dir already exists in app support, we're done
-    guard !fm.fileExists(atPath: newSegmentDir.path) else { return }
-
-    // Only check the old location that was actually used on this platform
     #if (os(iOS) || os(watchOS)) && !targetEnvironment(macCatalyst)
-    let oldSearchPath = FileManager.SearchPathDirectory.documentDirectory
+    let legacySearchPath = FileManager.SearchPathDirectory.documentDirectory
     #else
-    let oldSearchPath = FileManager.SearchPathDirectory.cachesDirectory
+    let legacySearchPath = FileManager.SearchPathDirectory.cachesDirectory
     #endif
+    let legacySegmentDir = fm.urls(for: legacySearchPath, in: .userDomainMask)
+        .first?
+        .appendingPathComponent("segment/\(writeKey)/")
 
-    guard let oldBaseURL = fm.urls(for: oldSearchPath, in: .userDomainMask).first else { return }
-    let oldSegmentDir = oldBaseURL.appendingPathComponent("segment")
+    let source: URL? = {
+        if fm.fileExists(atPath: appSupportSegmentDir.path) { return appSupportSegmentDir }
+        if let legacy = legacySegmentDir, fm.fileExists(atPath: legacy.path) { return legacy }
+        return nil
+    }()
 
-    guard fm.fileExists(atPath: oldSegmentDir.path) else { return }
+    guard let sourceURL = source else { return }
+
+    // moveItem requires the destination's parent to already exist.
+    try? fm.createDirectory(at: newLocation.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
 
     do {
-        try fm.moveItem(at: oldSegmentDir, to: newSegmentDir)
-        Analytics.segmentLog(message: "Migrated analytics data from \(oldSegmentDir.path)", kind: .debug)
+        try fm.moveItem(at: sourceURL, to: newLocation)
+        Analytics.segmentLog(message: "Migrated analytics data from \(sourceURL.path) to \(newLocation.path)", kind: .debug)
     } catch {
-        Analytics.segmentLog(message: "Failed to migrate from \(oldSegmentDir.path): \(error)", kind: .error)
+        Analytics.segmentLog(message: "Failed to migrate analytics data from \(sourceURL.path): \(error)", kind: .error)
     }
 }
