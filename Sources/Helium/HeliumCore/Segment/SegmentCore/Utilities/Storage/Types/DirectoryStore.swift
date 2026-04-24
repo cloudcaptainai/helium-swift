@@ -154,15 +154,39 @@ extension DirectoryStore {
         let index = getIndex()
         let fileURL = config.storageLocation.appendingPathComponent("\(index)-\(config.baseFilename)")
         writer = LineStreamWriter(url: fileURL)
-        // we might be reopening this file .. so only do this if it's empty.
         if let writer, writer.bytesWritten == 0 {
+            // Brand new file, write the batch header.
             let contents = "{ \"batch\": ["
             try? writer.writeLine(contents)
             return true
         }
+        // File exists with content. Check if it was already finalized — this can happen
+        // if the app was killed after finishFile() wrote the closing bracket but before
+        // the rename to .temp succeeded. Appending to a finalized file corrupts the batch.
+        if isFinalized(url: fileURL) {
+            // Complete the interrupted finishFile() rename so the batch becomes visible
+            // to the flush pipeline; otherwise these events are orphaned on disk.
+            let tempURL = fileURL.appendingPathExtension(Self.tempExtension)
+            try? FileManager.default.moveItem(at: fileURL, to: tempURL)
+            self.writer = nil
+            incrementIndex()
+            return startFileIfNeeded()
+        }
         return false
     }
-    
+
+    func isFinalized(url: URL) -> Bool {
+        guard let reader = LineStreamReader(url: url) else { return false }
+        var lastLine: String? = nil
+        while let line = reader.readLine() {
+            if !line.isEmpty { lastLine = line }
+        }
+        // Match the exact prefix finishFile() writes. `],` is impossible inside an
+        // event line (events are JSON objects), so this can't false-positive on
+        // host-controlled trait keys that happen to be named "sentAt".
+        return lastLine?.hasPrefix("],\"sentAt\"") == true
+    }
+
     func finishFile() {
         guard let writer else {
             #if DEBUG
