@@ -164,6 +164,10 @@ extension DirectoryStore {
         // if the app was killed after finishFile() wrote the closing bracket but before
         // the rename to .temp succeeded. Appending to a finalized file corrupts the batch.
         if isFinalized(url: fileURL) {
+            // Complete the interrupted finishFile() rename so the batch becomes visible
+            // to the flush pipeline; otherwise these events are orphaned on disk.
+            let tempURL = fileURL.appendingPathExtension(Self.tempExtension)
+            try? FileManager.default.moveItem(at: fileURL, to: tempURL)
             self.writer = nil
             incrementIndex()
             return startFileIfNeeded()
