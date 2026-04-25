@@ -720,7 +720,7 @@ public enum PurchaseRestoredOrigin: String, Codable, Sendable {
     /// Entitlement was passively observed (not signalled directly by a purchase
     /// action) — e.g. the entitlement refresh after returning from an external
     /// web checkout success redirect found the user already owns an offered product.
-    case detected
+    case detectedPostWebCheckout
 }
 
 /// Event fired when an existing entitlement is surfaced — either via StoreKit restore
