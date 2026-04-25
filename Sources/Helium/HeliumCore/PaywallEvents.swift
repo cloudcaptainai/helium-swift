@@ -608,7 +608,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId, paymentProcessor: paymentProcessor)
     }
 }
 
@@ -769,7 +769,7 @@ public struct PurchaseRestoredEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
+        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, origin: origin)
     }
 }
 
