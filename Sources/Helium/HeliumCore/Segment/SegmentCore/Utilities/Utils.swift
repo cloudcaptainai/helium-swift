@@ -54,9 +54,9 @@ extension Optional: Flattenable {
 internal func eventStorageDirectory(writeKey: String) -> URL {
     // Application Support is always resolvable on real Apple devices; the guard is belt-and-suspenders
     // so this SDK can never trap inside a host app. Temp dir is a session-only safety net.
-    let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-    let storageURL = baseURL.appendingPathComponent("Helium/analytics/\(writeKey)/")
+    let baseURL = heliumAppSupportDirectory
+        ?? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Helium", isDirectory: true)
+    let storageURL = baseURL.appendingPathComponent("analytics/\(writeKey)/")
 
     // Handle one-time migration from old locations
     migrateFromOldLocations(writeKey: writeKey, to: storageURL)

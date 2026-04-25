@@ -5,6 +5,24 @@
 
 import Foundation
 
+/// Helium-owned subdirectory of Application Support. All Helium SDK file persistence
+/// lives under this root so it stays isolated from host-app data and any other
+/// Segment/third-party SDKs the host may ship.
+///
+/// Returns nil only if the user-domain Application Support URL cannot be resolved,
+/// which doesn't happen on real Apple devices; callers should tolerate the optional
+/// rather than force-unwrapping.
+///
+/// Future consideration: the `Helium` directory name could collide with a host app
+/// that happens to use the same subdirectory for its own data. Consider migrating
+/// to a reverse-DNS name like `com.tryhelium.sdk` (matching the UserDefaults suite)
+/// to guarantee uniqueness. Would require a one-time migration of existing files.
+internal var heliumAppSupportDirectory: URL? {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        .first?
+        .appendingPathComponent("Helium", isDirectory: true)
+}
+
 /// Centralized persistence layer for the Helium SDK.
 ///
 /// Backed by a dedicated UserDefaults suite (`com.tryhelium.sdk`) to avoid
