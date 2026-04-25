@@ -740,36 +740,36 @@ public struct PurchaseRestoredEvent: ProductEvent {
     public let paywallName: String
     
     /// How this restore was surfaced — see `PurchaseRestoredOrigin`.
-    public let origin: PurchaseRestoredOrigin
-    
+    public let restoreOrigin: PurchaseRestoredOrigin
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, origin: PurchaseRestoredOrigin, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
-        self.origin = origin
+        self.restoreOrigin = restoreOrigin
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchaseRestored" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
-            "origin": origin.rawValue,
+            "restoreOrigin": restoreOrigin.rawValue,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
-    
+
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, origin: origin)
+        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, restoreOrigin: restoreOrigin)
     }
 }
 

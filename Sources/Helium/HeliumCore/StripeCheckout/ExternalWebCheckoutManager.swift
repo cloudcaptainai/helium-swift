@@ -386,7 +386,7 @@ public class ExternalWebCheckoutManager: NSObject {
                     productId: restored.productId,
                     triggerName: restored.observation.paywallSession.trigger,
                     paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                    origin: .detectedPostWebCheckout
+                    restoreOrigin: .detectedPostWebCheckout
                 ),
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false
