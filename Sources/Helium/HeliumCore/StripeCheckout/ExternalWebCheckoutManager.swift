@@ -365,8 +365,8 @@ public class ExternalWebCheckoutManager: NSObject {
                     sendToAnalytics: false
                 )
                 activeCheckoutObservations.removeAll()
-                // TODO: Ideally call HeliumActionsDelegate.dismissAll to handle dismissAction for DynamicPaywallModifier case.....
                 Helium.shared.hideAllPaywalls()
+                dismissAllSwiftUIPaywalls()
                 return true
             }
 
@@ -393,6 +393,7 @@ public class ExternalWebCheckoutManager: NSObject {
             )
             activeCheckoutObservations.removeAll()
             Helium.shared.hideAllPaywalls()
+            dismissAllSwiftUIPaywalls()
             return true
         }
 

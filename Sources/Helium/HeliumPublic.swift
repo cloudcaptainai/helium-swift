@@ -117,7 +117,12 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }
     
-    /// Hide all currently displayed paywalls, including "second try" paywalls.
+    /// Hide all paywalls shown via ``presentPaywall()``, including any
+    /// "second try" paywalls.
+    ///
+    /// This does not dismiss `.heliumPaywall` modifier or embedded paywalls —
+    /// those are driven by the host view's state (flip your `isPresented` binding
+    /// or remove the view from the hierarchy).
     public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }

@@ -59,6 +59,9 @@ public struct DynamicBaseTemplateView: View {
                 dismiss()
             }
             if presentationState.viewType != .presented {
+                registerSwiftUIPaywallDismiss(sessionId: actionsDelegate.paywallSession.sessionId) {
+                    dismiss()
+                }
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
                     actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
@@ -67,6 +70,7 @@ public struct DynamicBaseTemplateView: View {
         }
         .onDisappear {
             if presentationState.viewType != .presented {
+                unregisterSwiftUIPaywallDismiss(sessionId: actionsDelegate.paywallSession.sessionId)
                 if presentationState.isOpen {
                     presentationState.isOpen = false
                     actionsDelegateWrapper.logClosure()

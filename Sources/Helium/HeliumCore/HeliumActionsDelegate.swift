@@ -7,6 +7,32 @@
 
 import Foundation
 
+// Tracks dismiss actions for SwiftUI-presented paywalls (`.triggered` /
+// `.embedded`), keyed by `paywallSession.sessionId`. The UIKit-based
+// `HeliumPaywallPresenter` handles `.presented` paywalls; this covers the
+// gap for paywalls shown via the `.heliumPaywall` modifier or inline
+// embedding, which the external web checkout flow needs to close after a
+// successful purchase or restore.
+@MainActor
+private var swiftUIPaywallDismissActions: [String: () -> Void] = [:]
+
+@MainActor
+func registerSwiftUIPaywallDismiss(sessionId: String, _ action: @escaping () -> Void) {
+    swiftUIPaywallDismissActions[sessionId] = action
+}
+
+@MainActor
+func unregisterSwiftUIPaywallDismiss(sessionId: String) {
+    swiftUIPaywallDismissActions.removeValue(forKey: sessionId)
+}
+
+@MainActor
+func dismissAllSwiftUIPaywalls() {
+    let snapshot = swiftUIPaywallDismissActions
+    swiftUIPaywallDismissActions.removeAll()
+    for action in snapshot.values { action() }
+}
+
 class ActionsDelegateWrapper: ObservableObject {
     let delegate: HeliumActionsDelegate
     
