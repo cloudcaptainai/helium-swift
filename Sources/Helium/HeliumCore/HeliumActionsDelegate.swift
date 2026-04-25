@@ -7,29 +7,29 @@
 
 import Foundation
 
-// Tracks dismiss actions for SwiftUI-presented paywalls (`.triggered` /
-// `.embedded`), keyed by `paywallSession.sessionId`. The UIKit-based
-// `HeliumPaywallPresenter` handles `.presented` paywalls; this covers the
-// gap for paywalls shown via the `.heliumPaywall` modifier or inline
-// embedding, which the external web checkout flow needs to close after a
-// successful purchase or restore.
+// Tracks dismiss actions for inline paywalls (`.triggered` / `.embedded`
+// viewTypes — i.e. shown via the `.heliumPaywall` modifier or inlined
+// directly into the host's view hierarchy), keyed by `paywallSession.sessionId`.
+// The UIKit-based `HeliumPaywallPresenter` handles `.presented` paywalls;
+// this covers the gap so the external web checkout flow can close inline
+// paywalls after a successful purchase or restore.
 @MainActor
-private var swiftUIPaywallDismissActions: [String: () -> Void] = [:]
+private var inlinePaywallDismissActions: [String: () -> Void] = [:]
 
 @MainActor
-func registerSwiftUIPaywallDismiss(sessionId: String, _ action: @escaping () -> Void) {
-    swiftUIPaywallDismissActions[sessionId] = action
+func registerInlinePaywallDismiss(sessionId: String, _ action: @escaping () -> Void) {
+    inlinePaywallDismissActions[sessionId] = action
 }
 
 @MainActor
-func unregisterSwiftUIPaywallDismiss(sessionId: String) {
-    swiftUIPaywallDismissActions.removeValue(forKey: sessionId)
+func unregisterInlinePaywallDismiss(sessionId: String) {
+    inlinePaywallDismissActions.removeValue(forKey: sessionId)
 }
 
 @MainActor
-func dismissAllSwiftUIPaywalls() {
-    let snapshot = swiftUIPaywallDismissActions
-    swiftUIPaywallDismissActions.removeAll()
+func dismissAllInlinePaywalls() {
+    let snapshot = inlinePaywallDismissActions
+    inlinePaywallDismissActions.removeAll()
     for action in snapshot.values { action() }
 }
 

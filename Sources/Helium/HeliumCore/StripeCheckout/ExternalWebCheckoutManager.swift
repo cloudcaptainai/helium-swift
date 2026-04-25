@@ -366,7 +366,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 )
                 activeCheckoutObservations.removeAll()
                 Helium.shared.hideAllPaywalls()
-                dismissAllSwiftUIPaywalls()
+                dismissAllInlinePaywalls()
                 return true
             }
 
@@ -393,7 +393,7 @@ public class ExternalWebCheckoutManager: NSObject {
             )
             activeCheckoutObservations.removeAll()
             Helium.shared.hideAllPaywalls()
-            dismissAllSwiftUIPaywalls()
+            dismissAllInlinePaywalls()
             return true
         }
 
