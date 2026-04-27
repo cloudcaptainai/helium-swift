@@ -14,23 +14,22 @@ import Foundation
 // this covers the gap so the external web checkout flow can close inline
 // paywalls after a successful purchase or restore.
 @MainActor
-private var inlinePaywallDismissActions: [String: () -> Void] = [:]
+enum InlinePaywallDismissRegistry {
+    private static var actions: [String: () -> Void] = [:]
 
-@MainActor
-func registerInlinePaywallDismiss(sessionId: String, _ action: @escaping () -> Void) {
-    inlinePaywallDismissActions[sessionId] = action
-}
+    static func register(sessionId: String, _ action: @escaping () -> Void) {
+        actions[sessionId] = action
+    }
 
-@MainActor
-func unregisterInlinePaywallDismiss(sessionId: String) {
-    inlinePaywallDismissActions.removeValue(forKey: sessionId)
-}
+    static func unregister(sessionId: String) {
+        actions.removeValue(forKey: sessionId)
+    }
 
-@MainActor
-func dismissAllInlinePaywalls() {
-    let snapshot = inlinePaywallDismissActions
-    inlinePaywallDismissActions.removeAll()
-    for action in snapshot.values { action() }
+    static func dismissAll() {
+        let snapshot = actions
+        actions.removeAll()
+        for action in snapshot.values { action() }
+    }
 }
 
 class ActionsDelegateWrapper: ObservableObject {
