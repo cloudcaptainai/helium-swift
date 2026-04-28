@@ -7,6 +7,31 @@
 
 import Foundation
 
+// Tracks dismiss actions for inline paywalls (`.triggered` / `.embedded`
+// viewTypes — i.e. shown via the `.heliumPaywall` modifier or inlined
+// directly into the host's view hierarchy), keyed by `paywallSession.sessionId`.
+// The UIKit-based `HeliumPaywallPresenter` handles `.presented` paywalls;
+// this covers the gap so the external web checkout flow can close inline
+// paywalls after a successful purchase or restore.
+@MainActor
+enum InlinePaywallDismissRegistry {
+    private static var actions: [String: () -> Void] = [:]
+
+    static func register(sessionId: String, _ action: @escaping () -> Void) {
+        actions[sessionId] = action
+    }
+
+    static func unregister(sessionId: String) {
+        actions.removeValue(forKey: sessionId)
+    }
+
+    static func dismissAll() {
+        let snapshot = actions
+        actions.removeAll()
+        for action in snapshot.values { action() }
+    }
+}
+
 class ActionsDelegateWrapper: ObservableObject {
     let delegate: HeliumActionsDelegate
     

@@ -117,7 +117,12 @@ public class Helium {
         return HeliumPaywallPresenter.shared.hideUpsell();
     }
     
-    /// Hide all currently displayed paywalls, including "second try" paywalls.
+    /// Hide all paywalls shown via ``presentPaywall()``, including any
+    /// "second try" paywalls.
+    ///
+    /// This does not dismiss `.heliumPaywall` modifier or embedded paywalls —
+    /// those are driven by the host view's state (flip your `isPresented` binding
+    /// or remove the view from the hierarchy).
     public func hideAllPaywalls() {
         return HeliumPaywallPresenter.shared.hideAllUpsells()
     }
@@ -662,7 +667,6 @@ public class HeliumConfig {
     ///
     /// - Parameters:
     ///   - successURL: The URL to redirect to after a successful payment.
-    ///     Include `{CHECKOUT_SESSION_ID}` in the URL to receive the session ID.
     ///   - cancelURL: The URL the provider redirects to when the user cancels checkout.
     ///   - paymentProcessors: Which payment processors to enable. Defaults to `.all` (both Paddle and Stripe).
     ///     Pass `.paddle` or `.stripe` if your app only uses one to skip the unused processor's
