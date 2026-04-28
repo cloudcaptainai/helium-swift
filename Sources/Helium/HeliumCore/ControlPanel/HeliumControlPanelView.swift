@@ -21,21 +21,35 @@ struct HeliumControlPanelView: View {
                 case .loading:
                     ProgressView("Loading paywalls...")
                 case .loaded(let response):
-                    if response.paywalls.isEmpty {
-                        Text("No paywalls found.")
-                            .foregroundColor(.secondary)
-                    } else {
-                        let filtered = response.paywalls.filter {
-                            searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
-                        }
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(filtered) { paywall in
-                                    paywallCard(paywall)
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            descriptionHeader
+
+                            if response.paywalls.isEmpty {
+                                Text("No paywalls found.")
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 20)
+                            } else {
+                                let filtered = response.paywalls.filter {
+                                    searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
+                                }
+                                if filtered.isEmpty {
+                                    Text("No paywalls match \"\(searchText)\".")
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.top, 20)
+                                } else {
+                                    LazyVStack(spacing: 16) {
+                                        ForEach(filtered) { paywall in
+                                            paywallCard(paywall)
+                                        }
+                                    }
                                 }
                             }
-                            .padding()
                         }
+                        .padding()
                     }
                 case .error(let message):
                     VStack(spacing: 16) {
@@ -188,6 +202,14 @@ struct HeliumControlPanelView: View {
         }))
         .cornerRadius(12)
         .clipped()
+    }
+
+    private var descriptionHeader: some View {
+        Text("Preview your paywalls on device. Bring up this menu with a triple tap on any Helium paywall using a debug/TestFlight build. [Learn more](https://docs.tryhelium.com/guides/paywall-previews).")
+            .font(.footnote)
+            .foregroundColor(.secondary)
+            .tint(.accentColor)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var previewPlaceholder: some View {
