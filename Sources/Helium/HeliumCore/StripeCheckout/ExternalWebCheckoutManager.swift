@@ -138,7 +138,6 @@ public class ExternalWebCheckoutManager: NSObject {
         ctx["analytics"] = analyticsJSON
 
         ctx[provider.initialProductKey] = productKey
-        ctx["trigger"] = triggerName
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
         ctx["paymentFailureUrl"] = cancelURL // We currently do nothing special with paymentFailureUrl

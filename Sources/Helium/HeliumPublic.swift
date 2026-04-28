@@ -412,6 +412,11 @@ public class Helium {
         guard let redirectKind = WebCheckoutRedirect.classify(url) else {
             return false
         }
+        
+        HeliumLogger.log(.debug, category: .core, "Handling return URL from external checkout.", metadata: [
+            "type": redirectKind.rawValue,
+            "url": url.absoluteString
+        ])
 
         Task { @MainActor in
             await StripeCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
