@@ -634,7 +634,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
@@ -687,7 +687,7 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
@@ -759,7 +759,7 @@ public struct PurchaseRestoredEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
@@ -902,20 +902,24 @@ public struct PurchasePendingEvent: ProductEvent {
     /// The name/identifier of the paywall template where purchase is pending
     /// - Note: Template name from Helium configuration
     public let paywallName: String
-    
+
+    /// Which payment processor the pending purchase is going through.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchasePending" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
@@ -923,6 +927,7 @@ public struct PurchasePendingEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
