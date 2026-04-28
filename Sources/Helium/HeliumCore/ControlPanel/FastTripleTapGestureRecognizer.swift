@@ -7,10 +7,12 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
     private let requiredTaps: Int
     private let maxIntervalBetweenTaps: CFTimeInterval
     private let maxMovement: CGFloat
+    private let maxSequenceRadius: CGFloat
 
     private var tapCount: Int = 0
     private var lastTapEndTime: CFTimeInterval = 0
     private var startLocation: CGPoint = .zero
+    private var sequenceAnchor: CGPoint?
     private var staleTimer: Timer?
 
     init(
@@ -18,11 +20,13 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
         action: Selector?,
         requiredTaps: Int = 3,
         maxIntervalBetweenTaps: CFTimeInterval = 0.25,
-        maxMovement: CGFloat = 20
+        maxMovement: CGFloat = 20,
+        maxSequenceRadius: CGFloat = 44
     ) {
         self.requiredTaps = requiredTaps
         self.maxIntervalBetweenTaps = maxIntervalBetweenTaps
         self.maxMovement = maxMovement
+        self.maxSequenceRadius = maxSequenceRadius
         super.init(target: target, action: action)
     }
 
@@ -31,11 +35,27 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
             state = .failed
             return
         }
-        startLocation = touch.location(in: view)
+        let location = touch.location(in: view)
+        startLocation = location
+
         let now = CACurrentMediaTime()
         if tapCount > 0 && now - lastTapEndTime > maxIntervalBetweenTaps {
             tapCount = 0
+            sequenceAnchor = nil
         }
+
+        if let anchor = sequenceAnchor {
+            let dx = location.x - anchor.x
+            let dy = location.y - anchor.y
+            if (dx * dx + dy * dy) > maxSequenceRadius * maxSequenceRadius {
+                // Treat this as the start of a fresh sequence rather than failing outright.
+                tapCount = 0
+                sequenceAnchor = location
+            }
+        } else {
+            sequenceAnchor = location
+        }
+
         invalidateStaleTimer()
     }
 
@@ -71,6 +91,7 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
     override func reset() {
         super.reset()
         tapCount = 0
+        sequenceAnchor = nil
         invalidateStaleTimer()
     }
 
