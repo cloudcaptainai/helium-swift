@@ -28,7 +28,8 @@ struct HeliumControlPanelView: View {
                             if response.paywalls.isEmpty {
                                 Text("No paywalls found.")
                                     .foregroundColor(.secondary)
-                                    .padding(.top, 40)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 20)
                             } else {
                                 let filtered = response.paywalls.filter {
                                     searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
@@ -36,8 +37,9 @@ struct HeliumControlPanelView: View {
                                 if filtered.isEmpty {
                                     Text("No paywalls match \"\(searchText)\".")
                                         .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.center)
-                                        .padding(.top, 40)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.top, 20)
                                 } else {
                                     LazyVStack(spacing: 16) {
                                         ForEach(filtered) { paywall in
