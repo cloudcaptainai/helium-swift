@@ -390,8 +390,10 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
         }
 
         if HeliumControlPanelService.shared.allowPaywallControlPanel {
-            let tripleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTripleTap))
-            tripleTap.numberOfTapsRequired = 3
+            let tripleTap = FastTripleTapGestureRecognizer(
+                target: context.coordinator,
+                action: #selector(Coordinator.handleTripleTap)
+            )
             tripleTap.delegate = context.coordinator
             webView.addGestureRecognizer(tripleTap)
             context.coordinator.tripleTapRecognizer = tripleTap
@@ -439,7 +441,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let trigger: String?
         @Binding var showControlPanel: Bool
-        var tripleTapRecognizer: UITapGestureRecognizer?
+        var tripleTapRecognizer: FastTripleTapGestureRecognizer?
 
         init(trigger: String?, showControlPanel: Binding<Bool>) {
             self.trigger = trigger
