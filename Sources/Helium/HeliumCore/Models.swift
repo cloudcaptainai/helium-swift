@@ -199,7 +199,7 @@ public enum HeliumPaywallEvent: Codable {
     case subscriptionPressed(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionCancelled(productKey: String, triggerName: String, paywallTemplateName: String)
     case subscriptionSucceeded(productKey: String, triggerName: String, paywallTemplateName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64?, canonicalJoinTransactionId: String?, paymentProcessor: HeliumPaymentProcessor)
-    case subscriptionFailed(productKey: String, triggerName: String, paywallTemplateName: String, error: String? = nil)
+    case subscriptionFailed(productKey: String, triggerName: String, paywallTemplateName: String, error: String? = nil, paymentProcessor: HeliumPaymentProcessor)
     case subscriptionRestored(productKey: String, triggerName: String, paywallTemplateName: String, restoreOrigin: PurchaseRestoredOrigin)
     case subscriptionRestoreFailed(triggerName: String, paywallTemplateName: String)
     case subscriptionPending(productKey: String, triggerName: String, paywallTemplateName: String)
@@ -239,7 +239,7 @@ public enum HeliumPaywallEvent: Codable {
             return triggerName
         case .subscriptionRestored(_, let triggerName, _, _):
             return triggerName
-        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+        case .subscriptionFailed(_, let triggerName, _, _, _):
             return triggerName;
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             return triggerName;
@@ -283,7 +283,7 @@ public enum HeliumPaywallEvent: Codable {
             return paywallTemplateName
         case .subscriptionRestored(_, _, let paywallTemplateName, _):
             return paywallTemplateName
-        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+        case .subscriptionFailed(_, _, let paywallTemplateName, _, _):
             return paywallTemplateName;
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             return paywallTemplateName;
@@ -339,12 +339,13 @@ public enum HeliumPaywallEvent: Codable {
             try container.encode(productKey, forKey: .productKey)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
-        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error, let paymentProcessor):
             try container.encode(String(describing: self).components(separatedBy: "(")[0], forKey: .type)
             try container.encode(productKey, forKey: .productKey)
             try container.encode(triggerName, forKey: .triggerName)
             try container.encode(paywallTemplateName, forKey: .paywallTemplateName)
             try container.encodeIfPresent(error, forKey: .errorDescription)
+            try container.encode(paymentProcessor, forKey: .paymentProcessor)
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             try container.encode("subscriptionRestoreFailed", forKey: .type)
             try container.encode(triggerName, forKey: .triggerName)
@@ -477,7 +478,8 @@ public enum HeliumPaywallEvent: Codable {
             let triggerName = try container.decode(String.self, forKey: .triggerName)
             let paywallTemplateName = try container.decode(String.self, forKey: .paywallTemplateName)
             let error = try container.decodeIfPresent(String.self, forKey: .errorDescription)
-            self = .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName)
+            let paymentProcessor = try container.decodeIfPresent(HeliumPaymentProcessor.self, forKey: .paymentProcessor) ?? .appStore
+            self = .subscriptionFailed(productKey: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor)
         case "subscriptionRestored":
             let productKey = try container.decode(String.self, forKey: .productKey)
             let triggerName = try container.decode(String.self, forKey: .triggerName)
@@ -641,11 +643,12 @@ public enum HeliumPaywallEvent: Codable {
         case .subscriptionRestoreFailed(let triggerName, let paywallTemplateName):
             dict["triggerName"] = triggerName
             dict["paywallTemplateName"] = paywallTemplateName
-        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error):
+        case .subscriptionFailed(let productKey, let triggerName, let paywallTemplateName, let error, let paymentProcessor):
             dict["productKey"] = productKey
             dict["triggerName"] = triggerName
             dict["paywallTemplateName"] = paywallTemplateName
             dict["errorDescription"] = error
+            dict["paymentProcessor"] = paymentProcessor.rawValue
             
         case .paywallWebViewRendered(let triggerName, let paywallTemplateName, let webviewRenderTimeTakenMS, let paywallUnavailableReason):
             dict["triggerName"] = triggerName
