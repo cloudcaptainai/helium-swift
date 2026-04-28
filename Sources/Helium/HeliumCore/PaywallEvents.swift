@@ -608,7 +608,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId)
+        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId, paymentProcessor: paymentProcessor)
     }
 }
 
@@ -626,20 +626,24 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// The name/identifier of the paywall template where purchase was cancelled
     /// - Note: Template name from Helium configuration
     public let paywallName: String
-    
+
+    /// Which payment processor the cancelled purchase was attempted through.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchaseCancelled" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
@@ -647,6 +651,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
@@ -674,21 +679,25 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// The error that caused the purchase to fail
     /// - Note: Contains StoreKit error for debugging (e.g., SKError.paymentCancelled, network errors)
     public let error: Error?
-    
+
+    /// Which payment processor the failed purchase was attempted through.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, error: Error? = nil, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchaseFailed" }
-    
+
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "type": eventName,
@@ -696,6 +705,7 @@ public struct PurchaseFailedEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
         if let error = error {
@@ -705,7 +715,7 @@ public struct PurchaseFailedEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionFailed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, error: error?.localizedDescription)
+        return .subscriptionFailed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, error: error?.localizedDescription, paymentProcessor: paymentProcessor)
     }
 }
 
@@ -720,7 +730,7 @@ public enum PurchaseRestoredOrigin: String, Codable, Sendable {
     /// Entitlement was passively observed (not signalled directly by a purchase
     /// action) — e.g. the entitlement refresh after returning from an external
     /// web checkout success redirect found the user already owns an offered product.
-    case detected
+    case detectedPostWebCheckout
 }
 
 /// Event fired when an existing entitlement is surfaced — either via StoreKit restore
@@ -740,36 +750,41 @@ public struct PurchaseRestoredEvent: ProductEvent {
     public let paywallName: String
     
     /// How this restore was surfaced — see `PurchaseRestoredOrigin`.
-    public let origin: PurchaseRestoredOrigin
-    
+    public let restoreOrigin: PurchaseRestoredOrigin
+
+    /// Which payment processor surfaced this restored entitlement.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, origin: PurchaseRestoredOrigin, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
-        self.origin = origin
+        self.restoreOrigin = restoreOrigin
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchaseRestored" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
             "paywallName": paywallName,
-            "origin": origin.rawValue,
+            "restoreOrigin": restoreOrigin.rawValue,
+            "paymentProcessor": paymentProcessor.rawValue,
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
-    
+
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
+        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, restoreOrigin: restoreOrigin)
     }
 }
 
@@ -887,20 +902,24 @@ public struct PurchasePendingEvent: ProductEvent {
     /// The name/identifier of the paywall template where purchase is pending
     /// - Note: Template name from Helium configuration
     public let paywallName: String
-    
+
+    /// Which payment processor the pending purchase is going through.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchasePending" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
@@ -908,6 +927,7 @@ public struct PurchasePendingEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }

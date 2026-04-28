@@ -1,7 +1,7 @@
 import Foundation
 
 /// Which of the configured checkout redirect URLs the user returned through.
-enum CheckoutRedirectKind {
+enum CheckoutRedirectKind: String {
     case success
     case cancel
 }
@@ -45,6 +45,10 @@ enum WebCheckoutRedirect {
             return .success
         }
         if let error = value("error"), !error.isEmpty {
+            // technically this is a payment failure but for now we treat as cancel
+            return .cancel
+        }
+        if queryItems.isEmpty {
             return .cancel
         }
         return nil

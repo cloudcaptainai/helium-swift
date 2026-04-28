@@ -138,7 +138,6 @@ public class ExternalWebCheckoutManager: NSObject {
         ctx["analytics"] = analyticsJSON
 
         ctx[provider.initialProductKey] = productKey
-        ctx["trigger"] = triggerName
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
         ctx["paymentFailureUrl"] = cancelURL // We currently do nothing special with paymentFailureUrl
@@ -386,7 +385,8 @@ public class ExternalWebCheckoutManager: NSObject {
                     productId: restored.productId,
                     triggerName: restored.observation.paywallSession.trigger,
                     paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                    origin: .detected
+                    restoreOrigin: .detectedPostWebCheckout,
+                    paymentProcessor: provider.purchaseEventPaymentProcessor
                 ),
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false
