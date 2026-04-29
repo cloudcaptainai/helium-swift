@@ -92,12 +92,26 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             products.append(newEntitlement)
             cached = CachedSnapshot(
                 products: products,
-                introOfferEligible: cached?.introOfferEligible,
+                // NOTE - this introOfferEligible flag is determined by ANY purchase, so can simply set false here
+                introOfferEligible: false,
                 refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
             )
             persisted = products
         }
         persistData()
+    }
+
+    /// Marks the cache stale so the next read triggers a refresh. Keeps current
+    /// data visible in the meantime.
+    func invalidateCache() {
+        lock.withLock {
+            guard let current = cached else { return }
+            cached = CachedSnapshot(
+                products: current.products,
+                introOfferEligible: current.introOfferEligible,
+                refreshAfter: .distantPast
+            )
+        }
     }
 
     open func clearEntitlements() {

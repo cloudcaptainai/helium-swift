@@ -204,12 +204,18 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Stops observing for purchase completion if the session matches.
     @MainActor
     func stopObserving(paywallSession: PaywallSession) {
-        activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
+        let removed = activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
         if activeCheckoutObservations.isEmpty {
             foregroundCheckTask?.cancel()
             foregroundCheckTask = nil
             stopForegroundObserver()
             stopPendingBackgroundObserver()
+        }
+        // We're no longer auto-refreshing entitlements on foreground return for
+        // this session, so a purchase that completed without us seeing it would
+        // sit behind a stale cache. Force the next read to refetch.
+        if removed != nil {
+            entitlementsSource.invalidateCache()
         }
     }
 
