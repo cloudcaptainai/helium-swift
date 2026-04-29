@@ -95,7 +95,11 @@ public enum StoreKitDelegateError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .cannotFindProduct:
-            return "Could not find product. Please ensure products are properly configured."
+            var appIdentifierText = ""
+            if let appBundleId = Bundle.main.bundleIdentifier {
+                appIdentifierText = " (\(appBundleId))"
+            }
+            return "Could not find product. Please ensure products are properly configured in the Helium dashboard and that the product exists in App Store Connect for this app\(appIdentifierText)."
         case .unknownPurchaseResult:
             return "Purchase returned an unknown status."
         }
