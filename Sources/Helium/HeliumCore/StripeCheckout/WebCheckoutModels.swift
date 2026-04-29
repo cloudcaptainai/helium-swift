@@ -137,6 +137,32 @@ struct PaymentEntitlementResponse: Codable, Sendable {
     let hasActiveEntitlement: Bool
     let subscriptions: [PaymentSubscriptionInfo]
     let customerId: String?
+    let customerExists: Bool?
+    let introOfferEligibility: IntroOfferEligibility?
+}
+
+struct IntroOfferEligibility: Codable, Sendable {
+    let introOfferEligible: Bool
+    let hasConsumedAnyTrial: Bool?
+    let hasConsumedAnyDiscount: Bool?
+}
+
+// MARK: - Error Envelope
+
+struct PaymentAPIErrorEnvelope: Decodable {
+    let error: Body
+    let meta: ResponseMeta?
+
+    struct Body: Decodable {
+        let type: String?
+        let code: String?
+        let detail: String?
+        let documentationUrl: String?
+    }
+}
+
+struct ResponseMeta: Decodable {
+    let requestId: String?
 }
 
 // Stripe and Paddle don't return identical shapes. Stripe emits `trialEnd`;

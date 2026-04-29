@@ -4,6 +4,7 @@ import Foundation
 
 private struct CachedSnapshot {
     let products: [ProductEntitlement]
+    let introOfferEligible: Bool?
     let refreshAfter: Date
 
     var needsRefresh: Bool { Date() > refreshAfter }
@@ -68,6 +69,13 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
+    /// Latest server-reported intro-offer eligibility for this customer, or nil
+    /// if unknown (no fetch yet, or server omitted the field on partial failure).
+    open func introOfferEligible() async -> Bool? {
+        await refreshIfNeeded()
+        return lock.withLock { cached?.introOfferEligible }
+    }
+
     open func didCompletePurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
         guard !productId.isEmpty else { return }
 
@@ -84,6 +92,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             products.append(newEntitlement)
             cached = CachedSnapshot(
                 products: products,
+                introOfferEligible: cached?.introOfferEligible,
                 refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
             )
             persisted = products
@@ -171,6 +180,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             lock.withLock {
                 cached = CachedSnapshot(
                     products: productEntitlements,
+                    introOfferEligible: response.introOfferEligibility?.introOfferEligible,
                     refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
                 )
                 persisted = productEntitlements
