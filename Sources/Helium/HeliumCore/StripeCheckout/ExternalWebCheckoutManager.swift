@@ -99,18 +99,24 @@ public class ExternalWebCheckoutManager: NSObject {
             triggerName: triggerName,
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
-            introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups)
+            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups)
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
     /// True if every offered product is intro-offer eligible.
-    private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) -> Bool {
+    /// Prefers the server's per-customer signal from `/check-entitlement` when
+    /// available — the local price map can go stale (e.g., host app sets
+    /// userId after Helium initialized, so eligibility could change).
+    private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) async -> Bool {
         guard let paywallInfo,
               let products = provider.getOfferedProducts(paywallInfo, false),
               !products.isEmpty else {
             return false
+        }
+        if let serverValue = await entitlementsSource.introOfferEligible() {
+            return serverValue
         }
         let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
         return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
@@ -198,12 +204,18 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Stops observing for purchase completion if the session matches.
     @MainActor
     func stopObserving(paywallSession: PaywallSession) {
-        activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
+        let removed = activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
         if activeCheckoutObservations.isEmpty {
             foregroundCheckTask?.cancel()
             foregroundCheckTask = nil
             stopForegroundObserver()
             stopPendingBackgroundObserver()
+        }
+        // We're no longer auto-refreshing entitlements on foreground return for
+        // this session, so a purchase that completed without us seeing it would
+        // sit behind a stale cache. Force the next read to refetch.
+        if removed != nil {
+            entitlementsSource.invalidateCache()
         }
     }
 

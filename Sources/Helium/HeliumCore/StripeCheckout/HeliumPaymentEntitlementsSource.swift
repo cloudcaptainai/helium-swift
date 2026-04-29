@@ -4,6 +4,7 @@ import Foundation
 
 private struct CachedSnapshot {
     let products: [ProductEntitlement]
+    let introOfferEligible: Bool?
     let refreshAfter: Date
 
     var needsRefresh: Bool { Date() > refreshAfter }
@@ -68,6 +69,13 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
+    /// Latest server-reported intro-offer eligibility for this customer, or nil
+    /// if unknown (no fetch yet, or server omitted the field on partial failure).
+    open func introOfferEligible() async -> Bool? {
+        await refreshIfNeeded()
+        return lock.withLock { cached?.introOfferEligible }
+    }
+
     open func didCompletePurchase(productId: String, priceId: String?, subscriptionExpiresAt: Date?) {
         guard !productId.isEmpty else { return }
 
@@ -84,11 +92,26 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             products.append(newEntitlement)
             cached = CachedSnapshot(
                 products: products,
+                // NOTE - this introOfferEligible flag is determined by ANY purchase, so can simply set false here
+                introOfferEligible: false,
                 refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
             )
             persisted = products
         }
         persistData()
+    }
+
+    /// Marks the cache stale so the next read triggers a refresh. Keeps current
+    /// data visible in the meantime.
+    func invalidateCache() {
+        lock.withLock {
+            guard let current = cached else { return }
+            cached = CachedSnapshot(
+                products: current.products,
+                introOfferEligible: current.introOfferEligible,
+                refreshAfter: .distantPast
+            )
+        }
     }
 
     open func clearEntitlements() {
@@ -171,6 +194,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             lock.withLock {
                 cached = CachedSnapshot(
                     products: productEntitlements,
+                    introOfferEligible: response.introOfferEligibility?.introOfferEligible,
                     refreshAfter: Date().addingTimeInterval(Self.cacheTTL)
                 )
                 persisted = productEntitlements

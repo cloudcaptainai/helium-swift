@@ -23,9 +23,24 @@ public class HeliumPaymentAPIClient {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let http = response as? HTTPURLResponse
-            let message = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw HeliumPaymentAPIError.serverError(statusCode: http?.statusCode ?? 0, message: message)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let rawBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            let message: String
+            if let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: data),
+               case let parts = [envelope.error.code, envelope.error.type, envelope.error.detail]
+                   .compactMap({ $0 })
+                   .filter({ !$0.isEmpty }),
+               !parts.isEmpty {
+                let core = parts.joined(separator: ": ")
+                if let requestId = envelope.meta?.requestId, !requestId.isEmpty {
+                    message = "\(core) (requestId: \(requestId))"
+                } else {
+                    message = core
+                }
+            } else {
+                message = rawBody
+            }
+            throw HeliumPaymentAPIError.serverError(statusCode: statusCode, message: message)
         }
 
         return try JSONDecoder().decode(T.self, from: data)
