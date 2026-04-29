@@ -208,7 +208,9 @@ public struct CodableUserContext: Codable {
             "userSeed": userSeed,
             "additionalParams": self.additionalParams.dictionaryRepresentation,
             "paddleCheckoutEligible": ApplePayHelper.shared.isPaddleCheckoutEligible(),
-            "stripeCheckoutEligible": ApplePayHelper.shared.isStripeCheckoutEligible()
+            "stripeCheckoutEligible": ApplePayHelper.shared.isStripeCheckoutEligible(),
+            "hasApplePayCreditCard": ApplePayHelper.shared.hasApplePayCreditCard(),
+            "hasApplePayDebitCard": ApplePayHelper.shared.hasApplePayDebitCard()
         ]
     }
 

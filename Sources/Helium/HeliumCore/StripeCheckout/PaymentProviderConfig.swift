@@ -46,7 +46,7 @@ struct PaymentProviderConfig {
         getCustomerId: { HeliumIdentityManager.shared.getPaddleCustomerId() },
         setCustomerId: { HeliumIdentityManager.shared.setPaddleCustomerId($0) },
         getEntitlementsSource: { HeliumEntitlementsManager.shared.paddleEntitlementsSource },
-        initialProductKey: "initialPaddleSelection",
+        initialProductKey: "initialPaddleProduct",
         entitlementsPersistenceFileName: "helium_paddle_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },

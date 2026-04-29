@@ -80,7 +80,7 @@ public class ExternalWebCheckoutManager: NSObject {
         }
 
         let templateEvent = PurchaseSucceededEvent(
-            productId: productKey,
+            productId: "",
             triggerName: triggerName,
             paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
             storeKitTransactionId: nil,
@@ -151,7 +151,9 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
-
+        
+        ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
+        
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
@@ -242,7 +244,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Arms the foreground observer only once the app next enters the background.
     /// Used after a redirect lands while the app is still foregrounded — the
-    /// already-scheduled didBecomeActive must not trigger a check, and we can't
+    /// already-scheduled didBecomeActive must not kick off a check, and we can't
     /// rely on URL-vs-didBecomeActive ordering. didEnterBackground is an
     /// unambiguous "user left the app" signal.
     @MainActor
@@ -253,7 +255,7 @@ public class ExternalWebCheckoutManager: NSObject {
         // won't fire again until they go foreground first — which is exactly
         // what we want to observe. Skip the indirection and arm the foreground
         // observer directly.
-        if UIApplication.shared.applicationState != .active {
+        if UIApplication.shared.applicationState == .background {
             guard !activeCheckoutObservations.isEmpty else { return }
             startForegroundObserver()
             return

@@ -338,7 +338,8 @@ public class ApplePayHelper {
     public static let shared = ApplePayHelper()
 
     @HeliumAtomic private var cachedCanMakePayments: Bool?
-    @HeliumAtomic private var cachedCanMakePaymentsWithCreditCards: Bool?
+    @HeliumAtomic private var cachedHasApplePayCreditCard: Bool?
+    @HeliumAtomic private var cachedHasApplePayDebitCard: Bool?
 
     private static let defaultPaymentNetworks: [PKPaymentNetwork] = [
         .amex, .masterCard, .visa, .discover
@@ -346,7 +347,8 @@ public class ApplePayHelper {
 
     private init() {
         cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
-        cachedCanMakePaymentsWithCreditCards = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
+        cachedHasApplePayCreditCard = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
+        cachedHasApplePayDebitCard = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .debit)
     }
 
     /// Checks if the device supports Apple Pay (cached)
@@ -362,18 +364,20 @@ public class ApplePayHelper {
         return isStripeApplePayAvailable && canMakePayments()
     }
 
-    /// Excludes debit and prepaid cards — trial-to-paid conversion is materially
-    /// worse on those, so we gate web-checkout eligibility on having a credit card.
-    private func canUseApplePayCreditCards() -> Bool {
-        cachedCanMakePaymentsWithCreditCards ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
+    func hasApplePayCreditCard() -> Bool {
+        cachedHasApplePayCreditCard ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
+    }
+
+    func hasApplePayDebitCard() -> Bool {
+        cachedHasApplePayDebitCard ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .debit)
     }
 
     func isPaddleCheckoutEligible() -> Bool {
-        return Helium.config.webCheckoutProcessors.contains(.paddle) && canUseApplePayCreditCards()
+        return Helium.config.webCheckoutProcessors.contains(.paddle)
     }
 
     func isStripeCheckoutEligible() -> Bool {
-        return Helium.config.webCheckoutProcessors.contains(.stripe) && canUseApplePayCreditCards()
+        return Helium.config.webCheckoutProcessors.contains(.stripe)
     }
 }
 
