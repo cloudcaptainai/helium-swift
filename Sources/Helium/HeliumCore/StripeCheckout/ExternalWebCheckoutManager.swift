@@ -151,7 +151,9 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
-
+        
+        ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
+        
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
