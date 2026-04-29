@@ -80,7 +80,7 @@ public class ExternalWebCheckoutManager: NSObject {
         }
 
         let templateEvent = PurchaseSucceededEvent(
-            productId: productKey,
+            productId: "",
             triggerName: triggerName,
             paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
             storeKitTransactionId: nil,
