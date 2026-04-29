@@ -108,8 +108,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when
     /// available — the local price map can go stale (e.g., host app sets
-    /// userId after StoreKit prices were fetched, so eligibility was computed
-    /// against the wrong identity).
+    /// userId after Helium initialized, so eligibility could change).
     private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) async -> Bool {
         guard let paywallInfo,
               let products = provider.getOfferedProducts(paywallInfo, false),
