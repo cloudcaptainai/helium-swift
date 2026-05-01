@@ -437,7 +437,8 @@ public struct PaywallPresentationConfig {
     /// Creates a new paywall presentation configuration.
     /// - Parameters:
     ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
-    ///   - customPaywallTraits: Custom traits to send to the paywall.
+    ///   - customPaywallTraits: Custom traits to send to the paywall. Note that user traits are automatically included as paywall traits, as is "trigger". If duplicate keys
+    ///   exist, the value from customPaywallTraits will be used.
     ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
     ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
