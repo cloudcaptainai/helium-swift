@@ -178,7 +178,10 @@ struct DynamicWebView: View {
             
             _ = Date()
             var mergedContext = contextJSON
-            var combinedTraits = HeliumIdentityManager.shared.getUserTraits()
+            // Always include "trigger" in customPaywallTraits. customPaywallTraits are key/values that customer can actually direct
+            // paywall editor to look at.
+            var combinedTraits = HeliumUserTraits(["trigger": triggerName ?? ""])
+            combinedTraits.merge(HeliumIdentityManager.shared.getUserTraits())
             if let paywallTraits = paywallSession?.presentationContext.customPaywallTraits {
                 combinedTraits.merge(paywallTraits)
             }
