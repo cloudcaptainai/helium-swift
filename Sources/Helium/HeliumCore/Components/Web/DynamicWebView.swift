@@ -178,10 +178,12 @@ struct DynamicWebView: View {
             
             _ = Date()
             var mergedContext = contextJSON
-            if let customPaywallTraits = paywallSession?.presentationContext.customPaywallTraits {
-                let customData = try JSONEncoder().encode(customPaywallTraits)
-                mergedContext["customPaywallTraits"] = try JSON(data: customData)
+            var combinedTraits = HeliumIdentityManager.shared.getUserTraits()
+            if let paywallTraits = paywallSession?.presentationContext.customPaywallTraits {
+                combinedTraits.merge(paywallTraits)
             }
+            let combinedTraitsData = try JSONEncoder().encode(combinedTraits)
+            mergedContext["customPaywallTraits"] = try JSON(data: combinedTraitsData)
             
             // Get localized prices from HeliumFetchedConfigManager
             // Only fetch prices for products associated with this trigger
