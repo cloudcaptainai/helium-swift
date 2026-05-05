@@ -28,8 +28,6 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
         self.maxMovement = maxMovement
         self.maxSequenceRadius = maxSequenceRadius
         super.init(target: target, action: action)
-        cancelsTouchesInView = false
-        delaysTouchesBegan = false
         delaysTouchesEnded = false
     }
 
