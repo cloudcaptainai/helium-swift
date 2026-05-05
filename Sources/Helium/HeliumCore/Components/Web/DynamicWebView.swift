@@ -446,7 +446,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let trigger: String?
         @Binding var showControlPanel: Bool
-        var tripleTapRecognizer: FastTripleTapGestureRecognizer?
+        var tripleTapRecognizer: UITapGestureRecognizer?
 
         init(trigger: String?, showControlPanel: Binding<Bool>) {
             self.trigger = trigger

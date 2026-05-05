@@ -28,6 +28,9 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
         self.maxMovement = maxMovement
         self.maxSequenceRadius = maxSequenceRadius
         super.init(target: target, action: action)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -80,6 +83,9 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
         if tapCount >= requiredTaps {
             state = .recognized
         } else {
+            // Stay .possible during the inter-tap window so additional taps can
+            // accumulate; the stale timer will transition to .failed if no further
+            // tap arrives, freeing up downstream recognizers.
             scheduleStaleReset()
         }
     }
@@ -103,8 +109,14 @@ final class FastTripleTapGestureRecognizer: UIGestureRecognizer {
     private func scheduleStaleReset() {
         invalidateStaleTimer()
         staleTimer = Timer.scheduledTimer(withTimeInterval: maxIntervalBetweenTaps, repeats: false) { [weak self] _ in
-            self?.tapCount = 0
-            self?.staleTimer = nil
+            guard let self else { return }
+            staleTimer = nil
+            // Transition to .failed once the inter-tap window expires so other
+            // recognizers (e.g. WKWebView's internal click) aren't held up.
+            // reset() will zero tapCount.
+            if state == .possible {
+                state = .failed
+            }
         }
     }
 }
