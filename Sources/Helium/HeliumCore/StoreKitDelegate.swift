@@ -30,14 +30,20 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         }
     }
     
+    /// Override to customize how the purchase is initiated — e.g. to pass `Product.PurchaseOption`s
+    /// like a promotional offer.
+    open func performPurchase(product: Product, productId: String) async throws -> Product.PurchaseResult {
+        return try await product.heliumPurchase()
+    }
+
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let product = try await ProductsCache.shared.getProduct(id: productId) else {
                 HeliumLogger.log(.error, category: .core, "StoreKitDelegate - makePurchase could not find product: \(productId)")
                 return .failed(StoreKitDelegateError.cannotFindProduct)
             }
-            
-            let result = try await product.heliumPurchase()
+
+            let result = try await performPurchase(product: product, productId: productId)
                 
             switch result {
             case .success(let verification):
