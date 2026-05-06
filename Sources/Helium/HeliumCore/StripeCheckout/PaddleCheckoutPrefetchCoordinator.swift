@@ -189,20 +189,26 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     // MARK: - Composite key helpers
 
-    /// Extracts the priceId portion from "pro_xxx:pri_yyy" composite keys
-    /// returned in `HeliumPaywallInfo.webProductsOfferedPaddle`. Filters
-    /// out malformed entries (no colon, suffix doesn't start with `pri_`)
-    /// so a single bad row in the on-launch payload doesn't kill the
-    /// prefetch chain — bandit will reject any priceId we send that
-    /// doesn't actually exist anyway.
-    nonisolated static func extractPriceIds(from composites: [String]) -> [String] {
-        return composites.compactMap { key in
-            guard let suffix = key.split(separator: ":").last.map(String.init),
-                  suffix.hasPrefix("pri_") else {
-                return nil
-            }
-            return suffix
+    /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input
+    /// (no colon, suffix doesn't start with `pri_`). Single source of
+    /// truth for parsing `HeliumPaywallInfo.webProductsOfferedPaddle`
+    /// composite keys — the click-time path in
+    /// ExternalWebCheckoutManager calls this for one productKey,
+    /// `extractPriceIds(from:)` calls it for the whole array on
+    /// paywall display.
+    nonisolated static func extractPriceId(from compositeKey: String) -> String? {
+        guard let suffix = compositeKey.split(separator: ":").last.map(String.init),
+              suffix.hasPrefix("pri_") else {
+            return nil
         }
+        return suffix
+    }
+
+    /// Bulk variant for paywall-display-time fan-out. Filters out
+    /// malformed entries silently — a single bad row in the on-launch
+    /// payload shouldn't kill the prefetch chain.
+    nonisolated static func extractPriceIds(from composites: [String]) -> [String] {
+        return composites.compactMap(extractPriceId)
     }
 
     // MARK: - Internal chain runner

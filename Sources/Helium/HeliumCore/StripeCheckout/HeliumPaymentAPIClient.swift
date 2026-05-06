@@ -27,6 +27,23 @@ public class HeliumPaymentAPIClient {
     // MARK: - Networking
 
     public func post<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
+        let request = try makePostRequest(path: path, body: body)
+        let (data, response) = try await urlSession.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        guard 200..<300 ~= statusCode else {
+            throw genericServerError(statusCode: statusCode, body: data)
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    // MARK: - Request / response shared helpers
+
+    /// Builds a JSON-bodied POST request to `heliumBaseURL + path`. Single
+    /// source of truth for the headers and method-setup logic so future
+    /// changes (e.g. add a User-Agent) land in one place.
+    private func makePostRequest(path: String, body: [String: Any]) throws -> URLRequest {
         guard let url = URL(string: heliumBaseURL + path) else {
             throw HeliumPaymentAPIError.invalidEndpoint(path: path)
         }
@@ -35,31 +52,28 @@ public class HeliumPaymentAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
 
-        let (data, response) = try await urlSession.data(for: request)
-
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let rawBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            let message: String
-            if let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: data),
-               case let parts = [envelope.error.code, envelope.error.type, envelope.error.detail]
-                   .compactMap({ $0 })
-                   .filter({ !$0.isEmpty }),
-               !parts.isEmpty {
-                let core = parts.joined(separator: ": ")
-                if let requestId = envelope.meta?.requestId, !requestId.isEmpty {
-                    message = "\(core) (requestId: \(requestId))"
-                } else {
-                    message = core
-                }
-            } else {
-                message = rawBody
+    /// Parses a non-2xx response body into the generic
+    /// `HeliumPaymentAPIError.serverError(statusCode:message:)` shape. Tries
+    /// the structured `PaymentAPIErrorEnvelope` first; falls back to the raw
+    /// body text if the envelope doesn't decode. Used by `post()` and as the
+    /// non-409-duplicate fallback in `createPaddleTransactionForPaywall`.
+    private func genericServerError(statusCode: Int, body: Data) -> HeliumPaymentAPIError {
+        if let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: body),
+           case let parts = [envelope.error.code, envelope.error.type, envelope.error.detail]
+               .compactMap({ $0 })
+               .filter({ !$0.isEmpty }),
+           !parts.isEmpty {
+            var message = parts.joined(separator: ": ")
+            if let requestId = envelope.meta?.requestId, !requestId.isEmpty {
+                message += " (requestId: \(requestId))"
             }
-            throw HeliumPaymentAPIError.serverError(statusCode: statusCode, message: message)
+            return HeliumPaymentAPIError.serverError(statusCode: statusCode, message: message)
         }
-
-        return try JSONDecoder().decode(T.self, from: data)
+        let raw = String(data: body, encoding: .utf8) ?? "Unknown error"
+        return HeliumPaymentAPIError.serverError(statusCode: statusCode, message: raw)
     }
 
     // MARK: - Request Body Builder
@@ -116,58 +130,35 @@ public class HeliumPaymentAPIClient {
     /// Doesn't go through `post()` because we need to inspect the parsed
     /// error envelope's `code` field structurally — `post()` collapses code
     /// + type + detail into a single message string, which would force
-    /// fragile string-matching on the caller side. Duplication here is
-    /// scoped to one method and worth it for the type safety.
+    /// fragile string-matching on the caller side. The shared
+    /// `makePostRequest` and `genericServerError` helpers avoid the
+    /// transport / generic-error duplication; only the 409+duplicate_subscription
+    /// branch is unique to this method.
     func createPaddleTransactionForPaywall(
         priceId: String
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         let body = try baseRequestBody(provider: .paddle, productId: priceId)
-
-        let path = "paddle/create-transaction-for-paywall"
-        guard let url = URL(string: heliumBaseURL + path) else {
-            throw HeliumPaymentAPIError.invalidEndpoint(path: path)
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let request = try makePostRequest(path: "paddle/create-transaction-for-paywall", body: body)
 
         let (data, response) = try await urlSession.data(for: request)
-
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if 200..<300 ~= statusCode {
             return try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
         }
 
-        // Non-2xx: try to parse the structured error envelope. We branch on
-        // 409 + duplicate_subscription specifically because the prefetch
-        // coordinator translates that into a different control flow path
-        // (preCheckResolved instead of opened-with-error).
-        if let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: data) {
-            if statusCode == 409, envelope.error.code == "duplicate_subscription" {
-                let detail = envelope.error.detail
-                    ?? "You already have an active subscription for this product."
-                throw PaddlePrefetchError.alreadyEntitled(code: "duplicate_subscription", message: detail)
-            }
-            // Generic structured error: surface in the same shape post()
-            // uses so callers that already handle HeliumPaymentAPIError
-            // don't need a second branch.
-            let parts = [envelope.error.code, envelope.error.type, envelope.error.detail]
-                .compactMap { $0 }
-                .filter { !$0.isEmpty }
-            var message = parts.joined(separator: ": ")
-            if let requestId = envelope.meta?.requestId, !requestId.isEmpty {
-                message += " (requestId: \(requestId))"
-            }
-            throw HeliumPaymentAPIError.serverError(statusCode: statusCode, message: message)
+        // 409 + `duplicate_subscription` is the one outcome we surface as a
+        // typed error so the prefetch coordinator can pattern-match without
+        // string parsing. Everything else falls through to the generic
+        // server-error parser.
+        if statusCode == 409,
+           let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: data),
+           envelope.error.code == "duplicate_subscription" {
+            let detail = envelope.error.detail
+                ?? "You already have an active subscription for this product."
+            throw PaddlePrefetchError.alreadyEntitled(code: "duplicate_subscription", message: detail)
         }
-
-        // Body wasn't envelope-shaped: surface raw text so the caller still
-        // gets a debuggable error.
-        let raw = String(data: data, encoding: .utf8) ?? "Unknown error"
-        throw HeliumPaymentAPIError.serverError(statusCode: statusCode, message: raw)
+        throw genericServerError(statusCode: statusCode, body: data)
     }
 }
 

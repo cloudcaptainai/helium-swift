@@ -101,24 +101,22 @@ public class ExternalWebCheckoutManager: NSObject {
         //   * .failed / .notStarted → fall back to opening Safari without
         //     the bootstrap (current behavior, no regression).
         var paddleBootstrapDict: [String: Any]? = nil
-        if provider.providerSlug == "paddle" {
-            let priceId = Self.priceIdFromComposite(productKey)
-            if let priceId = priceId {
-                let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(priceId: priceId)
-                switch outcome {
-                case .alreadyEntitled(let code, let message):
-                    HeliumLogger.log(.debug, category: .entitlements,
-                                     "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
-                    // Mirror the pre-checkout entitlement-already-owns short-circuit
-                    // (line ~185 above): no browser open, refresh entitlements so
-                    // future flows reflect the server's view.
-                    entitlementsSource.invalidateCache()
-                    return .preCheckResolved
-                case .ready:
-                    paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome)
-                case .failed, .notStarted:
-                    paddleBootstrapDict = nil // fall back to bundle's own fetch
-                }
+        if provider.providerSlug == "paddle",
+           let priceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
+            let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(priceId: priceId)
+            switch outcome {
+            case .alreadyEntitled(let code, let message):
+                HeliumLogger.log(.debug, category: .entitlements,
+                                 "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
+                // Mirror the pre-checkout entitlement-already-owns short-circuit
+                // (line ~185 above): no browser open, refresh entitlements so
+                // future flows reflect the server's view.
+                entitlementsSource.invalidateCache()
+                return .preCheckResolved
+            case .ready:
+                paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome)
+            case .failed, .notStarted:
+                paddleBootstrapDict = nil // fall back to bundle's own fetch
             }
         }
 
@@ -136,16 +134,6 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-    /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
-    /// Internal helper exposed for symmetry with PaddleCheckoutPrefetchCoordinator's
-    /// extractPriceIds — both consume the same composite key shape.
-    private static func priceIdFromComposite(_ key: String) -> String? {
-        guard let suffix = key.split(separator: ":").last.map(String.init),
-              suffix.hasPrefix("pri_") else {
-            return nil
-        }
-        return suffix
-    }
 
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when
