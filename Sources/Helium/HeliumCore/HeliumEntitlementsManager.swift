@@ -61,7 +61,8 @@ actor HeliumEntitlementsManager {
         /// Entitlements from persisted data, used before real transactions are loaded
         var persistedEntitlements: [PersistedEntitlement] = []
 
-        /// Cached entitlement status per trigger, persisted for use before paywalls load
+        /// Cached entitlement status per trigger, persisted for use before paywalls load.
+        /// Only holds strict-mode results (considerAssociatedSubscriptions == false).
         var entitledForTrigger: [String: Bool] = [:]
 
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
@@ -250,9 +251,18 @@ actor HeliumEntitlementsManager {
         trigger: String,
         considerAssociatedSubscriptions: Bool
     ) async -> Bool? {
-        // If paywalls haven't loaded yet, use persisted trigger entitlement if available
+        // If paywalls haven't loaded yet, use persisted trigger entitlement if available (which cached should reflect)
         if !Helium.shared.paywallsLoaded() {
-            return cache.entitledForTrigger[trigger]
+            let cachedResult = cache.entitledForTrigger[trigger]
+            if !considerAssociatedSubscriptions {
+                return cachedResult
+            } else {
+                if cachedResult == true {
+                    return true
+                }
+                // We do not know for sure since we cannot look at associated subscriptions, so return nil
+                return nil
+            }
         }
 
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
@@ -276,8 +286,8 @@ actor HeliumEntitlementsManager {
             }
         }
 
-        // Cache and persist the result for this trigger
-        if cache.entitledForTrigger[trigger] != result {
+        // Only cache the strict (false) mode result.
+        if !considerAssociatedSubscriptions, cache.entitledForTrigger[trigger] != result {
             cache.entitledForTrigger[trigger] = result
             saveEntitlements()
         }
@@ -460,7 +470,7 @@ actor HeliumEntitlementsManager {
         return subscriptions
     }
     
-    /// Clears all cached data and forces a refresh on the next access.
+    /// Marks caches stale so the next access refetches.
     func invalidateCache() async {
         cache.lastTransactionsLoadedTime = nil
         cache.subscriptionStatuses.removeAll()
@@ -529,12 +539,24 @@ actor HeliumEntitlementsManager {
         }
     }
 
-    /// Refreshes the entitledForTrigger cache for all known triggers
+    /// Refreshes the entitledForTrigger cache for all known triggers.
     private func refreshEntitledForTriggerCache() async {
         let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
+        let purchasedIds = await purchasedProductIds()
+        var anyChanged = false
         for trigger in triggers {
-            // This will compute and cache the entitlement status for each trigger
-            let _ = await hasEntitlementForPaywall(trigger: trigger, considerAssociatedSubscriptions: false)
+            guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
+                continue
+            }
+            let productIds = paywallInfo.productIdsIncludingWebProductIds
+            let result = productIds.contains { purchasedIds.contains($0) }
+            if cache.entitledForTrigger[trigger] != result {
+                cache.entitledForTrigger[trigger] = result
+                anyChanged = true
+            }
+        }
+        if anyChanged {
+            saveEntitlements()
         }
     }
     
