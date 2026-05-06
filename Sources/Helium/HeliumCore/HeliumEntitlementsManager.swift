@@ -61,7 +61,8 @@ actor HeliumEntitlementsManager {
         /// Entitlements from persisted data, used before real transactions are loaded
         var persistedEntitlements: [PersistedEntitlement] = []
 
-        /// Cached entitlement status per trigger, persisted for use before paywalls load
+        /// Cached entitlement status per trigger, persisted for use before paywalls load.
+        /// Only holds strict-mode results (considerAssociatedSubscriptions == false).
         var entitledForTrigger: [String: Bool] = [:]
 
         func needsTransactionsSync(resetInterval: TimeInterval) -> Bool {
@@ -250,9 +251,18 @@ actor HeliumEntitlementsManager {
         trigger: String,
         considerAssociatedSubscriptions: Bool
     ) async -> Bool? {
-        // If paywalls haven't loaded yet, use persisted trigger entitlement if available
+        // If paywalls haven't loaded yet, use persisted trigger entitlement if available (which cached should reflect)
         if !Helium.shared.paywallsLoaded() {
-            return cache.entitledForTrigger[trigger]
+            let cachedResult = cache.entitledForTrigger[trigger]
+            if !considerAssociatedSubscriptions {
+                return cachedResult
+            } else {
+                if cachedResult == true {
+                    return true
+                }
+                // We do not know for sure since we cannot look at associated subscriptions, so return nil
+                return nil
+            }
         }
 
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
@@ -276,8 +286,8 @@ actor HeliumEntitlementsManager {
             }
         }
 
-        // Cache and persist the result for this trigger
-        if cache.entitledForTrigger[trigger] != result {
+        // Only cache the strict (false) mode result.
+        if !considerAssociatedSubscriptions, cache.entitledForTrigger[trigger] != result {
             cache.entitledForTrigger[trigger] = result
             saveEntitlements()
         }
