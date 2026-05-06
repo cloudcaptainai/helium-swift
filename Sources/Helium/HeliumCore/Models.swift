@@ -128,6 +128,21 @@ public struct HeliumFetchedConfig: Codable {
     
     var paddleProducts: [String: ServerProductPrice]?
     var paddleCustomerId: String?
+
+    /// Paddle client-side token for the org, returned by /on-launch when the
+    /// org has Paddle products configured. Used by the SDK pre-fetch path
+    /// (HEL-5326) to call Paddle's /transaction-checkout BFF directly during
+    /// paywall presentation, pre-warming the Apple Pay flow so user-perceived
+    /// latency moves from "frozen Subscribe button" to "behind Face ID's
+    /// processing spinner."
+    ///
+    /// Publishable by design — same auth Paddle's checkout-front-end uses in
+    /// the browser — so storing it on the SDK side carries no new
+    /// secrets-handling risk.
+    ///
+    /// Nil when the org has no Paddle products configured (bandit omits the
+    /// JSON key entirely in that case).
+    var paddleClientToken: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for
