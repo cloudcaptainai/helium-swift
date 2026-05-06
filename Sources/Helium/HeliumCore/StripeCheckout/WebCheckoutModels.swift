@@ -131,6 +131,23 @@ struct UpdateCustomerMetadataResponse: Decodable {
     let requestId: String?
 }
 
+/// Response from bandit's `POST /paddle/create-transaction-for-paywall`.
+///
+/// Mirrors the Go-side `PaddleCreateTransactionForPaywallResponse` (in
+/// bandit-server-lite-phoenix/pkg/model/paddle.go). The SDK calls this
+/// endpoint during paywall presentation as the first half of the pre-fetch
+/// chain (HEL-5326): the result is stuffed into the bundle URL's `ctx` so
+/// the bundle in Safari can skip its own bandit + Paddle BFF round-trips.
+///
+/// `paddleCustomerId` is omitted by the bandit when the caller is an unknown
+/// customer (no mapping row yet); decoded as nil here.
+struct PaddleCreateTransactionForPaywallResponse: Decodable {
+    let transactionId: String
+    let paddleCustomerId: String?
+    let isKnownCustomer: Bool
+    let requestId: String
+}
+
 // MARK: - Entitlement Response Types
 
 struct PaymentEntitlementResponse: Codable, Sendable {
@@ -230,6 +247,29 @@ public enum HeliumPaymentAPIError: LocalizedError {
             return "Checkout session has not been completed"
         case .notInitialized:
             return "Helium has not been initialized. Call Helium.initialize() before making payment API calls."
+        }
+    }
+}
+
+/// Errors specific to the SDK pre-fetch path for Paddle web checkout
+/// (HEL-5326). Distinct from `HeliumPaymentAPIError` because the prefetch
+/// flow needs to pattern-match on structured outcomes the generic
+/// `serverError(statusCode:message:)` would flatten away.
+public enum PaddlePrefetchError: LocalizedError {
+    /// Bandit returned 409 with `code: "duplicate_subscription"` —
+    /// the customer already has an active subscription for this product.
+    /// Callers (the prefetch coordinator) translate this into a
+    /// `preCheckResolved` outcome: don't open the bundle URL, fire
+    /// `purchase_already_entitled` analytics, optionally refresh the
+    /// entitlements cache. Mirrors the bundler's `kind: 'alreadyEntitled'`
+    /// handling so the UX is consistent whether we catch the dup
+    /// server-side (here) or in the bundle.
+    case alreadyEntitled(code: String, message: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .alreadyEntitled(_, let message):
+            return message
         }
     }
 }
