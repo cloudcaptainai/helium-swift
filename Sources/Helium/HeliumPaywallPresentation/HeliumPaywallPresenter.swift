@@ -456,11 +456,47 @@ class HeliumPaywallPresenter {
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
+
+        // SDK pre-fetch (HEL-5326): when an in-app paywall opens that has
+        // Paddle web products, fire the bandit + Paddle BFF chain in the
+        // background for each priceId. By the time the user taps Subscribe
+        // (typically after a few seconds of reading), the responses are
+        // cached and the click handler can redirect to Safari with the
+        // results already in `ctx.paddleBootstrap`.
+        //
+        // Fail-open: any missing piece (paywallInfo, paddleClientToken,
+        // empty product list) just means no prefetch happens — bundle
+        // falls back to its own fetch path on click.
+        if let info = paywallVC.paywallSession.paywallInfoWithBackups,
+           let webProducts = info.webProductsOfferedPaddle,
+           !webProducts.isEmpty,
+           let clientToken = HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken,
+           !clientToken.isEmpty {
+            let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: webProducts)
+            if !priceIds.isEmpty {
+                let bundleId = Bundle.main.bundleIdentifier
+                Task { @MainActor in
+                    PaddleCheckoutPrefetchCoordinator.shared.prefetch(
+                        priceIds: priceIds,
+                        paddleClientToken: clientToken,
+                        iosBundleId: bundleId
+                    )
+                }
+            }
+        }
     }
-    
+
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
-        
+
+        // Cancel any in-flight prefetches (HEL-5326). The user has left
+        // without clicking Subscribe; in-flight bandit+BFF tasks would
+        // create wasted Paddle draft transactions. cancelAll() also
+        // clears the cache so the next paywall presentation starts fresh.
+        Task { @MainActor in
+            PaddleCheckoutPrefetchCoordinator.shared.cancelAll()
+        }
+
         // Call onEntitled if this session had a successful purchase/restore
         let sessionId = paywallVC.paywallSession.sessionId
         var wasEntitled = false

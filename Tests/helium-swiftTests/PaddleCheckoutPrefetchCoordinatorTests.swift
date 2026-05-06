@@ -255,6 +255,101 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     // MARK: - parallelism
 
+    // MARK: - Bootstrap encoding for ctx (Stage 6)
+
+    /// `.ready` outcomes encode into the ctx as a `paddleBootstrap` object
+    /// the bundler reads to skip its own bandit + BFF round-trips. The
+    /// banditResponse fields are flat (typed ones we already decoded);
+    /// the paddleCheckoutResponse is the full raw Paddle BFF body so the
+    /// bundle's existing decoder can consume it.
+    func testEncodeBootstrapToCtx_returnsDict_whenReady() throws {
+        let bandit = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_test",
+            paddleCustomerId: "ctm_test",
+            isKnownCustomer: true,
+            requestId: "req_test"
+        )
+        let paddleBody = """
+        {"data":{"id":"che_x","transaction_id":"txn_test","status":"draft"}}
+        """.data(using: .utf8)!
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: paddleBody,
+            checkoutId: "che_x",
+            transactionId: "txn_test"
+        )
+        let outcome: PaddlePrefetchOutcome = .ready(bandit: bandit, paddle: paddle)
+
+        let dict = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome))
+
+        let banditDict = try XCTUnwrap(dict["banditResponse"] as? [String: Any])
+        XCTAssertEqual(banditDict["transactionId"] as? String, "txn_test")
+        XCTAssertEqual(banditDict["paddleCustomerId"] as? String, "ctm_test")
+        XCTAssertEqual(banditDict["isKnownCustomer"] as? Bool, true)
+
+        // paddleCheckoutResponse must round-trip the full Paddle response —
+        // bundle reads many fields off this (currency_code, ip_geo_*, items,
+        // totals, methods_available[].stripe_options.api_key, etc.). Lock in
+        // that we don't accidentally pluck just a few fields.
+        let paddleDict = try XCTUnwrap(dict["paddleCheckoutResponse"] as? [String: Any])
+        let paddleData = try XCTUnwrap(paddleDict["data"] as? [String: Any])
+        XCTAssertEqual(paddleData["id"] as? String, "che_x")
+        XCTAssertEqual(paddleData["transaction_id"] as? String, "txn_test")
+    }
+
+    func testEncodeBootstrapToCtx_returnsNil_whenAlreadyEntitled() {
+        // alreadyEntitled doesn't go through Safari at all, so there's
+        // nothing to encode in ctx. Stage 5's caller short-circuits before
+        // building the URL.
+        let outcome: PaddlePrefetchOutcome = .alreadyEntitled(code: "duplicate_subscription", message: "x")
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome))
+    }
+
+    func testEncodeBootstrapToCtx_returnsNil_whenFailedOrNotStarted() {
+        // Both should fall back to the bundle doing its own fetch — no
+        // ctx.paddleBootstrap means the bundle hits its existing code path.
+        let failed: PaddlePrefetchOutcome = .failed(error: NSError(domain: "x", code: 0))
+        let notStarted: PaddlePrefetchOutcome = .notStarted
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(failed))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(notStarted))
+    }
+
+    // MARK: - Composite key extraction (Stage 5 integration helper)
+
+    /// Paywall info stores Paddle products as "pro_xxx:pri_yyy" composite
+    /// keys (mirrors Stripe's encoding). The coordinator needs to extract
+    /// just the priceId portion to pass to the bandit + BFF chain.
+    func testExtractPriceIds_extractsPriPrefixedSuffixesFromCompositeKeys() {
+        let composites = [
+            "pro_01abc:pri_01xyz",
+            "pro_01def:pri_01def_yearly",
+        ]
+        let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: composites)
+        XCTAssertEqual(priceIds, ["pri_01xyz", "pri_01def_yearly"])
+    }
+
+    func testExtractPriceIds_skipsEntriesWithoutColonOrPriPrefix() {
+        // Defensive: a malformed composite key shouldn't crash the prefetch
+        // chain. Skip it and proceed with whatever IS valid.
+        let composites = [
+            "pro_01abc:pri_valid",
+            "no_colon_here",
+            "pro_01def:NOT_pri_prefixed",
+            "",
+            ":pri_orphan",
+        ]
+        let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: composites)
+        // ":pri_orphan" splits on ":" → last is "pri_orphan", which has the
+        // pri_ prefix — so it gets through. That's fine; bandit will reject
+        // an actually-invalid priceId at the API boundary anyway.
+        XCTAssertEqual(priceIds, ["pri_valid", "pri_orphan"])
+    }
+
+    func testExtractPriceIds_returnsEmptyForEmptyInput() {
+        XCTAssertEqual(PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: []), [])
+    }
+
+    // MARK: - Parallel prefetch
+
     func testPrefetch_runsMultiplePriceIdsInParallel() async throws {
         // Both succeed; coordinator should produce ready outcomes for both.
         MockURLProtocol.requestHandler = { request in

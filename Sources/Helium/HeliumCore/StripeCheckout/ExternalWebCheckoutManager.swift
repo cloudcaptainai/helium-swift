@@ -92,6 +92,36 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
+        // SDK prefetch lookup (HEL-5326): for the Paddle path, await the
+        // outcome of the in-flight prefetch (or get it instantly if it's
+        // already done). Behavior per outcome:
+        //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
+        //     opening Safari to a guaranteed-failure UX).
+        //   * .ready → encode into ctx so the bundle skips its own fetch.
+        //   * .failed / .notStarted → fall back to opening Safari without
+        //     the bootstrap (current behavior, no regression).
+        var paddleBootstrapDict: [String: Any]? = nil
+        if provider.providerSlug == "paddle" {
+            let priceId = Self.priceIdFromComposite(productKey)
+            if let priceId = priceId {
+                let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(priceId: priceId)
+                switch outcome {
+                case .alreadyEntitled(let code, let message):
+                    HeliumLogger.log(.debug, category: .entitlements,
+                                     "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
+                    // Mirror the pre-checkout entitlement-already-owns short-circuit
+                    // (line ~185 above): no browser open, refresh entitlements so
+                    // future flows reflect the server's view.
+                    entitlementsSource.invalidateCache()
+                    return .preCheckResolved
+                case .ready:
+                    paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome)
+                case .failed, .notStarted:
+                    paddleBootstrapDict = nil // fall back to bundle's own fetch
+                }
+            }
+        }
+
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -99,10 +129,22 @@ public class ExternalWebCheckoutManager: NSObject {
             triggerName: triggerName,
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
-            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups)
+            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
+            paddleBootstrap: paddleBootstrapDict
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
+    }
+
+    /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
+    /// Internal helper exposed for symmetry with PaddleCheckoutPrefetchCoordinator's
+    /// extractPriceIds — both consume the same composite key shape.
+    private static func priceIdFromComposite(_ key: String) -> String? {
+        guard let suffix = key.split(separator: ":").last.map(String.init),
+              suffix.hasPrefix("pri_") else {
+            return nil
+        }
+        return suffix
     }
 
     /// True if every offered product is intro-offer eligible.
@@ -124,6 +166,13 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Appends analytics, identity, and routing query parameters to a checkout URL
     /// as a single base64-encoded JSON `ctx` query parameter.
+    ///
+    /// `paddleBootstrap` (HEL-5326) is the SDK pre-fetch payload — the bandit
+    /// and Paddle BFF responses gathered during in-app paywall display.
+    /// When non-nil, the bundle in Safari reads it from `ctx.paddleBootstrap`
+    /// and skips its own bandit + BFF round-trips entirely. Pass nil for the
+    /// Stripe path (no prefetch) or when the prefetch wasn't ready /
+    /// failed (bundle does its own fetch as fallback).
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -131,7 +180,8 @@ public class ExternalWebCheckoutManager: NSObject {
         triggerName: String,
         successURL: String,
         cancelURL: String,
-        introOfferEligible: Bool
+        introOfferEligible: Bool,
+        paddleBootstrap: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
@@ -151,14 +201,22 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
-        
+
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
-        
+
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
                 ctx[key] = stringValue
             }
+        }
+
+        // SDK prefetch (HEL-5326): when present, the bundle in Safari uses
+        // these pre-fetched responses instead of making its own bandit + BFF
+        // round-trips. See PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx
+        // for the contract.
+        if let paddleBootstrap = paddleBootstrap {
+            ctx["paddleBootstrap"] = paddleBootstrap
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)

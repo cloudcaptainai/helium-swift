@@ -143,6 +143,68 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
+    // MARK: - ctx encoding (Stage 6)
+
+    /// Encodes a `.ready` outcome into a JSON-friendly dict that
+    /// `ExternalWebCheckoutManager.buildEnrichedCheckoutURL` merges into
+    /// `ctx.paddleBootstrap`. The bundler in Safari reads this and skips
+    /// its own bandit + Paddle BFF round-trips entirely.
+    ///
+    /// Returns nil for `.alreadyEntitled` (Stage 5 short-circuits before
+    /// building the URL), `.failed`, and `.notStarted` (those fall back to
+    /// the bundle's existing fetch path with no ctx hint).
+    ///
+    /// Shape:
+    /// ```
+    /// {
+    ///     "banditResponse": { "transactionId", "paddleCustomerId"?, "isKnownCustomer", "requestId" },
+    ///     "paddleCheckoutResponse": { ... full Paddle BFF response ... }
+    /// }
+    /// ```
+    nonisolated static func encodeBootstrapToCtx(_ outcome: PaddlePrefetchOutcome) -> [String: Any]? {
+        guard case let .ready(bandit, paddle) = outcome else {
+            return nil
+        }
+
+        var banditDict: [String: Any] = [
+            "transactionId": bandit.transactionId,
+            "isKnownCustomer": bandit.isKnownCustomer,
+            "requestId": bandit.requestId,
+        ]
+        if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {
+            banditDict["paddleCustomerId"] = customerId
+        }
+
+        // Paddle's BFF response is rich and only the bundle parses it
+        // fully — round-trip the full body so we don't accidentally drop
+        // fields. Stage 3's PaddleTransactionCheckoutResult preserves the
+        // raw bytes specifically for this purpose.
+        let paddleDict = (try? JSONSerialization.jsonObject(with: paddle.rawBody)) as? [String: Any] ?? [:]
+
+        return [
+            "banditResponse": banditDict,
+            "paddleCheckoutResponse": paddleDict,
+        ]
+    }
+
+    // MARK: - Composite key helpers
+
+    /// Extracts the priceId portion from "pro_xxx:pri_yyy" composite keys
+    /// returned in `HeliumPaywallInfo.webProductsOfferedPaddle`. Filters
+    /// out malformed entries (no colon, suffix doesn't start with `pri_`)
+    /// so a single bad row in the on-launch payload doesn't kill the
+    /// prefetch chain — bandit will reject any priceId we send that
+    /// doesn't actually exist anyway.
+    nonisolated static func extractPriceIds(from composites: [String]) -> [String] {
+        return composites.compactMap { key in
+            guard let suffix = key.split(separator: ":").last.map(String.init),
+                  suffix.hasPrefix("pri_") else {
+                return nil
+            }
+            return suffix
+        }
+    }
+
     // MARK: - Internal chain runner
 
     /// Bandit → BFF, with the alreadyEntitled short-circuit. Pure function
