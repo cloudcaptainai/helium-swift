@@ -131,12 +131,6 @@ actor HeliumEntitlementsManager {
         }
     }
 
-    /// Clears persisted entitlements
-    private func clearPersistedEntitlements() {
-        guard let fileURL = entitlementsFileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
     deinit {
         updateListenerTask?.cancel()
         debounceTask?.cancel()
@@ -468,8 +462,8 @@ actor HeliumEntitlementsManager {
     
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
-        cache = EntitlementsCache()
-        clearPersistedEntitlements()
+        cache.lastTransactionsLoadedTime = nil
+        cache.subscriptionStatuses.removeAll()
         for source in allThirdPartySources {
             source.invalidateCache()
         }
