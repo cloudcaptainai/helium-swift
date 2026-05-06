@@ -256,12 +256,16 @@ actor HeliumEntitlementsManager {
         }
 
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+
         let productIds = paywallInfo?.productIdsIncludingWebProductIds ?? []
 
         var result: Bool
+
+        // Just see if any of the paywall products are purchased/active
         if !considerAssociatedSubscriptions {
             result = await purchasedProductIds().contains { productIds.contains($0) }
         } else {
+            // Check products and associated subscription groups
             let thirdPartyIds = await allThirdPartyEntitledProductIds()
             result = false
             for productId in productIds {
@@ -272,10 +276,12 @@ actor HeliumEntitlementsManager {
             }
         }
 
+        // Cache and persist the result for this trigger
         if cache.entitledForTrigger[trigger] != result {
             cache.entitledForTrigger[trigger] = result
             saveEntitlements()
         }
+
         return result
     }
     
