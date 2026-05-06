@@ -103,7 +103,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
 
     /// Marks the cache stale so the next read triggers a refresh. Keeps current
     /// data visible in the meantime.
-    func invalidateCache() {
+    public func invalidateCache() {
         lock.withLock {
             guard let current = cached else { return }
             cached = CachedSnapshot(
