@@ -36,7 +36,12 @@ actor HeliumEntitlementsManager {
         return result
     }
     
-    private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
+    /// How long until the cache should be considered stale, in seconds.
+    private let cacheResetInterval: TimeInterval = {
+        let isProduction = AppReceiptsHelper.shared.getEnvironment() == AppReceiptsHelper.Environment.production.rawValue
+        let numMinutes: TimeInterval = isProduction ? 30 : 3
+        return 60 * numMinutes
+    }()
     
     /// Debounce interval for transaction updates in seconds
     private let debounceInterval: TimeInterval = 1
@@ -465,6 +470,8 @@ actor HeliumEntitlementsManager {
     func invalidateCache() async {
         cache = EntitlementsCache()
         clearPersistedEntitlements()
+        paddleEntitlementsSource.invalidateCache()
+        stripeEntitlementsSource.invalidateCache()
     }
     
     func updateAfterPurchase(productID: String, transaction: Transaction?) async {

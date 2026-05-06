@@ -921,6 +921,11 @@ public class HeliumEntitlements {
         return !productIds.isEmpty
     }
     
+    /// Clears all cached data and forces a refresh on next entitlements call.
+    public func invalidateCache() async {
+        await HeliumEntitlementsManager.shared.invalidateCache()
+    }
+    
 }
 
 @available(iOS 15.0, *)
