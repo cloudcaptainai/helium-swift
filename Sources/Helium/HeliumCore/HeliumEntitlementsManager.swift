@@ -36,7 +36,12 @@ actor HeliumEntitlementsManager {
         return result
     }
     
-    private let cacheResetInterval: TimeInterval = 60 * 30 // in seconds
+    /// How long until the cache should be considered stale, in seconds.
+    private var cacheResetInterval: TimeInterval {
+        let isProduction = AppReceiptsHelper.shared.getEnvironment() == AppReceiptsHelper.Environment.production.rawValue
+        let numMinutes: TimeInterval = isProduction ? 30 : 3
+        return 60 * numMinutes
+    }
     
     /// Debounce interval for transaction updates in seconds
     private let debounceInterval: TimeInterval = 1
@@ -124,12 +129,6 @@ actor HeliumEntitlementsManager {
         } catch {
             HeliumLogger.log(.warn, category: .entitlements, "Failed to persist entitlements to file", metadata: ["error": error.localizedDescription])
         }
-    }
-
-    /// Clears persisted entitlements
-    private func clearPersistedEntitlements() {
-        guard let fileURL = entitlementsFileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
     }
 
     deinit {
@@ -463,8 +462,11 @@ actor HeliumEntitlementsManager {
     
     /// Clears all cached data and forces a refresh on the next access.
     func invalidateCache() async {
-        cache = EntitlementsCache()
-        clearPersistedEntitlements()
+        cache.lastTransactionsLoadedTime = nil
+        cache.subscriptionStatuses.removeAll()
+        for source in allThirdPartySources {
+            source.invalidateCache()
+        }
     }
     
     func updateAfterPurchase(productID: String, transaction: Transaction?) async {
