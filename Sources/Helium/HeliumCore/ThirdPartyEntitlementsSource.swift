@@ -19,4 +19,8 @@ public protocol ThirdPartyEntitlementsSource: AnyObject, Sendable {
     
     /// Returns a set of active subscriptions by product ID.
     func activeSubscriptions() async -> Set<String>
+
+    /// Called when the SDK's entitlement cache is invalidated (e.g. via `Helium.shared.invalidateEntitlementsCache()`).
+    /// Implementations should clear any cached entitlement data so the next query fetches fresh state.
+    func invalidateCache()
 }
