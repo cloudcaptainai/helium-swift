@@ -294,12 +294,10 @@ final class PaddleCheckoutPrefetchCoordinator {
     nonisolated static func encodeBootstrapsToCtx(
         outcomesByPriceId: [String: PaddlePrefetchOutcome]
     ) -> [String: Any]? {
-        var result: [String: Any] = [:]
-        for (priceId, outcome) in outcomesByPriceId {
-            guard case let .ready(bandit, paddle) = outcome else { continue }
-            result[priceId] = encodeReadyBootstrap(bandit: bandit, paddle: paddle)
+        return encodeFilteredOutcomes(outcomesByPriceId: outcomesByPriceId) { outcome in
+            guard case let .ready(bandit, paddle) = outcome else { return nil }
+            return encodeReadyBootstrap(bandit: bandit, paddle: paddle)
         }
-        return result.isEmpty ? nil : result
     }
 
     /// Encodes `.alreadyEntitled` outcomes into the map the bundler reads
@@ -323,14 +321,31 @@ final class PaddleCheckoutPrefetchCoordinator {
     nonisolated static func encodeAlreadyEntitledToCtx(
         outcomesByPriceId: [String: PaddlePrefetchOutcome]
     ) -> [String: Any]? {
-        var result: [String: Any] = [:]
-        for (priceId, outcome) in outcomesByPriceId {
-            guard case let .alreadyEntitled(code, message, existingSubscriptionId) = outcome else { continue }
+        return encodeFilteredOutcomes(outcomesByPriceId: outcomesByPriceId) { outcome in
+            guard case let .alreadyEntitled(code, message, existingSubscriptionId) = outcome else { return nil }
             var entry: [String: Any] = ["code": code, "message": message]
             if let subId = existingSubscriptionId, !subId.isEmpty {
                 entry["existingSubscriptionId"] = subId
             }
-            result[priceId] = entry
+            return entry
+        }
+    }
+
+    /// Generic priceId-keyed encoder: applies `transform` to each
+    /// outcome, accumulates non-nil results into a map keyed by priceId,
+    /// returns nil when nothing matched (so the caller can omit the
+    /// field entirely from the ctx instead of shipping an empty `{}`).
+    /// Shared between `encodeBootstrapsToCtx` (filters `.ready`) and
+    /// `encodeAlreadyEntitledToCtx` (filters `.alreadyEntitled`).
+    private nonisolated static func encodeFilteredOutcomes(
+        outcomesByPriceId: [String: PaddlePrefetchOutcome],
+        transform: (PaddlePrefetchOutcome) -> [String: Any]?
+    ) -> [String: Any]? {
+        var result: [String: Any] = [:]
+        for (priceId, outcome) in outcomesByPriceId {
+            if let entry = transform(outcome) {
+                result[priceId] = entry
+            }
         }
         return result.isEmpty ? nil : result
     }
@@ -489,19 +504,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         tappedPriceId: String
     ) -> (code: String, message: String, existingSubscriptionId: String?)? {
         if case let .alreadyEntitled(code, message, existingSubscriptionId) = outcomes[tappedPriceId] ?? .notStarted,
-           isRestorableAlreadyEntitledCode(code) {
+           PaddleErrorCodes.isRestorable(code) {
             return (code, message, existingSubscriptionId)
         }
         return nil
-    }
-
-    /// Mirrors bundler-service's `routePaddle409`: only
-    /// `duplicate_subscription` is treated as a "user owns this, fire
-    /// restored" outcome. Other codes are alreadyEntitled-class but not
-    /// restorable — they should flow through the bundle for the failure-
-    /// routing UX (paymentFailureUrl redirect with an error message).
-    nonisolated static func isRestorableAlreadyEntitledCode(_ code: String) -> Bool {
-        return code == "duplicate_subscription"
     }
 
     // MARK: - Composite key helpers

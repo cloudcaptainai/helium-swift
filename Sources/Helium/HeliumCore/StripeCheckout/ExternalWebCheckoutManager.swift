@@ -150,7 +150,7 @@ public class ExternalWebCheckoutManager: NSObject {
             // priceIds being entitled doesn't block this purchase, and
             // non-restorable codes (trial_already_used) flow through the
             // bundle for its failure-routing UX. See `tappedShortCircuit`
-            // and `isRestorableAlreadyEntitledCode`.
+            // and `PaddleErrorCodes.isRestorable`.
             if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
                 in: outcomes, tappedPriceId: tappedPriceId
             ) {
