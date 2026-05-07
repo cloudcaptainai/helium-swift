@@ -5,6 +5,9 @@ class HeliumControlPanelService {
     private init() {}
 
     var allowPaywallControlPanel: Bool {
+        if HeliumFetchedConfigManager.shared.fetchedConfig?.enableProductionPaywallPreviews == true {
+            return true
+        }
         let env = AppReceiptsHelper.shared.getEnvironment()
         return env == AppReceiptsHelper.Environment.debug.rawValue
             || env == AppReceiptsHelper.Environment.sandbox.rawValue

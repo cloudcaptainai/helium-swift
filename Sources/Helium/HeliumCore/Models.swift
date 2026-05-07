@@ -125,6 +125,7 @@ public struct HeliumFetchedConfig: Codable {
     
     var stripeProducts: [String: ServerProductPrice]?
     var stripeCustomerId: String?
+    var enableProductionPaywallPreviews: Bool?
     
     var paddleProducts: [String: ServerProductPrice]?
     var paddleCustomerId: String?
