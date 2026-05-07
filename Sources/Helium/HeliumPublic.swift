@@ -967,7 +967,7 @@ public enum HeliumPurchaseError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .appAccountTokenMismatch:
-            return "If providing appAccountToken, this value MUST match Helium's appAttributionToken, which you can set in initialize or with Helium.shared.setAppAttributionToken()."
+            return "If providing appAccountToken, it MUST match Helium's appAccountToken. Set via Helium.identify.appAccountToken = <UUID>, ideally before initializing Helium."
         }
     }
 }

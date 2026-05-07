@@ -485,28 +485,35 @@ actor HeliumEntitlementsManager {
             return
         }
         
+        var storeKitNotInSyncYet: Bool = false
         if !cache.transactions.contains(where: { $0.productID == productID }) {
             cache.lastTransactionsLoadedTime = nil
             await loadEntitlementsIfNeeded()
-            // If it's still not there, add it manually (if transaction available)
-            if let transaction {
-                if !cache.transactions.contains(where: { $0.productID == productID }) {
+            if !cache.transactions.contains(where: { $0.productID == productID }) {
+                storeKitNotInSyncYet = true
+                if let transaction {
+                    // StoreKit is lagging — append the just-purchased transaction so
+                    // the trigger cache refresh below sees the correct purchased set.
                     cache.transactions.append(transaction)
-                    // Persist the updated entitlements
                     saveEntitlements()
                 }
-            } else {
-                cache.lastTransactionsLoadedTime = nil
             }
         }
 
-        cache.subscriptionStatuses[productID] = nil
-        let _ = await getSubscriptionStatus(for: productID)
-        
-        // Check paywalls downloaded to be safer. If non-fallback, paywalls should be downloaded. If fallback, paywalls
+        // Check if paywalls downloaded before updating per-trigger entitlements.
+        // If non-fallback, paywalls should be downloaded. If fallback, paywalls
         // may or may not be downloaded.
         if Helium.shared.paywallsLoaded() {
             await refreshEntitledForTriggerCache()
+        }
+        
+        // Mark subscription status stale for this product
+        cache.subscriptionStatuses[productID] = nil
+
+        if storeKitNotInSyncYet {
+            // Force a fresh StoreKit sync on next external access; by then StoreKit
+            // should have caught up. The transaction listener should also cause a refresh.
+            cache.lastTransactionsLoadedTime = nil
         }
     }
 
