@@ -503,7 +503,7 @@ actor HeliumEntitlementsManager {
         // If non-fallback, paywalls should be downloaded. If fallback, paywalls
         // may or may not be downloaded.
         if Helium.shared.paywallsLoaded() {
-            await refreshEntitledForTriggerCache()
+            await refreshEntitledForTriggerCache(justPurchasedProductId: storeKitNotInSyncYet ? productID : nil)
         }
         
         // Mark subscription status stale for this product
@@ -546,9 +546,12 @@ actor HeliumEntitlementsManager {
     }
 
     /// Refreshes the entitledForTrigger cache for all known triggers.
-    private func refreshEntitledForTriggerCache() async {
+    private func refreshEntitledForTriggerCache(justPurchasedProductId: String? = nil) async {
         let triggers = HeliumFetchedConfigManager.shared.getFetchedTriggerNames()
-        let purchasedIds = await purchasedProductIds()
+        var purchasedIds = Set(await purchasedProductIds())
+        if let justPurchasedProductId {
+            purchasedIds.insert(justPurchasedProductId)
+        }
         var anyChanged = false
         for trigger in triggers {
             guard let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) else {
