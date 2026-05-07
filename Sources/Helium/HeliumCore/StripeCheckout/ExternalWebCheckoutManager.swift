@@ -114,7 +114,10 @@ public class ExternalWebCheckoutManager: NSObject {
                 entitlementsSource.invalidateCache()
                 return .preCheckResolved
             case .ready:
-                paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome)
+                paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(
+                    outcome,
+                    priceId: priceId
+                )
             case .failed, .notStarted:
                 paddleBootstrapDict = nil // default to bundle's own fetch
             }

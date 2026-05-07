@@ -223,14 +223,25 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// building the URL), `.failed`, and `.notStarted` (those default to
     /// the bundle's existing fetch path with no ctx hint).
     ///
+    /// `priceId` is included as an explicit top-level field so the bundler
+    /// can validate the bootstrap matches the user's currently-selected
+    /// product without digging it out of Paddle's response shape (Bugbot
+    /// review on bundler PR #63 flagged that relying on
+    /// `paddleCheckoutResponse.data.items[0].price_id` would silently
+    /// disable the optimization if Paddle ever renamed that field).
+    ///
     /// Shape:
     /// ```
     /// {
+    ///     "priceId": "pri_xxx",
     ///     "banditResponse": { "transactionId", "paddleCustomerId"?, "isKnownCustomer", "requestId" },
     ///     "paddleCheckoutResponse": { ... full Paddle BFF response ... }
     /// }
     /// ```
-    nonisolated static func encodeBootstrapToCtx(_ outcome: PaddlePrefetchOutcome) -> [String: Any]? {
+    nonisolated static func encodeBootstrapToCtx(
+        _ outcome: PaddlePrefetchOutcome,
+        priceId: String
+    ) -> [String: Any]? {
         guard case let .ready(bandit, paddle) = outcome else {
             return nil
         }
@@ -251,6 +262,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         let paddleDict = (try? JSONSerialization.jsonObject(with: paddle.rawBody)) as? [String: Any] ?? [:]
 
         return [
+            "priceId": priceId,
             "banditResponse": banditDict,
             "paddleCheckoutResponse": paddleDict,
         ]

@@ -377,7 +377,18 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         )
         let outcome: PaddlePrefetchOutcome = .ready(bandit: bandit, paddle: paddle)
 
-        let dict = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome))
+        let dict = try XCTUnwrap(
+            PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(
+                outcome,
+                priceId: "pri_xyz"
+            )
+        )
+
+        // priceId is included explicitly so the bundler can match against
+        // the user's selected product without reading it out of Paddle's
+        // response shape (Bugbot review on bundler PR #63 — relying on
+        // items[0].price_id is a fragile schema dependency).
+        XCTAssertEqual(dict["priceId"] as? String, "pri_xyz")
 
         let banditDict = try XCTUnwrap(dict["banditResponse"] as? [String: Any])
         XCTAssertEqual(banditDict["transactionId"] as? String, "txn_test")
@@ -399,7 +410,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         // nothing to encode in ctx. Stage 5's caller short-circuits before
         // building the URL.
         let outcome: PaddlePrefetchOutcome = .alreadyEntitled(code: "duplicate_subscription", message: "x")
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome, priceId: "pri_xyz"))
     }
 
     func testEncodeBootstrapToCtx_returnsNil_whenFailedOrNotStarted() {
@@ -407,8 +418,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         // ctx.paddleBootstrap means the bundle hits its existing code path.
         let failed: PaddlePrefetchOutcome = .failed(error: NSError(domain: "x", code: 0))
         let notStarted: PaddlePrefetchOutcome = .notStarted
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(failed))
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(notStarted))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(failed, priceId: "pri_xyz"))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(notStarted, priceId: "pri_xyz"))
     }
 
     // MARK: - Composite key extraction (Stage 5 integration helper)
