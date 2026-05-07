@@ -264,29 +264,44 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     /// On timeout we surface a `.failed` outcome so the caller falls
     /// through to the safety-net path (open Safari without ctx, bundle
     /// does its own fetch) instead of presenting a frozen UI.
+    ///
+    /// CRITICAL: this test asserts elapsed wall-clock time, not just the
+    /// outcome kind. A buggy implementation (e.g. one using
+    /// `withTaskGroup` whose `await task.value` child doesn't respond to
+    /// cancellation — Bugbot's second flag on this method) would still
+    /// eventually return `.failed` because the underlying URLSession
+    /// would eventually finish and the JSON parse would fail. The
+    /// elapsed-time check is what proves the timeout actually fired.
     func testAwaitOutcome_timesOut_whenInflightTaskExceedsBudget() async throws {
-        // Make the bandit response hang past our timeout. We never resolve
-        // the promise — the test just confirms we return on the timeout
-        // instead of blocking forever.
+        // Hang the URLProtocol thread for 2s — well past the 100ms timeout
+        // we'll set on awaitOutcome. If the implementation respects the
+        // timeout, awaitOutcome returns in ~100ms regardless of how long
+        // this Thread.sleep takes.
         MockURLProtocol.requestHandler = { _ in
-            // Sleep longer than the test's timeout. The MockURLProtocol
-            // call site is synchronous, so a Thread.sleep is the cleanest
-            // way to simulate a slow network without bringing in Combine.
             Thread.sleep(forTimeInterval: 2.0)
-            // We won't reach here in time but we still need to return
-            // something to satisfy the URLProtocol contract.
             let response = HTTPURLResponse(url: URL(string: "https://x")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, "{}".data(using: .utf8)!)
         }
 
         coordinator.prefetch(priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_slow", timeout: 0.05)
+        let start = Date()
+        let outcome = await coordinator.awaitOutcome(priceId: "pri_slow", timeout: 0.1)
+        let elapsed = Date().timeIntervalSince(start)
 
         guard case .failed = outcome else {
             XCTFail("Expected .failed (timeout) when the in-flight task exceeds the budget; got \(outcome)")
             return
         }
+
+        // Elapsed should be ~100ms (the timeout). 1s is a generous upper
+        // bound that still rules out the buggy "wait for the underlying
+        // task to actually complete" behavior (which would be ~2s).
+        XCTAssertLessThan(
+            elapsed,
+            1.0,
+            "awaitOutcome with timeout=0.1s should return in well under 1s even if the underlying task hasn't completed; took \(elapsed)s — timeout isn't actually firing"
+        )
     }
 
     /// Default-timeout behavior: when the task completes well within the

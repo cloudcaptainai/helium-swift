@@ -12,6 +12,28 @@ import Foundation
 ///   * `.notStarted` → no prefetch was ever scheduled for this priceId
 ///     (paywall didn't have it, or was dismissed before prefetch ran).
 ///     Same default path as `.failed`.
+/// One-shot resume guard for `withCheckedContinuation` races. Two observer
+/// Tasks attempt to resume the continuation; only the first to call
+/// `tryResume()` wins. Used by `awaitOutcome` to race the cached prefetch
+/// Task against a timeout — the continuation must resume exactly once,
+/// regardless of which Task gets there first.
+///
+/// `@unchecked Sendable` because the lock provides the synchronization
+/// the compiler can't verify on its own. The one mutable field
+/// (`resumed`) is only ever touched while the lock is held.
+private final class ResumeGuard: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resumed = false
+
+    func tryResume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if resumed { return false }
+        resumed = true
+        return true
+    }
+}
+
 /// Surfaced as the `Error` value of a `.failed` outcome when
 /// `awaitOutcome` exceeds its timeout budget. Carries the priceId and
 /// the budget so logs can correlate the timeout with which prefetch
@@ -131,6 +153,16 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// does its own fetch — current behavior, no regression). The
     /// in-flight Task continues to completion in the background; we just
     /// stop observing it from the click handler's perspective.
+    ///
+    /// Implementation note: an earlier version used `withTaskGroup`, but
+    /// `withTaskGroup` waits for ALL child tasks to complete before
+    /// returning — and `await task.value` doesn't respond to cooperative
+    /// cancellation (Task.value just waits for the underlying Task, no
+    /// matter what). So the group would return only when the cached Task
+    /// actually finished, defeating the timeout (Bugbot's second flag on
+    /// this method). The fix is `withCheckedContinuation` plus a one-shot
+    /// guard — the function returns as soon as either observer Task wins
+    /// the race, regardless of what the loser is doing.
     func awaitOutcome(
         priceId: String,
         timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
@@ -139,27 +171,42 @@ final class PaddleCheckoutPrefetchCoordinator {
             return .notStarted
         }
 
-        // Race the cached Task against a sleep. Whichever finishes first
-        // wins; we cancel the loser. Returning `nil` from the timeout
-        // branch is our timeout sentinel (the cached Task always returns
-        // a `PaddlePrefetchOutcome`, never `nil`).
-        return await withTaskGroup(of: PaddlePrefetchOutcome?.self) { group in
-            group.addTask { await task.value }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                return nil
+        let timeoutNanos = UInt64(timeout * 1_000_000_000)
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<PaddlePrefetchOutcome, Never>) in
+            // One-shot resume guard. Whichever observer Task wins the race
+            // calls `tryResume()`; the loser's call returns false and is a
+            // no-op. Lock-protected so the two observers can't race on the
+            // resumed flag.
+            let resumeGuard = ResumeGuard()
+
+            // Observer 1: wait for the cached Task to complete.
+            // Detached so it doesn't pin MainActor (the coordinator is
+            // @MainActor; plain `Task { }` would inherit that isolation
+            // and serialize the wait against the click handler).
+            Task.detached(priority: .userInitiated) {
+                let outcome = await task.value
+                if resumeGuard.tryResume() {
+                    continuation.resume(returning: outcome)
+                }
+                // If the timeout already fired, the cached Task continues
+                // running in the background — we just don't observe it
+                // from this awaitOutcome call. The cache entry stays
+                // populated, so subsequent awaitOutcome calls for the
+                // same priceId can pick up the eventual result.
             }
 
-            let firstResult = await group.next() ?? nil
-            group.cancelAll()
-
-            if let outcome = firstResult {
-                return outcome
+            // Observer 2: timeout. Task.sleep responds to cancellation
+            // cooperatively (via try?), so a tearDown that cancels in-
+            // flight tasks doesn't leak this observer.
+            Task.detached(priority: .userInitiated) {
+                try? await Task.sleep(nanoseconds: timeoutNanos)
+                if resumeGuard.tryResume() {
+                    continuation.resume(returning: .failed(
+                        error: PaddlePrefetchAwaitTimeout(priceId: priceId, timeout: timeout)
+                    ))
+                }
             }
-            // Timeout fired first. The cached Task continues running in
-            // the background; the click handler proceeds via the
-            // safety-net path.
-            return .failed(error: PaddlePrefetchAwaitTimeout(priceId: priceId, timeout: timeout))
         }
     }
 
