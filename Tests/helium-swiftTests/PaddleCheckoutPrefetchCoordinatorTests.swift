@@ -369,6 +369,145 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
     }
 
+    // MARK: - collectPrefetchOutcomes — tapped blocking, others opportunistic
+
+    /// `collectPrefetchOutcomes` is the click-handler's gather step. It
+    /// awaits the TAPPED priceId with the full default timeout (3s) and
+    /// gathers OTHER priceIds opportunistically with a tiny timeout —
+    /// so a single stuck non-tapped priceId can't block Subscribe.
+    ///
+    /// Without this split, a slow non-tapped priceId would hold the
+    /// click handler for up to the full 3s timeout via `withTaskGroup`'s
+    /// "wait for all children" semantic. Bootstraps for non-tapped
+    /// products are a nice-to-have for product-switching in Safari,
+    /// not worth blocking the click flow.
+    ///
+    /// Test setup: pre-warm `pri_tapped` (so its task is cached-complete
+    /// when collectPrefetchOutcomes runs), then start `pri_slow` whose
+    /// underlying URL response hangs much longer than the opportunistic
+    /// timeout. The structural assertion: the click handler returns
+    /// well before `pri_slow` would naturally complete.
+    func testCollectPrefetchOutcomes_doesNotBlockOnSlowNonTappedPriceIds() async throws {
+        // Step 1: prefetch + complete pri_tapped under a fast handler.
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+        coordinator.prefetch(
+            sessionId: testSessionId,
+            priceIds: ["pri_tapped"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+        // Wait for tapped to fully complete — its task is now cached
+        // as a finished Task that resolves instantly via task.value.
+        _ = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_tapped")
+
+        // Step 2: switch handler — pri_slow hangs for 1s. pri_tapped is
+        // already done; only pri_slow's prefetch will hit this handler.
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                Thread.sleep(forTimeInterval: 1.0)
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_slow").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, self.bffSuccessBody(checkoutId: "che_x", transactionId: "txn_slow").data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+        coordinator.prefetch(
+            sessionId: testSessionId,
+            priceIds: ["pri_slow"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+
+        // Step 3: collect — pri_tapped is cache-hit (instant), pri_slow
+        // is in-flight (1s sleep on URL thread). Phase 1 returns
+        // immediately, Phase 2's opportunistic 5ms timeout fires before
+        // pri_slow's task completes.
+        let start = Date()
+        let outcomes = await coordinator.collectPrefetchOutcomes(
+            sessionId: testSessionId,
+            tappedPriceId: "pri_tapped",
+            otherPriceIds: ["pri_slow"]
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        // Tapped is .ready (cached completion):
+        guard case .ready = outcomes["pri_tapped"] else {
+            XCTFail("Expected pri_tapped to resolve to .ready, got \(String(describing: outcomes["pri_tapped"]))")
+            return
+        }
+
+        // Click handler returned well under pri_slow's 1s URL hang. If
+        // collectPrefetchOutcomes had naively waited for pri_slow with
+        // the default 3s timeout — like the previous TaskGroup-of-all
+        // implementation did — elapsed would be ~1s.
+        XCTAssertLessThan(
+            elapsed, 0.5,
+            "Click handler must not block on slow non-tapped priceIds; took \(elapsed)s"
+        )
+    }
+
+    /// When all priceIds are already complete (cached `.ready` outcomes),
+    /// `collectPrefetchOutcomes` returns ALL of them — opportunistic
+    /// gather is a "best effort if not blocked" pattern, not a "drop the
+    /// non-tapped ones" pattern.
+    func testCollectPrefetchOutcomes_returnsAllOutcomesWhenAlreadyComplete() async throws {
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+
+        coordinator.prefetch(
+            sessionId: testSessionId,
+            priceIds: ["pri_a", "pri_b", "pri_c"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+
+        // Wait for prefetch to complete (use awaitOutcome to gate).
+        _ = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_a")
+        _ = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_b")
+        _ = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_c")
+
+        let outcomes = await coordinator.collectPrefetchOutcomes(
+            sessionId: testSessionId,
+            tappedPriceId: "pri_a",
+            otherPriceIds: ["pri_b", "pri_c"]
+        )
+
+        XCTAssertEqual(outcomes.count, 3)
+        for priceId in ["pri_a", "pri_b", "pri_c"] {
+            guard case .ready = outcomes[priceId] else {
+                XCTFail("Expected \(priceId) to be .ready, got \(String(describing: outcomes[priceId]))")
+                return
+            }
+        }
+    }
+
+    /// Empty `otherPriceIds` is a valid case (single-product paywall):
+    /// just await the tapped one.
+    func testCollectPrefetchOutcomes_handlesEmptyOtherPriceIds() async throws {
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+
+        coordinator.prefetch(
+            sessionId: testSessionId,
+            priceIds: ["pri_only"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+
+        let outcomes = await coordinator.collectPrefetchOutcomes(
+            sessionId: testSessionId,
+            tappedPriceId: "pri_only",
+            otherPriceIds: []
+        )
+
+        XCTAssertEqual(outcomes.count, 1)
+        guard case .ready = outcomes["pri_only"] else {
+            XCTFail("Expected pri_only to be .ready")
+            return
+        }
+    }
+
     // MARK: - Per-session cancellation
 
     /// `cancelForSession(sessionId:)` clears only the entries owned by
@@ -418,7 +557,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     private func paddleResponseFixtureWithCruft(
         checkoutId: String = "che_x",
         transactionId: String = "txn_test"
-    ) -> Data {
+    ) throws -> Data {
         let dict: [String: Any] = [
             "data": [
                 // Fields the bundle reads ↓
@@ -508,7 +647,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 "subscription": ["current_billing_period_ends_at": NSNull()],
             ]
         ]
-        return try! JSONSerialization.data(withJSONObject: dict)
+        return try JSONSerialization.data(withJSONObject: dict)
     }
 
     /// `encodeBootstrapsToCtx` produces the map the bundler reads from
@@ -519,13 +658,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let bandit1 = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a")
         let paddle1 = PaddleTransactionCheckoutResult(
-            rawBody: paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
+            rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
             checkoutId: "che_a", transactionId: "txn_a")
 
         let bandit2 = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
         let paddle2 = PaddleTransactionCheckoutResult(
-            rawBody: paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
+            rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
             checkoutId: "che_b", transactionId: "txn_b")
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
@@ -556,7 +695,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let bandit = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
-            rawBody: paddleResponseFixtureWithCruft(),
+            rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_x")
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
@@ -593,7 +732,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let bandit = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
         let paddle = PaddleTransactionCheckoutResult(
-            rawBody: paddleResponseFixtureWithCruft(),
+            rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_test")
 
         let map = try XCTUnwrap(
@@ -664,7 +803,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let bandit = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
-            rawBody: paddleResponseFixtureWithCruft(),
+            rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_x")
 
         let map = try XCTUnwrap(

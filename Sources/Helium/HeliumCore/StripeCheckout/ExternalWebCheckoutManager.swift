@@ -111,13 +111,11 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
-        // Paddle prefetch lookup: await the prefetched outcomes for EVERY
-        // priceId on this paywall (not just the tapped one) — the bundle
-        // in Safari can switch products mid-flow, and the SDK already
-        // pre-warmed all of them on paywall-open. We ship every `.ready`
-        // outcome in `ctx.paddleBootstraps` keyed by priceId so the
-        // bundle's `ensurePaddleInitForProduct(product)` lookup hits the
-        // bootstrap regardless of which product the user picks.
+        // Paddle prefetch lookup: await the TAPPED priceId fully (this
+        // is the click-latency budget), and gather OTHER priceIds
+        // opportunistically without blocking. See
+        // `PaddleCheckoutPrefetchCoordinator.collectPrefetchOutcomes`
+        // for the two-phase rationale.
         //
         // Tapped-priceId-specific behavior:
         //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
@@ -135,14 +133,12 @@ public class ExternalWebCheckoutManager: NSObject {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
                 from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
             )
-            // Defensive: ensure the tapped product is in the set even if
-            // it wasn't (somehow) advertised on `webProductsOfferedPaddle`.
-            // Set semantics handle the dedup.
-            let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
+            let otherPriceIds = allPriceIds.filter { $0 != tappedPriceId }
 
-            let outcomes = await collectPrefetchOutcomes(
+            let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
-                priceIds: priceIdsToAwait
+                tappedPriceId: tappedPriceId,
+                otherPriceIds: otherPriceIds
             )
 
             // Tapped-product short-circuit fires only if the tapped product
@@ -196,33 +192,6 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-
-    /// Awaits the prefetch coordinator's outcome for every priceId in
-    /// parallel, returning the map keyed by priceId. Each `awaitOutcome`
-    /// has its own internal timeout; using a TaskGroup means total wall-
-    /// clock time is bounded by the slowest priceId, not their sum.
-    private func collectPrefetchOutcomes(
-        sessionId: String,
-        priceIds: [String]
-    ) async -> [String: PaddlePrefetchOutcome] {
-        guard !priceIds.isEmpty else { return [:] }
-        return await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
-            for priceId in priceIds {
-                group.addTask { @MainActor in
-                    let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
-                        sessionId: sessionId,
-                        priceId: priceId
-                    )
-                    return (priceId, outcome)
-                }
-            }
-            var result: [String: PaddlePrefetchOutcome] = [:]
-            for await (priceId, outcome) in group {
-                result[priceId] = outcome
-            }
-            return result
-        }
-    }
 
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when

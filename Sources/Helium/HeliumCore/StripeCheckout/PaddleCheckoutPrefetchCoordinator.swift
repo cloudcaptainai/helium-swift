@@ -216,6 +216,65 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
+    /// Click-handler gather step: awaits the tapped priceId fully, and
+    /// gathers other priceIds opportunistically without blocking.
+    ///
+    /// Two phases:
+    ///   1. **Tapped** — `awaitOutcome` with the default timeout (3s).
+    ///      This is the click-latency budget; the user is buying this
+    ///      product, we wait for its prefetch.
+    ///   2. **Others** — `awaitOutcome` per priceId in parallel via
+    ///      TaskGroup, but with a tiny `opportunisticTimeoutSeconds`
+    ///      timeout. If a non-tapped priceId is already complete by
+    ///      click-time, ship it; if it's still in flight, drop it (the
+    ///      bundle's live-fetch path covers product-switching in Safari).
+    ///
+    /// Without the split, a single stuck non-tapped priceId would hold
+    /// the click handler for up to the full 3s — bootstraps for products
+    /// the user isn't buying right now aren't worth that latency cost.
+    func collectPrefetchOutcomes(
+        sessionId: String,
+        tappedPriceId: String,
+        otherPriceIds: [String]
+    ) async -> [String: PaddlePrefetchOutcome] {
+        // Phase 1: tapped — full timeout (this IS the click-latency budget).
+        let tappedOutcome = await awaitOutcome(
+            sessionId: sessionId, priceId: tappedPriceId
+        )
+        var result: [String: PaddlePrefetchOutcome] = [tappedPriceId: tappedOutcome]
+        if otherPriceIds.isEmpty { return result }
+
+        // Phase 2: others — best-effort, parallel, near-zero blocking.
+        // 5ms is comfortably above the cost of resolving an already-
+        // complete Task and well below user-perceptible click latency.
+        let opportunistic = await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
+            for priceId in otherPriceIds where priceId != tappedPriceId {
+                group.addTask { @MainActor in
+                    let outcome = await self.awaitOutcome(
+                        sessionId: sessionId,
+                        priceId: priceId,
+                        timeout: Self.opportunisticTimeoutSeconds
+                    )
+                    return (priceId, outcome)
+                }
+            }
+            var collected: [String: PaddlePrefetchOutcome] = [:]
+            for await (priceId, outcome) in group {
+                collected[priceId] = outcome
+            }
+            return collected
+        }
+        result.merge(opportunistic) { _, new in new }
+        return result
+    }
+
+    /// Tiny timeout for the opportunistic gather of non-tapped priceIds.
+    /// Resolves already-complete tasks instantly via the
+    /// `withCheckedContinuation` race in `awaitOutcome`; in-flight tasks
+    /// resolve to `.failed(timeout)` which the encoders treat as
+    /// "skip this priceId."
+    static let opportunisticTimeoutSeconds: TimeInterval = 0.005
+
     /// Cancels every in-flight task owned by this session and removes its
     /// cache entries. Other sessions are untouched. Cancellation
     /// propagates into URLSession.data(for:) so the underlying network
