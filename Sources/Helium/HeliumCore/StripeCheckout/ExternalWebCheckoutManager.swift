@@ -20,12 +20,31 @@ enum WebCheckoutOutcome {
     case opened
     /// Pre-checkout entitlement check found the user already owns the product;
     /// browser was not opened and the flow is fully resolved.
-    case preCheckResolved
+    ///
+    /// `existingSubscriptionId` is the buyer's existing Paddle subscription
+    /// id when the SDK pre-fetch surfaced one in bandit's 409 body. Only
+    /// set on the prefetch-tapped-entitled path; the cached-entitlements
+    /// pre-check path doesn't have access to a sub id and passes nil.
+    /// Used by `HeliumPaywallDelegateWrapper.handlePurchase` to populate
+    /// `PurchaseRestoredEvent.existingSubscriptionId` for analytics parity
+    /// with the bundle's `helium_purchase_already_entitled` Jitsu fire
+    /// (canonicalJoinTransactionId).
+    case preCheckResolved(existingSubscriptionId: String? = nil)
 
     var transactionStatus: HeliumPaywallTransactionStatus {
         switch self {
         case .opened: return .pending
         case .preCheckResolved: return .restored
+        }
+    }
+
+    /// Convenience accessor for the entitled-during-purchase sub id.
+    /// Returns nil for `.opened` and for `.preCheckResolved` cases that
+    /// didn't pass one (e.g. cached-entitlements pre-check).
+    var existingSubscriptionId: String? {
+        switch self {
+        case .opened: return nil
+        case .preCheckResolved(let subId): return subId
         }
     }
 }
@@ -127,9 +146,11 @@ public class ExternalWebCheckoutManager: NSObject {
             )
 
             // Tapped-product short-circuit fires only if the tapped product
-            // itself is alreadyEntitled. Other priceIds being entitled
-            // doesn't block this purchase — see `tappedShortCircuit`'s
-            // docstring (and tests) for the property this preserves.
+            // itself is alreadyEntitled with a restorable code. Other
+            // priceIds being entitled doesn't block this purchase, and
+            // non-restorable codes (trial_already_used) flow through the
+            // bundle for its failure-routing UX. See `tappedShortCircuit`
+            // and `isRestorableAlreadyEntitledCode`.
             if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
                 in: outcomes, tappedPriceId: tappedPriceId
             ) {
@@ -138,9 +159,13 @@ public class ExternalWebCheckoutManager: NSObject {
                 // Same handling as the pre-checkout entitlement check
                 // earlier in this method: no browser open, invalidate the
                 // entitlements cache so future flows reflect the server's
-                // view.
+                // view. Existing subscription id (when bandit's 409 body
+                // surfaced one) is threaded through so the SDK-fired
+                // PurchaseRestoredEvent can include it for analytics
+                // parity with the bundle's helium_purchase_already_entitled
+                // canonicalJoinTransactionId.
                 entitlementsSource.invalidateCache()
-                return .preCheckResolved
+                return .preCheckResolved(existingSubscriptionId: shortCircuit.existingSubscriptionId)
             }
 
             paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
@@ -321,7 +346,10 @@ public class ExternalWebCheckoutManager: NSObject {
 
         if entitledBefore.contains(productKey) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
-            return .preCheckResolved
+            // Cached entitlements path doesn't have a sub id (entitlement
+            // came from a prior /check-entitlement, not a 409). Pass nil
+            // explicitly; default-arg sugar doesn't cover bare-case usage.
+            return .preCheckResolved(existingSubscriptionId: nil)
         }
 
         let observation = CheckoutObservation(

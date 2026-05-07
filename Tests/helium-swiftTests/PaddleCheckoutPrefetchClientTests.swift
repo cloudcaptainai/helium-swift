@@ -279,11 +279,16 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         }
     }
 
-    /// 409s with a different error code (anything that isn't
-    /// `duplicate_subscription`) should pass through as a generic server
-    /// error. Specific to alreadyEntitled is the right granularity — we
-    /// don't want every 409 to look like an entitlement match.
-    func testCreatePaddleTransactionForPaywall_otherNon409CodesPassThroughAsServerError() async throws {
+    /// 409 with `code: "trial_already_used"` is also surfaced as
+    /// `PaddlePrefetchError.alreadyEntitled` (with the original code
+    /// preserved). Bundle's `routePaddle409` then maps to entitled_failure
+    /// at click-time; SDK's tappedShortCircuit refuses to fire restored
+    /// for non-restorable codes — see `is409CodeRestorable`. The
+    /// motivation: catching this 409 in pre-fetch means the bundle can
+    /// short-circuit without a live bandit call, same as for
+    /// duplicate_subscription. UX downstream is what differs: the
+    /// bundle redirects to paymentFailureUrl (not successUrl).
+    func testCreatePaddleTransactionForPaywall_throwsAlreadyEntitledOn409TrialAlreadyUsed() async throws {
         let envelope = """
         {
             "error": {
@@ -300,12 +305,45 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
         do {
             _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected createPaddleTransactionForPaywall to throw on 409 trial_already_used")
+        } catch let PaddlePrefetchError.alreadyEntitled(code, message, _) {
+            // Code is preserved verbatim — bundle's routePaddle409 reads
+            // the code at click-time to decide success vs failure routing.
+            XCTAssertEqual(code, "trial_already_used")
+            XCTAssertTrue(message.contains("Customer has already consumed a trial"))
+        } catch {
+            XCTFail("Expected PaddlePrefetchError.alreadyEntitled but got \(type(of: error)): \(error)")
+        }
+    }
+
+    /// 409 with an unknown code (one neither `duplicate_subscription`
+    /// nor `trial_already_used`) still passes through as a generic
+    /// server error. The allow-list is explicit — adding a new code
+    /// should be a deliberate decision matching the bundle's
+    /// `routePaddle409`.
+    func testCreatePaddleTransactionForPaywall_unknownNon409CodePassesThroughAsServerError() async throws {
+        let envelope = """
+        {
+            "error": {
+                "type": "request_error",
+                "code": "some_future_paddle_code",
+                "detail": "Hypothetical new failure mode"
+            }
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
             XCTFail("Expected createPaddleTransactionForPaywall to throw on 409")
         } catch HeliumPaymentAPIError.serverError(let statusCode, let message) {
             XCTAssertEqual(statusCode, 409)
             XCTAssertTrue(
-                message.contains("trial_already_used"),
-                "Expected non-duplicate 409 to surface as serverError preserving the code in the message; got \(message)"
+                message.contains("some_future_paddle_code"),
+                "Expected unknown 409 code to surface as serverError preserving the code in the message; got \(message)"
             )
         } catch {
             XCTFail("Expected HeliumPaymentAPIError.serverError but got \(type(of: error)): \(error)")

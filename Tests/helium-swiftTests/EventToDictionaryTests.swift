@@ -23,6 +23,56 @@ final class EventToDictionaryTests: XCTestCase {
         XCTAssertEqual(dict["timestamp"] as? Double, 1000.0)
     }
 
+    func testPurchaseRestoredEventToDictionary_includesExistingSubscriptionIdWhenSet() {
+        // Paddle web-checkout entitled-during-purchase path threads
+        // existingSubscriptionId from the SDK pre-fetch's bandit 409
+        // through to this event for analytics parity with the bundle's
+        // helium_purchase_already_entitled fire's canonicalJoinTransactionId.
+        let event = PurchaseRestoredEvent(
+            productId: "pro_x:pri_y",
+            triggerName: "upgrade",
+            paywallName: "wall",
+            restoreOrigin: .duringPurchase,
+            paymentProcessor: .paddle,
+            existingSubscriptionId: "sub_01k_abc"
+        )
+        let dict = event.toDictionary()
+        XCTAssertEqual(dict["type"] as? String, "purchaseRestored")
+        XCTAssertEqual(dict["existingSubscriptionId"] as? String, "sub_01k_abc")
+        XCTAssertEqual(dict["restoreOrigin"] as? String, "duringPurchase")
+    }
+
+    func testPurchaseRestoredEventToDictionary_omitsExistingSubscriptionIdWhenNil() {
+        // Default constructor (no sub id) — most common case (StoreKit
+        // restores, cached-entitlements pre-checks). Field absent keeps
+        // dashboards from confusing "missing" with "explicit null".
+        let event = PurchaseRestoredEvent(
+            productId: "com.app.premium",
+            triggerName: "upgrade",
+            paywallName: "wall",
+            restoreOrigin: .restorePurchases,
+            paymentProcessor: .appStore
+        )
+        let dict = event.toDictionary()
+        XCTAssertNil(dict["existingSubscriptionId"])
+    }
+
+    func testPurchaseRestoredEventToDictionary_omitsExistingSubscriptionIdWhenEmptyString() {
+        // Defensive: an empty string is logically the same as absent;
+        // the toDictionary helper drops it so analytics never see an
+        // empty-string id.
+        let event = PurchaseRestoredEvent(
+            productId: "com.app.premium",
+            triggerName: "upgrade",
+            paywallName: "wall",
+            restoreOrigin: .duringPurchase,
+            paymentProcessor: .paddle,
+            existingSubscriptionId: ""
+        )
+        let dict = event.toDictionary()
+        XCTAssertNil(dict["existingSubscriptionId"])
+    }
+
     func testPurchaseSucceededEventToDictionary() {
         let event = PurchaseSucceededEvent(
             productId: "com.app.premium",

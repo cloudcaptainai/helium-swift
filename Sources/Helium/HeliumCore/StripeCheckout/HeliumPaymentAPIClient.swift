@@ -168,15 +168,30 @@ public class HeliumPaymentAPIClient {
             return try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
         }
 
-        // 409 + `duplicate_subscription` is the one outcome we surface as a
-        // typed error so the prefetch coordinator can pattern-match without
-        // string parsing. Everything else falls through to the generic
-        // server-error parser.
+        // 409 with a recognized alreadyEntitled-class code is surfaced as a
+        // typed error so the prefetch coordinator can pattern-match
+        // structurally. The allow-list mirrors the bundler's
+        // `routePaddle409` known codes — adding a new one is a deliberate
+        // decision that should land on both sides together. Anything else
+        // falls through to the generic server-error parser.
+        //
+        // Codes:
+        //   - duplicate_subscription: customer already owns this product.
+        //     Bundle routes to entitled_success (successUrl + ?alreadySubscribed=true).
+        //   - trial_already_used: customer has consumed a trial on any
+        //     product. Bundle routes to entitled_failure (paymentFailureUrl).
+        //
+        // The SDK doesn't differentiate UX semantics here — it just
+        // surfaces the code verbatim. Downstream
+        // (PaddleCheckoutPrefetchCoordinator.tappedShortCircuit and the
+        // bundle's decidePaddleSubscribeAction) decide success vs failure
+        // routing.
         if statusCode == 409,
            let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: data),
-           envelope.error.code == "duplicate_subscription" {
+           let code = envelope.error.code,
+           HeliumPaymentAPIClient.isPrefetchAlreadyEntitledCode(code) {
             let detail = envelope.error.detail
-                ?? "You already have an active subscription for this product."
+                ?? HeliumPaymentAPIClient.defaultMessageForAlreadyEntitledCode(code)
             // Best-effort sub-id extraction. Mirrors the bundler's
             // `parsePaddle409` 5-path lookup so the SDK and bundle agree on
             // where existingSubscriptionId can live in a 409 body. Threaded
@@ -185,12 +200,32 @@ public class HeliumPaymentAPIClient {
             // as `canonicalJoinTransactionId`.
             let existingSubscriptionId = HeliumPaymentAPIClient.extractExistingSubscriptionId(from: data)
             throw PaddlePrefetchError.alreadyEntitled(
-                code: "duplicate_subscription",
+                code: code,
                 message: detail,
                 existingSubscriptionId: existingSubscriptionId
             )
         }
         throw genericServerError(statusCode: statusCode, body: data)
+    }
+
+    /// Allow-list of bandit 409 codes the SDK pre-fetch surfaces as
+    /// `PaddlePrefetchError.alreadyEntitled`. Mirrors the bundler's
+    /// `routePaddle409` known-codes — both sides update together.
+    static func isPrefetchAlreadyEntitledCode(_ code: String) -> Bool {
+        return code == "duplicate_subscription" || code == "trial_already_used"
+    }
+
+    /// Default user-facing message per code, used when the 409 body
+    /// doesn't include `detail`. Mirrors the bundler's `parsePaddle409`
+    /// fallback strings so the SDK-fired and bundle-fired UX strings
+    /// stay consistent.
+    private static func defaultMessageForAlreadyEntitledCode(_ code: String) -> String {
+        switch code {
+        case "trial_already_used":
+            return "You've already used your free trial for this product."
+        default:
+            return "You already have an active subscription for this product."
+        }
     }
 
     /// Extracts the buyer's existing Paddle subscription id from a bandit

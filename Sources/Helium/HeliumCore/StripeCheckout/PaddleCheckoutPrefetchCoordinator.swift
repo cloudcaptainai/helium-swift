@@ -466,9 +466,10 @@ final class PaddleCheckoutPrefetchCoordinator {
     // MARK: - Tapped-product short-circuit decision
 
     /// Decides whether the tapped product warrants short-circuiting the
-    /// click flow (skip Safari, fire `purchase_already_entitled`).
-    /// Returns the alreadyEntitled `(code, message)` when the *tapped*
-    /// priceId itself is alreadyEntitled; nil otherwise.
+    /// click flow (skip Safari, treat as restored). Returns the
+    /// `(code, message, existingSubscriptionId)` when the *tapped* priceId
+    /// is alreadyEntitled WITH a restorable code (currently only
+    /// `duplicate_subscription`); nil otherwise.
     ///
     /// **Crucially, OTHER priceIds being alreadyEntitled don't trigger
     /// short-circuit.** Real scenario: paywall offers monthly + yearly,
@@ -476,14 +477,31 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// will be `.alreadyEntitled` and `outcomes["pri_monthly"]` will be
     /// `.ready` — we want to allow the monthly purchase to proceed
     /// normally, not block it because of the unrelated yearly entitlement.
+    ///
+    /// **And: only `duplicate_subscription` short-circuits to restored.**
+    /// Other alreadyEntitled-class codes (e.g. `trial_already_used`)
+    /// represent a failure UX in the bundle — entitled_failure with a
+    /// redirect to paymentFailureUrl. The SDK opens the bundle for those
+    /// codes and lets the bundle's existing routing handle it. This
+    /// mirrors `routePaddle409` in the bundler.
     nonisolated static func tappedShortCircuit(
         in outcomes: [String: PaddlePrefetchOutcome],
         tappedPriceId: String
-    ) -> (code: String, message: String)? {
-        if case let .alreadyEntitled(code, message, _) = outcomes[tappedPriceId] ?? .notStarted {
-            return (code, message)
+    ) -> (code: String, message: String, existingSubscriptionId: String?)? {
+        if case let .alreadyEntitled(code, message, existingSubscriptionId) = outcomes[tappedPriceId] ?? .notStarted,
+           isRestorableAlreadyEntitledCode(code) {
+            return (code, message, existingSubscriptionId)
         }
         return nil
+    }
+
+    /// Mirrors bundler-service's `routePaddle409`: only
+    /// `duplicate_subscription` is treated as a "user owns this, fire
+    /// restored" outcome. Other codes are alreadyEntitled-class but not
+    /// restorable — they should flow through the bundle for the failure-
+    /// routing UX (paymentFailureUrl redirect with an error message).
+    nonisolated static func isRestorableAlreadyEntitledCode(_ code: String) -> Bool {
+        return code == "duplicate_subscription"
     }
 
     // MARK: - Composite key helpers

@@ -68,6 +68,14 @@ class HeliumPaywallDelegateWrapper {
         
         let transactionStatus: HeliumPaywallTransactionStatus
 
+        // Carry the prefetch's existingSubscriptionId (when present)
+        // through to the fired PurchaseRestoredEvent for analytics parity
+        // with the bundle's helium_purchase_already_entitled Jitsu fire's
+        // canonicalJoinTransactionId. Set only on the Paddle pre-checkout-
+        // entitled path (.preCheckResolved with a sub id); nil for
+        // StoreKit, Stripe, and cached-entitlements pre-checks.
+        var entitledExistingSubscriptionId: String? = nil
+
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
         let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
 
@@ -84,35 +92,46 @@ class HeliumPaywallDelegateWrapper {
 
         if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
             do {
-                transactionStatus = try await StripeCheckoutManager.shared.startCheckoutFlow(
+                let outcome = try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                ).transactionStatus
+                )
+                transactionStatus = outcome.transactionStatus
+                entitledExistingSubscriptionId = outcome.existingSubscriptionId
             } catch {
                 transactionStatus = .failed(error)
             }
         } else if paymentProcessor == .paddle {
             do {
-                transactionStatus = try await PaddleCheckoutManager.shared.startCheckoutFlow(
+                let outcome = try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                ).transactionStatus
+                )
+                transactionStatus = outcome.transactionStatus
+                entitledExistingSubscriptionId = outcome.existingSubscriptionId
             } catch {
                 transactionStatus = .failed(error)
             }
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
-        
+
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .failed(let error):
             self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .duringPurchase, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoredEvent(
+                productId: productKey,
+                triggerName: triggerName,
+                paywallName: paywallTemplateName,
+                restoreOrigin: .duringPurchase,
+                paymentProcessor: paymentProcessor,
+                existingSubscriptionId: entitledExistingSubscriptionId
+            ), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
