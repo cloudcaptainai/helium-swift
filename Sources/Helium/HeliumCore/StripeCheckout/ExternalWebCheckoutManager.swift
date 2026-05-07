@@ -271,17 +271,11 @@ public class ExternalWebCheckoutManager: NSObject {
         // `DecompressionStream('deflate-raw')` — Apple's `COMPRESSION_ZLIB`
         // produces exactly that wire format despite the name. See
         // CtxCompression.swift for the wire-pairing rationale.
-        //
-        // We default to the uncompressed `?ctx=` form when the encoder
-        // returns nil (an Apple-framework error case). Old SDK versions
-        // also send `?ctx=`, so the bundle's parser already supports it
-        // — no regression on this branch.
-        var queryItems = components.queryItems ?? []
-        if let compressed = CtxCompression.deflateRaw(ctxData) {
-            queryItems.append(URLQueryItem(name: "ctxz", value: compressed.base64URLEncodedString()))
-        } else {
-            queryItems.append(URLQueryItem(name: "ctx", value: ctxData.base64URLEncodedString()))
+        guard let compressed = CtxCompression.deflateRaw(ctxData) else {
+            throw WebCheckoutError.failedToBuildEnrichedURL
         }
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "ctxz", value: compressed.base64URLEncodedString()))
         components.queryItems = queryItems
 
         guard let url = components.url else {
