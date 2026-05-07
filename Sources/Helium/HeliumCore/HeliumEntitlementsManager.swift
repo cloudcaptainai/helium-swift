@@ -216,6 +216,7 @@ actor HeliumEntitlementsManager {
         if !transactions.isEmpty {
             cache.transactions = transactions
             cache.lastTransactionsLoadedTime = Date()
+            cache.subscriptionStatuses.removeAll()
             cache.persistedEntitlements.removeAll()
             saveEntitlements()
             return
@@ -235,6 +236,7 @@ actor HeliumEntitlementsManager {
             // All persisted entitlements are expired or none exist - trust empty result
             cache.transactions = []
             cache.lastTransactionsLoadedTime = Date()
+            cache.subscriptionStatuses.removeAll()
             cache.persistedEntitlements.removeAll()
             saveEntitlements()
         }
@@ -384,19 +386,16 @@ actor HeliumEntitlementsManager {
     }
     
     func hasActiveEntitlementFor(productId: String, thirdPartyIds: Set<String>? = nil) async -> Bool {
-        // Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
-        // just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
         let ids: Set<String>
         if let thirdPartyIds {
             ids = thirdPartyIds
         } else {
             ids = await allThirdPartyEntitledProductIds()
         }
-        let productIdPrefix = String(productId.prefix(while: { $0 != ":" }))
-        if ids.contains(where: { String($0.prefix(while: { $0 != ":" })) == productIdPrefix }) {
+        if Self.thirdPartyIdsContain(productId: productId, in: ids) {
             return true
         }
-        
+
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
             if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() }) {
@@ -436,7 +435,7 @@ actor HeliumEntitlementsManager {
     func hasActiveSubscriptionFor(productId: String) async -> Bool {
         for source in allThirdPartySources {
             let subs = await source.activeSubscriptions()
-            if subs.contains(productId) { return true }
+            if Self.thirdPartyIdsContain(productId: productId, in: subs) { return true }
         }
 
         let entitlements = await getCachedEntitlements()
@@ -577,7 +576,14 @@ actor HeliumEntitlementsManager {
     }
 
     // MARK: - Private Helper Methods
-    
+
+    /// Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
+    /// just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
+    private static func thirdPartyIdsContain(productId: String, in ids: Set<String>) -> Bool {
+        let prefix = String(productId.prefix(while: { $0 != ":" }))
+        return ids.contains(where: { String($0.prefix(while: { $0 != ":" })) == prefix })
+    }
+
     /// Lazily loads and caches (auto-renewable) subscription status for a product
     private func getSubscriptionStatus(for productId: String) async -> Product.SubscriptionInfo.Status? {
         // Check cache first
