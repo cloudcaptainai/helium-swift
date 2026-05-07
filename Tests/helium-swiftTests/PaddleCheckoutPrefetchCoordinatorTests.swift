@@ -389,71 +389,295 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     // MARK: - Bootstrap encoding for ctx
 
-    /// `.ready` outcomes encode into the ctx as a `paddleBootstrap` object
-    /// the bundler reads to skip its own bandit + BFF round-trips. The
-    /// banditResponse fields are flat (typed ones we already decoded);
-    /// the paddleCheckoutResponse is the full raw Paddle BFF body so the
-    /// bundle's existing decoder can consume it.
-    func testEncodeBootstrapToCtx_returnsDict_whenReady() throws {
+    /// Builds a representative Paddle BFF response with all the cruft a
+    /// real response carries (experimentation block, settings, custom_data,
+    /// non-Apple-Pay payment methods, etc.) so trim-assertion tests can
+    /// verify we drop everything the bundle doesn't read.
+    private func paddleResponseFixtureWithCruft(
+        checkoutId: String = "che_x",
+        transactionId: String = "txn_test"
+    ) -> Data {
+        let dict: [String: Any] = [
+            "data": [
+                // Fields the bundle reads ↓
+                "id": checkoutId,
+                "transaction_id": transactionId,
+                "status": "draft",
+                "currency_code": "USD",
+                "ip_geo_country_code": "US",
+                "ip_geo_postal_code": "94102",
+                "customer": ["id": "ctm_x", "email": "u@e.com"],
+                "seller": ["name": "Helium"],
+                "items": [
+                    [
+                        // Bundle-read sub-fields:
+                        "billing_cycle": ["interval": "month", "frequency": 1],
+                        "trial_period": ["interval": "day", "frequency": 7],
+                        "price": ["unit_price": ["amount": "499", "currency_code": "USD"]],
+                        // Cruft to be dropped:
+                        "id": "txnitm_x",
+                        "quantity": ["max_quantity": 999_999, "min_quantity": 1, "current": 1],
+                        "totals": ["subtotal": 0, "discount": 0, "tax": 0, "total": 0],
+                        "recurring_totals": ["subtotal": 4.99, "total": 4.99],
+                        "product": ["id": "pro_x", "name": "Plan", "description": "A plan"],
+                        "price_id": "pri_x",
+                        "tax_rate": 0,
+                    ]
+                ],
+                "recurring_totals": [
+                    "total": 4.99,
+                    // Cruft (bundle only reads `.total`):
+                    "subtotal": 4.99, "discount": 0, "credit": 0, "tax": 0, "balance": 4.99,
+                ],
+                "totals": [
+                    "total": 0,
+                    "subtotal": 0, "discount": 0, "credit": 0, "tax": 0, "balance": 0,
+                ],
+                "discount": [
+                    "id": "disc_x",
+                    "type": "percentage",
+                    "amount": "10",
+                    "recur": true,
+                    "maximum_recurring_intervals": NSNull(),
+                ],
+                "payments": [
+                    "methods_available": [
+                        // Apple Pay (kept):
+                        [
+                            "type": "PI_APPLE_PAY",
+                            "stripe_options": ["api_key": "pk_test_xxx", "country_code": "US"],
+                            // Cruft on the kept entry:
+                            "weight": 3,
+                            "options": ["api_key": "pk_test_xxx", "country_code": "US"],
+                            "seller_friendly_name": "apple-pay",
+                            "can_be_saved": false,
+                            "one_click": true,
+                        ],
+                        // Non-Apple-Pay (filtered out):
+                        [
+                            "type": "CARD",
+                            "tokenex_options": ["public_key": "BIG_KEY"],
+                            "stripe_options": ["api_key": "pk_test_card", "country_code": "GB"],
+                        ],
+                        ["type": "PAYPAL", "weight": 2, "options": []],
+                    ],
+                    // Cruft:
+                    "enable_saved_payment_methods": false,
+                    "is_payment_processing": false,
+                ],
+                // Big cruft fields the bundle never reads:
+                "settings": [
+                    "feature_flags": ["coupon": false, "customer_name": true],
+                    "styles": ["theme": "light"],
+                    "marketing_consent_message": "Pages of legal text...",
+                ],
+                "experimentation": [
+                    "ld": ["flag1": "value", "flag2": "value", "flag3": "value"],
+                    "ab": ["test1": "control", "test2": "control"],
+                ],
+                "custom_data": ["helium_org_id": "x"],
+                "type": "transaction-checkout",
+                "is_free": false,
+                "environment": "sandbox",
+                "created_at": "2026-05-07T02:53:11+00:00",
+                "ip_geo_region": "California",
+                "source_page": "https://x.com",
+                "messages": [],
+                "subscription": ["current_billing_period_ends_at": NSNull()],
+            ]
+        ]
+        return try! JSONSerialization.data(withJSONObject: dict)
+    }
+
+    /// `encodeBootstrapsToCtx` produces the map the bundler reads from
+    /// `ctx.paddleBootstraps`: keyed by priceId so the bundle can look up
+    /// the bootstrap for whichever product the user clicks in Safari, not
+    /// just the one tapped in iOS. Two products → two entries.
+    func testEncodeBootstrapsToCtx_keysMapByPriceId() throws {
+        let bandit1 = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a")
+        let paddle1 = PaddleTransactionCheckoutResult(
+            rawBody: paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
+            checkoutId: "che_a", transactionId: "txn_a")
+
+        let bandit2 = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
+        let paddle2 = PaddleTransactionCheckoutResult(
+            rawBody: paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
+            checkoutId: "che_b", transactionId: "txn_b")
+
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_a": .ready(bandit: bandit1, paddle: paddle1),
+            "pri_b": .ready(bandit: bandit2, paddle: paddle2),
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: outcomes))
+
+        XCTAssertEqual(Set(map.keys), ["pri_a", "pri_b"])
+        let aBootstrap = try XCTUnwrap(map["pri_a"] as? [String: Any])
+        let bBootstrap = try XCTUnwrap(map["pri_b"] as? [String: Any])
+
+        // Each bootstrap carries banditResponse + paddleCheckoutResponse
+        // for ITS priceId. No `priceId` field on the inner bootstrap — the
+        // map key already names it.
+        XCTAssertNil(aBootstrap["priceId"], "Inner bootstrap shouldn't repeat priceId — the map key is the priceId")
+        XCTAssertEqual((aBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_a")
+        XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_b")
+    }
+
+    /// Non-`.ready` outcomes (alreadyEntitled / failed / notStarted) don't
+    /// belong in the bootstrap map. The bundle's behavior on a missing
+    /// entry is the same as today's missing-bootstrap behavior: do its
+    /// own fetch. AlreadyEntitled is caller-handled (short-circuit at the
+    /// click-handler level) so it must never appear here.
+    func testEncodeBootstrapsToCtx_skipsNonReadyOutcomes() throws {
         let bandit = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_test",
-            paddleCustomerId: "ctm_test",
-            isKnownCustomer: true,
-            requestId: "req_test"
-        )
-        let paddleBody = """
-        {"data":{"id":"che_x","transaction_id":"txn_test","status":"draft"}}
-        """.data(using: .utf8)!
+            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
-            rawBody: paddleBody,
-            checkoutId: "che_x",
-            transactionId: "txn_test"
-        )
-        let outcome: PaddlePrefetchOutcome = .ready(bandit: bandit, paddle: paddle)
+            rawBody: paddleResponseFixtureWithCruft(),
+            checkoutId: "che_x", transactionId: "txn_x")
 
-        let dict = try XCTUnwrap(
-            PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(
-                outcome,
-                priceId: "pri_xyz"
-            )
-        )
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_ready": .ready(bandit: bandit, paddle: paddle),
+            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+            "pri_failed": .failed(error: NSError(domain: "x", code: 0)),
+            "pri_notstarted": .notStarted,
+        ]
 
-        // priceId is included explicitly so the bundler can match against
-        // the user's selected product without reading it out of Paddle's
-        // response shape (relying on `items[0].price_id` would be a
-        // fragile schema dependency on Paddle's response).
-        XCTAssertEqual(dict["priceId"] as? String, "pri_xyz")
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: outcomes))
 
-        let banditDict = try XCTUnwrap(dict["banditResponse"] as? [String: Any])
-        XCTAssertEqual(banditDict["transactionId"] as? String, "txn_test")
-        XCTAssertEqual(banditDict["paddleCustomerId"] as? String, "ctm_test")
-        XCTAssertEqual(banditDict["isKnownCustomer"] as? Bool, true)
-
-        // paddleCheckoutResponse must round-trip the full Paddle response —
-        // bundle reads many fields off this (currency_code, ip_geo_*, items,
-        // totals, methods_available[].stripe_options.api_key, etc.). Lock in
-        // that we don't accidentally pluck just a few fields.
-        let paddleDict = try XCTUnwrap(dict["paddleCheckoutResponse"] as? [String: Any])
-        let paddleData = try XCTUnwrap(paddleDict["data"] as? [String: Any])
-        XCTAssertEqual(paddleData["id"] as? String, "che_x")
-        XCTAssertEqual(paddleData["transaction_id"] as? String, "txn_test")
+        XCTAssertEqual(Set(map.keys), ["pri_ready"], "Only .ready outcomes belong in the bootstrap map")
     }
 
-    func testEncodeBootstrapToCtx_returnsNil_whenAlreadyEntitled() {
-        // alreadyEntitled doesn't go through Safari at all, so there's
-        // nothing to encode in ctx. The caller short-circuits before
-        // building the URL.
-        let outcome: PaddlePrefetchOutcome = .alreadyEntitled(code: "duplicate_subscription", message: "x")
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome, priceId: "pri_xyz"))
+    /// Empty / no-ready inputs return nil so the caller can omit the
+    /// `paddleBootstraps` field entirely from the ctx (instead of a
+    /// pointless empty `{}`).
+    func testEncodeBootstrapsToCtx_returnsNilWhenNoReadyOutcomes() {
+        let allFailed: [String: PaddlePrefetchOutcome] = [
+            "pri_a": .failed(error: NSError(domain: "x", code: 0)),
+            "pri_b": .notStarted,
+        ]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: allFailed))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: [:]))
     }
 
-    func testEncodeBootstrapToCtx_returnsNil_whenFailedOrNotStarted() {
-        // Both should default to the bundle doing its own fetch — no
-        // ctx.paddleBootstrap means the bundle hits its existing code path.
-        let failed: PaddlePrefetchOutcome = .failed(error: NSError(domain: "x", code: 0))
-        let notStarted: PaddlePrefetchOutcome = .notStarted
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(failed, priceId: "pri_xyz"))
-        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(notStarted, priceId: "pri_xyz"))
+    /// `paddleCheckoutResponse.data` is trimmed to a documented allow-list
+    /// of fields the bundle actually reads (declared by
+    /// `PaddleBFFCheckoutData` in heliumStandalonePaddle.ts). The full
+    /// Paddle BFF response is ~6KB; trimmed it's ~500 bytes — important
+    /// because we're now packing N products' bootstraps into one ctx URL
+    /// query parameter, and Safari has practical URL limits.
+    func testEncodeBootstrapsToCtx_keepsOnlyBundleNeededFieldsInPaddleResponse() throws {
+        let bandit = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: paddleResponseFixtureWithCruft(),
+            checkoutId: "che_x", transactionId: "txn_test")
+
+        let map = try XCTUnwrap(
+            PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+                outcomesByPriceId: ["pri_x": .ready(bandit: bandit, paddle: paddle)])
+        )
+        let bootstrap = try XCTUnwrap(map["pri_x"] as? [String: Any])
+        let response = try XCTUnwrap(bootstrap["paddleCheckoutResponse"] as? [String: Any])
+        let data = try XCTUnwrap(response["data"] as? [String: Any])
+
+        // Top-level required scalar fields:
+        XCTAssertEqual(data["id"] as? String, "che_x")
+        XCTAssertEqual(data["transaction_id"] as? String, "txn_test")
+        XCTAssertEqual(data["status"] as? String, "draft")
+        XCTAssertEqual(data["currency_code"] as? String, "USD")
+        XCTAssertEqual(data["ip_geo_country_code"] as? String, "US")
+        XCTAssertEqual(data["ip_geo_postal_code"] as? String, "94102")
+
+        // Customer (bundle reads .email for prefilledEmail; .id retained
+        // for parity with the typed PaddleBFFCheckoutData interface):
+        let customer = try XCTUnwrap(data["customer"] as? [String: Any])
+        XCTAssertEqual(customer["email"] as? String, "u@e.com")
+
+        // Seller (only `name` is read for the Apple Pay billing-agreement disclosure):
+        let seller = try XCTUnwrap(data["seller"] as? [String: Any])
+        XCTAssertEqual(seller["name"] as? String, "Helium")
+
+        // Items — only billing_cycle, trial_period, price.unit_price needed:
+        let items = try XCTUnwrap(data["items"] as? [[String: Any]])
+        XCTAssertEqual(items.count, 1)
+        let item = items[0]
+        let billing = try XCTUnwrap(item["billing_cycle"] as? [String: Any])
+        XCTAssertEqual(billing["interval"] as? String, "month")
+        XCTAssertEqual(billing["frequency"] as? Int, 1)
+        let trial = try XCTUnwrap(item["trial_period"] as? [String: Any])
+        XCTAssertEqual(trial["interval"] as? String, "day")
+        XCTAssertEqual(trial["frequency"] as? Int, 7)
+        let unitPrice = try XCTUnwrap((item["price"] as? [String: Any])?["unit_price"] as? [String: Any])
+        XCTAssertEqual(unitPrice["amount"] as? String, "499")
+        XCTAssertEqual(unitPrice["currency_code"] as? String, "USD")
+
+        // Totals — only `.total` is read:
+        let recurring = try XCTUnwrap(data["recurring_totals"] as? [String: Any])
+        XCTAssertEqual(recurring["total"] as? Double, 4.99)
+        let totals = try XCTUnwrap(data["totals"] as? [String: Any])
+        XCTAssertEqual(totals["total"] as? Double, 0)
+
+        // Discount — pass through fully:
+        let discount = try XCTUnwrap(data["discount"] as? [String: Any])
+        XCTAssertEqual(discount["id"] as? String, "disc_x")
+        XCTAssertEqual(discount["recur"] as? Bool, true)
+
+        // Payments — only PI_APPLE_PAY entries kept, only stripe_options inside:
+        let payments = try XCTUnwrap(data["payments"] as? [String: Any])
+        let methods = try XCTUnwrap(payments["methods_available"] as? [[String: Any]])
+        XCTAssertEqual(methods.count, 1, "Non-Apple-Pay methods (CARD, PAYPAL) must be filtered out — bundle never uses them on this path")
+        XCTAssertEqual(methods[0]["type"] as? String, "PI_APPLE_PAY")
+        let stripeOpts = try XCTUnwrap(methods[0]["stripe_options"] as? [String: Any])
+        XCTAssertEqual(stripeOpts["api_key"] as? String, "pk_test_xxx")
+        XCTAssertEqual(stripeOpts["country_code"] as? String, "US")
+    }
+
+    /// Asserts the trim drops the LARGE cruft fields (experimentation, settings,
+    /// custom_data, etc.) — these are 50%+ of the raw response by size. The
+    /// trim is the whole point: without it we blow the URL budget once we
+    /// pack N products into the ctx.
+    func testEncodeBootstrapsToCtx_dropsLargeUnusedFields() throws {
+        let bandit = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: paddleResponseFixtureWithCruft(),
+            checkoutId: "che_x", transactionId: "txn_x")
+
+        let map = try XCTUnwrap(
+            PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+                outcomesByPriceId: ["pri_x": .ready(bandit: bandit, paddle: paddle)])
+        )
+        let data = try XCTUnwrap(
+            ((map["pri_x"] as? [String: Any])?["paddleCheckoutResponse"] as? [String: Any])?["data"] as? [String: Any]
+        )
+
+        // Big-payload fields the bundle never reads — drop them.
+        for key in [
+            "experimentation",   // LD + AB flags, ~2KB
+            "settings",          // feature_flags, styles, expires, ~1KB
+            "custom_data",       // SDK already knows these
+            "type", "is_free", "environment", "created_at",
+            "ip_geo_region", "source_page", "messages", "subscription",
+        ] {
+            XCTAssertNil(data[key], "Field `\(key)` should be dropped by the trim — bundle doesn't read it")
+        }
+
+        // Spot-check items[]: per-item totals/product/quantity not read,
+        // only billing_cycle/trial_period/price.unit_price are.
+        let item = try XCTUnwrap((data["items"] as? [[String: Any]])?.first)
+        for key in ["id", "quantity", "totals", "recurring_totals", "product", "price_id", "tax_rate"] {
+            XCTAssertNil(item[key], "items[].\(key) should be dropped by the trim")
+        }
+        // The kept item.price object should ONLY contain unit_price (no `id`, no `name`):
+        let price = try XCTUnwrap(item["price"] as? [String: Any])
+        XCTAssertEqual(Set(price.keys), ["unit_price"], "items[].price should only contain unit_price")
+
+        // Spot-check the kept Apple Pay method has only `type` + `stripe_options`:
+        let methods = try XCTUnwrap((data["payments"] as? [String: Any])?["methods_available"] as? [[String: Any]])
+        XCTAssertEqual(Set(methods[0].keys), ["type", "stripe_options"],
+                       "Apple Pay entry should be trimmed to {type, stripe_options} only")
     }
 
     // MARK: - Composite key extraction (click-handler integration)

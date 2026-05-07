@@ -256,32 +256,55 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     // MARK: - ctx encoding
 
-    /// Encodes a `.ready` outcome into the dict the bundler reads from
-    /// `ctx.paddleBootstrap`. Returns nil for non-ready outcomes; the
-    /// caller in `ExternalWebCheckoutManager.startCheckoutFlow` either
-    /// short-circuits (alreadyEntitled) or skips the bootstrap merge
-    /// (failed/notStarted).
+    /// Encodes ready-outcome bootstraps into the map the bundler reads from
+    /// `ctx.paddleBootstraps`, keyed by priceId.
     ///
-    /// `priceId` is included as a top-level field so the bundler can
-    /// validate the bootstrap matches the user's currently-selected
-    /// product without depending on Paddle's response shape.
+    /// **Why a map, not a single bootstrap:** the bundle in Safari can
+    /// switch products mid-flow (user lands on it after tapping product A
+    /// in iOS, then picks product B in the web paywall). The bundle calls
+    /// `ensurePaddleInitForProduct(product)` each time the selected product
+    /// changes; that lookup needs a bootstrap for whichever priceId is
+    /// currently selected, not just the iOS-tapped one.
+    ///
+    /// **Why we trim the Paddle BFF response:** the raw response is ~6KB
+    /// and includes large blocks the bundle never reads (`experimentation`,
+    /// `settings`, `custom_data`, non-Apple-Pay payment methods). Sending
+    /// it whole for N products would blow Safari's URL budget. The trimmed
+    /// shape mirrors `PaddleBFFCheckoutData` in
+    /// `bundler-service/server/heliumStandalonePaddle.ts` — when the bundle
+    /// adds new field reads, both sides update together.
+    ///
+    /// Returns nil when no outcome is `.ready` so the caller can omit the
+    /// `paddleBootstraps` field entirely from the ctx.
     ///
     /// Shape:
     /// ```
     /// {
-    ///     "priceId": "pri_xxx",
-    ///     "banditResponse": { "transactionId", "paddleCustomerId"?, "isKnownCustomer", "requestId" },
-    ///     "paddleCheckoutResponse": { ...full Paddle BFF response... }
+    ///     "pri_xxx": {
+    ///         "banditResponse":         { "transactionId", "paddleCustomerId"?, "isKnownCustomer", "requestId" },
+    ///         "paddleCheckoutResponse": { "data": { id, transaction_id, status, currency_code, ... trimmed ... } }
+    ///     },
+    ///     "pri_yyy": { ... }
     /// }
     /// ```
-    nonisolated static func encodeBootstrapToCtx(
-        _ outcome: PaddlePrefetchOutcome,
-        priceId: String
+    nonisolated static func encodeBootstrapsToCtx(
+        outcomesByPriceId: [String: PaddlePrefetchOutcome]
     ) -> [String: Any]? {
-        guard case let .ready(bandit, paddle) = outcome else {
-            return nil
+        var result: [String: Any] = [:]
+        for (priceId, outcome) in outcomesByPriceId {
+            guard case let .ready(bandit, paddle) = outcome else { continue }
+            result[priceId] = encodeReadyBootstrap(bandit: bandit, paddle: paddle)
         }
+        return result.isEmpty ? nil : result
+    }
 
+    /// Builds one `(banditResponse, paddleCheckoutResponse)` bootstrap for
+    /// a single ready outcome. Caller (`encodeBootstrapsToCtx`) places it
+    /// under the priceId key.
+    private nonisolated static func encodeReadyBootstrap(
+        bandit: PaddleCreateTransactionForPaywallResponse,
+        paddle: PaddleTransactionCheckoutResult
+    ) -> [String: Any] {
         var banditDict: [String: Any] = [
             "transactionId": bandit.transactionId,
             "isKnownCustomer": bandit.isKnownCustomer,
@@ -291,15 +314,116 @@ final class PaddleCheckoutPrefetchCoordinator {
             banditDict["paddleCustomerId"] = customerId
         }
 
-        // Paddle's BFF response is rich; the bundle parses it fully. Round-
-        // trip the full body so we don't drop fields the bundle reads.
-        let paddleDict = (try? JSONSerialization.jsonObject(with: paddle.rawBody)) as? [String: Any] ?? [:]
+        let trimmedPaddleResponse = trimPaddleCheckoutResponse(rawBody: paddle.rawBody)
 
         return [
-            "priceId": priceId,
             "banditResponse": banditDict,
-            "paddleCheckoutResponse": paddleDict,
+            "paddleCheckoutResponse": trimmedPaddleResponse,
         ]
+    }
+
+    /// Allow-list trim of the Paddle BFF `/transaction-checkout` response.
+    /// Keeps only the fields the bundle's `runPaddleApplePayInit` reads
+    /// (see `PaddleBFFCheckoutData` in heliumStandalonePaddle.ts). Drops
+    /// everything else — `experimentation` (~2KB), `settings` (~1KB),
+    /// `custom_data`, non-Apple-Pay payment methods, per-item totals/quantities,
+    /// `created_at`, etc.
+    ///
+    /// Defensive: if the body is unparseable we return `{ "data": [:] }`
+    /// rather than throwing. The bundle's null-checks on required fields
+    /// (`id`, `transaction_id`) will then make it default to its
+    /// live-fetch path, the same way it would for a never-prefetched
+    /// product.
+    private nonisolated static func trimPaddleCheckoutResponse(rawBody: Data) -> [String: Any] {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let rawData = parsed["data"] as? [String: Any] else {
+            return ["data": [String: Any]()]
+        }
+        return ["data": trimPaddleCheckoutData(rawData)]
+    }
+
+    /// Pure helper that copies only allow-listed fields from the raw
+    /// Paddle BFF `data` dict into a new dict. Mirrors the
+    /// `PaddleBFFCheckoutData` interface in heliumStandalonePaddle.ts.
+    private nonisolated static func trimPaddleCheckoutData(_ raw: [String: Any]) -> [String: Any] {
+        var trimmed: [String: Any] = [:]
+
+        // Top-level scalars the bundle reads on the BFF response.
+        for key in [
+            "id", "transaction_id", "status", "currency_code",
+            "ip_geo_country_code", "ip_geo_postal_code",
+        ] {
+            if let value = raw[key] { trimmed[key] = value }
+        }
+
+        // customer.email (read for prefilledEmail). Keep `id` for parity
+        // with the typed interface even though only `.email` is read today.
+        if let customer = raw["customer"] as? [String: Any] {
+            var c: [String: Any] = [:]
+            if let id = customer["id"] { c["id"] = id }
+            if let email = customer["email"] { c["email"] = email }
+            if !c.isEmpty { trimmed["customer"] = c }
+        }
+
+        // seller.name → Apple Pay billingAgreement disclosure.
+        if let seller = raw["seller"] as? [String: Any], let name = seller["name"] {
+            trimmed["seller"] = ["name": name]
+        }
+
+        // items[]: only billing_cycle / trial_period / price.unit_price.
+        if let rawItems = raw["items"] as? [[String: Any]] {
+            trimmed["items"] = rawItems.map(trimPaddleItem)
+        }
+
+        // recurring_totals.total / totals.total — only `.total` is read.
+        for key in ["recurring_totals", "totals"] {
+            if let dict = raw[key] as? [String: Any], let total = dict["total"] {
+                trimmed[key] = ["total": total]
+            }
+        }
+
+        // discount: passed through fully — all of {id, type, amount,
+        // recur, maximum_recurring_intervals} are read by the bundle's
+        // multi-phase Apple Pay representation.
+        if let discount = raw["discount"] {
+            trimmed["discount"] = discount
+        }
+
+        // payments.methods_available filtered to PI_APPLE_PAY only, with
+        // each entry trimmed to {type, stripe_options}.
+        if let payments = raw["payments"] as? [String: Any],
+           let methods = payments["methods_available"] as? [[String: Any]] {
+            let applePayMethods = methods.compactMap(trimApplePayMethod)
+            if !applePayMethods.isEmpty {
+                trimmed["payments"] = ["methods_available": applePayMethods]
+            }
+        }
+
+        return trimmed
+    }
+
+    private nonisolated static func trimPaddleItem(_ item: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let billing = item["billing_cycle"] { out["billing_cycle"] = billing }
+        if let trial = item["trial_period"] { out["trial_period"] = trial }
+        if let price = item["price"] as? [String: Any], let unit = price["unit_price"] {
+            out["price"] = ["unit_price": unit]
+        }
+        return out
+    }
+
+    private nonisolated static func trimApplePayMethod(_ method: [String: Any]) -> [String: Any]? {
+        guard let type = method["type"] as? String, type == "PI_APPLE_PAY" else { return nil }
+        var out: [String: Any] = ["type": type]
+        if let stripeOpts = method["stripe_options"] as? [String: Any] {
+            // Only the two fields the bundle reads: api_key, country_code.
+            var trimmedStripe: [String: Any] = [:]
+            for key in ["api_key", "country_code"] {
+                if let v = stripeOpts[key] { trimmedStripe[key] = v }
+            }
+            if !trimmedStripe.isEmpty { out["stripe_options"] = trimmedStripe }
+        }
+        return out
     }
 
     // MARK: - Composite key helpers

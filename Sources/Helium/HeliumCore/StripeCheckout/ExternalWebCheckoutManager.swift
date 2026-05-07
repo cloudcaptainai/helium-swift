@@ -92,23 +92,43 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
-        // Paddle prefetch lookup: await the in-flight prefetch outcome (or
-        // get it instantly if it's already done), scoped to this paywall
-        // session. Behavior per outcome:
+        // Paddle prefetch lookup: await the prefetched outcomes for EVERY
+        // priceId on this paywall (not just the tapped one) — the bundle
+        // in Safari can switch products mid-flow, and the SDK already
+        // pre-warmed all of them on paywall-open. We ship every `.ready`
+        // outcome in `ctx.paddleBootstraps` keyed by priceId so the
+        // bundle's `ensurePaddleInitForProduct(product)` lookup hits the
+        // bootstrap regardless of which product the user picks.
+        //
+        // Tapped-priceId-specific behavior:
         //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
-        //     opening Safari to a guaranteed-failure UX).
-        //   * .ready → encode into ctx so the bundle skips its own fetch.
-        //   * .failed / .notStarted → default to opening Safari without
-        //     the bootstrap (current behavior, no regression).
-        var paddleBootstrapDict: [String: Any]? = nil
+        //     opening Safari to a guaranteed-failure UX). Other priceIds'
+        //     alreadyEntitled outcomes do NOT short-circuit — they're
+        //     just absent from the bootstrap map and the bundle defaults
+        //     to its own fetch for them.
+        //   * .ready → encoded into the map; bundle skips its own fetch.
+        //   * .failed / .notStarted → absent from the map; bundle defaults
+        //     to its own fetch (current behavior, no regression).
+        var paddleBootstrapsDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
-           let priceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
-            let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
-                sessionId: paywallSession.sessionId,
-                priceId: priceId
+           let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
+            let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
+                from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
             )
-            switch outcome {
-            case .alreadyEntitled(let code, let message):
+            // Defensive: ensure the tapped product is in the set even if
+            // it wasn't (somehow) advertised on `webProductsOfferedPaddle`.
+            // Set semantics handle the dedup.
+            let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
+
+            let outcomes = await collectPrefetchOutcomes(
+                sessionId: paywallSession.sessionId,
+                priceIds: priceIdsToAwait
+            )
+
+            // Tapped-product short-circuit fires only if the tapped product
+            // itself is alreadyEntitled. Other priceIds being entitled
+            // doesn't block this purchase.
+            if case let .alreadyEntitled(code, message) = outcomes[tappedPriceId] ?? .notStarted {
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
                 // Same handling as the pre-checkout entitlement check
@@ -117,14 +137,11 @@ public class ExternalWebCheckoutManager: NSObject {
                 // view.
                 entitlementsSource.invalidateCache()
                 return .preCheckResolved
-            case .ready:
-                paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(
-                    outcome,
-                    priceId: priceId
-                )
-            case .failed, .notStarted:
-                paddleBootstrapDict = nil // default to bundle's own fetch
             }
+
+            paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+                outcomesByPriceId: outcomes
+            )
         }
 
         let enrichedURL = try buildEnrichedCheckoutURL(
@@ -135,12 +152,39 @@ public class ExternalWebCheckoutManager: NSObject {
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
             introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
-            paddleBootstrap: paddleBootstrapDict
+            paddleBootstraps: paddleBootstrapsDict
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
+
+    /// Awaits the prefetch coordinator's outcome for every priceId in
+    /// parallel, returning the map keyed by priceId. Each `awaitOutcome`
+    /// has its own internal timeout; using a TaskGroup means total wall-
+    /// clock time is bounded by the slowest priceId, not their sum.
+    private func collectPrefetchOutcomes(
+        sessionId: String,
+        priceIds: [String]
+    ) async -> [String: PaddlePrefetchOutcome] {
+        guard !priceIds.isEmpty else { return [:] }
+        return await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
+            for priceId in priceIds {
+                group.addTask { @MainActor in
+                    let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
+                        sessionId: sessionId,
+                        priceId: priceId
+                    )
+                    return (priceId, outcome)
+                }
+            }
+            var result: [String: PaddlePrefetchOutcome] = [:]
+            for await (priceId, outcome) in group {
+                result[priceId] = outcome
+            }
+            return result
+        }
+    }
 
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when
@@ -162,12 +206,13 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Appends analytics, identity, and routing query parameters to a checkout URL
     /// as a single base64-encoded JSON `ctx` query parameter.
     ///
-    /// `paddleBootstrap` (HEL-5326) is the SDK pre-fetch payload — the bandit
-    /// and Paddle BFF responses gathered during in-app paywall display.
-    /// When non-nil, the bundle in Safari reads it from `ctx.paddleBootstrap`
-    /// and skips its own bandit + BFF round-trips entirely. Pass nil for the
-    /// Stripe path (no prefetch) or when the prefetch wasn't ready /
-    /// failed (bundle does its own fetch as a safety net).
+    /// `paddleBootstraps` (HEL-5326) is the SDK pre-fetch payload — a map
+    /// keyed by priceId of bandit + Paddle BFF responses gathered during
+    /// in-app paywall display. When non-nil, the bundle in Safari reads
+    /// it from `ctx.paddleBootstraps[priceId]` for whichever product the
+    /// user picks and skips its own bandit + BFF round-trips. Pass nil
+    /// for the Stripe path (no prefetch) or when no prefetch was ready
+    /// (bundle does its own fetch as a safety net).
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -176,7 +221,7 @@ public class ExternalWebCheckoutManager: NSObject {
         successURL: String,
         cancelURL: String,
         introOfferEligible: Bool,
-        paddleBootstrap: [String: Any]? = nil
+        paddleBootstraps: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
@@ -206,12 +251,14 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         }
 
-        // SDK prefetch (HEL-5326): when present, the bundle in Safari uses
-        // these pre-fetched responses instead of making its own bandit + BFF
-        // round-trips. See PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx
-        // for the contract.
-        if let paddleBootstrap = paddleBootstrap {
-            ctx["paddleBootstrap"] = paddleBootstrap
+        // SDK prefetch (HEL-5326): when present, the bundle in Safari
+        // uses the pre-fetched responses for whichever product the user
+        // picks (`ctx.paddleBootstraps[priceId]`) instead of making its
+        // own bandit + BFF round-trips. See
+        // `PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx` for
+        // the wire contract.
+        if let paddleBootstraps = paddleBootstraps {
+            ctx["paddleBootstraps"] = paddleBootstraps
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
