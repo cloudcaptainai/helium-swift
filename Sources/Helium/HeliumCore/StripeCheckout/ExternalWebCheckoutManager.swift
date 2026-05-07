@@ -98,7 +98,7 @@ public class ExternalWebCheckoutManager: NSObject {
         //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
         //     opening Safari to a guaranteed-failure UX).
         //   * .ready → encode into ctx so the bundle skips its own fetch.
-        //   * .failed / .notStarted → fall back to opening Safari without
+        //   * .failed / .notStarted → default to opening Safari without
         //     the bootstrap (current behavior, no regression).
         var paddleBootstrapDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
@@ -116,7 +116,7 @@ public class ExternalWebCheckoutManager: NSObject {
             case .ready:
                 paddleBootstrapDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome)
             case .failed, .notStarted:
-                paddleBootstrapDict = nil // fall back to bundle's own fetch
+                paddleBootstrapDict = nil // default to bundle's own fetch
             }
         }
 
@@ -160,7 +160,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// When non-nil, the bundle in Safari reads it from `ctx.paddleBootstrap`
     /// and skips its own bandit + BFF round-trips entirely. Pass nil for the
     /// Stripe path (no prefetch) or when the prefetch wasn't ready /
-    /// failed (bundle does its own fetch as fallback).
+    /// failed (bundle does its own fetch as a safety net).
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,

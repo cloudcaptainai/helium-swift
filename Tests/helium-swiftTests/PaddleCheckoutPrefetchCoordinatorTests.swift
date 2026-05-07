@@ -18,10 +18,10 @@ import XCTest
 ///     translates this to `preCheckResolved` + `purchase_already_entitled`
 ///     event.
 ///   * `.failed(error)` — transport error or non-2xx from either call.
-///     Stage 5 falls back to opening Safari without `ctx.paddleBootstrap`
+///     Stage 5 defaults to opening Safari without `ctx.paddleBootstrap`
 ///     and the bundle does its own fetch (current behavior, no regression).
 ///   * `.notStarted` — no prefetch ever ran for this priceId. Stage 5
-///     falls back the same way as `.failed`.
+///     defaults the same way as `.failed`.
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
@@ -305,7 +305,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     }
 
     func testEncodeBootstrapToCtx_returnsNil_whenFailedOrNotStarted() {
-        // Both should fall back to the bundle doing its own fetch — no
+        // Both should default to the bundle doing its own fetch — no
         // ctx.paddleBootstrap means the bundle hits its existing code path.
         let failed: PaddlePrefetchOutcome = .failed(error: NSError(domain: "x", code: 0))
         let notStarted: PaddlePrefetchOutcome = .notStarted
@@ -327,21 +327,40 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(priceIds, ["pri_01xyz", "pri_01def_yearly"])
     }
 
-    func testExtractPriceIds_skipsEntriesWithoutColonOrPriPrefix() {
+    /// Caught by CodeRabbit review: a key with no colon at all but a
+    /// `pri_` prefix (e.g. "pri_just_a_priceid") was silently accepted by
+    /// the old `.split(":").last` implementation. The composite-key
+    /// contract is "pro_xxx:pri_yyy" — no colon means it isn't a composite,
+    /// so it must be rejected.
+    func testExtractPriceId_rejectsKeyWithNoColon() {
+        XCTAssertNil(
+            PaddleCheckoutPrefetchCoordinator.extractPriceId(from: "pri_just_a_priceid"),
+            "A key without a colon is not a composite key, even if it starts with `pri_`."
+        )
+    }
+
+    func testExtractPriceId_rejectsKeyWithMultipleColons() {
+        // Defensive: more than one colon means the input is malformed in
+        // a way the contract doesn't cover. Skip rather than trying to
+        // guess which segment is the priceId.
+        XCTAssertNil(
+            PaddleCheckoutPrefetchCoordinator.extractPriceId(from: "pro_x:extra:pri_y")
+        )
+    }
+
+    func testExtractPriceIds_skipsMalformedCompositeKeys() {
         // Defensive: a malformed composite key shouldn't crash the prefetch
         // chain. Skip it and proceed with whatever IS valid.
         let composites = [
-            "pro_01abc:pri_valid",
-            "no_colon_here",
-            "pro_01def:NOT_pri_prefixed",
-            "",
-            ":pri_orphan",
+            "pro_01abc:pri_valid",          // happy path
+            "no_colon_here",                // missing colon → not a composite
+            "pro_01def:NOT_pri_prefixed",   // suffix doesn't look like a priceId
+            "",                             // empty
+            ":pri_orphan",                  // missing productId half
+            "pro_x:extra:pri_y",            // too many colons
         ]
         let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: composites)
-        // ":pri_orphan" splits on ":" → last is "pri_orphan", which has the
-        // pri_ prefix — so it gets through. That's fine; bandit will reject
-        // an actually-invalid priceId at the API boundary anyway.
-        XCTAssertEqual(priceIds, ["pri_valid", "pri_orphan"])
+        XCTAssertEqual(priceIds, ["pri_valid"])
     }
 
     func testExtractPriceIds_returnsEmptyForEmptyInput() {

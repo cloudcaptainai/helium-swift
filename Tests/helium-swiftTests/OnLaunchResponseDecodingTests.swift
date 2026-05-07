@@ -22,7 +22,7 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
     // (Codable's auto-synthesized decoder rejects missing non-optional keys).
     // Build dynamically so each test can layer one extra key on top without
     // re-typing the whole boilerplate.
-    private func makeOnLaunchJSON(extras: [String: Any] = [:]) -> Data {
+    private func makeOnLaunchJSON(extras: [String: Any] = [:]) throws -> Data {
         var dict: [String: Any] = [
             "triggerToPaywalls": [:],
             "segmentBrowserWriteKey": "test_key",
@@ -30,13 +30,13 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
             "fetchedConfigID": UUID().uuidString,
         ]
         for (k, v) in extras { dict[k] = v }
-        return try! JSONSerialization.data(withJSONObject: dict, options: [])
+        return try JSONSerialization.data(withJSONObject: dict, options: [])
     }
 
     // ---------- paddleClientToken contract ----------
 
     func testPaddleClientTokenDecodesFromJSON() throws {
-        let json = makeOnLaunchJSON(extras: [
+        let json = try makeOnLaunchJSON(extras: [
             "paddleClientToken": "test_paddle_client_token_abc123",
         ])
 
@@ -52,7 +52,7 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
     func testPaddleClientTokenIsNilWhenAbsent() throws {
         // Bandit omits the key entirely when the org has no Paddle products
         // (omitempty on the Go side). SDK must treat that as nil, not crash.
-        let json = makeOnLaunchJSON(extras: [:])
+        let json = try makeOnLaunchJSON(extras: [:])
 
         let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
 

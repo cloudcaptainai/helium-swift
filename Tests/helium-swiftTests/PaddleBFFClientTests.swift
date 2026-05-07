@@ -189,6 +189,39 @@ final class PaddleBFFClientTests: XCTestCase {
         )
     }
 
+    /// CodeRabbit flag: the original implementation used
+    /// `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`,
+    /// which leaves reserved query delimiters like `?`, `&`, `=` unescaped
+    /// when they appear in the *value*. A bundle id like
+    /// "com.example.app?evil=1" would produce a URL where the second `?`
+    /// terminates the source_page query string, fragmenting the URL Paddle
+    /// validates against its allow-list. Use URLComponents/URLQueryItem so
+    /// the value is escaped correctly.
+    func testCreateTransactionCheckout_sourcePage_escapesReservedCharsInBundleId() async throws {
+        MockURLProtocol.requestHandler = okResponseHandler()
+
+        _ = try await client.createTransactionCheckout(
+            transactionId: "txn_xxx",
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.app?evil=1&"
+        )
+
+        let captured = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let bodyDict = try XCTUnwrap(JSONSerialization.jsonObject(with: captured.httpBody ?? Data()) as? [String: Any])
+        let data = try XCTUnwrap(bodyDict["data"] as? [String: Any])
+        let settings = try XCTUnwrap(data["settings"] as? [String: Any])
+        let sourcePage = try XCTUnwrap(settings["source_page"] as? String)
+
+        // Reserved query delimiters MUST be percent-encoded in the value
+        // portion. After encoding, the URL should still parse cleanly via
+        // URLComponents into a single query item with the original raw value.
+        let components = try XCTUnwrap(URLComponents(string: sourcePage))
+        let items = try XCTUnwrap(components.queryItems)
+        XCTAssertEqual(items.count, 1, "Reserved chars must not split the value into multiple query items")
+        XCTAssertEqual(items[0].name, "helium_ios_bundle_id")
+        XCTAssertEqual(items[0].value, "com.example.app?evil=1&")
+    }
+
     func testCreateTransactionCheckout_sourcePage_omitsBundleIdQueryWhenNotProvided() async throws {
         MockURLProtocol.requestHandler = okResponseHandler()
 

@@ -57,9 +57,9 @@ public class HeliumPaymentAPIClient {
 
     /// Parses a non-2xx response body into the generic
     /// `HeliumPaymentAPIError.serverError(statusCode:message:)` shape. Tries
-    /// the structured `PaymentAPIErrorEnvelope` first; falls back to the raw
+    /// the structured `PaymentAPIErrorEnvelope` first; defaults to the raw
     /// body text if the envelope doesn't decode. Used by `post()` and as the
-    /// non-409-duplicate fallback in `createPaddleTransactionForPaywall`.
+    /// non-409-duplicate default path in `createPaddleTransactionForPaywall`.
     private func genericServerError(statusCode: Int, body: Data) -> HeliumPaymentAPIError {
         if let envelope = try? JSONDecoder().decode(PaymentAPIErrorEnvelope.self, from: body),
            case let parts = [envelope.error.code, envelope.error.type, envelope.error.detail]

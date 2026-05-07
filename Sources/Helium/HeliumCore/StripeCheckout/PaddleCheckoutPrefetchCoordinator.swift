@@ -11,7 +11,7 @@ import Foundation
 ///     does its own fetch (current behavior, no regression)
 ///   * `.notStarted` → no prefetch was ever scheduled for this priceId
 ///     (paywall didn't have it, or was dismissed before prefetch ran).
-///     Same fallback as `.failed`.
+///     Same default path as `.failed`.
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -26,8 +26,8 @@ enum PaddlePrefetchOutcome {
 /// in parallel per priceId during in-app paywall presentation, caches
 /// in-flight Tasks keyed by priceId, exposes a click-handler-friendly
 /// `awaitOutcome` that returns instantly when ready or blocks until in-flight
-/// completes (per the user's "wait, don't fall back" preference for in-flight
-/// case — see HEL-5326 design discussion).
+/// completes (per the user's "wait, don't take the default path" preference
+/// for in-flight case — see HEL-5326 design discussion).
 ///
 /// Design properties:
 ///   * `prefetch` returns immediately, never blocks. Tasks run on detached
@@ -100,9 +100,9 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     /// Returns the cached outcome for a priceId. Blocks until the in-flight
-    /// task completes (per the design: never fall back to the slow path
-    /// when a prefetch is in-flight; just wait for it). Returns
-    /// `.notStarted` for priceIds that were never prefetched.
+    /// task completes (per the design: never default to the slow path when
+    /// a prefetch is in-flight; just wait for it). Returns `.notStarted`
+    /// for priceIds that were never prefetched.
     func awaitOutcome(priceId: String) async -> PaddlePrefetchOutcome {
         guard let task = cache[priceId] else {
             return .notStarted
@@ -151,7 +151,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// its own bandit + Paddle BFF round-trips entirely.
     ///
     /// Returns nil for `.alreadyEntitled` (Stage 5 short-circuits before
-    /// building the URL), `.failed`, and `.notStarted` (those fall back to
+    /// building the URL), `.failed`, and `.notStarted` (those default to
     /// the bundle's existing fetch path with no ctx hint).
     ///
     /// Shape:
@@ -189,19 +189,32 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     // MARK: - Composite key helpers
 
-    /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input
-    /// (no colon, suffix doesn't start with `pri_`). Single source of
-    /// truth for parsing `HeliumPaywallInfo.webProductsOfferedPaddle`
-    /// composite keys — the click-time path in
-    /// ExternalWebCheckoutManager calls this for one productKey,
-    /// `extractPriceIds(from:)` calls it for the whole array on
-    /// paywall display.
+    /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
+    ///
+    /// Strict shape: exactly one `:` separator with non-empty halves and a
+    /// `pri_`-prefixed suffix. Rejects:
+    ///   * "pri_just_a_priceid"   (no colon — not a composite)
+    ///   * "pro_x:extra:pri_y"    (too many colons — ambiguous)
+    ///   * ":pri_orphan"          (missing productId half)
+    ///   * "pro_x:something_else" (suffix doesn't look like a priceId)
+    ///
+    /// Single source of truth for parsing
+    /// `HeliumPaywallInfo.webProductsOfferedPaddle` composite keys — the
+    /// click-time path in ExternalWebCheckoutManager calls this for one
+    /// productKey, `extractPriceIds(from:)` calls it for the whole array
+    /// on paywall display.
     nonisolated static func extractPriceId(from compositeKey: String) -> String? {
-        guard let suffix = compositeKey.split(separator: ":").last.map(String.init),
-              suffix.hasPrefix("pri_") else {
+        let parts = compositeKey.split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ).map(String.init)
+        guard parts.count == 2,
+              !parts[0].isEmpty,
+              !parts[1].isEmpty,
+              parts[1].hasPrefix("pri_") else {
             return nil
         }
-        return suffix
+        return parts[1]
     }
 
     /// Bulk variant for paywall-display-time fan-out. Filters out

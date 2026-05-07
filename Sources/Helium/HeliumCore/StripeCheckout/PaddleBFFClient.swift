@@ -57,7 +57,7 @@ public struct PaddleTransactionCheckoutResult {
 /// flag for the SDK to get out of sync.
 final class PaddleBFFClient {
 
-    /// Bundler's hard-coded fallback origin (server/heliumStandalonePaddle.ts).
+    /// Bundler's hard-coded default origin (server/heliumStandalonePaddle.ts).
     /// We use the same per-environment values so source_page survives Paddle's
     /// strict validation against the global allow-list (paddle has approved
     /// both `bundles.clickthrough.to` and `bundles-staging.clickthrough.to`).
@@ -157,8 +157,20 @@ final class PaddleBFFClient {
               !trimmed.isEmpty else {
             return origin
         }
-        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
-        return "\(origin)?helium_ios_bundle_id=\(encoded)"
+        // Use URLComponents/URLQueryItem so reserved query delimiters
+        // (`?`, `&`, `=`, `+`) inside the bundle id are escaped correctly.
+        // Manual `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`
+        // leaves these unescaped because they're "allowed" at the
+        // query-string level, but the value position requires stricter
+        // escaping — otherwise a malicious / oddly-named bundle id would
+        // fragment the URL and break Paddle's allow-list validation.
+        guard var components = URLComponents(string: origin) else {
+            return origin
+        }
+        components.queryItems = [
+            URLQueryItem(name: "helium_ios_bundle_id", value: trimmed)
+        ]
+        return components.string ?? origin
     }
 
     // MARK: - Internal decode envelope

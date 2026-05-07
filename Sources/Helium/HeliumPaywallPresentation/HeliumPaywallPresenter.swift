@@ -466,7 +466,7 @@ class HeliumPaywallPresenter {
         //
         // Fail-open: any missing piece (paywallInfo, paddleClientToken,
         // empty product list) just means no prefetch happens — bundle
-        // falls back to its own fetch path on click.
+        // defaults to its own fetch path on click.
         if let info = paywallVC.paywallSession.paywallInfoWithBackups,
            let webProducts = info.webProductsOfferedPaddle,
            !webProducts.isEmpty,

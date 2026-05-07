@@ -26,21 +26,49 @@ import Foundation
 /// Always reset the requestHandler in tearDown so handlers don't leak across
 /// tests (the handler is a static, so without reset a later test could pick
 /// up a previous test's stubbed behavior).
+///
+/// Concurrency: URLProtocol callbacks run on URLSession's internal queue, and
+/// when the protocol is registered on a session that issues parallel data(for:)
+/// calls (the prefetch coordinator's parallel fan-out is the canonical case),
+/// `startLoading()` fires concurrently from multiple threads. Both
+/// `requestHandler` (read) and `capturedRequests` (read+append) need to be
+/// serialized — otherwise tests intermittently lose captured requests or
+/// race-condition during `reset()` between two tests. We use a serial dispatch
+/// queue as the synchronization primitive (lighter than an actor, and the
+/// protocol's instance methods aren't async-friendly anyway).
 final class MockURLProtocol: URLProtocol {
+
+    private static let stateQueue = DispatchQueue(label: "com.helium.tests.MockURLProtocol")
+    private static var _requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data?))?
+    private static var _capturedRequests: [URLRequest] = []
+
     /// Test sets this closure; the protocol calls it for every intercepted
     /// request and uses the returned response + body. Throwing from the
     /// handler surfaces as a transport error to the caller, which lets tests
     /// drive both happy-path and network-failure cases.
-    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data?))?
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
+        get { stateQueue.sync { _requestHandler } }
+        set { stateQueue.sync { _requestHandler = newValue } }
+    }
 
     /// Captured requests, in order. Lets tests assert on the exact URL,
     /// method, headers, and body that was sent — useful when the production
     /// code's contract with the server is part of what's under test.
-    static var capturedRequests: [URLRequest] = []
+    static var capturedRequests: [URLRequest] {
+        stateQueue.sync { _capturedRequests }
+    }
+
+    /// Internal append, called from `startLoading`. Serializes via the
+    /// state queue so concurrent loads don't race when appending.
+    fileprivate static func appendCapturedRequest(_ request: URLRequest) {
+        stateQueue.sync { _capturedRequests.append(request) }
+    }
 
     static func reset() {
-        requestHandler = nil
-        capturedRequests = []
+        stateQueue.sync {
+            _requestHandler = nil
+            _capturedRequests = []
+        }
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -70,7 +98,7 @@ final class MockURLProtocol: URLProtocol {
         // Capture the canonical request. URLProtocol receives a fully-formed
         // request (incl. body via httpBodyStream when the body is large), so
         // tests get fidelity on what would have hit the wire.
-        MockURLProtocol.capturedRequests.append(captureWithBody(request))
+        MockURLProtocol.appendCapturedRequest(captureWithBody(request))
 
         do {
             let (response, body) = try handler(request)
