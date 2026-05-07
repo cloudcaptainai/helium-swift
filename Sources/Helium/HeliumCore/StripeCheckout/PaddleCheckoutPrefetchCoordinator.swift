@@ -216,64 +216,43 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
-    /// Click-handler gather step: awaits the tapped priceId fully, and
-    /// gathers other priceIds opportunistically without blocking.
+    /// Click-handler gather step: awaits prefetch outcomes for ALL
+    /// priceIds on the paywall in parallel before the SDK opens Safari.
     ///
-    /// Two phases:
-    ///   1. **Tapped** — `awaitOutcome` with the default timeout (3s).
-    ///      This is the click-latency budget; the user is buying this
-    ///      product, we wait for its prefetch.
-    ///   2. **Others** — `awaitOutcome` per priceId in parallel via
-    ///      TaskGroup, but with a tiny `opportunisticTimeoutSeconds`
-    ///      timeout. If a non-tapped priceId is already complete by
-    ///      click-time, ship it; if it's still in flight, drop it (the
-    ///      bundle's live-fetch path covers product-switching in Safari).
+    /// **All-or-bounded by design.** The bundle is the user-facing
+    /// surface in Safari; if it opens with missing bootstraps, the
+    /// user can switch products and trigger live-fetch loaders inside
+    /// Safari — the very UX the prefetch optimization exists to
+    /// eliminate. Holding the in-app click for a moment to ensure
+    /// every bootstrap is in `ctx.paddleBootstraps` before redirect
+    /// is the explicit trade: brief in-app wait beats Safari loaders.
     ///
-    /// Without the split, a single stuck non-tapped priceId would hold
-    /// the click handler for up to the full 3s — bootstraps for products
-    /// the user isn't buying right now aren't worth that latency cost.
+    /// `withTaskGroup` runs all priceIds concurrently — wall-clock is
+    /// bounded by max(per-priceId timeout, slowest priceId). Each
+    /// `awaitOutcome` has the default 3s timeout, so a stuck priceId
+    /// caps the worst-case click latency at 3s (resolves to `.failed`
+    /// which the encoders skip).
     func collectPrefetchOutcomes(
         sessionId: String,
-        tappedPriceId: String,
-        otherPriceIds: [String]
+        priceIds: [String]
     ) async -> [String: PaddlePrefetchOutcome] {
-        // Phase 1: tapped — full timeout (this IS the click-latency budget).
-        let tappedOutcome = await awaitOutcome(
-            sessionId: sessionId, priceId: tappedPriceId
-        )
-        var result: [String: PaddlePrefetchOutcome] = [tappedPriceId: tappedOutcome]
-        if otherPriceIds.isEmpty { return result }
-
-        // Phase 2: others — best-effort, parallel, near-zero blocking.
-        // 5ms is comfortably above the cost of resolving an already-
-        // complete Task and well below user-perceptible click latency.
-        let opportunistic = await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
-            for priceId in otherPriceIds where priceId != tappedPriceId {
+        guard !priceIds.isEmpty else { return [:] }
+        return await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
+            for priceId in priceIds {
                 group.addTask { @MainActor in
                     let outcome = await self.awaitOutcome(
-                        sessionId: sessionId,
-                        priceId: priceId,
-                        timeout: Self.opportunisticTimeoutSeconds
+                        sessionId: sessionId, priceId: priceId
                     )
                     return (priceId, outcome)
                 }
             }
-            var collected: [String: PaddlePrefetchOutcome] = [:]
+            var result: [String: PaddlePrefetchOutcome] = [:]
             for await (priceId, outcome) in group {
-                collected[priceId] = outcome
+                result[priceId] = outcome
             }
-            return collected
+            return result
         }
-        result.merge(opportunistic) { _, new in new }
-        return result
     }
-
-    /// Tiny timeout for the opportunistic gather of non-tapped priceIds.
-    /// Resolves already-complete tasks instantly via the
-    /// `withCheckedContinuation` race in `awaitOutcome`; in-flight tasks
-    /// resolve to `.failed(timeout)` which the encoders treat as
-    /// "skip this priceId."
-    static let opportunisticTimeoutSeconds: TimeInterval = 0.005
 
     /// Cancels every in-flight task owned by this session and removes its
     /// cache entries. Other sessions are untouched. Cancellation

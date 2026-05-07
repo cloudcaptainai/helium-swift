@@ -111,21 +111,29 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
-        // Paddle prefetch lookup: await the TAPPED priceId fully (this
-        // is the click-latency budget), and gather OTHER priceIds
-        // opportunistically without blocking. See
-        // `PaddleCheckoutPrefetchCoordinator.collectPrefetchOutcomes`
-        // for the two-phase rationale.
+        // Paddle prefetch lookup: await EVERY priceId on the paywall
+        // (not just the tapped one) before redirecting to Safari.
+        // `collectPrefetchOutcomes` runs them in parallel via TaskGroup
+        // with the per-priceId default timeout (3s), so wall-clock is
+        // bounded by max(slowest priceId, 3s) — typically ~0ms when
+        // the user has been reading the paywall for a few seconds.
+        //
+        // Why wait for non-tapped: the bundle in Safari can switch
+        // products mid-flow. If a non-tapped priceId's bootstrap isn't
+        // in ctx.paddleBootstraps when Safari opens, the bundle's
+        // live-fetch path runs there instead — defeating the entire
+        // "no loader on click" UX the prefetch exists to deliver. A
+        // brief in-app wait before redirect is the explicit trade.
         //
         // Tapped-priceId-specific behavior:
         //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
         //     opening Safari to a guaranteed-failure UX). Other priceIds'
         //     alreadyEntitled outcomes do NOT short-circuit — they're
-        //     just absent from the bootstrap map and the bundle defaults
-        //     to its own fetch for them.
-        //   * .ready → encoded into the map; bundle skips its own fetch.
-        //   * .failed / .notStarted → absent from the map; bundle defaults
-        //     to its own fetch (current behavior, no regression).
+        //     just routed to ctx.paddleAlreadyEntitled so the bundle
+        //     can short-circuit if the user picks that product in Safari.
+        //   * .ready → encoded into the bootstraps map.
+        //   * .failed / .notStarted → absent from the map; bundle's
+        //     live-fetch path is the safety net.
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
@@ -133,12 +141,13 @@ public class ExternalWebCheckoutManager: NSObject {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
                 from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
             )
-            let otherPriceIds = allPriceIds.filter { $0 != tappedPriceId }
+            // Defensive: ensure tapped is in the await set even if it
+            // wasn't (somehow) in `webProductsOfferedPaddle`.
+            let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
 
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
-                tappedPriceId: tappedPriceId,
-                otherPriceIds: otherPriceIds
+                priceIds: priceIdsToAwait
             )
 
             // Tapped-product short-circuit fires only if the tapped product
