@@ -65,16 +65,8 @@ class HeliumPaywallDelegateWrapper {
         } ?? false
         
         StoreKit1Listener.ensureListening()
-        
-        let transactionStatus: HeliumPaywallTransactionStatus
 
-        // Carry the prefetch's existingSubscriptionId (when present)
-        // through to the fired PurchaseRestoredEvent for analytics parity
-        // with the bundle's helium_purchase_already_entitled Jitsu fire's
-        // canonicalJoinTransactionId. Set only on the Paddle pre-checkout-
-        // entitled path (.preCheckResolved with a sub id); nil for
-        // StoreKit, Stripe, and cached-entitlements pre-checks.
-        var entitledExistingSubscriptionId: String? = nil
+        let transactionStatus: HeliumPaywallTransactionStatus
 
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
         let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
@@ -98,7 +90,6 @@ class HeliumPaywallDelegateWrapper {
                     paywallSession: paywallSession
                 )
                 transactionStatus = outcome.transactionStatus
-                entitledExistingSubscriptionId = outcome.existingSubscriptionId
             } catch {
                 transactionStatus = .failed(error)
             }
@@ -110,7 +101,6 @@ class HeliumPaywallDelegateWrapper {
                     paywallSession: paywallSession
                 )
                 transactionStatus = outcome.transactionStatus
-                entitledExistingSubscriptionId = outcome.existingSubscriptionId
             } catch {
                 transactionStatus = .failed(error)
             }
@@ -129,8 +119,7 @@ class HeliumPaywallDelegateWrapper {
                 triggerName: triggerName,
                 paywallName: paywallTemplateName,
                 restoreOrigin: .duringPurchase,
-                paymentProcessor: paymentProcessor,
-                existingSubscriptionId: entitledExistingSubscriptionId
+                paymentProcessor: paymentProcessor
             ), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()

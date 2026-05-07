@@ -520,9 +520,9 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     /// Decides whether the tapped product warrants short-circuiting the
     /// click flow (skip Safari, treat as restored). Returns the
-    /// `(code, message, existingSubscriptionId)` when the *tapped* priceId
-    /// is alreadyEntitled WITH a restorable code (currently only
-    /// `duplicate_subscription`); nil otherwise.
+    /// `(code, message)` when the *tapped* priceId is alreadyEntitled
+    /// WITH a restorable code (currently only `duplicate_subscription`);
+    /// nil otherwise.
     ///
     /// **Crucially, OTHER priceIds being alreadyEntitled don't trigger
     /// short-circuit.** Real scenario: paywall offers monthly + yearly,
@@ -540,10 +540,10 @@ final class PaddleCheckoutPrefetchCoordinator {
     nonisolated static func tappedShortCircuit(
         in outcomes: [String: PaddlePrefetchOutcome],
         tappedPriceId: String
-    ) -> (code: String, message: String, existingSubscriptionId: String?)? {
-        if case let .alreadyEntitled(code, message, existingSubscriptionId) = outcomes[tappedPriceId] ?? .notStarted,
+    ) -> (code: String, message: String)? {
+        if case let .alreadyEntitled(code, message, _) = outcomes[tappedPriceId] ?? .notStarted,
            PaddleErrorCodes.isRestorable(code) {
-            return (code, message, existingSubscriptionId)
+            return (code, message)
         }
         return nil
     }

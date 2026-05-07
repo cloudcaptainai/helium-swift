@@ -755,34 +755,23 @@ public struct PurchaseRestoredEvent: ProductEvent {
     /// Which payment processor surfaced this restored entitlement.
     public let paymentProcessor: HeliumPaymentProcessor
 
-    /// The buyer's existing Paddle subscription id, when the SDK pre-fetch
-    /// surfaced one in bandit's 409 body. Mirrors the bundler's
-    /// `helium_purchase_already_entitled` Jitsu event's
-    /// `canonicalJoinTransactionId` field — present when the SDK has the
-    /// id, absent (nil) otherwise. Currently populated only on the
-    /// Paddle web-checkout `.duringPurchase` path; nil for StoreKit
-    /// restores and for cached-entitlements pre-checks (which don't have
-    /// access to a sub id).
-    public let existingSubscriptionId: String?
-
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, existingSubscriptionId: String? = nil, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.restoreOrigin = restoreOrigin
         self.paymentProcessor = paymentProcessor
-        self.existingSubscriptionId = existingSubscriptionId
         self.timestamp = timestamp
     }
 
     public var eventName: String { "purchaseRestored" }
 
     public func toDictionary() -> [String: Any] {
-        var dict: [String: Any] = [
+        return [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
@@ -792,10 +781,6 @@ public struct PurchaseRestoredEvent: ProductEvent {
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
-        if let existingSubscriptionId, !existingSubscriptionId.isEmpty {
-            dict["existingSubscriptionId"] = existingSubscriptionId
-        }
-        return dict
     }
 
     public func toLegacyEvent() -> HeliumPaywallEvent {

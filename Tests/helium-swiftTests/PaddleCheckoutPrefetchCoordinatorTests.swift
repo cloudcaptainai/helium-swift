@@ -951,39 +951,6 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         "trial_already_used must NOT short-circuit — it routes to entitled_failure on the bundle, not entitled_success")
     }
 
-    /// `existingSubscriptionId` flows through `tappedShortCircuit` so the
-    /// caller can populate `PurchaseRestoredEvent.existingSubscriptionId`
-    /// (analytics parity with the bundle's
-    /// `helium_purchase_already_entitled` `canonicalJoinTransactionId`).
-    func testTappedShortCircuit_returnsExistingSubscriptionIdWhenPresent() {
-        let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_tapped": .alreadyEntitled(
-                code: "duplicate_subscription",
-                message: "You already own this",
-                existingSubscriptionId: "sub_01k_abc"
-            ),
-        ]
-        let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
-            in: outcomes, tappedPriceId: "pri_tapped"
-        )
-        XCTAssertEqual(result?.code, "duplicate_subscription")
-        XCTAssertEqual(result?.existingSubscriptionId, "sub_01k_abc")
-    }
-
-    func testTappedShortCircuit_returnsNilExistingSubscriptionIdWhenAbsent() {
-        let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_tapped": .alreadyEntitled(
-                code: "duplicate_subscription",
-                message: "You already own this",
-                existingSubscriptionId: nil
-            ),
-        ]
-        let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
-            in: outcomes, tappedPriceId: "pri_tapped"
-        )
-        XCTAssertNil(result?.existingSubscriptionId)
-    }
-
     func testTappedShortCircuit_whenTappedIsFailed_returnsNil() {
         // .failed → bundle does its own fetch; not a short-circuit.
         let outcomes: [String: PaddlePrefetchOutcome] = [
