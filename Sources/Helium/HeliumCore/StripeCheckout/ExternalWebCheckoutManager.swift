@@ -267,7 +267,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
 
         // Compress (raw DEFLATE / RFC 1951) then base64URL-encode. The
-        // bundler reads `?ctxz=` and decodes via
+        // bundler reads `?ctx=` and decodes via
         // `DecompressionStream('deflate-raw')` — Apple's `COMPRESSION_ZLIB`
         // produces exactly that wire format despite the name. See
         // CtxCompression.swift for the wire-pairing rationale.
@@ -275,7 +275,7 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.failedToBuildEnrichedURL
         }
         var queryItems = components.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "ctxz", value: compressed.base64URLEncodedString()))
+        queryItems.append(URLQueryItem(name: "ctx", value: compressed.base64URLEncodedString()))
         components.queryItems = queryItems
 
         guard let url = components.url else {

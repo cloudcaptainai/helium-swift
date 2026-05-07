@@ -159,16 +159,15 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertGreaterThan(reduction, 0.20, "Expected >=20% size reduction; got \(Int(reduction * 100))%")
     }
 
-    // MARK: - End-to-end: buildEnrichedCheckoutURL emits compressed ?ctxz=
+    // MARK: - End-to-end: buildEnrichedCheckoutURL emits compressed ?ctx=
 
-    /// Integration test: the URL `buildEnrichedCheckoutURL` produces must
-    /// have a `?ctxz=` query parameter (NOT `?ctx=`), and base64URL-
-    /// decoding it then deflate-raw-decompressing must yield the same
-    /// JSON the legacy uncompressed path would have produced.
+    /// Integration test: the URL `buildEnrichedCheckoutURL` produces
+    /// has a `?ctx=` query parameter, and base64URL-decoding it then
+    /// deflate-raw-decompressing yields the original JSON.
     ///
-    /// This is the contract the bundler PR consumes: `ctxz` over `ctx`,
-    /// base64URL alphabet, raw DEFLATE bytes inside.
-    func testBuildEnrichedCheckoutURL_emitsCtxzWithCompressedThenBase64URLEncodedJSON() async throws {
+    /// This is the wire contract the bundler consumes: base64URL of
+    /// raw-DEFLATE-compressed JSON in `?ctx=`.
+    func testBuildEnrichedCheckoutURL_emitsCompressedCtxAsBase64URL() async throws {
         // Helium.lastApiKeyUsed gates baseRequestBody — without it
         // buildEnrichedCheckoutURL throws .notInitialized.
         Helium.lastApiKeyUsed = "test_api_key_for_compression"
@@ -204,21 +203,18 @@ final class CtxCompressionTests: XCTestCase {
             paddleBootstraps: nil
         )
 
-        // 1) URL must use ?ctxz=, not ?ctx=. The query param name is the
-        //    bundler's signal that it should decompress before parsing.
+        // 1) URL has ?ctx= with compressed-then-base64URL'd bytes.
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         let items: [URLQueryItem] = components.queryItems ?? []
         let queryNames: [String] = items.map { $0.name }
-        XCTAssertTrue(queryNames.contains("ctxz"),
-                      "Expected ?ctxz= query param; got \(queryNames)")
-        XCTAssertFalse(queryNames.contains("ctx"),
-                       "Should not emit both ?ctx= and ?ctxz= — that defeats the size win")
+        XCTAssertTrue(queryNames.contains("ctx"),
+                      "Expected ?ctx= query param; got \(queryNames)")
 
-        let ctxzValue = try XCTUnwrap(items.first(where: { $0.name == "ctxz" })?.value)
+        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
 
         // 2) base64URL-decode the value back to compressed bytes.
-        let compressed = try XCTUnwrap(base64URLDecode(ctxzValue),
-                                       "ctxz value isn't valid base64URL")
+        let compressed = try XCTUnwrap(base64URLDecode(ctxValue),
+                                       "ctx value isn't valid base64URL")
 
         // 3) Decompress (Apple's COMPRESSION_ZLIB consumes raw DEFLATE).
         let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
@@ -296,18 +292,18 @@ final class CtxCompressionTests: XCTestCase {
             introOfferEligible: true, paddleBootstraps: bootstraps
         )
 
-        // Size check: compare the compressed URL's ctxz value length to
-        // what an UNcompressed equivalent would have been. Lower bound
-        // is 30% smaller (compression factor amplified by base64's 4:3
-        // expansion ratio applying to both).
+        // Size check: compare the compressed ?ctx= value length to what
+        // an UNcompressed equivalent would have been. Lower bound is 30%
+        // smaller (compression factor amplified by base64's 4:3 expansion
+        // ratio applying to both).
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         let items: [URLQueryItem] = components.queryItems ?? []
-        let ctxzValue = try XCTUnwrap(items.first(where: { $0.name == "ctxz" })?.value)
-        let compressedB64Length = ctxzValue.count
+        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let compressedB64Length = ctxValue.count
 
         // Reconstruct what the uncompressed JSON would look like by
         // decompressing the URL and measuring its base64URL'd size.
-        let compressed = try XCTUnwrap(base64URLDecode(ctxzValue))
+        let compressed = try XCTUnwrap(base64URLDecode(ctxValue))
         let decompressed = try decompressWithAppleZlib(compressed, originalSize: 16_384)
         let uncompressedB64Length = decompressed.base64URLEncodedString().count
 
@@ -345,8 +341,8 @@ final class CtxCompressionTests: XCTestCase {
 
     /// Reverses our `base64URLEncodedString` (RFC 4648 §5: `+/` → `-_`,
     /// padding stripped) back to bytes. Mirrors what the bundler's
-    /// `decodeHeliumCtxParam` does, so this test uses the same algorithm
-    /// the production bundle uses when consuming `?ctxz=`.
+    /// `decodeBase64UrlToBytes` does, so this test uses the same
+    /// algorithm the production bundle uses when consuming `?ctx=`.
     private func base64URLDecode(_ encoded: String) -> Data? {
         var s = encoded.replacingOccurrences(of: "-", with: "+")
                        .replacingOccurrences(of: "_", with: "/")
