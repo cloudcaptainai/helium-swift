@@ -127,10 +127,13 @@ public class ExternalWebCheckoutManager: NSObject {
 
             // Tapped-product short-circuit fires only if the tapped product
             // itself is alreadyEntitled. Other priceIds being entitled
-            // doesn't block this purchase.
-            if case let .alreadyEntitled(code, message) = outcomes[tappedPriceId] ?? .notStarted {
+            // doesn't block this purchase — see `tappedShortCircuit`'s
+            // docstring (and tests) for the property this preserves.
+            if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+                in: outcomes, tappedPriceId: tappedPriceId
+            ) {
                 HeliumLogger.log(.debug, category: .entitlements,
-                                 "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
+                                 "\(provider.displayName) prefetch alreadyEntitled (\(shortCircuit.code)): \(shortCircuit.message) — skipping browser")
                 // Same handling as the pre-checkout entitlement check
                 // earlier in this method: no browser open, invalidate the
                 // entitlements cache so future flows reflect the server's

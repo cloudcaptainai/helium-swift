@@ -426,6 +426,29 @@ final class PaddleCheckoutPrefetchCoordinator {
         return out
     }
 
+    // MARK: - Tapped-product short-circuit decision
+
+    /// Decides whether the tapped product warrants short-circuiting the
+    /// click flow (skip Safari, fire `purchase_already_entitled`).
+    /// Returns the alreadyEntitled `(code, message)` when the *tapped*
+    /// priceId itself is alreadyEntitled; nil otherwise.
+    ///
+    /// **Crucially, OTHER priceIds being alreadyEntitled don't trigger
+    /// short-circuit.** Real scenario: paywall offers monthly + yearly,
+    /// user already owns yearly, user taps monthly. `outcomes["pri_yearly"]`
+    /// will be `.alreadyEntitled` and `outcomes["pri_monthly"]` will be
+    /// `.ready` — we want to allow the monthly purchase to proceed
+    /// normally, not block it because of the unrelated yearly entitlement.
+    nonisolated static func tappedShortCircuit(
+        in outcomes: [String: PaddlePrefetchOutcome],
+        tappedPriceId: String
+    ) -> (code: String, message: String)? {
+        if case let .alreadyEntitled(code, message) = outcomes[tappedPriceId] ?? .notStarted {
+            return (code, message)
+        }
+        return nil
+    }
+
     // MARK: - Composite key helpers
 
     /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.

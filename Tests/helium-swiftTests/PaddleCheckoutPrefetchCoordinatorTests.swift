@@ -95,6 +95,28 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         """
     }
 
+    /// Minimal bandit response for tests that only need a "ready" outcome
+    /// shape and don't care about the inner field values.
+    private func makeBandit(transactionId: String = "txn_x") -> PaddleCreateTransactionForPaywallResponse {
+        return PaddleCreateTransactionForPaywallResponse(
+            transactionId: transactionId,
+            paddleCustomerId: nil,
+            isKnownCustomer: false,
+            requestId: "req_x"
+        )
+    }
+
+    /// Minimal paddle BFF result for tests that only need a "ready" outcome
+    /// shape — the bytes don't have to be a real Paddle response, the
+    /// short-circuit decision tests don't decode them.
+    private func makePaddle() -> PaddleTransactionCheckoutResult {
+        return PaddleTransactionCheckoutResult(
+            rawBody: "{}".data(using: .utf8)!,
+            checkoutId: "che_x",
+            transactionId: "txn_x"
+        )
+    }
+
     private func bothSucceedHandler() -> ((URLRequest) throws -> (HTTPURLResponse, Data?)) {
         return { request in
             let url = request.url!.absoluteString
@@ -678,6 +700,75 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let methods = try XCTUnwrap((data["payments"] as? [String: Any])?["methods_available"] as? [[String: Any]])
         XCTAssertEqual(Set(methods[0].keys), ["type", "stripe_options"],
                        "Apple Pay entry should be trimmed to {type, stripe_options} only")
+    }
+
+    // MARK: - Tapped-product short-circuit decision
+
+    /// `tappedShortCircuit` is the pure decision the click handler makes
+    /// after collecting prefetch outcomes for every priceId on the
+    /// paywall: should we skip Safari and resolve the flow as
+    /// `preCheckResolved` because the user *specifically tapped* a
+    /// product they already own?
+    ///
+    /// Critical: ONLY the tapped priceId's outcome can trigger the
+    /// short-circuit. Other priceIds being alreadyEntitled (e.g. user
+    /// already owns yearly but tapped monthly) must NOT block the
+    /// monthly purchase. This is the property the test below locks in.
+    func testTappedShortCircuit_whenTappedIsAlreadyEntitled_returnsCodeAndMessage() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_tapped": .alreadyEntitled(code: "duplicate_subscription", message: "You already own this"),
+            "pri_other": .ready(bandit: makeBandit(), paddle: makePaddle()),
+        ]
+        let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            in: outcomes, tappedPriceId: "pri_tapped"
+        )
+        XCTAssertEqual(result?.code, "duplicate_subscription")
+        XCTAssertEqual(result?.message, "You already own this")
+    }
+
+    /// The most important behavioral guarantee: a non-tapped priceId
+    /// being alreadyEntitled must NOT short-circuit the tapped product.
+    /// Real scenario: user owns yearly, paywall offers monthly + yearly,
+    /// user taps monthly — they should be allowed to purchase monthly.
+    func testTappedShortCircuit_whenOnlyOtherPriceIdIsAlreadyEntitled_doesNotShortCircuit() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_tapped": .ready(bandit: makeBandit(), paddle: makePaddle()),
+            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "You own yearly"),
+        ]
+        let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            in: outcomes, tappedPriceId: "pri_tapped"
+        )
+        XCTAssertNil(result, "Other priceIds being alreadyEntitled must not block the tapped purchase")
+    }
+
+    func testTappedShortCircuit_whenTappedIsReady_returnsNil() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_tapped": .ready(bandit: makeBandit(), paddle: makePaddle()),
+        ]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            in: outcomes, tappedPriceId: "pri_tapped"
+        ))
+    }
+
+    func testTappedShortCircuit_whenTappedIsMissingFromMap_returnsNil() {
+        // No prefetch ran for the tapped priceId (older paywall config,
+        // race condition, etc.). Default to opening Safari, not blocking.
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+        ]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            in: outcomes, tappedPriceId: "pri_tapped"
+        ))
+    }
+
+    func testTappedShortCircuit_whenTappedIsFailed_returnsNil() {
+        // .failed → bundle does its own fetch; not a short-circuit.
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_tapped": .failed(error: NSError(domain: "x", code: 0)),
+        ]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            in: outcomes, tappedPriceId: "pri_tapped"
+        ))
     }
 
     // MARK: - Composite key extraction (click-handler integration)
