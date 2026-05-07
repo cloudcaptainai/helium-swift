@@ -54,7 +54,7 @@ enum PaddleErrorCodes {
 
     /// Default user-facing message per code. Used when bandit's 409 body
     /// doesn't include a `detail` field. Mirrors the bundler's
-    /// `parsePaddle409` fallback strings (`DEFAULT_MESSAGE` and
+    /// `parsePaddle409` defaults (`DEFAULT_MESSAGE` and
     /// `TRIAL_USED_MESSAGE`) so the SDK-fired and bundle-fired UX
     /// strings stay consistent.
     static func defaultMessage(for code: String) -> String {

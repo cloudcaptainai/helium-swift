@@ -111,42 +111,18 @@ public class HeliumPaymentAPIClient {
 
     // MARK: - Paddle Pre-Fetch (HEL-5326)
 
-    /// Calls bandit's `POST /paddle/create-transaction-for-paywall` to
-    /// pre-create a Paddle transaction during paywall presentation. Used by
-    /// the SDK pre-fetch path (HEL-5326): the bundle in Safari then skips
-    /// its own bandit round-trip and goes straight to opening the Apple Pay
-    /// sheet from cached data.
+    /// Pre-creates a Paddle transaction during paywall display so the bundle
+    /// in Safari can skip its own bandit round-trip on Subscribe.
     ///
-    /// Error semantics:
-    ///   * 200 → returns the decoded response.
-    ///   * 409 with `error.code == "duplicate_subscription"` → throws
-    ///     `PaddlePrefetchError.alreadyEntitled(code, message)`. Callers
-    ///     translate this into a `preCheckResolved` outcome (don't open
-    ///     browser, fire `purchase_already_entitled`).
-    ///   * Anything else (other 4xx/5xx, transport errors, decode failures)
-    ///     → `HeliumPaymentAPIError.serverError(statusCode, message)` or
-    ///     the underlying transport error.
+    /// Throws `PaddlePrefetchError.alreadyEntitled` on a 409 carrying a
+    /// recognized code (see `PaddleErrorCodes`); all other failures throw
+    /// `HeliumPaymentAPIError.serverError` or the underlying transport
+    /// error. The 409 path is split out so callers pattern-match on
+    /// `code` instead of string-matching the message.
     ///
-    /// Doesn't go through `post()` because we need to inspect the parsed
-    /// error envelope's `code` field structurally — `post()` collapses code
-    /// + type + detail into a single message string, which would force
-    /// fragile string-matching on the caller side. The shared
-    /// `makePostRequest` and `genericServerError` helpers avoid the
-    /// transport / generic-error duplication; only the 409+duplicate_subscription
-    /// branch is unique to this method.
-    ///
-    /// Body shape matches bandit's `PaddleCreateTransactionForPaywallRequest`
-    /// (pkg/model/paddle.go):
-    ///   - `priceId` (required, validated): bare "pri_xxx", NOT the Stripe-
-    ///     style "product_id:price_id" composite that `baseRequestBody`'s
-    ///     `productId:` parameter produces. We bypass that parameter and set
-    ///     `priceId` explicitly — sending the wrong field name (or under
-    ///     `productPriceId`) makes bandit reject with 400 "priceId is required".
-    ///   - `orgId` (optional, fallback to API key): added for parity with
-    ///     the bundler's runtime call; bandit can resolve it from the API
-    ///     key but sending it explicitly is one less DB round-trip there.
-    ///   - identity fields (apiKey, userId, rcUserId, heliumPersistentId,
-    ///     appTransactionId, paddleCustomerId): unchanged, from baseRequestBody.
+    /// `priceId` must be the bare `pri_xxx` form — bandit validates the
+    /// field name and rejects the `product:price` composite that
+    /// `baseRequestBody(productId:)` would produce.
     func createPaddleTransactionForPaywall(
         priceId: String
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
