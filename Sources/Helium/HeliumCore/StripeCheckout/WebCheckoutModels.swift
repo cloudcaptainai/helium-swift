@@ -264,11 +264,18 @@ public enum PaddlePrefetchError: LocalizedError {
     /// entitlements cache. Mirrors the bundler's `kind: 'alreadyEntitled'`
     /// handling so the UX is consistent whether we catch the dup
     /// server-side (here) or in the bundle.
-    case alreadyEntitled(code: String, message: String)
+    ///
+    /// `existingSubscriptionId` is the buyer's currently-active Paddle
+    /// subscription id, when bandit's 409 body surfaced one. Threaded
+    /// through to `ctx.paddleAlreadyEntitled` so the bundle's
+    /// `helium_purchase_already_entitled` Jitsu fire can include it as
+    /// `canonicalJoinTransactionId`. Nil when the 409 body didn't
+    /// include any of the recognized id fields.
+    case alreadyEntitled(code: String, message: String, existingSubscriptionId: String?)
 
     public var errorDescription: String? {
         switch self {
-        case .alreadyEntitled(_, let message):
+        case .alreadyEntitled(_, let message, _):
             return message
         }
     }

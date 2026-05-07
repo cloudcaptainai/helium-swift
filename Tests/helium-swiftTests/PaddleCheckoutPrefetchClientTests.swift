@@ -118,14 +118,164 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         do {
             _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
             XCTFail("Expected createPaddleTransactionForPaywall to throw on 409 duplicate_subscription")
-        } catch let PaddlePrefetchError.alreadyEntitled(code, message) {
+        } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
             XCTAssertEqual(code, "duplicate_subscription")
             XCTAssertTrue(
                 message.contains("already have an active subscription"),
                 "Expected detail message to be preserved on alreadyEntitled error; got \(message)"
             )
+            // No subscription_id in this body → field absent.
+            XCTAssertNil(existingSubscriptionId)
         } catch {
             XCTFail("Expected PaddlePrefetchError.alreadyEntitled but got \(type(of: error)): \(error)")
+        }
+    }
+
+    // MARK: - existingSubscriptionId extraction (Gap 2)
+
+    /// When bandit's 409 body carries the buyer's existing subscription
+    /// id, the SDK must thread it through `PaddlePrefetchError.alreadyEntitled`
+    /// so it can land in `ctx.paddleAlreadyEntitled` and ultimately become
+    /// `canonicalJoinTransactionId` in the bundle's `helium_purchase_already_entitled`
+    /// Jitsu fire. Five lookup paths are accepted (mirrors the bundler's
+    /// `parsePaddle409`):
+    ///   1. error.subscription_id (Paddle's canonical snake_case)
+    ///   2. error.subscriptionId
+    ///   3. error.meta.subscription_id
+    ///   4. subscription_id (top-level)
+    ///   5. subscriptionId (top-level)
+    func testCreatePaddleTransactionForPaywall_extractsExistingSubscriptionId_fromErrorSubscriptionId() async throws {
+        let envelope = """
+        {
+            "error": {
+                "code": "duplicate_subscription",
+                "detail": "x",
+                "subscription_id": "sub_01k_path1"
+            }
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_01k_path1")
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_extractsExistingSubscriptionId_fromErrorSubscriptionIdCamelCase() async throws {
+        let envelope = """
+        {
+            "error": {
+                "code": "duplicate_subscription",
+                "detail": "x",
+                "subscriptionId": "sub_01k_path2"
+            }
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_01k_path2")
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_extractsExistingSubscriptionId_fromErrorMeta() async throws {
+        let envelope = """
+        {
+            "error": {
+                "code": "duplicate_subscription",
+                "detail": "x",
+                "meta": { "subscription_id": "sub_01k_path3" }
+            }
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_01k_path3")
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_extractsExistingSubscriptionId_fromTopLevelSnakeCase() async throws {
+        let envelope = """
+        {
+            "error": { "code": "duplicate_subscription", "detail": "x" },
+            "subscription_id": "sub_01k_path4"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_01k_path4")
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_extractsExistingSubscriptionId_fromTopLevelCamelCase() async throws {
+        let envelope = """
+        {
+            "error": { "code": "duplicate_subscription", "detail": "x" },
+            "subscriptionId": "sub_01k_path5"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_01k_path5")
+        }
+    }
+
+    /// First-non-empty-wins: when multiple paths are present, the
+    /// most-specific one wins. error.subscription_id beats top-level.
+    func testCreatePaddleTransactionForPaywall_existingSubscriptionId_prefersMoreSpecificPath() async throws {
+        let envelope = """
+        {
+            "error": {
+                "code": "duplicate_subscription",
+                "detail": "x",
+                "subscription_id": "sub_specific"
+            },
+            "subscription_id": "sub_top_level_should_lose"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+            return (response, envelope.data(using: .utf8)!)
+        }
+
+        do {
+            _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_xxx")
+            XCTFail("Expected to throw")
+        } catch let PaddlePrefetchError.alreadyEntitled(_, _, existingSubscriptionId) {
+            XCTAssertEqual(existingSubscriptionId, "sub_specific")
         }
     }
 

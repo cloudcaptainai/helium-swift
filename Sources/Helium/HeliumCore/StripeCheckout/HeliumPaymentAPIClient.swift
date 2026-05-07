@@ -177,9 +177,52 @@ public class HeliumPaymentAPIClient {
            envelope.error.code == "duplicate_subscription" {
             let detail = envelope.error.detail
                 ?? "You already have an active subscription for this product."
-            throw PaddlePrefetchError.alreadyEntitled(code: "duplicate_subscription", message: detail)
+            // Best-effort sub-id extraction. Mirrors the bundler's
+            // `parsePaddle409` 5-path lookup so the SDK and bundle agree on
+            // where existingSubscriptionId can live in a 409 body. Threaded
+            // into ctx.paddleAlreadyEntitled so the bundle's
+            // `helium_purchase_already_entitled` Jitsu fire can include it
+            // as `canonicalJoinTransactionId`.
+            let existingSubscriptionId = HeliumPaymentAPIClient.extractExistingSubscriptionId(from: data)
+            throw PaddlePrefetchError.alreadyEntitled(
+                code: "duplicate_subscription",
+                message: detail,
+                existingSubscriptionId: existingSubscriptionId
+            )
         }
         throw genericServerError(statusCode: statusCode, body: data)
+    }
+
+    /// Extracts the buyer's existing Paddle subscription id from a bandit
+    /// 409 body. Mirrors `parsePaddle409` in
+    /// `bundler-service/server/heliumStandalonePaddle.ts` — the same five
+    /// paths, in order of specificity (first non-empty wins):
+    ///   1. error.subscription_id        (Paddle's canonical snake_case)
+    ///   2. error.subscriptionId         (camelCased by some transforms)
+    ///   3. error.meta.subscription_id   (Paddle nests metadata sometimes)
+    ///   4. subscription_id              (top-level; bandit may hoist it)
+    ///   5. subscriptionId               (top-level camelCase)
+    ///
+    /// Returns nil when none of the paths produce a non-empty string.
+    /// Defensive against malformed bodies — never throws.
+    static func extractExistingSubscriptionId(from data: Data) -> String? {
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let errorObj = parsed["error"] as? [String: Any] ?? [:]
+        let candidates: [Any?] = [
+            errorObj["subscription_id"],
+            errorObj["subscriptionId"],
+            (errorObj["meta"] as? [String: Any])?["subscription_id"],
+            parsed["subscription_id"],
+            parsed["subscriptionId"],
+        ]
+        for candidate in candidates {
+            if let s = candidate as? String, !s.isEmpty {
+                return s
+            }
+        }
+        return nil
     }
 }
 

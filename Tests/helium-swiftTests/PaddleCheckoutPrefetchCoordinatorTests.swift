@@ -176,7 +176,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
-        guard case .alreadyEntitled(let code, let message) = outcome else {
+        guard case .alreadyEntitled(let code, let message, _) = outcome else {
             XCTFail("Expected .alreadyEntitled, got \(outcome)")
             return
         }
@@ -561,7 +561,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_ready": .ready(bandit: bandit, paddle: paddle),
-            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x", existingSubscriptionId: nil),
             "pri_failed": .failed(error: NSError(domain: "x", code: 0)),
             "pri_notstarted": .notStarted,
         ]
@@ -716,8 +716,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     /// clicks it — which defeats the whole point of pre-fetching.
     func testEncodeAlreadyEntitledToCtx_returnsMapKeyedByPriceId() throws {
         let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_yearly": .alreadyEntitled(code: "duplicate_subscription", message: "You already own yearly"),
-            "pri_lifetime": .alreadyEntitled(code: "duplicate_subscription", message: "You already own lifetime"),
+            "pri_yearly": .alreadyEntitled(code: "duplicate_subscription", message: "You already own yearly", existingSubscriptionId: nil),
+            "pri_lifetime": .alreadyEntitled(code: "duplicate_subscription", message: "You already own lifetime", existingSubscriptionId: nil),
         ]
 
         let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
@@ -739,7 +739,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let bandit = makeBandit()
         let paddle = makePaddle()
         let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x", existingSubscriptionId: nil),
             "pri_ready": .ready(bandit: bandit, paddle: paddle),
             "pri_failed": .failed(error: NSError(domain: "x", code: 0)),
             "pri_notstarted": .notStarted,
@@ -748,6 +748,46 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
 
         XCTAssertEqual(Set(map.keys), ["pri_entitled"], "Only .alreadyEntitled outcomes belong in the entitled map")
+    }
+
+    /// `existingSubscriptionId` flows into the encoded entry when the
+    /// SDK extracted one from bandit's 409 body. Bundle uses it for
+    /// `canonicalJoinTransactionId` in the `helium_purchase_already_entitled`
+    /// Jitsu fire — without this thread-through, the prefetched
+    /// alreadyEntitled path's analytics would be missing the field that
+    /// the live-fetch path emits.
+    func testEncodeAlreadyEntitledToCtx_includesExistingSubscriptionIdWhenPresent() throws {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_yearly": .alreadyEntitled(
+                code: "duplicate_subscription",
+                message: "You already own yearly",
+                existingSubscriptionId: "sub_01k_abc"
+            ),
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
+
+        let yearly = try XCTUnwrap(map["pri_yearly"] as? [String: Any])
+        XCTAssertEqual(yearly["existingSubscriptionId"] as? String, "sub_01k_abc")
+    }
+
+    /// When the SDK didn't extract an existingSubscriptionId (the 409
+    /// body didn't include any of the recognized id paths), the encoded
+    /// entry omits the field entirely — bundle's null-check branches
+    /// gracefully on missing data.
+    func testEncodeAlreadyEntitledToCtx_omitsExistingSubscriptionIdWhenNil() throws {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_yearly": .alreadyEntitled(
+                code: "duplicate_subscription",
+                message: "You already own yearly",
+                existingSubscriptionId: nil
+            ),
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
+
+        let yearly = try XCTUnwrap(map["pri_yearly"] as? [String: Any])
+        XCTAssertNil(yearly["existingSubscriptionId"], "Field absent when SDK didn't extract an id")
     }
 
     /// Empty / no-entitled inputs return nil so the caller can omit the
@@ -775,7 +815,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     /// monthly purchase. This is the property the test below locks in.
     func testTappedShortCircuit_whenTappedIsAlreadyEntitled_returnsCodeAndMessage() {
         let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_tapped": .alreadyEntitled(code: "duplicate_subscription", message: "You already own this"),
+            "pri_tapped": .alreadyEntitled(code: "duplicate_subscription", message: "You already own this", existingSubscriptionId: nil),
             "pri_other": .ready(bandit: makeBandit(), paddle: makePaddle()),
         ]
         let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
@@ -792,7 +832,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testTappedShortCircuit_whenOnlyOtherPriceIdIsAlreadyEntitled_doesNotShortCircuit() {
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_tapped": .ready(bandit: makeBandit(), paddle: makePaddle()),
-            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "You own yearly"),
+            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "You own yearly", existingSubscriptionId: nil),
         ]
         let result = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
             in: outcomes, tappedPriceId: "pri_tapped"
@@ -813,7 +853,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         // No prefetch ran for the tapped priceId (older paywall config,
         // race condition, etc.). Default to opening Safari, not blocking.
         let outcomes: [String: PaddlePrefetchOutcome] = [
-            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "x", existingSubscriptionId: nil),
         ]
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
             in: outcomes, tappedPriceId: "pri_tapped"

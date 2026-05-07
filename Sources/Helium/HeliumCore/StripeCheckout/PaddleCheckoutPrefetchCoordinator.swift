@@ -43,7 +43,11 @@ enum PaddlePrefetchOutcome {
         bandit: PaddleCreateTransactionForPaywallResponse,
         paddle: PaddleTransactionCheckoutResult
     )
-    case alreadyEntitled(code: String, message: String)
+    /// Bandit returned 409 `duplicate_subscription` for this priceId.
+    /// `existingSubscriptionId` carries the buyer's existing Paddle
+    /// subscription id (for the bundle's `canonicalJoinTransactionId`
+    /// analytics field) when the 409 body surfaced one — nil otherwise.
+    case alreadyEntitled(code: String, message: String, existingSubscriptionId: String?)
     case failed(error: Error)
     case notStarted
 }
@@ -321,8 +325,12 @@ final class PaddleCheckoutPrefetchCoordinator {
     ) -> [String: Any]? {
         var result: [String: Any] = [:]
         for (priceId, outcome) in outcomesByPriceId {
-            guard case let .alreadyEntitled(code, message) = outcome else { continue }
-            result[priceId] = ["code": code, "message": message]
+            guard case let .alreadyEntitled(code, message, existingSubscriptionId) = outcome else { continue }
+            var entry: [String: Any] = ["code": code, "message": message]
+            if let subId = existingSubscriptionId, !subId.isEmpty {
+                entry["existingSubscriptionId"] = subId
+            }
+            result[priceId] = entry
         }
         return result.isEmpty ? nil : result
     }
@@ -472,7 +480,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         in outcomes: [String: PaddlePrefetchOutcome],
         tappedPriceId: String
     ) -> (code: String, message: String)? {
-        if case let .alreadyEntitled(code, message) = outcomes[tappedPriceId] ?? .notStarted {
+        if case let .alreadyEntitled(code, message, _) = outcomes[tappedPriceId] ?? .notStarted {
             return (code, message)
         }
         return nil
@@ -526,8 +534,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)
-        } catch let PaddlePrefetchError.alreadyEntitled(code, message) {
-            return .alreadyEntitled(code: code, message: message)
+        } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
+            return .alreadyEntitled(code: code, message: message, existingSubscriptionId: existingSubscriptionId)
         } catch {
             return .failed(error: error)
         }
