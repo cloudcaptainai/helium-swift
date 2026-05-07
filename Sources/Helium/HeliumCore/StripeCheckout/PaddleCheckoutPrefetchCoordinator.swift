@@ -229,7 +229,17 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// Bandit → BFF, with the alreadyEntitled short-circuit. Pure function
     /// (no MainActor / shared-state dependency) so it can run off-actor in
     /// the detached task.
-    private static func runPrefetchChain(
+    ///
+    /// `nonisolated` is load-bearing: without it, this static method
+    /// inherits the enclosing class's `@MainActor` isolation. The
+    /// `Task.detached` at the call site would then immediately hop back
+    /// to MainActor to invoke this — defeating the whole point of
+    /// dispatching network orchestration off the main thread (Bugbot
+    /// flagged this on the initial review). With `nonisolated`, the
+    /// detached task body runs on the global concurrent executor as
+    /// intended, and parallel prefetches don't compete for MainActor
+    /// time between network suspension points.
+    private nonisolated static func runPrefetchChain(
         priceId: String,
         paddleClientToken: String,
         iosBundleId: String?,
