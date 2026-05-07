@@ -134,10 +134,31 @@ public class HeliumPaymentAPIClient {
     /// `makePostRequest` and `genericServerError` helpers avoid the
     /// transport / generic-error duplication; only the 409+duplicate_subscription
     /// branch is unique to this method.
+    ///
+    /// Body shape matches bandit's `PaddleCreateTransactionForPaywallRequest`
+    /// (pkg/model/paddle.go):
+    ///   - `priceId` (required, validated): bare "pri_xxx", NOT the Stripe-
+    ///     style "product_id:price_id" composite that `baseRequestBody`'s
+    ///     `productId:` parameter produces. We bypass that parameter and set
+    ///     `priceId` explicitly — sending the wrong field name (or under
+    ///     `productPriceId`) makes bandit reject with 400 "priceId is required".
+    ///   - `orgId` (optional, fallback to API key): added for parity with
+    ///     the bundler's runtime call; bandit can resolve it from the API
+    ///     key but sending it explicitly is one less DB round-trip there.
+    ///   - identity fields (apiKey, userId, rcUserId, heliumPersistentId,
+    ///     appTransactionId, paddleCustomerId): unchanged, from baseRequestBody.
     func createPaddleTransactionForPaywall(
         priceId: String
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
-        let body = try baseRequestBody(provider: .paddle, productId: priceId)
+        // baseRequestBody without `productId:` so we don't get the Stripe-
+        // shaped `productPriceId` field; we add the Paddle-shaped `priceId`
+        // explicitly below.
+        var body = try baseRequestBody(provider: .paddle)
+        body["priceId"] = priceId
+        if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
+            body["orgId"] = orgId
+        }
+
         let request = try makePostRequest(path: "paddle/create-transaction-for-paywall", body: body)
 
         let (data, response) = try await urlSession.data(for: request)

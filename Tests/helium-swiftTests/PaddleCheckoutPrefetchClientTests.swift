@@ -164,7 +164,14 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
     // MARK: - createPaddleTransactionForPaywall — request shape
 
-    func testCreatePaddleTransactionForPaywall_sendsPriceIdInBody() async throws {
+    /// The bandit's PaddleCreateTransactionForPaywallRequest is strict about
+    /// field names — it validates `priceId` as required. The Stripe path
+    /// uses `productPriceId` (a "product_id:price_id" composite), but
+    /// Paddle's bandit handler expects just `priceId` ("pri_xxx"). Earlier
+    /// versions of this client routed through `baseRequestBody(productId:)`
+    /// which produces `productPriceId` — wrong for Paddle. This test locks
+    /// in the correct wire contract so we don't regress.
+    func testCreatePaddleTransactionForPaywall_sendsCorrectBanditContract() async throws {
         let bodyJSON = """
         {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x"}
         """
@@ -175,7 +182,6 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
         _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_specific_price")
 
-        // Capture the request the client sent and assert on its shape.
         XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
         let captured = MockURLProtocol.capturedRequests[0]
         XCTAssertEqual(captured.httpMethod, "POST")
@@ -184,13 +190,27 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
             "Expected URL path to end with /paddle/create-transaction-for-paywall, got \(captured.url?.absoluteString ?? "nil")"
         )
 
-        // Body must contain `productPriceId` keyed to the priceId we passed in.
-        // (`baseRequestBody(provider: .paddle, productId:)` puts the priceId
-        // under that key — locking it in here protects us against a silent
-        // rename of the body field.)
         let bodyData = captured.httpBody ?? Data()
         let bodyDict = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
-        XCTAssertEqual(bodyDict["productPriceId"] as? String, "pri_specific_price")
+
+        // Required by bandit's request validator (PaddleCreateTransactionForPaywallRequest):
+        XCTAssertEqual(
+            bodyDict["priceId"] as? String,
+            "pri_specific_price",
+            "Bandit's Paddle handler validates `priceId` as required (json:\"priceId\" validate:\"required\"). " +
+            "If this asserts `productPriceId`, the SDK is sending the Stripe-shaped composite key instead of the bare priceId Paddle expects, and bandit will reject the request with a 400."
+        )
         XCTAssertEqual(bodyDict["apiKey"] as? String, "test_api_key_for_prefetch_tests")
+
+        // Should NOT carry the Stripe composite-key field on the Paddle path —
+        // it's at best ignored (bandit's request struct doesn't decode it),
+        // at worst confusing in server logs.
+        XCTAssertNil(
+            bodyDict["productPriceId"],
+            "`productPriceId` is the Stripe-path field name; Paddle should not send it."
+        )
+
+        // Identity fields the SDK can populate from local state:
+        XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
     }
 }
