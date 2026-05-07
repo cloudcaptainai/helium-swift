@@ -318,6 +318,105 @@ final class CtxCompressionTests: XCTestCase {
         )
     }
 
+    // MARK: - paddleAlreadyEntitled map round-trips through ctx
+
+    /// When a paywall has products the customer already owns, the SDK
+    /// passes `paddleAlreadyEntitled` into `buildEnrichedCheckoutURL`
+    /// alongside `paddleBootstraps`. The bundle uses it to short-
+    /// circuit instantly when the user clicks an entitled product in
+    /// Safari — no live bandit call, no loader.
+    ///
+    /// This test locks in the wire shape: the map appears in ctx as
+    /// `paddleAlreadyEntitled`, sibling to `paddleBootstraps`, and
+    /// each entry has `{ code, message }`.
+    func testBuildEnrichedCheckoutURL_includesPaddleAlreadyEntitledWhenProvided() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_compression"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let alreadyEntitled: [String: Any] = [
+            "pri_yearly": ["code": "duplicate_subscription", "message": "You already own yearly"],
+        ]
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_monthly", triggerName: "t",
+            successURL: "ok", cancelURL: "no",
+            introOfferEligible: true,
+            paddleBootstraps: nil,
+            paddleAlreadyEntitled: alreadyEntitled
+        )
+
+        // Decode the URL back to its ctx dict.
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items: [URLQueryItem] = components.queryItems ?? []
+        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let compressed = try XCTUnwrap(base64URLDecode(ctxValue))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 16_384)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        // The new field is present and round-trips intact.
+        let entitledMap = try XCTUnwrap(parsed["paddleAlreadyEntitled"] as? [String: Any])
+        let yearlyEntry = try XCTUnwrap(entitledMap["pri_yearly"] as? [String: Any])
+        XCTAssertEqual(yearlyEntry["code"] as? String, "duplicate_subscription")
+        XCTAssertEqual(yearlyEntry["message"] as? String, "You already own yearly")
+    }
+
+    /// When the SDK has nothing to report (no entitled products),
+    /// `paddleAlreadyEntitled` is omitted from ctx — no point shipping
+    /// an empty `{}`.
+    func testBuildEnrichedCheckoutURL_omitsPaddleAlreadyEntitledWhenNil() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_compression"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_monthly", triggerName: "t",
+            successURL: "ok", cancelURL: "no",
+            introOfferEligible: true,
+            paddleBootstraps: nil,
+            paddleAlreadyEntitled: nil
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items: [URLQueryItem] = components.queryItems ?? []
+        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let compressed = try XCTUnwrap(base64URLDecode(ctxValue))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8_192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        XCTAssertNil(parsed["paddleAlreadyEntitled"], "Omitted when caller passes nil")
+    }
+
     // MARK: - Empty / edge-case inputs
 
     /// Empty input shouldn't crash. DEFLATE has a defined empty-stream

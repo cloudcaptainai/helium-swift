@@ -298,6 +298,35 @@ final class PaddleCheckoutPrefetchCoordinator {
         return result.isEmpty ? nil : result
     }
 
+    /// Encodes `.alreadyEntitled` outcomes into the map the bundler reads
+    /// from `ctx.paddleAlreadyEntitled`, keyed by priceId. The bundle uses
+    /// this to short-circuit straight to its `kind: 'alreadyEntitled'`
+    /// branch when the user clicks an entitled-but-not-tapped product in
+    /// Safari — without this map, the bundle would have to call bandit
+    /// itself just to discover the 409, defeating the whole point of
+    /// pre-fetching (loader on screen + extra round-trip).
+    ///
+    /// Returns nil when no outcome is `.alreadyEntitled` so the caller
+    /// can omit the field entirely from the ctx.
+    ///
+    /// Shape:
+    /// ```
+    /// {
+    ///     "pri_yearly":   { "code": "duplicate_subscription", "message": "..." },
+    ///     "pri_lifetime": { "code": "duplicate_subscription", "message": "..." }
+    /// }
+    /// ```
+    nonisolated static func encodeAlreadyEntitledToCtx(
+        outcomesByPriceId: [String: PaddlePrefetchOutcome]
+    ) -> [String: Any]? {
+        var result: [String: Any] = [:]
+        for (priceId, outcome) in outcomesByPriceId {
+            guard case let .alreadyEntitled(code, message) = outcome else { continue }
+            result[priceId] = ["code": code, "message": message]
+        }
+        return result.isEmpty ? nil : result
+    }
+
     /// Builds one `(banditResponse, paddleCheckoutResponse)` bootstrap for
     /// a single ready outcome. Caller (`encodeBootstrapsToCtx`) places it
     /// under the priceId key.

@@ -702,6 +702,65 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                        "Apple Pay entry should be trimmed to {type, stripe_options} only")
     }
 
+    // MARK: - Already-entitled encoding for non-tapped products
+
+    /// `encodeAlreadyEntitledToCtx` produces the map the bundler reads
+    /// from `ctx.paddleAlreadyEntitled`, keyed by priceId. Each entry
+    /// carries `(code, message)` from bandit's 409 response so the
+    /// bundle can short-circuit to its `kind: 'alreadyEntitled'` branch
+    /// instantly when the user clicks an entitled product in Safari —
+    /// no loader, no round-trip.
+    ///
+    /// Without this map, the bundle's only way to know a non-tapped
+    /// product is entitled is to call bandit itself when the user
+    /// clicks it — which defeats the whole point of pre-fetching.
+    func testEncodeAlreadyEntitledToCtx_returnsMapKeyedByPriceId() throws {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_yearly": .alreadyEntitled(code: "duplicate_subscription", message: "You already own yearly"),
+            "pri_lifetime": .alreadyEntitled(code: "duplicate_subscription", message: "You already own lifetime"),
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
+
+        XCTAssertEqual(Set(map.keys), ["pri_yearly", "pri_lifetime"])
+        let yearly = try XCTUnwrap(map["pri_yearly"] as? [String: Any])
+        XCTAssertEqual(yearly["code"] as? String, "duplicate_subscription")
+        XCTAssertEqual(yearly["message"] as? String, "You already own yearly")
+        let lifetime = try XCTUnwrap(map["pri_lifetime"] as? [String: Any])
+        XCTAssertEqual(lifetime["message"] as? String, "You already own lifetime")
+    }
+
+    /// Only `.alreadyEntitled` outcomes belong in the map. `.ready`
+    /// goes into `paddleBootstraps` separately; `.failed` and
+    /// `.notStarted` are dropped (bundle defaults to live-fetch for
+    /// missing entries — same as for ready products that didn't
+    /// pre-fetch successfully).
+    func testEncodeAlreadyEntitledToCtx_skipsNonEntitledOutcomes() throws {
+        let bandit = makeBandit()
+        let paddle = makePaddle()
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_entitled": .alreadyEntitled(code: "duplicate_subscription", message: "x"),
+            "pri_ready": .ready(bandit: bandit, paddle: paddle),
+            "pri_failed": .failed(error: NSError(domain: "x", code: 0)),
+            "pri_notstarted": .notStarted,
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: outcomes))
+
+        XCTAssertEqual(Set(map.keys), ["pri_entitled"], "Only .alreadyEntitled outcomes belong in the entitled map")
+    }
+
+    /// Empty / no-entitled inputs return nil so the caller can omit the
+    /// `paddleAlreadyEntitled` field from the ctx (instead of a
+    /// pointless empty `{}`).
+    func testEncodeAlreadyEntitledToCtx_returnsNilWhenNoEntitledOutcomes() {
+        let allReady: [String: PaddlePrefetchOutcome] = [
+            "pri_a": .ready(bandit: makeBandit(), paddle: makePaddle()),
+        ]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: allReady))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(outcomesByPriceId: [:]))
+    }
+
     // MARK: - Tapped-product short-circuit decision
 
     /// `tappedShortCircuit` is the pure decision the click handler makes

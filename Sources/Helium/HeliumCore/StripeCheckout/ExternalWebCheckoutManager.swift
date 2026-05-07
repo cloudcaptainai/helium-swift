@@ -110,6 +110,7 @@ public class ExternalWebCheckoutManager: NSObject {
         //   * .failed / .notStarted → absent from the map; bundle defaults
         //     to its own fetch (current behavior, no regression).
         var paddleBootstrapsDict: [String: Any]? = nil
+        var paddleAlreadyEntitledDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -145,6 +146,14 @@ public class ExternalWebCheckoutManager: NSObject {
             paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
                 outcomesByPriceId: outcomes
             )
+            // Non-tapped products that came back .alreadyEntitled go
+            // into a sibling map. Bundle uses it to short-circuit when
+            // the user clicks one of these in Safari, avoiding the
+            // bandit live-fetch (which would show a loader before
+            // resolving to the same alreadyEntitled outcome).
+            paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
+                outcomesByPriceId: outcomes
+            )
         }
 
         let enrichedURL = try buildEnrichedCheckoutURL(
@@ -155,7 +164,8 @@ public class ExternalWebCheckoutManager: NSObject {
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
             introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
-            paddleBootstraps: paddleBootstrapsDict
+            paddleBootstraps: paddleBootstrapsDict,
+            paddleAlreadyEntitled: paddleAlreadyEntitledDict
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
@@ -213,9 +223,19 @@ public class ExternalWebCheckoutManager: NSObject {
     /// keyed by priceId of bandit + Paddle BFF responses gathered during
     /// in-app paywall display. When non-nil, the bundle in Safari reads
     /// it from `ctx.paddleBootstraps[priceId]` for whichever product the
-    /// user picks and skips its own bandit + BFF round-trips. Pass nil
-    /// for the Stripe path (no prefetch) or when no prefetch was ready
-    /// (bundle does its own fetch as a safety net).
+    /// user picks and skips its own bandit + BFF round-trips.
+    ///
+    /// `paddleAlreadyEntitled` is the sibling map for products bandit
+    /// returned 409 `duplicate_subscription` for during pre-fetch.
+    /// Bundle uses it to short-circuit straight to its
+    /// `kind: 'alreadyEntitled'` branch when the user clicks one of
+    /// these products in Safari — without it the bundle would have to
+    /// call bandit itself just to discover the 409, with a loader
+    /// showing during the round-trip.
+    ///
+    /// Pass nil for either when the SDK has nothing to report (e.g.
+    /// Stripe path, prefetches that timed out). Bundle defaults to
+    /// live-fetch on missing entries.
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -224,7 +244,8 @@ public class ExternalWebCheckoutManager: NSObject {
         successURL: String,
         cancelURL: String,
         introOfferEligible: Bool,
-        paddleBootstraps: [String: Any]? = nil
+        paddleBootstraps: [String: Any]? = nil,
+        paddleAlreadyEntitled: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
@@ -262,6 +283,12 @@ public class ExternalWebCheckoutManager: NSObject {
         // the wire contract.
         if let paddleBootstraps = paddleBootstraps {
             ctx["paddleBootstraps"] = paddleBootstraps
+        }
+        // Sibling map for products bandit returned 409 for. Bundle
+        // short-circuits to its kind: 'alreadyEntitled' branch on click,
+        // skipping the live bandit call (no loader, no round-trip).
+        if let paddleAlreadyEntitled = paddleAlreadyEntitled {
+            ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
