@@ -12,6 +12,19 @@ import Foundation
 ///   * `.notStarted` → no prefetch was ever scheduled for this priceId
 ///     (paywall didn't have it, or was dismissed before prefetch ran).
 ///     Same default path as `.failed`.
+/// Surfaced as the `Error` value of a `.failed` outcome when
+/// `awaitOutcome` exceeds its timeout budget. Carries the priceId and
+/// the budget so logs can correlate the timeout with which prefetch
+/// stalled.
+struct PaddlePrefetchAwaitTimeout: LocalizedError {
+    let priceId: String
+    let timeout: TimeInterval
+
+    var errorDescription: String? {
+        return "Paddle prefetch await timed out after \(timeout)s for priceId \(priceId)"
+    }
+}
+
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -99,24 +112,80 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
+    /// Default upper bound for `awaitOutcome` waits. Generous enough that
+    /// most prefetches complete well within it (bandit ~400ms + Paddle BFF
+    /// ~700ms = ~1.1s typical), tight enough that a stuck task doesn't
+    /// freeze the Subscribe-tap handler indefinitely. Tunable per call for
+    /// tests that want a tighter or looser budget.
+    static let defaultAwaitTimeoutSeconds: TimeInterval = 3.0
+
     /// Returns the cached outcome for a priceId. Blocks until the in-flight
-    /// task completes (per the design: never default to the slow path when
-    /// a prefetch is in-flight; just wait for it). Returns `.notStarted`
-    /// for priceIds that were never prefetched.
-    func awaitOutcome(priceId: String) async -> PaddlePrefetchOutcome {
+    /// task completes OR the timeout elapses, whichever comes first.
+    /// Returns `.notStarted` for priceIds that were never prefetched.
+    ///
+    /// Timeout behavior (Bugbot review): URLSession's default timeout is
+    /// 60s, so an unbounded wait could freeze the Subscribe-tap UI for up
+    /// to a minute on a stuck request. On timeout we surface `.failed` so
+    /// the caller in `ExternalWebCheckoutManager.startCheckoutFlow` falls
+    /// through to the safety-net branch (open Safari without ctx; bundle
+    /// does its own fetch — current behavior, no regression). The
+    /// in-flight Task continues to completion in the background; we just
+    /// stop observing it from the click handler's perspective.
+    func awaitOutcome(
+        priceId: String,
+        timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
+    ) async -> PaddlePrefetchOutcome {
         guard let task = cache[priceId] else {
             return .notStarted
         }
-        return await task.value
+
+        // Race the cached Task against a sleep. Whichever finishes first
+        // wins; we cancel the loser. Returning `nil` from the timeout
+        // branch is our timeout sentinel (the cached Task always returns
+        // a `PaddlePrefetchOutcome`, never `nil`).
+        return await withTaskGroup(of: PaddlePrefetchOutcome?.self) { group in
+            group.addTask { await task.value }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                return nil
+            }
+
+            let firstResult = await group.next() ?? nil
+            group.cancelAll()
+
+            if let outcome = firstResult {
+                return outcome
+            }
+            // Timeout fired first. The cached Task continues running in
+            // the background; the click handler proceeds via the
+            // safety-net path.
+            return .failed(error: PaddlePrefetchAwaitTimeout(priceId: priceId, timeout: timeout))
+        }
     }
 
-    /// Cancels every in-flight task and clears the cache. Called when the
-    /// paywall is dismissed without a click — we don't want stale Tasks
-    /// running after the user has left.
+    /// Cancels in-flight tasks for the specified priceIds only and removes
+    /// them from the cache. Use this when a paywall closes — pass the
+    /// closing paywall's priceIds so other still-displayed paywalls keep
+    /// their cached outcomes (Bugbot review: previously `cancelAll()` here
+    /// would wipe every other paywall's cache too, since the coordinator
+    /// is a singleton).
     ///
     /// Cancellation propagates into `URLSession.data(for:)` so the
     /// underlying network requests are torn down too, not just the Swift
-    /// Tasks wrapping them.
+    /// Tasks wrapping them. Unknown priceIds are silently ignored — safe
+    /// to over-call.
+    func cancel(priceIds: [String]) {
+        for priceId in priceIds {
+            if let task = cache.removeValue(forKey: priceId) {
+                task.cancel()
+            }
+        }
+    }
+
+    /// Cancels every in-flight task and clears the cache. Use only when
+    /// you genuinely want a global wipe (test tearDown, app backgrounding).
+    /// For paywall close, prefer `cancel(priceIds:)` so concurrent
+    /// paywalls don't lose their caches.
     ///
     /// This synchronous variant signals cancellation but doesn't wait for
     /// the Tasks to actually stop. Tests that need a hard barrier (e.g.

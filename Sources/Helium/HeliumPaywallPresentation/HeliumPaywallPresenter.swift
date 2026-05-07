@@ -489,12 +489,22 @@ class HeliumPaywallPresenter {
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
 
-        // Cancel any in-flight prefetches (HEL-5326). The user has left
-        // without clicking Subscribe; in-flight bandit+BFF tasks would
-        // create wasted Paddle draft transactions. cancelAll() also
-        // clears the cache so the next paywall presentation starts fresh.
-        Task { @MainActor in
-            PaddleCheckoutPrefetchCoordinator.shared.cancelAll()
+        // Cancel any in-flight prefetches scoped to THIS paywall's priceIds
+        // (HEL-5326). Bugbot review: previously called the global
+        // `cancelAll()`, which would wipe other concurrently-displayed
+        // paywalls' prefetch results too. Scoping by priceId leaves other
+        // paywalls' caches intact while still freeing this paywall's
+        // in-flight bandit + BFF tasks (avoiding wasted Paddle draft
+        // transactions when the user dismisses without clicking).
+        if let info = paywallVC.paywallSession.paywallInfoWithBackups,
+           let webProducts = info.webProductsOfferedPaddle,
+           !webProducts.isEmpty {
+            let priceIdsToCancel = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: webProducts)
+            if !priceIdsToCancel.isEmpty {
+                Task { @MainActor in
+                    PaddleCheckoutPrefetchCoordinator.shared.cancel(priceIds: priceIdsToCancel)
+                }
+            }
         }
 
         // Call onEntitled if this session had a successful purchase/restore

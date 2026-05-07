@@ -255,6 +255,104 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     // MARK: - parallelism
 
+    // MARK: - Timeout on awaitOutcome (Bugbot review #2)
+
+    /// `awaitOutcome` blocks the caller until the in-flight Task completes
+    /// or the supplied timeout elapses, whichever comes first. Without an
+    /// upper bound the prefetch chain could block the Subscribe-tap
+    /// handler for up to URLSession's default 60s — Bugbot caught this.
+    /// On timeout we surface a `.failed` outcome so the caller falls
+    /// through to the safety-net path (open Safari without ctx, bundle
+    /// does its own fetch) instead of presenting a frozen UI.
+    func testAwaitOutcome_timesOut_whenInflightTaskExceedsBudget() async throws {
+        // Make the bandit response hang past our timeout. We never resolve
+        // the promise — the test just confirms we return on the timeout
+        // instead of blocking forever.
+        MockURLProtocol.requestHandler = { _ in
+            // Sleep longer than the test's timeout. The MockURLProtocol
+            // call site is synchronous, so a Thread.sleep is the cleanest
+            // way to simulate a slow network without bringing in Combine.
+            Thread.sleep(forTimeInterval: 2.0)
+            // We won't reach here in time but we still need to return
+            // something to satisfy the URLProtocol contract.
+            let response = HTTPURLResponse(url: URL(string: "https://x")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, "{}".data(using: .utf8)!)
+        }
+
+        coordinator.prefetch(priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        let outcome = await coordinator.awaitOutcome(priceId: "pri_slow", timeout: 0.05)
+
+        guard case .failed = outcome else {
+            XCTFail("Expected .failed (timeout) when the in-flight task exceeds the budget; got \(outcome)")
+            return
+        }
+    }
+
+    /// Default-timeout behavior: when the task completes well within the
+    /// budget, awaitOutcome returns the actual outcome (not a timeout).
+    func testAwaitOutcome_returnsRealOutcome_whenTaskCompletesWithinBudget() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_fast").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, self.bffSuccessBody(checkoutId: "che_fast", transactionId: "txn_fast").data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(priceIds: ["pri_fast"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        // Generous timeout — task should beat it easily on the synchronous
+        // mock URL handler.
+        let outcome = await coordinator.awaitOutcome(priceId: "pri_fast", timeout: 5.0)
+
+        guard case .ready = outcome else {
+            XCTFail("Expected .ready when task completes within timeout; got \(outcome)")
+            return
+        }
+    }
+
+    // MARK: - Scoped cancel(priceIds:) (Bugbot review #3)
+
+    /// `cancel(priceIds:)` removes only the specified entries from the
+    /// cache, leaving other paywalls' prefetch results intact. The
+    /// previous design wiped the singleton cache entirely on every
+    /// paywall close — Bugbot flagged that closing paywall A would
+    /// destroy paywall B's prefetched outcomes too.
+    func testCancelPriceIds_removesSpecifiedEntriesOnly() async throws {
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+
+        coordinator.prefetch(
+            priceIds: ["pri_a", "pri_b", "pri_c"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+
+        // Cancel just one priceId.
+        coordinator.cancel(priceIds: ["pri_b"])
+
+        let outcomeA = await coordinator.awaitOutcome(priceId: "pri_a", timeout: 5.0)
+        let outcomeB = await coordinator.awaitOutcome(priceId: "pri_b", timeout: 5.0)
+        let outcomeC = await coordinator.awaitOutcome(priceId: "pri_c", timeout: 5.0)
+
+        guard case .ready = outcomeA else {
+            XCTFail("Expected pri_a to still be cached; got \(outcomeA)")
+            return
+        }
+        guard case .notStarted = outcomeB else {
+            XCTFail("Expected pri_b to be removed by scoped cancel; got \(outcomeB)")
+            return
+        }
+        guard case .ready = outcomeC else {
+            XCTFail("Expected pri_c to still be cached; got \(outcomeC)")
+            return
+        }
+    }
+
     // MARK: - Bootstrap encoding for ctx (Stage 6)
 
     /// `.ready` outcomes encode into the ctx as a `paddleBootstrap` object
