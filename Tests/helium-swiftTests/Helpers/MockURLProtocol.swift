@@ -97,11 +97,15 @@ final class MockURLProtocol: URLProtocol {
 
         // Capture the canonical request. URLProtocol receives a fully-formed
         // request (incl. body via httpBodyStream when the body is large), so
-        // tests get fidelity on what would have hit the wire.
-        MockURLProtocol.appendCapturedRequest(captureWithBody(request))
+        // tests get fidelity on what would have hit the wire. Pass the
+        // body-materialized request to the handler too — otherwise a test
+        // handler that inspects `request.httpBody` would see nil whenever
+        // URLSession converted the body to a stream.
+        let materializedRequest = captureWithBody(request)
+        MockURLProtocol.appendCapturedRequest(materializedRequest)
 
         do {
-            let (response, body) = try handler(request)
+            let (response, body) = try handler(materializedRequest)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             if let body = body {
                 client?.urlProtocol(self, didLoad: body)

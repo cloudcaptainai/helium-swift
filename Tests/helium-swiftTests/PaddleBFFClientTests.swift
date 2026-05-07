@@ -39,7 +39,7 @@ final class PaddleBFFClientTests: XCTestCase {
     // Helper: minimum well-formed BFF response body. Real Paddle response is
     // far richer (items, totals, methods_available, ip_geo_*, etc.), but
     // these tests only need to confirm the SDK parses the basic envelope —
-    // the rich body gets forwarded raw to the bundle in Stage 6.
+    // the rich body gets forwarded raw to the bundle via `rawBody`.
     private static let stubResponseBody = """
     {
         "data": {
@@ -77,7 +77,7 @@ final class PaddleBFFClientTests: XCTestCase {
         XCTAssertEqual(
             captured.url?.absoluteString,
             "https://sandbox-checkout-service.paddle.com/transaction-checkout",
-            "Sandbox tokens (prefix `test_`) must route to sandbox-checkout-service.paddle.com — see bundler builder.js line ~1056."
+            "Sandbox tokens (prefix `test_`) must route to sandbox-checkout-service.paddle.com — must mirror the bundler's URL selection."
         )
     }
 
@@ -189,14 +189,13 @@ final class PaddleBFFClientTests: XCTestCase {
         )
     }
 
-    /// CodeRabbit flag: the original implementation used
-    /// `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`,
-    /// which leaves reserved query delimiters like `?`, `&`, `=` unescaped
-    /// when they appear in the *value*. A bundle id like
+    /// `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`
+    /// leaves reserved query delimiters like `?`, `&`, `=` unescaped when
+    /// they appear in the *value*. A bundle id like
     /// "com.example.app?evil=1" would produce a URL where the second `?`
     /// terminates the source_page query string, fragmenting the URL Paddle
-    /// validates against its allow-list. Use URLComponents/URLQueryItem so
-    /// the value is escaped correctly.
+    /// validates against its allow-list. We use URLComponents/URLQueryItem
+    /// so the value is escaped correctly; this test locks that in.
     func testCreateTransactionCheckout_sourcePage_escapesReservedCharsInBundleId() async throws {
         MockURLProtocol.requestHandler = okResponseHandler()
 
@@ -254,12 +253,11 @@ final class PaddleBFFClientTests: XCTestCase {
             iosBundleId: nil
         )
 
-        // Stage 4's coordinator + Stage 6's ctx encoder both want to
-        // preserve the FULL response body (Paddle returns rich data the
-        // bundle parses into its own PaddleCheckoutContext). Locking in
-        // that the raw bytes are accessible — not just a few decoded
-        // fields — protects against accidental "save space, drop fields"
-        // refactors later.
+        // The coordinator + ctx encoder both rely on preserving the FULL
+        // response body — Paddle returns rich data the bundle parses into
+        // its own PaddleCheckoutContext. Locking in that the raw bytes
+        // are accessible (not just a few decoded fields) protects against
+        // accidental "save space, drop fields" refactors later.
         let raw = try XCTUnwrap(String(data: result.rawBody, encoding: .utf8))
         XCTAssertTrue(raw.contains("che_test_session_id"))
         XCTAssertTrue(raw.contains("txn_test_id"))

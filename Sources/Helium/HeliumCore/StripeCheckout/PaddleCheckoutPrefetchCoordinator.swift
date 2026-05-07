@@ -1,26 +1,8 @@
 import Foundation
 
-/// Outcomes the prefetch coordinator can produce for a given priceId.
-///
-/// Stage 5 (the click handler in ExternalWebCheckoutManager) pattern-matches
-/// on these to decide what to do when the user taps Subscribe:
-///   * `.ready` → embed both responses in `ctx.paddleBootstrap` and open Safari
-///   * `.alreadyEntitled` → skip Safari, fire `purchase_already_entitled`,
-///     return `.preCheckResolved` (Option A from HEL-5326)
-///   * `.failed` → open Safari WITHOUT `ctx.paddleBootstrap`; the bundle
-///     does its own fetch (current behavior, no regression)
-///   * `.notStarted` → no prefetch was ever scheduled for this priceId
-///     (paywall didn't have it, or was dismissed before prefetch ran).
-///     Same default path as `.failed`.
-/// One-shot resume guard for `withCheckedContinuation` races. Two observer
-/// Tasks attempt to resume the continuation; only the first to call
-/// `tryResume()` wins. Used by `awaitOutcome` to race the cached prefetch
-/// Task against a timeout — the continuation must resume exactly once,
-/// regardless of which Task gets there first.
-///
-/// `@unchecked Sendable` because the lock provides the synchronization
-/// the compiler can't verify on its own. The one mutable field
-/// (`resumed`) is only ever touched while the lock is held.
+/// One-shot resume guard for `withCheckedContinuation` races: the first
+/// observer to call `tryResume` wins, the rest are no-ops. Lock-protected
+/// because the observers run on different Tasks.
 private final class ResumeGuard: @unchecked Sendable {
     private let lock = NSLock()
     private var resumed = false
@@ -34,10 +16,8 @@ private final class ResumeGuard: @unchecked Sendable {
     }
 }
 
-/// Surfaced as the `Error` value of a `.failed` outcome when
-/// `awaitOutcome` exceeds its timeout budget. Carries the priceId and
-/// the budget so logs can correlate the timeout with which prefetch
-/// stalled.
+/// Surfaced as the `Error` of a `.failed` outcome when `awaitOutcome`
+/// exceeds its timeout budget.
 struct PaddlePrefetchAwaitTimeout: LocalizedError {
     let priceId: String
     let timeout: TimeInterval
@@ -47,6 +27,17 @@ struct PaddlePrefetchAwaitTimeout: LocalizedError {
     }
 }
 
+/// Outcomes the prefetch coordinator can produce for a given priceId.
+/// Pattern-matched at click-time to decide what the Subscribe-tap handler
+/// does:
+///
+///   * `.ready` — embed both responses in `ctx.paddleBootstrap` and open Safari
+///   * `.alreadyEntitled` — skip Safari entirely, fire `purchase_already_entitled`,
+///     resolve as `.preCheckResolved`
+///   * `.failed` — open Safari WITHOUT `ctx.paddleBootstrap`; the bundle
+///     does its own fetch (no regression from current behavior)
+///   * `.notStarted` — no prefetch was scheduled for this priceId. Same
+///     treatment as `.failed`.
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -57,44 +48,38 @@ enum PaddlePrefetchOutcome {
     case notStarted
 }
 
-/// Coordinates the SDK pre-fetch chain (HEL-5326): runs bandit + Paddle BFF
-/// in parallel per priceId during in-app paywall presentation, caches
-/// in-flight Tasks keyed by priceId, exposes a click-handler-friendly
-/// `awaitOutcome` that returns instantly when ready or blocks until in-flight
-/// completes (per the user's "wait, don't take the default path" preference
-/// for in-flight case — see HEL-5326 design discussion).
+/// Runs bandit + Paddle BFF in parallel per priceId at paywall-display
+/// time, caches the in-flight Tasks, and exposes a click-handler-friendly
+/// `awaitOutcome` that returns instantly when the result is ready or
+/// blocks (with a timeout) until it is.
 ///
-/// Design properties:
-///   * `prefetch` returns immediately, never blocks. Tasks run on detached
-///     context so MainActor isn't held during network I/O.
-///   * Idempotent on the same priceId — re-calling prefetch for a priceId
-///     already in the cache is a no-op (avoids duplicating work if the
-///     paywall re-renders).
-///   * `cancelAll` cancels in-flight URLSession tasks via Swift's Task
-///     cancellation propagation (URLSession.data(for:) responds to it) and
-///     clears the cache so subsequent `awaitOutcome` calls return
-///     `.notStarted`.
-///   * MainActor-isolated for simplicity: paywall lifecycle hooks already
-///     run on the main thread, click handlers do too. Network calls are
-///     dispatched off-actor via `Task.detached`.
+/// Cache ownership is per-paywall-session: the cache key is
+/// `(sessionId, priceId)`. Two paywalls displayed concurrently with the
+/// same priceId get independent entries, so closing one doesn't wipe the
+/// other's cached outcome.
+///
+/// MainActor-isolated because the integration points (paywall lifecycle
+/// events, click-handler) are main-thread; URLSession orchestration is
+/// dispatched off-actor via `Task.detached` so network I/O doesn't pin
+/// the main thread.
 @MainActor
 final class PaddleCheckoutPrefetchCoordinator {
 
-    /// Singleton used by Stage 5 (ExternalWebCheckoutManager) to look up
-    /// cached results from the paywall-display-time prefetch. Tests should
-    /// build their own instance via the designated initializer with
-    /// MockURLProtocol-backed clients to avoid singleton state leakage
-    /// between tests.
     static let shared = PaddleCheckoutPrefetchCoordinator()
 
     private let banditClient: HeliumPaymentAPIClient
     private let bffClient: PaddleBFFClient
 
-    /// In-flight or completed prefetch Tasks, keyed by priceId. Storing the
-    /// Task itself (not just the outcome) lets `awaitOutcome` block until
-    /// completion when the click arrives faster than the network — Swift's
-    /// `await task.value` returns immediately if already completed.
-    private var cache: [String: Task<PaddlePrefetchOutcome, Never>] = [:]
+    /// Cache keyed by `(sessionId, priceId)` composite. Storing the Task
+    /// itself (not just the eventual outcome) lets `awaitOutcome` block on
+    /// a still-in-flight result; `await task.value` returns immediately if
+    /// the task has already completed.
+    private var cache: [CacheKey: Task<PaddlePrefetchOutcome, Never>] = [:]
+
+    private struct CacheKey: Hashable {
+        let sessionId: String
+        let priceId: String
+    }
 
     init(
         banditClient: HeliumPaymentAPIClient = .shared,
@@ -104,25 +89,62 @@ final class PaddleCheckoutPrefetchCoordinator {
         self.bffClient = bffClient
     }
 
-    /// Schedules prefetch tasks for each priceId in parallel. Returns
-    /// immediately. Tasks already in the cache for a given priceId are
-    /// preserved (no-op for re-entries) so multiple paywall onAppear
-    /// passes don't fan-out duplicate requests.
+    // MARK: - One-liner entry points for paywall lifecycle events
+
+    /// Fire when a paywall becomes visible. Reads the trigger's
+    /// `webProductsOfferedPaddle` and the org's paddle client token from
+    /// the SDK's existing config, extracts priceIds, and schedules a
+    /// prefetch per priceId. No-op when any prerequisite is missing — the
+    /// click handler's safety-net path covers that.
+    func handlePaywallOpen(paywallSession: PaywallSession) {
+        guard let info = paywallSession.paywallInfoWithBackups,
+              let webProducts = info.webProductsOfferedPaddle,
+              !webProducts.isEmpty,
+              let clientToken = HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken,
+              !clientToken.isEmpty else {
+            return
+        }
+        let priceIds = Self.extractPriceIds(from: webProducts)
+        guard !priceIds.isEmpty else { return }
+
+        prefetch(
+            sessionId: paywallSession.sessionId,
+            priceIds: priceIds,
+            paddleClientToken: clientToken,
+            iosBundleId: Bundle.main.bundleIdentifier
+        )
+    }
+
+    /// Fire when a paywall closes. Cancels in-flight prefetches owned by
+    /// this paywall session only — other still-displayed paywalls keep
+    /// their caches.
+    func handlePaywallClose(paywallSession: PaywallSession) {
+        cancelForSession(sessionId: paywallSession.sessionId)
+    }
+
+    // MARK: - Primitives (also called directly by tests)
+
+    /// Schedules prefetch tasks for each priceId in parallel under the
+    /// given session's ownership. Returns immediately. Re-calling for the
+    /// same `(sessionId, priceId)` is a no-op so re-renders don't
+    /// fan-out duplicate requests.
     func prefetch(
+        sessionId: String,
         priceIds: [String],
         paddleClientToken: String,
         iosBundleId: String?
     ) {
         for priceId in priceIds {
-            if cache[priceId] != nil { continue }
+            let key = CacheKey(sessionId: sessionId, priceId: priceId)
+            if cache[key] != nil { continue }
 
-            // Capture references to the clients locally so the detached
-            // task can run them off-actor without crossing the MainActor
-            // boundary on every URLSession call.
+            // Capture clients locally so the detached task runs them
+            // off-actor without crossing the MainActor boundary on every
+            // URLSession call.
             let bandit = banditClient
             let bff = bffClient
 
-            cache[priceId] = Task.detached(priority: .userInitiated) {
+            cache[key] = Task.detached(priority: .userInitiated) {
                 await Self.runPrefetchChain(
                     priceId: priceId,
                     paddleClientToken: paddleClientToken,
@@ -135,70 +157,50 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     /// Default upper bound for `awaitOutcome` waits. Generous enough that
-    /// most prefetches complete well within it (bandit ~400ms + Paddle BFF
-    /// ~700ms = ~1.1s typical), tight enough that a stuck task doesn't
-    /// freeze the Subscribe-tap handler indefinitely. Tunable per call for
-    /// tests that want a tighter or looser budget.
+    /// most prefetches complete well within it (bandit ~400ms + Paddle
+    /// BFF ~700ms ≈ 1.1s typical), tight enough that a stuck task doesn't
+    /// freeze the Subscribe-tap handler indefinitely.
     static let defaultAwaitTimeoutSeconds: TimeInterval = 3.0
 
-    /// Returns the cached outcome for a priceId. Blocks until the in-flight
-    /// task completes OR the timeout elapses, whichever comes first.
-    /// Returns `.notStarted` for priceIds that were never prefetched.
+    /// Returns the cached outcome for `(sessionId, priceId)`. Blocks until
+    /// the in-flight task completes OR the timeout elapses, whichever
+    /// comes first. Returns `.notStarted` for entries that were never
+    /// prefetched. On timeout, returns `.failed` so the caller's
+    /// safety-net branch fires.
     ///
-    /// Timeout behavior (Bugbot review): URLSession's default timeout is
-    /// 60s, so an unbounded wait could freeze the Subscribe-tap UI for up
-    /// to a minute on a stuck request. On timeout we surface `.failed` so
-    /// the caller in `ExternalWebCheckoutManager.startCheckoutFlow` falls
-    /// through to the safety-net branch (open Safari without ctx; bundle
-    /// does its own fetch — current behavior, no regression). The
-    /// in-flight Task continues to completion in the background; we just
-    /// stop observing it from the click handler's perspective.
-    ///
-    /// Implementation note: an earlier version used `withTaskGroup`, but
-    /// `withTaskGroup` waits for ALL child tasks to complete before
-    /// returning — and `await task.value` doesn't respond to cooperative
-    /// cancellation (Task.value just waits for the underlying Task, no
-    /// matter what). So the group would return only when the cached Task
-    /// actually finished, defeating the timeout (Bugbot's second flag on
-    /// this method). The fix is `withCheckedContinuation` plus a one-shot
-    /// guard — the function returns as soon as either observer Task wins
-    /// the race, regardless of what the loser is doing.
+    /// We use `withCheckedContinuation` rather than `withTaskGroup`
+    /// because the group implicitly waits for ALL its child tasks before
+    /// returning, and `await task.value` doesn't respond to cooperative
+    /// cancellation — so a buggy implementation built on TaskGroup would
+    /// effectively block until the underlying URLSession completes.
+    /// Continuations let us return the moment whichever observer wins.
     func awaitOutcome(
+        sessionId: String,
         priceId: String,
         timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
     ) async -> PaddlePrefetchOutcome {
-        guard let task = cache[priceId] else {
+        let key = CacheKey(sessionId: sessionId, priceId: priceId)
+        guard let task = cache[key] else {
             return .notStarted
         }
 
         let timeoutNanos = UInt64(timeout * 1_000_000_000)
 
         return await withCheckedContinuation { (continuation: CheckedContinuation<PaddlePrefetchOutcome, Never>) in
-            // One-shot resume guard. Whichever observer Task wins the race
-            // calls `tryResume()`; the loser's call returns false and is a
-            // no-op. Lock-protected so the two observers can't race on the
-            // resumed flag.
             let resumeGuard = ResumeGuard()
 
-            // Observer 1: wait for the cached Task to complete.
-            // Detached so it doesn't pin MainActor (the coordinator is
-            // @MainActor; plain `Task { }` would inherit that isolation
-            // and serialize the wait against the click handler).
+            // Observer 1: wait for the cached Task. Detached so it doesn't
+            // pin MainActor.
             Task.detached(priority: .userInitiated) {
                 let outcome = await task.value
                 if resumeGuard.tryResume() {
                     continuation.resume(returning: outcome)
                 }
-                // If the timeout already fired, the cached Task continues
-                // running in the background — we just don't observe it
-                // from this awaitOutcome call. The cache entry stays
-                // populated, so subsequent awaitOutcome calls for the
-                // same priceId can pick up the eventual result.
             }
 
-            // Observer 2: timeout. Task.sleep responds to cancellation
-            // cooperatively (via try?), so a tearDown that cancels in-
-            // flight tasks doesn't leak this observer.
+            // Observer 2: timeout. Task.sleep is cancellation-cooperative,
+            // so a tearDown that cancels in-flight tasks won't leak this
+            // observer.
             Task.detached(priority: .userInitiated) {
                 try? await Task.sleep(nanoseconds: timeoutNanos)
                 if resumeGuard.tryResume() {
@@ -210,34 +212,27 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
-    /// Cancels in-flight tasks for the specified priceIds only and removes
-    /// them from the cache. Use this when a paywall closes — pass the
-    /// closing paywall's priceIds so other still-displayed paywalls keep
-    /// their cached outcomes (Bugbot review: previously `cancelAll()` here
-    /// would wipe every other paywall's cache too, since the coordinator
-    /// is a singleton).
-    ///
-    /// Cancellation propagates into `URLSession.data(for:)` so the
-    /// underlying network requests are torn down too, not just the Swift
-    /// Tasks wrapping them. Unknown priceIds are silently ignored — safe
-    /// to over-call.
-    func cancel(priceIds: [String]) {
-        for priceId in priceIds {
-            if let task = cache.removeValue(forKey: priceId) {
+    /// Cancels every in-flight task owned by this session and removes its
+    /// cache entries. Other sessions are untouched. Cancellation
+    /// propagates into URLSession.data(for:) so the underlying network
+    /// requests are torn down too.
+    func cancelForSession(sessionId: String) {
+        for key in Array(cache.keys) where key.sessionId == sessionId {
+            if let task = cache.removeValue(forKey: key) {
                 task.cancel()
             }
         }
     }
 
-    /// Cancels every in-flight task and clears the cache. Use only when
-    /// you genuinely want a global wipe (test tearDown, app backgrounding).
-    /// For paywall close, prefer `cancel(priceIds:)` so concurrent
-    /// paywalls don't lose their caches.
+    /// Cancels every in-flight task across all sessions. Use only when
+    /// you genuinely want a global wipe (test tearDown, app
+    /// backgrounding). For paywall close prefer `handlePaywallClose` /
+    /// `cancelForSession`.
     ///
-    /// This synchronous variant signals cancellation but doesn't wait for
-    /// the Tasks to actually stop. Tests that need a hard barrier (e.g.
+    /// Synchronous variant: signals cancellation but doesn't wait for
+    /// Tasks to actually stop. Tests that need a hard barrier (e.g.
     /// before resetting MockURLProtocol's static state) should call
-    /// `cancelAllAndAwait()` instead.
+    /// `cancelAllAndAwait()`.
     func cancelAll() {
         for (_, task) in cache {
             task.cancel()
@@ -246,8 +241,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     /// Like `cancelAll`, but also awaits each Task's completion. Use when
-    /// you need a hard barrier — e.g. test tearDown that's about to mutate
-    /// shared state the in-flight Tasks could still touch.
+    /// you need a hard barrier before mutating shared state in-flight
+    /// Tasks could touch.
     func cancelAllAndAwait() async {
         let tasks = Array(cache.values)
         cache.removeAll()
@@ -259,30 +254,24 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
-    // MARK: - ctx encoding (Stage 6)
+    // MARK: - ctx encoding
 
-    /// Encodes a `.ready` outcome into a JSON-friendly dict that
-    /// `ExternalWebCheckoutManager.buildEnrichedCheckoutURL` merges into
-    /// `ctx.paddleBootstrap`. The bundler in Safari reads this and skips
-    /// its own bandit + Paddle BFF round-trips entirely.
+    /// Encodes a `.ready` outcome into the dict the bundler reads from
+    /// `ctx.paddleBootstrap`. Returns nil for non-ready outcomes; the
+    /// caller in `ExternalWebCheckoutManager.startCheckoutFlow` either
+    /// short-circuits (alreadyEntitled) or skips the bootstrap merge
+    /// (failed/notStarted).
     ///
-    /// Returns nil for `.alreadyEntitled` (Stage 5 short-circuits before
-    /// building the URL), `.failed`, and `.notStarted` (those default to
-    /// the bundle's existing fetch path with no ctx hint).
-    ///
-    /// `priceId` is included as an explicit top-level field so the bundler
-    /// can validate the bootstrap matches the user's currently-selected
-    /// product without digging it out of Paddle's response shape (Bugbot
-    /// review on bundler PR #63 flagged that relying on
-    /// `paddleCheckoutResponse.data.items[0].price_id` would silently
-    /// disable the optimization if Paddle ever renamed that field).
+    /// `priceId` is included as a top-level field so the bundler can
+    /// validate the bootstrap matches the user's currently-selected
+    /// product without depending on Paddle's response shape.
     ///
     /// Shape:
     /// ```
     /// {
     ///     "priceId": "pri_xxx",
     ///     "banditResponse": { "transactionId", "paddleCustomerId"?, "isKnownCustomer", "requestId" },
-    ///     "paddleCheckoutResponse": { ... full Paddle BFF response ... }
+    ///     "paddleCheckoutResponse": { ...full Paddle BFF response... }
     /// }
     /// ```
     nonisolated static func encodeBootstrapToCtx(
@@ -302,10 +291,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             banditDict["paddleCustomerId"] = customerId
         }
 
-        // Paddle's BFF response is rich and only the bundle parses it
-        // fully — round-trip the full body so we don't accidentally drop
-        // fields. Stage 3's PaddleTransactionCheckoutResult preserves the
-        // raw bytes specifically for this purpose.
+        // Paddle's BFF response is rich; the bundle parses it fully. Round-
+        // trip the full body so we don't drop fields the bundle reads.
         let paddleDict = (try? JSONSerialization.jsonObject(with: paddle.rawBody)) as? [String: Any] ?? [:]
 
         return [
@@ -318,19 +305,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     // MARK: - Composite key helpers
 
     /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
-    ///
-    /// Strict shape: exactly one `:` separator with non-empty halves and a
-    /// `pri_`-prefixed suffix. Rejects:
-    ///   * "pri_just_a_priceid"   (no colon — not a composite)
-    ///   * "pro_x:extra:pri_y"    (too many colons — ambiguous)
-    ///   * ":pri_orphan"          (missing productId half)
-    ///   * "pro_x:something_else" (suffix doesn't look like a priceId)
-    ///
-    /// Single source of truth for parsing
-    /// `HeliumPaywallInfo.webProductsOfferedPaddle` composite keys — the
-    /// click-time path in ExternalWebCheckoutManager calls this for one
-    /// productKey, `extractPriceIds(from:)` calls it for the whole array
-    /// on paywall display.
+    /// Strict shape: exactly one ":" separator with non-empty halves and
+    /// a `pri_`-prefixed suffix.
     nonisolated static func extractPriceId(from compositeKey: String) -> String? {
         let parts = compositeKey.split(
             separator: ":",
@@ -345,28 +321,22 @@ final class PaddleCheckoutPrefetchCoordinator {
         return parts[1]
     }
 
-    /// Bulk variant for paywall-display-time fan-out. Filters out
-    /// malformed entries silently — a single bad row in the on-launch
-    /// payload shouldn't kill the prefetch chain.
+    /// Bulk variant. Filters malformed entries silently — a single bad
+    /// row in the on-launch payload shouldn't kill the prefetch chain.
     nonisolated static func extractPriceIds(from composites: [String]) -> [String] {
         return composites.compactMap(extractPriceId)
     }
 
     // MARK: - Internal chain runner
 
-    /// Bandit → BFF, with the alreadyEntitled short-circuit. Pure function
-    /// (no MainActor / shared-state dependency) so it can run off-actor in
-    /// the detached task.
+    /// Bandit → BFF, with the alreadyEntitled short-circuit. Pure
+    /// function (no MainActor / shared-state dependency) so it runs
+    /// off-actor in the detached task.
     ///
     /// `nonisolated` is load-bearing: without it, this static method
-    /// inherits the enclosing class's `@MainActor` isolation. The
-    /// `Task.detached` at the call site would then immediately hop back
-    /// to MainActor to invoke this — defeating the whole point of
-    /// dispatching network orchestration off the main thread (Bugbot
-    /// flagged this on the initial review). With `nonisolated`, the
-    /// detached task body runs on the global concurrent executor as
-    /// intended, and parallel prefetches don't compete for MainActor
-    /// time between network suspension points.
+    /// inherits the enclosing class's `@MainActor` isolation, and the
+    /// `Task.detached` at the call site would hop back to MainActor to
+    /// invoke it — defeating the point of off-actor dispatch.
     private nonisolated static func runPrefetchChain(
         priceId: String,
         paddleClientToken: String,
@@ -374,9 +344,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient
     ) async -> PaddlePrefetchOutcome {
-        // Step 1: bandit. If this throws alreadyEntitled, BFF is skipped
-        // entirely (no checkout session needed for a customer who already
-        // owns the product).
+        // Step 1: bandit. If 409 alreadyEntitled, BFF is skipped — no
+        // checkout session needed for a customer who already owns the
+        // product.
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)

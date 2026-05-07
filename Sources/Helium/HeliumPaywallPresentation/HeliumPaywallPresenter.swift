@@ -456,56 +456,10 @@ class HeliumPaywallPresenter {
     
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
-
-        // SDK pre-fetch (HEL-5326): when an in-app paywall opens that has
-        // Paddle web products, fire the bandit + Paddle BFF chain in the
-        // background for each priceId. By the time the user taps Subscribe
-        // (typically after a few seconds of reading), the responses are
-        // cached and the click handler can redirect to Safari with the
-        // results already in `ctx.paddleBootstrap`.
-        //
-        // Fail-open: any missing piece (paywallInfo, paddleClientToken,
-        // empty product list) just means no prefetch happens — bundle
-        // defaults to its own fetch path on click.
-        if let info = paywallVC.paywallSession.paywallInfoWithBackups,
-           let webProducts = info.webProductsOfferedPaddle,
-           !webProducts.isEmpty,
-           let clientToken = HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken,
-           !clientToken.isEmpty {
-            let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: webProducts)
-            if !priceIds.isEmpty {
-                let bundleId = Bundle.main.bundleIdentifier
-                Task { @MainActor in
-                    PaddleCheckoutPrefetchCoordinator.shared.prefetch(
-                        priceIds: priceIds,
-                        paddleClientToken: clientToken,
-                        iosBundleId: bundleId
-                    )
-                }
-            }
-        }
     }
 
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
-
-        // Cancel any in-flight prefetches scoped to THIS paywall's priceIds
-        // (HEL-5326). Bugbot review: previously called the global
-        // `cancelAll()`, which would wipe other concurrently-displayed
-        // paywalls' prefetch results too. Scoping by priceId leaves other
-        // paywalls' caches intact while still freeing this paywall's
-        // in-flight bandit + BFF tasks (avoiding wasted Paddle draft
-        // transactions when the user dismisses without clicking).
-        if let info = paywallVC.paywallSession.paywallInfoWithBackups,
-           let webProducts = info.webProductsOfferedPaddle,
-           !webProducts.isEmpty {
-            let priceIdsToCancel = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: webProducts)
-            if !priceIdsToCancel.isEmpty {
-                Task { @MainActor in
-                    PaddleCheckoutPrefetchCoordinator.shared.cancel(priceIds: priceIdsToCancel)
-                }
-            }
-        }
 
         // Call onEntitled if this session had a successful purchase/restore
         let sessionId = paywallVC.paywallSession.sessionId

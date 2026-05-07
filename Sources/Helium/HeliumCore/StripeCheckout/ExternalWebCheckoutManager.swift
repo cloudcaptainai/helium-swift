@@ -92,9 +92,9 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
-        // SDK prefetch lookup (HEL-5326): for the Paddle path, await the
-        // outcome of the in-flight prefetch (or get it instantly if it's
-        // already done). Behavior per outcome:
+        // Paddle prefetch lookup: await the in-flight prefetch outcome (or
+        // get it instantly if it's already done), scoped to this paywall
+        // session. Behavior per outcome:
         //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
         //     opening Safari to a guaranteed-failure UX).
         //   * .ready → encode into ctx so the bundle skips its own fetch.
@@ -103,14 +103,18 @@ public class ExternalWebCheckoutManager: NSObject {
         var paddleBootstrapDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
            let priceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
-            let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(priceId: priceId)
+            let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
+                sessionId: paywallSession.sessionId,
+                priceId: priceId
+            )
             switch outcome {
             case .alreadyEntitled(let code, let message):
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch alreadyEntitled (\(code)): \(message) — skipping browser")
-                // Mirror the pre-checkout entitlement-already-owns short-circuit
-                // (line ~185 above): no browser open, refresh entitlements so
-                // future flows reflect the server's view.
+                // Same handling as the pre-checkout entitlement check
+                // earlier in this method: no browser open, invalidate the
+                // entitlements cache so future flows reflect the server's
+                // view.
                 entitlementsSource.invalidateCache()
                 return .preCheckResolved
             case .ready:

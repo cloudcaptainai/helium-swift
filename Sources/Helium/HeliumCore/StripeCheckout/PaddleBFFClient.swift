@@ -20,16 +20,16 @@ public enum PaddleBFFError: LocalizedError {
 
 /// Successful response from Paddle's `POST /transaction-checkout`.
 ///
-/// We deliberately keep this struct tiny (just the fields the SDK itself
-/// needs for cache keying / sanity checks) and preserve the full response
-/// body as raw `Data` for forwarding. Paddle's response is rich (items,
+/// Deliberately tiny — just the fields the SDK itself needs for cache
+/// keying / sanity checks. The full response body is preserved as raw
+/// `Data` for forwarding to the bundle. Paddle's response is rich (items,
 /// totals, methods_available, ip_geo_*, customer, ...) and the bundle in
-/// Safari already has a complete decoder for it. Re-decoding everything on
-/// the SDK side would be duplicate work and a maintenance liability —
+/// Safari already has a complete decoder for it. Re-decoding everything
+/// on the SDK side would be duplicate work and a maintenance liability —
 /// every new Paddle field would need a Codable mirror here.
 ///
-/// Stage 6 of the prefetch path encodes `rawBody` into the bundle URL's
-/// `ctx.paddleBootstrap.paddleCheckoutResponseBody`, where the bundle's
+/// `rawBody` is encoded into the bundle URL's
+/// `ctx.paddleBootstrap.paddleCheckoutResponse`, where the bundle's
 /// existing decoder consumes it.
 public struct PaddleTransactionCheckoutResult {
     /// Full JSON response body from Paddle. Forwarded as-is to the bundle.
@@ -51,10 +51,10 @@ public struct PaddleTransactionCheckoutResult {
 /// in-app paywall presentation so the bundle in Safari can skip the
 /// round-trip entirely.
 ///
-/// URL selection mirrors `server/builder.js` (line ~1056): a `test_*`
-/// client token routes to sandbox, anything else routes to prod. This
-/// keeps env separation rooted in the token itself — no separate config
-/// flag for the SDK to get out of sync.
+/// URL selection mirrors the bundler: a `test_*` client token routes to
+/// sandbox, anything else routes to prod. Keeping env separation rooted
+/// in the token itself means there's no separate config flag for the SDK
+/// to get out of sync.
 final class PaddleBFFClient {
 
     /// Bundler's hard-coded default origin (server/heliumStandalonePaddle.ts).

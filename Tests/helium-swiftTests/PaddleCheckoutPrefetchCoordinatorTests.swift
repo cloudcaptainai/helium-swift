@@ -1,29 +1,28 @@
 import XCTest
 @testable import Helium
 
-/// Tests for `PaddleCheckoutPrefetchCoordinator` (Stage 4 of HEL-5326).
-///
-/// The coordinator combines the bandit client (Stage 2) and the Paddle BFF
-/// client (Stage 3) to run the full pre-fetch chain in the background per
-/// priceId, caches the in-flight Tasks keyed by priceId, and exposes
-/// `awaitOutcome(priceId:)` which the click handler uses on Subscribe to
-/// either get an instant cached result or wait for an in-flight one.
+/// Tests for `PaddleCheckoutPrefetchCoordinator` — the orchestrator that
+/// runs bandit + Paddle BFF in parallel during paywall display so the
+/// click handler can produce `ctx.paddleBootstrap` instantly on Subscribe.
 ///
 /// Outcomes the coordinator produces:
 ///   * `.ready(bandit, paddle)` — full prefetch succeeded, both responses
 ///     ready to embed in `ctx.paddleBootstrap`.
 ///   * `.alreadyEntitled(code, message)` — bandit returned 409
-///     `duplicate_subscription`. BFF was never called (we don't waste a
-///     round-trip when the customer already owns the product). Stage 5
-///     translates this to `preCheckResolved` + `purchase_already_entitled`
-///     event.
-///   * `.failed(error)` — transport error or non-2xx from either call.
-///     Stage 5 defaults to opening Safari without `ctx.paddleBootstrap`
-///     and the bundle does its own fetch (current behavior, no regression).
-///   * `.notStarted` — no prefetch ever ran for this priceId. Stage 5
-///     defaults the same way as `.failed`.
+///     `duplicate_subscription`; BFF was skipped. Caller resolves the
+///     flow as `preCheckResolved` and fires `purchase_already_entitled`.
+///   * `.failed(error)` — transport error, non-2xx, or timeout. Caller
+///     opens Safari without `ctx.paddleBootstrap`; bundle does its own
+///     fetch (no regression from current behavior).
+///   * `.notStarted` — no prefetch was ever scheduled for the
+///     `(sessionId, priceId)` pair.
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
+
+    /// Session id used by every test that doesn't specifically exercise
+    /// per-session ownership. Cache key is `(sessionId, priceId)`, so
+    /// using a fixed value keeps the rest of the cases simple.
+    private let testSessionId = "test_session_default"
 
     private var session: URLSession!
     private var banditClient: HeliumPaymentAPIClient!
@@ -117,12 +116,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
         coordinator.prefetch(
+            sessionId: testSessionId,
             priceIds: ["pri_x"],
             paddleClientToken: "test_xyz",
             iosBundleId: "com.example.test"
         )
 
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_x")
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .ready(let bandit, let paddle) = outcome else {
             XCTFail("Expected .ready, got \(outcome)")
@@ -151,8 +151,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                           userInfo: [NSLocalizedDescriptionKey: "BFF was called after bandit 409 — should have short-circuited"])
         }
 
-        coordinator.prefetch(priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_x")
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .alreadyEntitled(let code, let message) = outcome else {
             XCTFail("Expected .alreadyEntitled, got \(outcome)")
@@ -181,8 +181,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_x")
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .failed = outcome else {
             XCTFail("Expected .failed, got \(outcome)")
@@ -203,8 +203,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_x")
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .failed = outcome else {
             XCTFail("Expected .failed, got \(outcome)")
@@ -216,7 +216,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     func testAwaitOutcome_returnsNotStarted_whenNoPrefetchWasCalled() async {
         // No call to prefetch — cache is empty.
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_unknown")
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_unknown")
 
         guard case .notStarted = outcome else {
             XCTFail("Expected .notStarted for priceId never prefetched, got \(outcome)")
@@ -227,12 +227,30 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testAwaitOutcome_returnsNotStarted_forPriceIdNotInPrefetchSet() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_y_not_prefetched")
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_y_not_prefetched")
 
         guard case .notStarted = outcome else {
             XCTFail("Expected .notStarted for priceId outside the prefetched set, got \(outcome)")
+            return
+        }
+    }
+
+    /// `(sessionId, priceId)` is a composite key, so the same priceId in
+    /// a different session is a different cache entry. A click handler
+    /// that asks for the wrong session's priceId must surface
+    /// `.notStarted`, not someone else's outcome.
+    func testAwaitOutcome_returnsNotStarted_whenSessionIdDoesNotMatch() async throws {
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+
+        coordinator.prefetch(sessionId: "session_a", priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        // Same priceId, different sessionId → cache miss.
+        let outcome = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_x")
+
+        guard case .notStarted = outcome else {
+            XCTFail("Different session id should be a cache miss; got \(outcome)")
             return
         }
     }
@@ -242,10 +260,10 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testCancelAll_clearsCache_subsequentAwaitsReturnNotStarted() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         coordinator.cancelAll()
 
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_x")
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .notStarted = outcome else {
             XCTFail("After cancelAll, awaitOutcome should return .notStarted (cache cleared)")
@@ -255,23 +273,21 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     // MARK: - parallelism
 
-    // MARK: - Timeout on awaitOutcome (Bugbot review #2)
+    // MARK: - Timeout on awaitOutcome
 
     /// `awaitOutcome` blocks the caller until the in-flight Task completes
     /// or the supplied timeout elapses, whichever comes first. Without an
     /// upper bound the prefetch chain could block the Subscribe-tap
-    /// handler for up to URLSession's default 60s — Bugbot caught this.
-    /// On timeout we surface a `.failed` outcome so the caller falls
-    /// through to the safety-net path (open Safari without ctx, bundle
-    /// does its own fetch) instead of presenting a frozen UI.
+    /// handler for up to URLSession's default 60s. On timeout we surface
+    /// a `.failed` outcome so the caller defaults to the safety-net path
+    /// (open Safari without ctx, bundle does its own fetch) instead of
+    /// presenting a frozen UI.
     ///
     /// CRITICAL: this test asserts elapsed wall-clock time, not just the
-    /// outcome kind. A buggy implementation (e.g. one using
-    /// `withTaskGroup` whose `await task.value` child doesn't respond to
-    /// cancellation — Bugbot's second flag on this method) would still
-    /// eventually return `.failed` because the underlying URLSession
-    /// would eventually finish and the JSON parse would fail. The
-    /// elapsed-time check is what proves the timeout actually fired.
+    /// outcome kind. An implementation that doesn't actually unblock on
+    /// timeout — e.g. one whose timeout observer waits on the underlying
+    /// task — would still eventually return `.failed` once the network
+    /// finishes; only the elapsed-time check rules that out.
     func testAwaitOutcome_timesOut_whenInflightTaskExceedsBudget() async throws {
         // Hang the URLProtocol thread for 2s — well past the 100ms timeout
         // we'll set on awaitOutcome. If the implementation respects the
@@ -283,10 +299,10 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             return (response, "{}".data(using: .utf8)!)
         }
 
-        coordinator.prefetch(priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
         let start = Date()
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_slow", timeout: 0.1)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_slow", timeout: 0.1)
         let elapsed = Date().timeIntervalSince(start)
 
         guard case .failed = outcome else {
@@ -319,11 +335,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(priceIds: ["pri_fast"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_fast"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
         // Generous timeout — task should beat it easily on the synchronous
         // mock URL handler.
-        let outcome = await coordinator.awaitOutcome(priceId: "pri_fast", timeout: 5.0)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_fast", timeout: 5.0)
 
         guard case .ready = outcome else {
             XCTFail("Expected .ready when task completes within timeout; got \(outcome)")
@@ -331,44 +347,47 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
     }
 
-    // MARK: - Scoped cancel(priceIds:) (Bugbot review #3)
+    // MARK: - Per-session cancellation
 
-    /// `cancel(priceIds:)` removes only the specified entries from the
-    /// cache, leaving other paywalls' prefetch results intact. The
-    /// previous design wiped the singleton cache entirely on every
-    /// paywall close — Bugbot flagged that closing paywall A would
-    /// destroy paywall B's prefetched outcomes too.
-    func testCancelPriceIds_removesSpecifiedEntriesOnly() async throws {
+    /// `cancelForSession(sessionId:)` clears only the entries owned by
+    /// that session. Other in-flight or cached paywall sessions are
+    /// untouched. This is the property that makes overlapping paywalls
+    /// safe: closing paywall A's prefetch must not destroy paywall B's
+    /// cached outcome — even when both share a priceId.
+    func testCancelForSession_removesEntriesOwnedByThatSessionOnly() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(
-            priceIds: ["pri_a", "pri_b", "pri_c"],
-            paddleClientToken: "test_xyz",
-            iosBundleId: nil
-        )
+        // Two sessions, overlapping priceId on purpose to lock in the
+        // worst-case scenario.
+        coordinator.prefetch(sessionId: "session_a", priceIds: ["pri_shared", "pri_a_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(sessionId: "session_b", priceIds: ["pri_shared", "pri_b_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
-        // Cancel just one priceId.
-        coordinator.cancel(priceIds: ["pri_b"])
+        coordinator.cancelForSession(sessionId: "session_a")
 
-        let outcomeA = await coordinator.awaitOutcome(priceId: "pri_a", timeout: 5.0)
-        let outcomeB = await coordinator.awaitOutcome(priceId: "pri_b", timeout: 5.0)
-        let outcomeC = await coordinator.awaitOutcome(priceId: "pri_c", timeout: 5.0)
+        let aShared = await coordinator.awaitOutcome(sessionId: "session_a", priceId: "pri_shared", timeout: 5.0)
+        let aOnly = await coordinator.awaitOutcome(sessionId: "session_a", priceId: "pri_a_only", timeout: 5.0)
+        let bShared = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_shared", timeout: 5.0)
+        let bOnly = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_b_only", timeout: 5.0)
 
-        guard case .ready = outcomeA else {
-            XCTFail("Expected pri_a to still be cached; got \(outcomeA)")
+        guard case .notStarted = aShared else {
+            XCTFail("session_a/pri_shared should have been wiped by cancelForSession(session_a); got \(aShared)")
             return
         }
-        guard case .notStarted = outcomeB else {
-            XCTFail("Expected pri_b to be removed by scoped cancel; got \(outcomeB)")
+        guard case .notStarted = aOnly else {
+            XCTFail("session_a/pri_a_only should have been wiped; got \(aOnly)")
             return
         }
-        guard case .ready = outcomeC else {
-            XCTFail("Expected pri_c to still be cached; got \(outcomeC)")
+        guard case .ready = bShared else {
+            XCTFail("session_b/pri_shared should be untouched by cancelForSession(session_a); got \(bShared)")
+            return
+        }
+        guard case .ready = bOnly else {
+            XCTFail("session_b/pri_b_only should be untouched; got \(bOnly)")
             return
         }
     }
 
-    // MARK: - Bootstrap encoding for ctx (Stage 6)
+    // MARK: - Bootstrap encoding for ctx
 
     /// `.ready` outcomes encode into the ctx as a `paddleBootstrap` object
     /// the bundler reads to skip its own bandit + BFF round-trips. The
@@ -401,8 +420,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
         // priceId is included explicitly so the bundler can match against
         // the user's selected product without reading it out of Paddle's
-        // response shape (Bugbot review on bundler PR #63 — relying on
-        // items[0].price_id is a fragile schema dependency).
+        // response shape (relying on `items[0].price_id` would be a
+        // fragile schema dependency on Paddle's response).
         XCTAssertEqual(dict["priceId"] as? String, "pri_xyz")
 
         let banditDict = try XCTUnwrap(dict["banditResponse"] as? [String: Any])
@@ -422,7 +441,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     func testEncodeBootstrapToCtx_returnsNil_whenAlreadyEntitled() {
         // alreadyEntitled doesn't go through Safari at all, so there's
-        // nothing to encode in ctx. Stage 5's caller short-circuits before
+        // nothing to encode in ctx. The caller short-circuits before
         // building the URL.
         let outcome: PaddlePrefetchOutcome = .alreadyEntitled(code: "duplicate_subscription", message: "x")
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(outcome, priceId: "pri_xyz"))
@@ -437,7 +456,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapToCtx(notStarted, priceId: "pri_xyz"))
     }
 
-    // MARK: - Composite key extraction (Stage 5 integration helper)
+    // MARK: - Composite key extraction (click-handler integration)
 
     /// Paywall info stores Paddle products as "pro_xxx:pri_yyy" composite
     /// keys (mirrors Stripe's encoding). The coordinator needs to extract
@@ -451,11 +470,9 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(priceIds, ["pri_01xyz", "pri_01def_yearly"])
     }
 
-    /// Caught by CodeRabbit review: a key with no colon at all but a
-    /// `pri_` prefix (e.g. "pri_just_a_priceid") was silently accepted by
-    /// the old `.split(":").last` implementation. The composite-key
-    /// contract is "pro_xxx:pri_yyy" — no colon means it isn't a composite,
-    /// so it must be rejected.
+    /// A key with no colon but a `pri_` prefix (e.g. "pri_just_a_priceid")
+    /// must be rejected — the composite-key contract is "pro_xxx:pri_yyy",
+    /// and "no colon" means "not a composite", regardless of prefix.
     func testExtractPriceId_rejectsKeyWithNoColon() {
         XCTAssertNil(
             PaddleCheckoutPrefetchCoordinator.extractPriceId(from: "pri_just_a_priceid"),
@@ -513,13 +530,14 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
 
         coordinator.prefetch(
+            sessionId: testSessionId,
             priceIds: ["pri_a", "pri_b"],
             paddleClientToken: "test_xyz",
             iosBundleId: nil
         )
 
-        let outcomeA = await coordinator.awaitOutcome(priceId: "pri_a")
-        let outcomeB = await coordinator.awaitOutcome(priceId: "pri_b")
+        let outcomeA = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_a")
+        let outcomeB = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_b")
 
         guard case .ready = outcomeA else {
             XCTFail("Expected .ready for pri_a, got \(outcomeA)")
