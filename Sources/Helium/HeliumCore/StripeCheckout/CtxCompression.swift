@@ -25,8 +25,11 @@ enum CtxCompression {
     ///
     /// Returns nil when the framework reports a 0-byte output, which it
     /// does on encoder failure or when the destination buffer is too
-    /// small. Callers default to sending uncompressed `?ctx=` in that
-    /// case (no regression).
+    /// small. The bundler exclusively decodes compressed ctx, so
+    /// callers must abort the checkout on nil rather than emit an
+    /// uncompressed payload — the bundler would silently parse an
+    /// uncompressed payload as empty defaults and the user would
+    /// land on a paywall with no product data.
     static func deflateRaw(_ data: Data) -> Data? {
         // The encoder doesn't know the output size up-front, so we have
         // to allocate a destination buffer big enough for the worst case.
