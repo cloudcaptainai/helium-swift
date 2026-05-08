@@ -417,6 +417,91 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertNil(parsed["paddleAlreadyEntitled"], "Omitted when caller passes nil")
     }
 
+    // MARK: - Larger realistic payload (regression test)
+
+    /// Production-shaped ctx with 2 paddleBootstraps + identity fields,
+    /// totalling ~4.5 KB of JSON. Reproduces the wire shape we ship in
+    /// `?ctx=`. If this round-trips cleanly, the helper is OK at that size;
+    /// any trailing-byte corruption shows up as a JSON-parse failure here.
+    func testDeflateRaw_roundTripsLargeRealisticPaywallCtx() throws {
+        // Two-product bootstrap shape — matches the trimmed Paddle BFF
+        // payload the SDK actually sends, padded to ~4.5 KB total.
+        let bootstrap: [String: Any] = [
+            "banditResponse": [
+                "transactionId": "txn_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "isKnownCustomer": false,
+                "requestId": "req_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "paddleCustomerId": "ctm_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+            ],
+            "paddleCheckoutResponse": [
+                "data": [
+                    "id": "che_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                    "transaction_id": "txn_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                    "status": "draft",
+                    "currency_code": "USD",
+                    "ip_geo_country_code": "US",
+                    "ip_geo_postal_code": "94102",
+                    "items": [
+                        [
+                            "billing_cycle": ["interval": "month", "frequency": 1],
+                            "trial_period": ["interval": "day", "frequency": 7],
+                            "price": [
+                                "unit_price": ["amount": "499", "currency_code": "USD"],
+                                "id": "pri_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                            ],
+                        ],
+                    ],
+                    "totals": ["total": 0, "subtotal": 0, "tax": 0, "discount": 0],
+                    "recurring_totals": ["total": 4.99, "subtotal": 4.99, "tax": 0],
+                    "payments": [
+                        "methods_available": [
+                            ["type": "PI_APPLE_PAY",
+                             "stripe_options": ["api_key": "pk_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                                                "country_code": "US"]],
+                        ],
+                    ],
+                    "discount": NSNull(),
+                    "customer": ["email": "buyer@example.com"],
+                    "seller": ["name": "Acme Inc."],
+                ],
+            ],
+        ]
+        let ctx: [String: Any] = [
+            "analytics": [
+                "userId": "user_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "heliumPersistentId": "01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "rcUserId": "rc_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "appTransactionId": "apptxn_01k_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "organizationId": "4817a01c-719f-4976-a477-51a074ce476a",
+                "iosBundleId": "com.helium.HeliumExample",
+            ],
+            "successUrl": "heliumexamplestripe://openapp",
+            "cancelUrl": "heliumexamplestripe://openapp",
+            "paymentFailureUrl": "heliumexamplestripe://openapp",
+            "introOfferEligible": true,
+            "initialPaddleProduct": "pro_01kppzadma4mq2yx61e5spzgxe:pri_01kpsb1rqm5f373rznmw63jnwt",
+            "organizationId": "4817a01c-719f-4976-a477-51a074ce476a",
+            "iosBundleId": "com.helium.HeliumExample",
+            "paddleBootstraps": [
+                "pri_01kpsb1rqm5f373rznmw63jnwt": bootstrap,
+                "pri_01kpsgnvzp69jyatar1znzxtex": bootstrap,
+            ],
+        ]
+        let json = try JSONSerialization.data(withJSONObject: ctx)
+        XCTAssertGreaterThan(json.count, 1500, "Test fixture should produce a non-trivial JSON size")
+
+        let compressed = try XCTUnwrap(CtxCompression.deflateRaw(json))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: json.count)
+
+        XCTAssertEqual(json.count, decompressed.count, "Round-trip must preserve byte count exactly")
+        XCTAssertEqual(json, decompressed, "Round-trip must preserve bytes exactly")
+
+        // The bundler does this exact step on the decompressed output.
+        // If the trailing bytes are corrupt, JSONSerialization will throw.
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: decompressed),
+                         "Decompressed payload must parse back to JSON")
+    }
+
     // MARK: - Empty / edge-case inputs
 
     /// Empty input shouldn't crash. DEFLATE has a defined empty-stream
