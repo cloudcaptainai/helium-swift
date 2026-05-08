@@ -159,7 +159,187 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertGreaterThan(reduction, 0.20, "Expected >=20% size reduction; got \(Int(reduction * 100))%")
     }
 
-    // MARK: - End-to-end: buildEnrichedCheckoutURL emits compressed ?ctx=
+    // MARK: - End-to-end: buildEnrichedCheckoutURL emits compressed ctx in URL fragment
+
+    /// **HEL-5326 PII follow-up:** `buildEnrichedCheckoutURL` writes
+    /// the compressed ctx to the URL **fragment** (after `#`), NOT the
+    /// query string. The ctx contains PII (`customer.email`,
+    /// `ip_geo_postal_code`) and hash fragments aren't sent in HTTP
+    /// requests by browsers — so the payload doesn't appear in CDN
+    /// logs, server access logs, or referer headers.
+    ///
+    /// This test locks in the wire move: ctx MUST be in the fragment,
+    /// MUST NOT be in the query, and any pre-existing query items on
+    /// the bundle URL are preserved (we don't accidentally clobber
+    /// `helium_ios_bundle_id` or any other bundle URL params).
+    func testBuildEnrichedCheckoutURL_emitsCtxInUrlFragmentNotQuery() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_fragment"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        // Bundle URL with a pre-existing query item — production URLs
+        // routinely carry `helium_ios_bundle_id` set by the bandit
+        // server. The fragment write must leave this untouched.
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html?helium_ios_bundle_id=com.example.app")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "t",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+
+        // 1) ctx is NOT in the query string.
+        let queryNames: [String] = (components.queryItems ?? []).map { $0.name }
+        XCTAssertFalse(queryNames.contains("ctx"),
+                       "ctx must NOT appear in query string (PII leakage); got \(queryNames)")
+
+        // 2) Pre-existing query items survive (helium_ios_bundle_id stays put).
+        XCTAssertTrue(queryNames.contains("helium_ios_bundle_id"),
+                      "Pre-existing helium_ios_bundle_id must be preserved; got \(queryNames)")
+
+        // 3) ctx IS in the fragment, formatted as `ctx=<value>`.
+        let fragment = try XCTUnwrap(components.fragment,
+                                     "URL must have a fragment containing ctx")
+        XCTAssertTrue(fragment.hasPrefix("ctx="),
+                      "Fragment must start with `ctx=`; got `\(fragment)`")
+
+        // 4) The fragment value round-trips through base64URL → deflate
+        //    → JSON exactly as the old query-string wire did.
+        let fragmentValue = String(fragment.dropFirst("ctx=".count))
+        let compressed = try XCTUnwrap(base64URLDecode(fragmentValue),
+                                       "Fragment value isn't valid base64URL")
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: decompressed) as? [String: Any]
+        )
+        XCTAssertEqual(parsed[provider.initialProductKey] as? String, "pro_x:pri_y")
+        XCTAssertEqual(parsed["successUrl"] as? String, "myapp://ok")
+        XCTAssertEqual(parsed["cancelUrl"] as? String, "myapp://cancel")
+        XCTAssertEqual(parsed["introOfferEligible"] as? Bool, true)
+        XCTAssertNotNil(parsed["analytics"])
+    }
+
+    /// **HEL-5326 source_page alignment:** `buildEnrichedCheckoutURL`
+    /// auto-appends `?helium_ios_bundle_id=<Bundle.main.bundleIdentifier>`
+    /// to the URL when the base URL doesn't already carry it. This
+    /// matches the `source_page` value the SDK sends to Paddle's
+    /// `/transaction-checkout` (`bundles.clickthrough.to?helium_ios_bundle_id=<id>`),
+    /// closing the "what we told Paddle source_page is" vs. "where
+    /// the user actually lands" gap. Approved as non-PII on the
+    /// 2026-05-08 Paddle call.
+    ///
+    /// Locked-in invariants:
+    ///   1. Query param is present with a non-empty value.
+    ///   2. Doesn't double-write when the base URL already has it.
+    ///   3. Doesn't displace ctx — fragment still carries the
+    ///      compressed payload.
+    func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_bundle_id"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        // Base URL with NO helium_ios_bundle_id — the SDK should add it.
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "t",
+            successURL: "ok", cancelURL: "no",
+            introOfferEligible: true, paddleBootstraps: nil
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items: [URLQueryItem] = components.queryItems ?? []
+
+        // 1) helium_ios_bundle_id query param is present and non-empty.
+        let bundleIdItem = try XCTUnwrap(
+            items.first(where: { $0.name == "helium_ios_bundle_id" }),
+            "Expected helium_ios_bundle_id query param; got \(items.map { $0.name })"
+        )
+        let bundleIdValue = try XCTUnwrap(bundleIdItem.value)
+        XCTAssertFalse(bundleIdValue.isEmpty, "helium_ios_bundle_id value must not be empty")
+        // Matches the same value we put in ctx.iosBundleId — both come
+        // from Bundle.main.bundleIdentifier with the same fallback.
+        XCTAssertEqual(bundleIdValue, Bundle.main.bundleIdentifier ?? "unknown")
+
+        // 2) Fragment still has ctx (the bundle id query param doesn't
+        //    displace the PII payload that lives in the fragment).
+        let fragment = try XCTUnwrap(components.fragment)
+        XCTAssertTrue(fragment.hasPrefix("ctx="))
+    }
+
+    /// Don't double-write `helium_ios_bundle_id` when the base URL
+    /// already has it. The bandit server may include it on the
+    /// `webPaywallBundleUrl` already; even if the value differs, the
+    /// SDK should respect what the bundle URL was generated with
+    /// rather than overwriting (single-writer principle for this
+    /// query param).
+    func testBuildEnrichedCheckoutURL_doesNotDoubleWriteHeliumIosBundleId() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_bundle_id_idempotent"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        // Base URL ALREADY has helium_ios_bundle_id. SDK must NOT
+        // add a duplicate (which URLComponents would happily allow).
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html?helium_ios_bundle_id=com.preset.app")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.purchaseEventPaymentProcessor
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "t",
+            successURL: "ok", cancelURL: "no",
+            introOfferEligible: true, paddleBootstraps: nil
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items: [URLQueryItem] = components.queryItems ?? []
+
+        // Exactly ONE helium_ios_bundle_id, value preserved from the
+        // base URL.
+        let matches = items.filter { $0.name == "helium_ios_bundle_id" }
+        XCTAssertEqual(matches.count, 1, "Must not double-write helium_ios_bundle_id; got \(matches.map { $0.value ?? "nil" })")
+        XCTAssertEqual(matches.first?.value, "com.preset.app")
+    }
+
+    // MARK: - End-to-end: legacy `?ctx=` test (kept until SDK fully migrates)
 
     /// Integration test: the URL `buildEnrichedCheckoutURL` produces
     /// has a `?ctx=` query parameter, and base64URL-decoding it then
@@ -203,14 +383,12 @@ final class CtxCompressionTests: XCTestCase {
             paddleBootstraps: nil
         )
 
-        // 1) URL has ?ctx= with compressed-then-base64URL'd bytes.
+        // 1) URL fragment contains `ctx=<base64URL>` (HEL-5326 PII move).
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let items: [URLQueryItem] = components.queryItems ?? []
-        let queryNames: [String] = items.map { $0.name }
-        XCTAssertTrue(queryNames.contains("ctx"),
-                      "Expected ?ctx= query param; got \(queryNames)")
-
-        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let fragment = try XCTUnwrap(components.fragment, "URL must have a ctx fragment")
+        XCTAssertTrue(fragment.hasPrefix("ctx="),
+                      "Fragment must start with `ctx=`; got `\(fragment)`")
+        let ctxValue = String(fragment.dropFirst("ctx=".count))
 
         // 2) base64URL-decode the value back to compressed bytes.
         let compressed = try XCTUnwrap(base64URLDecode(ctxValue),
@@ -292,13 +470,15 @@ final class CtxCompressionTests: XCTestCase {
             introOfferEligible: true, paddleBootstraps: bootstraps
         )
 
-        // Size check: compare the compressed ?ctx= value length to what
-        // an UNcompressed equivalent would have been. Lower bound is 30%
-        // smaller (compression factor amplified by base64's 4:3 expansion
-        // ratio applying to both).
+        // Size check: compare the compressed `#ctx=` value length to
+        // what an UNcompressed equivalent would have been. Lower bound
+        // is 30% smaller (compression factor amplified by base64's 4:3
+        // expansion ratio applying to both). Wire moved from query to
+        // fragment in HEL-5326 — see emitsCtxInUrlFragmentNotQuery.
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let items: [URLQueryItem] = components.queryItems ?? []
-        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let fragment = try XCTUnwrap(components.fragment, "URL must have a ctx fragment")
+        XCTAssertTrue(fragment.hasPrefix("ctx="), "Fragment must start with `ctx=`; got `\(fragment)`")
+        let ctxValue = String(fragment.dropFirst("ctx=".count))
         let compressedB64Length = ctxValue.count
 
         // Reconstruct what the uncompressed JSON would look like by
@@ -361,10 +541,11 @@ final class CtxCompressionTests: XCTestCase {
             paddleAlreadyEntitled: alreadyEntitled
         )
 
-        // Decode the URL back to its ctx dict.
+        // Decode the URL fragment back to its ctx dict (HEL-5326).
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let items: [URLQueryItem] = components.queryItems ?? []
-        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let fragment = try XCTUnwrap(components.fragment, "URL must have a ctx fragment")
+        XCTAssertTrue(fragment.hasPrefix("ctx="), "Fragment must start with `ctx=`; got `\(fragment)`")
+        let ctxValue = String(fragment.dropFirst("ctx=".count))
         let compressed = try XCTUnwrap(base64URLDecode(ctxValue))
         let decompressed = try decompressWithAppleZlib(compressed, originalSize: 16_384)
         let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
@@ -408,8 +589,9 @@ final class CtxCompressionTests: XCTestCase {
         )
 
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let items: [URLQueryItem] = components.queryItems ?? []
-        let ctxValue = try XCTUnwrap(items.first(where: { $0.name == "ctx" })?.value)
+        let fragment = try XCTUnwrap(components.fragment, "URL must have a ctx fragment")
+        XCTAssertTrue(fragment.hasPrefix("ctx="), "Fragment must start with `ctx=`; got `\(fragment)`")
+        let ctxValue = String(fragment.dropFirst("ctx=".count))
         let compressed = try XCTUnwrap(base64URLDecode(ctxValue))
         let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8_192)
         let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])

@@ -199,8 +199,29 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
     }
 
-    /// Appends analytics, identity, and routing query parameters to a checkout URL
-    /// as a single base64-encoded JSON `ctx` query parameter.
+    /// Appends analytics, identity, and routing parameters to a checkout URL
+    /// as a single base64-encoded JSON `ctx` value, written to the URL
+    /// **fragment** (after `#`), not the query string.
+    ///
+    /// **Why fragment, not query (HEL-5326 PII follow-up):** the ctx
+    /// payload contains PII — `customer.email` (Paddle's record of a
+    /// returning customer's email) and `ip_geo_postal_code` (Paddle's
+    /// IP-derived postal code) per the Paddle privacy review.
+    /// Hash fragments are **not sent in HTTP requests by browsers**, so
+    /// they don't appear in CDN access logs, server access logs, or
+    /// referer headers — exactly the leakage Paddle's privacy policy
+    /// avoids.
+    ///
+    /// **Wire pairing:** the bundler-side decoder
+    /// (`decodeCompressedCtxParam` in `heliumStandaloneStripe.ts`) reads
+    /// from `window.location.hash` first, then falls through to
+    /// `window.location.search` for backward compat with legacy SDKs
+    /// still on the `?ctx=` wire. This SDK version writes hash only.
+    ///
+    /// **Existing query items survive:** the bandit server appends
+    /// `helium_ios_bundle_id=<id>` to the bundle URL as a query param
+    /// for source_page attribution. This function preserves any
+    /// pre-existing query items and only writes the fragment.
     ///
     /// `paddleBootstraps` (HEL-5326) is the SDK pre-fetch payload — a map
     /// keyed by priceId of bandit + Paddle BFF responses gathered during
@@ -277,16 +298,51 @@ public class ExternalWebCheckoutManager: NSObject {
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
 
         // Compress (raw DEFLATE / RFC 1951) then base64URL-encode. The
-        // bundler reads `?ctx=` and decodes via
-        // `DecompressionStream('deflate-raw')` — Apple's `COMPRESSION_ZLIB`
-        // produces exactly that wire format despite the name. See
-        // CtxCompression.swift for the wire-pairing rationale.
+        // bundler decodes via fflate (Paddle bundles) or
+        // `DecompressionStream('deflate-raw')` (Stripe bundles) — Apple's
+        // `COMPRESSION_ZLIB` produces exactly that wire format despite
+        // the name. See CtxCompression.swift for the wire-pairing
+        // rationale.
         guard let compressed = CtxCompression.deflateRaw(ctxData) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
         }
+
+        // Append `helium_ios_bundle_id=<id>` as a query param when the
+        // base URL doesn't already carry it. This aligns the actual
+        // landing URL with the `source_page` value the SDK sends to
+        // Paddle's `/transaction-checkout` (which is built by
+        // `PaddleBFFClient.paddleSourcePage` as
+        // `bundles.clickthrough.to?helium_ios_bundle_id=<id>`).
+        // Approved as non-PII on the 2026-05-08 Paddle call —
+        // identifies the app, not the user.
+        //
+        // Idempotent: if the bandit server (or some upstream) already
+        // included `helium_ios_bundle_id` on the bundle URL, we
+        // preserve the existing value rather than appending a
+        // duplicate (URLComponents would happily produce
+        // `?helium_ios_bundle_id=a&helium_ios_bundle_id=b`).
         var queryItems = components.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "ctx", value: compressed.base64URLEncodedString()))
-        components.queryItems = queryItems
+        if !queryItems.contains(where: { $0.name == "helium_ios_bundle_id" }) {
+            let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
+            queryItems.append(URLQueryItem(name: "helium_ios_bundle_id", value: bundleId))
+            components.queryItems = queryItems
+        }
+
+        // Write the compressed ctx to the URL fragment (after `#`), NOT
+        // the query string. Browsers don't send fragments in HTTP
+        // requests, so the ctx payload (which carries PII per HEL-5326
+        // — Paddle's returning-customer email and IP-derived postal
+        // code) doesn't leak through CDN logs, server access logs, or
+        // referer headers. The bundler reads from
+        // `window.location.hash` and falls through to
+        // `window.location.search` for legacy SDKs.
+        //
+        // base64URL alphabet (RFC 4648 §5: A-Z, a-z, 0-9, -, _) is
+        // entirely within RFC 3986's `unreserved` character set, so
+        // setting `components.fragment` directly is safe — no
+        // percent-encoding is applied to characters that don't need
+        // it.
+        components.fragment = "ctx=" + compressed.base64URLEncodedString()
 
         guard let url = components.url else {
             throw WebCheckoutError.failedToBuildEnrichedURL
