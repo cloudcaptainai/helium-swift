@@ -142,6 +142,12 @@ public class ExternalWebCheckoutManager: NSObject {
         let analyticsData = try JSONEncoder().encode(analyticsEvent)
         let analyticsJSON = try JSONSerialization.jsonObject(with: analyticsData)
         ctx["analytics"] = analyticsJSON
+        
+        if let segmentAnonymousId = HeliumAnalyticsManager.shared.getActiveAnalyticsInstance()?.anonymousId {
+            ctx["anonymousId"] = segmentAnonymousId
+        }
+        
+        ctx["context"] = SegmentContext.staticContextData()
 
         ctx[provider.initialProductKey] = productKey
         ctx["successUrl"] = successURL
