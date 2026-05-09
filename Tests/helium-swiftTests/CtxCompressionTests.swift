@@ -286,7 +286,8 @@ final class CtxCompressionTests: XCTestCase {
         let bundleIdValue = try XCTUnwrap(bundleIdItem.value)
         XCTAssertFalse(bundleIdValue.isEmpty, "helium_ios_bundle_id value must not be empty")
         // Matches the same value we put in ctx.iosBundleId — both come
-        // from Bundle.main.bundleIdentifier with the same fallback.
+        // from Bundle.main.bundleIdentifier with the same "unknown"
+        // default when the bundle id is nil.
         XCTAssertEqual(bundleIdValue, Bundle.main.bundleIdentifier ?? "unknown")
 
         // 2) Fragment still has ctx (the bundle id query param doesn't
