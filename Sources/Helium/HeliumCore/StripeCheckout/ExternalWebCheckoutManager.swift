@@ -214,9 +214,8 @@ public class ExternalWebCheckoutManager: NSObject {
     ///
     /// **Wire pairing:** the bundler-side decoder
     /// (`decodeCompressedCtxParam` in `heliumStandaloneStripe.ts`) reads
-    /// from `window.location.hash` first, then falls through to
-    /// `window.location.search` for backward compat with legacy SDKs
-    /// still on the `?ctx=` wire. This SDK version writes hash only.
+    /// `ctx` exclusively from the URL hash fragment. There is no legacy
+    /// query-string wire to maintain — SDK and bundler ship hash-only.
     ///
     /// **Existing query items survive:** the bandit server appends
     /// `helium_ios_bundle_id=<id>` to the bundle URL as a query param
@@ -333,9 +332,8 @@ public class ExternalWebCheckoutManager: NSObject {
         // requests, so the ctx payload (which carries PII per HEL-5326
         // — Paddle's returning-customer email and IP-derived postal
         // code) doesn't leak through CDN logs, server access logs, or
-        // referer headers. The bundler reads from
-        // `window.location.hash` and falls through to
-        // `window.location.search` for legacy SDKs.
+        // referer headers. The bundler reads `ctx` exclusively from
+        // `window.location.hash`; no query-string wire is supported.
         //
         // base64URL alphabet (RFC 4648 §5: A-Z, a-z, 0-9, -, _) is
         // entirely within RFC 3986's `unreserved` character set, so
