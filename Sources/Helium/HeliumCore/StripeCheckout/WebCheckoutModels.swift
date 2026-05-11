@@ -258,6 +258,7 @@ enum WebCheckoutError: LocalizedError {
     case failedToBuildEnrichedURL
     case failedToOpenEnrichedURL
     case webPaywallBundleUrlMissing
+    case californiaBuyerBlocked
 
     var errorDescription: String? {
         switch self {
@@ -271,6 +272,8 @@ enum WebCheckoutError: LocalizedError {
             return "Could not open enriched checkout URL in browser."
         case .webPaywallBundleUrlMissing:
             return "No web paywall bundle URL available for this paywall."
+        case .californiaBuyerBlocked:
+            return "Checkout not available for California buyers."
         }
     }
 }
