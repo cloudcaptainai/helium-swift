@@ -505,20 +505,24 @@ public struct PurchasePressedEvent: ProductEvent {
     /// The name/identifier of the paywall template where purchase was initiated
     /// - Note: Template name from Helium configuration
     public let paywallName: String
-    
+
+    /// Which payment processor the purchase is being initiated through.
+    public let paymentProcessor: HeliumPaymentProcessor
+
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
-    
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+
+    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
     }
-    
+
     public var eventName: String { "purchasePressed" }
-    
+
     public func toDictionary() -> [String: Any] {
         return [
             "type": eventName,
@@ -526,12 +530,13 @@ public struct PurchasePressedEvent: ProductEvent {
             "triggerName": triggerName,
             "paywallName": paywallName,
             "isSecondTry": isSecondTry,
+            "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
-    
+
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionPressed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
+        return .subscriptionPressed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, paymentProcessor: paymentProcessor)
     }
 }
 
@@ -540,6 +545,16 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
     case appStore
     case stripe
     case paddle
+
+    static func resolve(for productKey: String) -> HeliumPaymentProcessor {
+        if HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[productKey] != nil {
+            return .stripe
+        }
+        if HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()?[productKey] != nil {
+            return .paddle
+        }
+        return .appStore
+    }
 }
 
 /// Event fired when a purchase completes successfully.
@@ -659,7 +674,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
     }
     
     public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionCancelled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
+        return .subscriptionCancelled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, paymentProcessor: paymentProcessor)
     }
 }
 

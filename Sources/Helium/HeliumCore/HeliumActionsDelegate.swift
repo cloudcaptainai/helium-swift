@@ -209,7 +209,8 @@ class HeliumActionsDelegate: ObservableObject {
         let pressedEvent = PurchasePressedEvent(
             productId: selectedProductId,
             triggerName: trigger,
-            paywallName: paywallInfo.paywallTemplateName
+            paywallName: paywallInfo.paywallTemplateName,
+            paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId)
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent, paywallSession: paywallSession)
 

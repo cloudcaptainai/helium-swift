@@ -143,11 +143,15 @@ public class ExternalWebCheckoutManager: NSObject {
         let analyticsJSON = try JSONSerialization.jsonObject(with: analyticsData)
         ctx["analytics"] = analyticsJSON
         
-        if let segmentAnonymousId = HeliumAnalyticsManager.shared.getActiveAnalyticsInstance()?.anonymousId {
-            ctx["anonymousId"] = segmentAnonymousId
+        var analyticsTopFields: [String: Any] = [:]
+        if let userId = Helium.identify.userId {
+            analyticsTopFields["userId"] = userId
         }
-        
-        ctx["context"] = SegmentContext.staticContextData()
+        if let segmentAnonymousId = HeliumAnalyticsManager.shared.getActiveAnalyticsInstance()?.anonymousId {
+            analyticsTopFields["anonymousId"] = segmentAnonymousId
+        }
+        analyticsTopFields["context"] = SegmentContext.staticContextData()
+        ctx["analyticsTopFields"] = analyticsTopFields
 
         ctx[provider.initialProductKey] = productKey
         ctx["successUrl"] = successURL

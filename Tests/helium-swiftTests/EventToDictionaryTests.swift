@@ -76,7 +76,7 @@ final class EventToDictionaryTests: XCTestCase {
             PaywallButtonPressedEvent(buttonName: "btn", triggerName: "t", paywallName: "p"),
             CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "t", paywallName: "p"),
             ProductSelectedEvent(productId: "prod", triggerName: "t", paywallName: "p"),
-            PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p"),
+            PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
             PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
             PurchaseCancelledEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
             PurchaseFailedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
