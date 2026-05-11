@@ -472,7 +472,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// so observations are kept and the foreground observer is re-armed so a later
     /// purchase still gets picked up on the next app return.
     @MainActor
-    func handleExternalReturn(redirectKind: CheckoutRedirectKind) async {
+    func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
         guard !activeCheckoutObservations.isEmpty else { return }
 
         // Redirect is authoritative — suppress the foreground-observer safety net
@@ -488,8 +488,8 @@ public class ExternalWebCheckoutManager: NSObject {
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()
             }
-        case .cancel:
-            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) cancel redirect handled — observations kept in case user resumes checkout")
+        case .cancel, .paymentFailure:
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — observations kept in case user resumes checkout")
             armForegroundObserverAfterBackground()
         }
     }
