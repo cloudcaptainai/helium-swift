@@ -23,6 +23,14 @@ struct PaddlePrefetchAwaitTimeout: LocalizedError {
     }
 }
 
+struct PaddleCaliforniaBlocked: LocalizedError {
+    let postalCode: String
+
+    var errorDescription: String? {
+        return "Paddle prefetch blocked for California IP (postal \(postalCode))"
+    }
+}
+
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -356,6 +364,17 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
+    nonisolated static func tappedCaliforniaBlocked(
+        in outcomes: [String: PaddlePrefetchOutcome],
+        tappedPriceId: String
+    ) -> Bool {
+        if case let .failed(error) = outcomes[tappedPriceId] ?? .notStarted,
+           error is PaddleCaliforniaBlocked {
+            return true
+        }
+        return false
+    }
+
     // MARK: - Composite key helpers
 
     /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
@@ -404,9 +423,26 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
+            if let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
+                return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
+            }
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
             return .failed(error: error)
         }
+    }
+
+    /// Returns the postal code when the response's IP-geo is a US California
+    /// ZIP (90001–96162, contiguous; HI starts at 96701). Nil otherwise.
+    private nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any],
+              (data["ip_geo_country_code"] as? String) == "US",
+              let postal = data["ip_geo_postal_code"] as? String,
+              let zip = Int(postal.prefix(5)),
+              (90001...96162).contains(zip) else {
+            return nil
+        }
+        return postal
     }
 }
