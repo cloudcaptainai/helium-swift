@@ -404,13 +404,13 @@ public class Helium {
     /// - Parameter url: The URL the host app received.
     /// - Returns: `true` if the URL was a Helium checkout redirect and is being processed.
     @discardableResult
-    public func handleURL(_ url: URL) -> Bool {
+    public func handleURL(_ url: URL) -> HeliumCheckoutRedirectType? {
         guard Helium.config.webCheckoutEnabled else {
-            return false
+            return nil
         }
 
         guard let redirectKind = WebCheckoutRedirect.classify(url) else {
-            return false
+            return nil
         }
         
         HeliumLogger.log(.debug, category: .core, "Handling return URL from external checkout.", metadata: [
@@ -422,7 +422,7 @@ public class Helium {
             await StripeCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
             await PaddleCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
         }
-        return true
+        return redirectKind
     }
 
 }
