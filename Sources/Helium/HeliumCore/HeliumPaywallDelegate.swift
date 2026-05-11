@@ -68,19 +68,8 @@ class HeliumPaywallDelegateWrapper {
 
         let transactionStatus: HeliumPaywallTransactionStatus
 
-        let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
+        let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
         let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
-
-        let allPaddleProductIds = Array((HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]).keys)
-
-        let paymentProcessor: HeliumPaymentProcessor
-        if allStripeProductIds.contains(productKey) {
-            paymentProcessor = .stripe
-        } else if allPaddleProductIds.contains(productKey) {
-            paymentProcessor = .paddle
-        } else {
-            paymentProcessor = .appStore
-        }
 
         if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
             do {

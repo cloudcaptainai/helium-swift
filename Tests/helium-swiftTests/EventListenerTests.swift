@@ -68,7 +68,7 @@ final class EventListenerTests: HeliumTestCase {
         XCTAssertEqual(anyEvents.count, 1)
 
         // Another PaywallContextEvent
-        handlers.handleEvent(PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p"))
+        handlers.handleEvent(PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore))
         XCTAssertEqual(anyEvents.count, 2)
 
         // PaywallSkippedEvent is NOT a PaywallContextEvent
