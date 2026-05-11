@@ -45,7 +45,9 @@ public class Helium {
             HeliumLogger.log(.warn, category: .core, "Helium already initialized, ignoring subsequent call. Use resetHelium if you need to initialize again.")
             return
         }
-        
+
+        HeliumObservabilityManager.shared.setUp()
+
         // Start store country code fetch immediately
         _ = AppStoreCountryHelper.shared
         
