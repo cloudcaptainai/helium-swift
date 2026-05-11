@@ -14,9 +14,6 @@ extension PaddleCheckoutPrefetchCoordinator {
         case failed(Error)
     }
 
-    /// Emits `paddle_prefetch_bandit_completed` always, plus
-    /// `paddle_prefetch_outcome_finalized` for terminal outcomes
-    /// (alreadyEntitled, failed).
     nonisolated static func trackBanditCompletion(
         priceId: String,
         paywallSession: PaywallSession,
@@ -84,9 +81,6 @@ extension PaddleCheckoutPrefetchCoordinator {
         }
     }
 
-    /// Emits `paddle_prefetch_bff_completed` always, plus
-    /// `paddle_prefetch_outcome_finalized` (the BFF step is always terminal —
-    /// success → .ready, caBlocked, or failed).
     nonisolated static func trackBffCompletion(
         priceId: String,
         transactionId: String,

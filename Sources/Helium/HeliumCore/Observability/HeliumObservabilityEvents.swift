@@ -18,8 +18,6 @@ func msSince(_ start: Date) -> Int {
     Int(Date().timeIntervalSince(start) * 1000)
 }
 
-/// Pulls httpStatus out of the SDK's two transport error types when available.
-/// Falls back to runtime type name + localized description for other errors.
 func decomposeError(_ error: Error) -> (httpStatus: Int?, errorClass: String, errorMessage: String?) {
     if let bff = error as? PaddleBFFError {
         switch bff {

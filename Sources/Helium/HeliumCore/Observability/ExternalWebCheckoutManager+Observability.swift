@@ -2,10 +2,6 @@ import Foundation
 
 extension ExternalWebCheckoutManager {
 
-    /// Wraps a checkout-flow body with start/resolve telemetry. The body runs
-    /// inside a do/catch: a normal return emits `web_checkout_flow_resolved`
-    /// with the mapped success outcome; a thrown error emits it with
-    /// `.error` + errorClass/errorMessage and re-throws.
     @MainActor
     func withFlowTelemetry(
         productKey: String,
@@ -52,7 +48,6 @@ extension ExternalWebCheckoutManager {
         }
     }
 
-    /// Tallies prefetch outcomes by kind and emits `paddle_prefetch_await_resolved`.
     func emitPaddleAwaitResolved(
         tappedPriceId: String,
         awaitDurationMs: Int,

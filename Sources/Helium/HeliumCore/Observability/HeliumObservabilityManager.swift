@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// Ops/debug telemetry pipeline. Writes to a dedicated Jitsu connection
-/// distinct from product analytics .
+/// distinct from product analytics.
 class HeliumObservabilityManager {
     static let shared = HeliumObservabilityManager()
 
