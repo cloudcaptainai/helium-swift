@@ -1,9 +1,10 @@
 import Foundation
 
 /// Which of the configured checkout redirect URLs the user returned through.
-enum CheckoutRedirectKind: String {
+public enum HeliumCheckoutRedirectType: String {
     case success
     case cancel
+    case paymentFailure
 }
 
 // MARK: - URL Constants
@@ -16,7 +17,7 @@ enum WebCheckoutRedirect {
     /// our checkout flow disambiguate. Returns `nil` if the URL doesn't match, or
     /// if success/cancel collide and query params aren't conclusive — those go to
     /// the didBecomeActive observer, which reconciles against real entitlement state.
-    static func classify(_ url: URL) -> CheckoutRedirectKind? {
+    static func classify(_ url: URL) -> HeliumCheckoutRedirectType? {
         let matchesSuccess = matchesBase(url, configured: Helium.config.checkoutSuccessURL)
         let matchesCancel = matchesBase(url, configured: Helium.config.checkoutCancelURL)
 
@@ -32,7 +33,7 @@ enum WebCheckoutRedirect {
         }
     }
 
-    private static func classifyByQueryParams(_ url: URL) -> CheckoutRedirectKind? {
+    private static func classifyByQueryParams(_ url: URL) -> HeliumCheckoutRedirectType? {
         let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? {
             queryItems.first(where: { $0.name == name })?.value
@@ -45,8 +46,7 @@ enum WebCheckoutRedirect {
             return .success
         }
         if let error = value("error"), !error.isEmpty {
-            // technically this is a payment failure but for now we treat as cancel
-            return .cancel
+            return .paymentFailure
         }
         if queryItems.isEmpty {
             return .cancel
