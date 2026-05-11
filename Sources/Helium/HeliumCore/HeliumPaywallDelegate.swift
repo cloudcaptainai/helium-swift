@@ -315,12 +315,6 @@ class HeliumPaywallDelegateWrapper {
             }
         }
 
-        // Paddle SDK pre-fetch: kick off bandit + BFF for every Paddle web
-        // priceId on the trigger as soon as the paywall becomes visible, so
-        // the responses are cached by the time the user taps Subscribe.
-        // Hooked here (rather than in HeliumPaywallPresenter) so embedded
-        // paywall displays — which fire PaywallOpenEvent without going
-        // through presentUpsell — get the same optimization.
         if event is PaywallOpenEvent, let paywallSession {
             Task { @MainActor in
                 PaddleCheckoutPrefetchCoordinator.shared.handlePaywallOpen(paywallSession: paywallSession)

@@ -1,13 +1,6 @@
 import Foundation
 
-/// Errors specific to Paddle's checkout-service BFF (`*-checkout-service.paddle.com`).
-/// Distinct from `HeliumPaymentAPIError` because the BFF is a third-party
-/// service with its own response shape — flattening it through Helium's
-/// generic error type would lose the structured info Paddle returns
-/// (errors[].code, errors[].detail, etc.).
 public enum PaddleBFFError: LocalizedError {
-    /// Non-2xx response from Paddle's BFF. Body is the raw response so
-    /// callers (and tests) can inspect Paddle-specific error shapes.
     case requestFailed(statusCode: Int, rawBody: String)
 
     public var errorDescription: String? {
@@ -18,49 +11,14 @@ public enum PaddleBFFError: LocalizedError {
     }
 }
 
-/// Successful response from Paddle's `POST /transaction-checkout`.
-///
-/// Deliberately tiny — just the fields the SDK itself needs for cache
-/// keying / sanity checks. The full response body is preserved as raw
-/// `Data` for forwarding to the bundle. Paddle's response is rich (items,
-/// totals, methods_available, ip_geo_*, customer, ...) and the bundle in
-/// Safari already has a complete decoder for it. Re-decoding everything
-/// on the SDK side would be duplicate work and a maintenance liability —
-/// every new Paddle field would need a Codable mirror here.
-///
-/// `rawBody` is encoded into the bundle URL's
-/// `ctx.paddleBootstrap.paddleCheckoutResponse`, where the bundle's
-/// existing decoder consumes it.
 public struct PaddleTransactionCheckoutResult {
-    /// Full JSON response body from Paddle. Forwarded as-is to the bundle.
     public let rawBody: Data
-
-    /// Paddle's checkout session id (`che_xxx`). Used by the SDK for
-    /// logging and cache sanity-checks; the bundle reads it from rawBody.
     public let checkoutId: String
-
-    /// Echo of `transaction_id` from the request, surfaced as a sanity
-    /// check that the BFF saw and persisted the bandit's transaction.
     public let transactionId: String
 }
 
-/// Client for Paddle's checkout-service BFF (`*-checkout-service.paddle.com`).
-///
-/// This is the second half of the SDK pre-fetch chain (HEL-5326). The
-/// bundler runs the equivalent flow at runtime; the SDK pre-runs it during
-/// in-app paywall presentation so the bundle in Safari can skip the
-/// round-trip entirely.
-///
-/// URL selection mirrors the bundler: a `test_*` client token routes to
-/// sandbox, anything else routes to prod. Keeping env separation rooted
-/// in the token itself means there's no separate config flag for the SDK
-/// to get out of sync.
 final class PaddleBFFClient {
 
-    /// Bundler's hard-coded default origin (server/heliumStandalonePaddle.ts).
-    /// We use the same per-environment values so source_page survives Paddle's
-    /// strict validation against the global allow-list (paddle has approved
-    /// both `bundles.clickthrough.to` and `bundles-staging.clickthrough.to`).
     private static let prodSourcePageOrigin = "https://bundles.clickthrough.to"
     private static let sandboxSourcePageOrigin = "https://bundles-staging.clickthrough.to"
 
@@ -73,15 +31,6 @@ final class PaddleBFFClient {
         self.urlSession = urlSession
     }
 
-    /// Calls `POST {paddleCheckoutBase}/transaction-checkout` with the
-    /// transaction id from a successful bandit
-    /// `/paddle/create-transaction-for-paywall` response. Returns the BFF
-    /// response body (raw + minimal decoded fields) on 2xx; throws
-    /// `PaddleBFFError.requestFailed` otherwise.
-    ///
-    /// `iosBundleId` becomes a query param on `source_page` so Paddle can
-    /// attribute transactions per app for AUP enforcement (matches the
-    /// bundler's `buildPaddleSourcePage` helper).
     func createTransactionCheckout(
         transactionId: String,
         paddleClientToken: String,
@@ -91,8 +40,6 @@ final class PaddleBFFClient {
         let sourcePage = paddleSourcePage(for: paddleClientToken, iosBundleId: iosBundleId)
 
         guard let url = URL(string: baseURL + "/transaction-checkout") else {
-            // Should be unreachable given the constants are static
-            // strings, but typed errors are cheap and keep the API total.
             throw PaddleBFFError.requestFailed(statusCode: 0, rawBody: "Failed to construct URL from \(baseURL)")
         }
 
@@ -101,10 +48,6 @@ final class PaddleBFFClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(paddleClientToken, forHTTPHeaderField: "Paddle-Clienttoken")
 
-        // Body shape matches bundler's runtime call exactly
-        // (server/heliumStandalonePaddle.ts:~1497). Variant + display_mode +
-        // theme + locale are required by Paddle for the express checkout
-        // flow; source_page is strict-validated.
         let body: [String: Any] = [
             "data": [
                 "settings": [
@@ -113,9 +56,6 @@ final class PaddleBFFClient {
                     "display_mode": "inline",
                     "variant": "express",
                     "source_page": sourcePage,
-                    // Paddle treats `referrer` as informational (not strict-
-                    // validated); send the same value as source_page so
-                    // analytics show consistent attribution.
                     "referrer": sourcePage,
                 ],
                 "transaction_id": transactionId,
@@ -131,8 +71,6 @@ final class PaddleBFFClient {
             throw PaddleBFFError.requestFailed(statusCode: statusCode, rawBody: raw)
         }
 
-        // Decode just the two fields we need internally; preserve the
-        // raw body for forwarding to the bundle.
         let envelope = try JSONDecoder().decode(BFFResponseEnvelope.self, from: data)
         return PaddleTransactionCheckoutResult(
             rawBody: data,
@@ -157,16 +95,12 @@ final class PaddleBFFClient {
               !trimmed.isEmpty else {
             return origin
         }
-        // Use URLComponents/URLQueryItem so reserved query delimiters
-        // (`?`, `&`, `=`, `+`) inside the bundle id are escaped correctly.
-        // Manual `addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)`
-        // leaves these unescaped because they're "allowed" at the
-        // query-string level, but the value position requires stricter
-        // escaping — otherwise a malicious / oddly-named bundle id would
-        // fragment the URL and break Paddle's allow-list validation.
         guard var components = URLComponents(string: origin) else {
             return origin
         }
+        // URLQueryItem (not addingPercentEncoding(.urlQueryAllowed)) —
+        // the "allowed" set leaves ?&=+ unescaped, which would break
+        // Paddle's source_page allow-list validation for odd bundle ids.
         components.queryItems = [
             URLQueryItem(name: "helium_ios_bundle_id", value: trimmed)
         ]

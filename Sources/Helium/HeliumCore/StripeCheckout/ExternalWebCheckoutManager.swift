@@ -92,29 +92,6 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
-        // Paddle prefetch lookup: await EVERY priceId on the paywall
-        // (not just the tapped one) before redirecting to Safari.
-        // `collectPrefetchOutcomes` runs them in parallel via TaskGroup
-        // with the per-priceId default timeout (3s), so wall-clock is
-        // bounded by max(slowest priceId, 3s) — typically ~0ms when
-        // the user has been reading the paywall for a few seconds.
-        //
-        // Why wait for non-tapped: the bundle in Safari can switch
-        // products mid-flow. If a non-tapped priceId's bootstrap isn't
-        // in ctx.paddleBootstraps when Safari opens, the bundle's
-        // live-fetch path runs there instead — defeating the entire
-        // "no loader on click" UX the prefetch exists to deliver. A
-        // brief in-app wait before redirect is the explicit trade.
-        //
-        // Tapped-priceId-specific behavior:
-        //   * .alreadyEntitled → short-circuit to .preCheckResolved (skip
-        //     opening Safari to a guaranteed-failure UX). Other priceIds'
-        //     alreadyEntitled outcomes do NOT short-circuit — they're
-        //     just routed to ctx.paddleAlreadyEntitled so the bundle
-        //     can short-circuit if the user picks that product in Safari.
-        //   * .ready → encoded into the bootstraps map.
-        //   * .failed / .notStarted → absent from the map; bundle's
-        //     live-fetch path is the safety net.
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
         if provider.providerSlug == "paddle",
@@ -122,8 +99,6 @@ public class ExternalWebCheckoutManager: NSObject {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
                 from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
             )
-            // Defensive: ensure tapped is in the await set even if it
-            // wasn't (somehow) in `webProductsOfferedPaddle`.
             let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
 
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
@@ -131,24 +106,11 @@ public class ExternalWebCheckoutManager: NSObject {
                 priceIds: priceIdsToAwait
             )
 
-            // Tapped-product short-circuit fires only if the tapped product
-            // itself is alreadyEntitled with a restorable code. Other
-            // priceIds being entitled doesn't block this purchase, and
-            // non-restorable codes (trial_already_used) flow through the
-            // bundle for its failure-routing UX. See `tappedShortCircuit`
-            // and `PaddleErrorCodes.isRestorable`.
             if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
                 in: outcomes, tappedPriceId: tappedPriceId
             ) {
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch alreadyEntitled (\(shortCircuit.code)): \(shortCircuit.message) — skipping browser")
-                // Same handling as the pre-checkout entitlement check
-                // earlier in this method: no browser open, invalidate the
-                // entitlements cache so future flows reflect the server's
-                // view. The bundle still gets the existing-subscription-id
-                // through ctx.paddleAlreadyEntitled for the non-tapped
-                // paths' Jitsu fire; the tapped path resolves entirely
-                // SDK-side and doesn't need the id locally.
                 entitlementsSource.invalidateCache()
                 return .preCheckResolved
             }
@@ -156,11 +118,6 @@ public class ExternalWebCheckoutManager: NSObject {
             paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
                 outcomesByPriceId: outcomes
             )
-            // Non-tapped products that came back .alreadyEntitled go
-            // into a sibling map. Bundle uses it to short-circuit when
-            // the user clicks one of these in Safari, avoiding the
-            // bandit live-fetch (which would show a loader before
-            // resolving to the same alreadyEntitled outcome).
             paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
                 outcomesByPriceId: outcomes
             )
@@ -199,46 +156,8 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
     }
 
-    /// Appends analytics, identity, and routing parameters to a checkout URL
-    /// as a single base64-encoded JSON `ctx` value, written to the URL
-    /// **fragment** (after `#`), not the query string.
-    ///
-    /// **Why fragment, not query (HEL-5326 PII follow-up):** the ctx
-    /// payload contains PII — `customer.email` (Paddle's record of a
-    /// returning customer's email) and `ip_geo_postal_code` (Paddle's
-    /// IP-derived postal code) per the Paddle privacy review.
-    /// Hash fragments are **not sent in HTTP requests by browsers**, so
-    /// they don't appear in CDN access logs, server access logs, or
-    /// referer headers — exactly the leakage Paddle's privacy policy
-    /// avoids.
-    ///
-    /// **Wire pairing:** the bundler-side decoder
-    /// (`decodeCompressedCtxParam` in `heliumStandaloneStripe.ts`) reads
-    /// `ctx` exclusively from the URL hash fragment. There is no legacy
-    /// query-string wire to maintain — SDK and bundler ship hash-only.
-    ///
-    /// **Existing query items survive:** the bandit server appends
-    /// `helium_ios_bundle_id=<id>` to the bundle URL as a query param
-    /// for source_page attribution. This function preserves any
-    /// pre-existing query items and only writes the fragment.
-    ///
-    /// `paddleBootstraps` (HEL-5326) is the SDK pre-fetch payload — a map
-    /// keyed by priceId of bandit + Paddle BFF responses gathered during
-    /// in-app paywall display. When non-nil, the bundle in Safari reads
-    /// it from `ctx.paddleBootstraps[priceId]` for whichever product the
-    /// user picks and skips its own bandit + BFF round-trips.
-    ///
-    /// `paddleAlreadyEntitled` is the sibling map for products bandit
-    /// returned 409 `duplicate_subscription` for during pre-fetch.
-    /// Bundle uses it to short-circuit straight to its
-    /// `kind: 'alreadyEntitled'` branch when the user clicks one of
-    /// these products in Safari — without it the bundle would have to
-    /// call bandit itself just to discover the 409, with a loader
-    /// showing during the round-trip.
-    ///
-    /// Pass nil for either when the SDK has nothing to report (e.g.
-    /// Stripe path, prefetches that timed out). Bundle defaults to
-    /// live-fetch on missing entries.
+    /// Builds the enriched checkout URL: existing query items are preserved,
+    /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -278,48 +197,19 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         }
 
-        // SDK prefetch (HEL-5326): when present, the bundle in Safari
-        // uses the pre-fetched responses for whichever product the user
-        // picks (`ctx.paddleBootstraps[priceId]`) instead of making its
-        // own bandit + BFF round-trips. See
-        // `PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx` for
-        // the wire contract.
         if let paddleBootstraps = paddleBootstraps {
             ctx["paddleBootstraps"] = paddleBootstraps
         }
-        // Sibling map for products bandit returned 409 for. Bundle
-        // short-circuits to its kind: 'alreadyEntitled' branch on click,
-        // skipping the live bandit call (no loader, no round-trip).
         if let paddleAlreadyEntitled = paddleAlreadyEntitled {
             ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
 
-        // Compress (raw DEFLATE / RFC 1951) then base64URL-encode. The
-        // bundler decodes via fflate (Paddle bundles) or
-        // `DecompressionStream('deflate-raw')` (Stripe bundles) — Apple's
-        // `COMPRESSION_ZLIB` produces exactly that wire format despite
-        // the name. See CtxCompression.swift for the wire-pairing
-        // rationale.
         guard let compressed = CtxCompression.deflateRaw(ctxData) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
         }
 
-        // Append `helium_ios_bundle_id=<id>` as a query param when the
-        // base URL doesn't already carry it. This aligns the actual
-        // landing URL with the `source_page` value the SDK sends to
-        // Paddle's `/transaction-checkout` (which is built by
-        // `PaddleBFFClient.paddleSourcePage` as
-        // `bundles.clickthrough.to?helium_ios_bundle_id=<id>`).
-        // Approved as non-PII on the 2026-05-08 Paddle call —
-        // identifies the app, not the user.
-        //
-        // Idempotent: if the bandit server (or some upstream) already
-        // included `helium_ios_bundle_id` on the bundle URL, we
-        // preserve the existing value rather than appending a
-        // duplicate (URLComponents would happily produce
-        // `?helium_ios_bundle_id=a&helium_ios_bundle_id=b`).
         var queryItems = components.queryItems ?? []
         if !queryItems.contains(where: { $0.name == "helium_ios_bundle_id" }) {
             let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
@@ -327,19 +217,6 @@ public class ExternalWebCheckoutManager: NSObject {
             components.queryItems = queryItems
         }
 
-        // Write the compressed ctx to the URL fragment (after `#`), NOT
-        // the query string. Browsers don't send fragments in HTTP
-        // requests, so the ctx payload (which carries PII per HEL-5326
-        // — Paddle's returning-customer email and IP-derived postal
-        // code) doesn't leak through CDN logs, server access logs, or
-        // referer headers. The bundler reads `ctx` exclusively from
-        // `window.location.hash`; no query-string wire is supported.
-        //
-        // base64URL alphabet (RFC 4648 §5: A-Z, a-z, 0-9, -, _) is
-        // entirely within RFC 3986's `unreserved` character set, so
-        // setting `components.fragment` directly is safe — no
-        // percent-encoding is applied to characters that don't need
-        // it.
         components.fragment = "ctx=" + compressed.base64URLEncodedString()
 
         guard let url = components.url else {
