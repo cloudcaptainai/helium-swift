@@ -128,6 +128,8 @@ public struct HeliumFetchedConfig: Codable {
     
     var paddleProducts: [String: ServerProductPrice]?
     var paddleCustomerId: String?
+
+    var paddleClientToken: String?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for

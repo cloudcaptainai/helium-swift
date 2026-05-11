@@ -457,10 +457,10 @@ class HeliumPaywallPresenter {
     private func dispatchOpenEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: true, paywallVC: paywallVC)
     }
-    
+
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
-        
+
         // Call onEntitled if this session had a successful purchase/restore
         let sessionId = paywallVC.paywallSession.sessionId
         var wasEntitled = false

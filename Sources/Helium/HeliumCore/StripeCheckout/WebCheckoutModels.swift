@@ -131,6 +131,13 @@ struct UpdateCustomerMetadataResponse: Decodable {
     let requestId: String?
 }
 
+struct PaddleCreateTransactionForPaywallResponse: Decodable {
+    let transactionId: String
+    let paddleCustomerId: String?
+    let isKnownCustomer: Bool
+    let requestId: String
+}
+
 // MARK: - Entitlement Response Types
 
 struct PaymentEntitlementResponse: Codable, Sendable {
@@ -230,6 +237,17 @@ public enum HeliumPaymentAPIError: LocalizedError {
             return "Checkout session has not been completed"
         case .notInitialized:
             return "Helium has not been initialized. Call Helium.initialize() before making payment API calls."
+        }
+    }
+}
+
+public enum PaddlePrefetchError: LocalizedError {
+    case alreadyEntitled(code: String, message: String, existingSubscriptionId: String?)
+
+    public var errorDescription: String? {
+        switch self {
+        case .alreadyEntitled(_, let message, _):
+            return message
         }
     }
 }
