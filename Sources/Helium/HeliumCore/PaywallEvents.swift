@@ -358,8 +358,6 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
     /// - Note: Template name from Helium configuration
     public let paywallName: String
     
-    //add source to these...
-    
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date

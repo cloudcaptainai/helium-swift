@@ -269,7 +269,7 @@ class HeliumAnalyticsManager {
     }
     
     func getActiveAnalyticsInstance() -> Analytics? {
-        return analytics
+        return queue.sync { analytics }
     }
 
     // MARK: - Testing
