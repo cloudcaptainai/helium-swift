@@ -115,9 +115,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 return .preCheckResolved
             }
 
-            if PaddleCheckoutPrefetchCoordinator.tappedCaliforniaBlocked(
-                in: outcomes, tappedPriceId: tappedPriceId
-            ) {
+            if PaddleCheckoutPrefetchCoordinator.anyCaliforniaBlocked(in: outcomes) {
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch blocked for California IP — failing checkout")
                 throw WebCheckoutError.californiaBuyerBlocked
