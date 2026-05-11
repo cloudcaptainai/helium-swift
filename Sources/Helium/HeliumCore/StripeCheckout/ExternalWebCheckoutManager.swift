@@ -92,6 +92,37 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
+        var paddleBootstrapsDict: [String: Any]? = nil
+        var paddleAlreadyEntitledDict: [String: Any]? = nil
+        if provider.providerSlug == "paddle",
+           let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
+            let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
+                from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
+            )
+            let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
+
+            let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
+                sessionId: paywallSession.sessionId,
+                priceIds: priceIdsToAwait
+            )
+
+            if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+                in: outcomes, tappedPriceId: tappedPriceId
+            ) {
+                HeliumLogger.log(.debug, category: .entitlements,
+                                 "\(provider.displayName) prefetch alreadyEntitled (\(shortCircuit.code)): \(shortCircuit.message) — skipping browser")
+                entitlementsSource.invalidateCache()
+                return .preCheckResolved
+            }
+
+            paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+                outcomesByPriceId: outcomes
+            )
+            paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
+                outcomesByPriceId: outcomes
+            )
+        }
+
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -99,11 +130,14 @@ public class ExternalWebCheckoutManager: NSObject {
             triggerName: triggerName,
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
-            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups)
+            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
+            paddleBootstraps: paddleBootstrapsDict,
+            paddleAlreadyEntitled: paddleAlreadyEntitledDict
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
+
 
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when
@@ -122,8 +156,8 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
     }
 
-    /// Appends analytics, identity, and routing query parameters to a checkout URL
-    /// as a single base64-encoded JSON `ctx` query parameter.
+    /// Builds the enriched checkout URL: existing query items are preserved,
+    /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
         baseURL: URL,
         analyticsEvent: HeliumPaywallLoggedEvent,
@@ -131,7 +165,9 @@ public class ExternalWebCheckoutManager: NSObject {
         triggerName: String,
         successURL: String,
         cancelURL: String,
-        introOfferEligible: Bool
+        introOfferEligible: Bool,
+        paddleBootstraps: [String: Any]? = nil,
+        paddleAlreadyEntitled: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.failedToBuildEnrichedURL
@@ -151,9 +187,9 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
-        
+
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
-        
+
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
@@ -161,12 +197,27 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         }
 
+        if let paddleBootstraps = paddleBootstraps {
+            ctx["paddleBootstraps"] = paddleBootstraps
+        }
+        if let paddleAlreadyEntitled = paddleAlreadyEntitled {
+            ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
+        }
+
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
-        let ctxBase64 = ctxData.base64URLEncodedString()
+
+        guard let compressed = CtxCompression.deflateRaw(ctxData) else {
+            throw WebCheckoutError.failedToBuildEnrichedURL
+        }
 
         var queryItems = components.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "ctx", value: ctxBase64))
-        components.queryItems = queryItems
+        if !queryItems.contains(where: { $0.name == "helium_ios_bundle_id" }) {
+            let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
+            queryItems.append(URLQueryItem(name: "helium_ios_bundle_id", value: bundleId))
+            components.queryItems = queryItems
+        }
+
+        components.fragment = "ctx=" + compressed.base64URLEncodedString()
 
         guard let url = components.url else {
             throw WebCheckoutError.failedToBuildEnrichedURL

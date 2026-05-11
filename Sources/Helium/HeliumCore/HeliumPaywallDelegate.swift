@@ -65,7 +65,7 @@ class HeliumPaywallDelegateWrapper {
         } ?? false
         
         StoreKit1Listener.ensureListening()
-        
+
         let transactionStatus: HeliumPaywallTransactionStatus
 
         let allStripeProductIds = Array((HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() ?? [:]).keys)
@@ -84,35 +84,43 @@ class HeliumPaywallDelegateWrapper {
 
         if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
             do {
-                transactionStatus = try await StripeCheckoutManager.shared.startCheckoutFlow(
+                let outcome = try await StripeCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                ).transactionStatus
+                )
+                transactionStatus = outcome.transactionStatus
             } catch {
                 transactionStatus = .failed(error)
             }
         } else if paymentProcessor == .paddle {
             do {
-                transactionStatus = try await PaddleCheckoutManager.shared.startCheckoutFlow(
+                let outcome = try await PaddleCheckoutManager.shared.startCheckoutFlow(
                     for: productKey,
                     triggerName: triggerName,
                     paywallSession: paywallSession
-                ).transactionStatus
+                )
+                transactionStatus = outcome.transactionStatus
             } catch {
                 transactionStatus = .failed(error)
             }
         } else {
             transactionStatus = await delegate.makePurchase(productId: productKey)
         }
-        
+
         switch transactionStatus {
         case .cancelled:
             self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .failed(let error):
             self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .duringPurchase, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoredEvent(
+                productId: productKey,
+                triggerName: triggerName,
+                paywallName: paywallTemplateName,
+                restoreOrigin: .duringPurchase,
+                paymentProcessor: paymentProcessor
+            ), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
@@ -303,6 +311,13 @@ class HeliumPaywallDelegateWrapper {
             Task { @MainActor in
                 PaddleCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
                 StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
+                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallClose(paywallSession: paywallSession)
+            }
+        }
+
+        if event is PaywallOpenEvent, let paywallSession {
+            Task { @MainActor in
+                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallOpen(paywallSession: paywallSession)
             }
         }
     }
