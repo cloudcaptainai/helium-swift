@@ -255,7 +255,9 @@ public enum PaddlePrefetchError: LocalizedError {
 enum WebCheckoutError: LocalizedError {
     case cannotPresentCheckout
     case checkoutURLsNotConfigured
-    case failedToBuildEnrichedURL
+    case invalidBaseURLForComponents
+    case failedToCompressCtx
+    case failedToAssembleEnrichedURL
     case failedToOpenEnrichedURL
     case webPaywallBundleUrlMissing
     case californiaBuyerBlocked
@@ -266,8 +268,12 @@ enum WebCheckoutError: LocalizedError {
             return "Could not present the checkout view"
         case .checkoutURLsNotConfigured:
             return "Checkout URLs not configured. Call Helium.config.enableExternalWebCheckout() before presenting a paywall."
-        case .failedToBuildEnrichedURL:
-            return "Failed to build enriched checkout URL."
+        case .invalidBaseURLForComponents:
+            return "Web paywall bundle URL could not be parsed into URLComponents."
+        case .failedToCompressCtx:
+            return "Failed to compress the ctx payload for the enriched checkout URL."
+        case .failedToAssembleEnrichedURL:
+            return "Failed to assemble the final enriched checkout URL from its components."
         case .failedToOpenEnrichedURL:
             return "Could not open enriched checkout URL in browser."
         case .webPaywallBundleUrlMissing:

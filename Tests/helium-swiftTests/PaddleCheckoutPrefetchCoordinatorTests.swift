@@ -4,7 +4,8 @@ import XCTest
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
-    private let testSessionId = "test_session_default"
+    private var testSession: PaywallSession!
+    private var testSessionId: String { testSession.sessionId }
 
     private var session: URLSession!
     private var banditClient: HeliumPaymentAPIClient!
@@ -13,6 +14,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+
+        testSession = makeTestSession()
 
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
@@ -112,7 +115,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
         coordinator.prefetch(
-            sessionId: testSessionId,
+            paywallSession: testSession,
             priceIds: ["pri_x"],
             paddleClientToken: "test_xyz",
             iosBundleId: "com.example.test"
@@ -145,7 +148,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                           userInfo: [NSLocalizedDescriptionKey: "BFF was called after bandit 409 — should have short-circuited"])
         }
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .alreadyEntitled(let code, let message, _) = outcome else {
@@ -173,7 +176,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .failed = outcome else {
@@ -195,7 +198,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
 
         guard case .failed = outcome else {
@@ -218,7 +221,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testAwaitOutcome_returnsNotStarted_forPriceIdNotInPrefetchSet() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_y_not_prefetched")
 
@@ -231,9 +234,12 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testAwaitOutcome_returnsNotStarted_whenSessionIdDoesNotMatch() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(sessionId: "session_a", priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let sessionA = makeTestSession()
+        let sessionB = makeTestSession()
 
-        let outcome = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_x")
+        coordinator.prefetch(paywallSession: sessionA, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        let outcome = await coordinator.awaitOutcome(sessionId: sessionB.sessionId, priceId: "pri_x")
 
         guard case .notStarted = outcome else {
             XCTFail("Different session id should be a cache miss; got \(outcome)")
@@ -246,7 +252,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testCancelAll_clearsCache_subsequentAwaitsReturnNotStarted() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
         coordinator.cancelAll()
 
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_x")
@@ -268,7 +274,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             return (response, "{}".data(using: .utf8)!)
         }
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_slow"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
         let start = Date()
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_slow", timeout: 0.1)
@@ -299,7 +305,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(sessionId: testSessionId, priceIds: ["pri_fast"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_fast"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_fast", timeout: 5.0)
 
@@ -315,7 +321,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
         coordinator.prefetch(
-            sessionId: testSessionId,
+            paywallSession: testSession,
             priceIds: ["pri_a", "pri_b", "pri_c"],
             paddleClientToken: "test_xyz",
             iosBundleId: nil
@@ -347,7 +353,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
         coordinator.prefetch(
-            sessionId: testSessionId,
+            paywallSession: testSession,
             priceIds: ["pri_only"],
             paddleClientToken: "test_xyz",
             iosBundleId: nil
@@ -370,15 +376,18 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     func testCancelForSession_removesEntriesOwnedByThatSessionOnly() async throws {
         MockURLProtocol.requestHandler = bothSucceedHandler()
 
-        coordinator.prefetch(sessionId: "session_a", priceIds: ["pri_shared", "pri_a_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        coordinator.prefetch(sessionId: "session_b", priceIds: ["pri_shared", "pri_b_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let sessionA = makeTestSession()
+        let sessionB = makeTestSession()
 
-        coordinator.cancelForSession(sessionId: "session_a")
+        coordinator.prefetch(paywallSession: sessionA, priceIds: ["pri_shared", "pri_a_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: sessionB, priceIds: ["pri_shared", "pri_b_only"], paddleClientToken: "test_xyz", iosBundleId: nil)
 
-        let aShared = await coordinator.awaitOutcome(sessionId: "session_a", priceId: "pri_shared", timeout: 5.0)
-        let aOnly = await coordinator.awaitOutcome(sessionId: "session_a", priceId: "pri_a_only", timeout: 5.0)
-        let bShared = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_shared", timeout: 5.0)
-        let bOnly = await coordinator.awaitOutcome(sessionId: "session_b", priceId: "pri_b_only", timeout: 5.0)
+        coordinator.cancelForSession(sessionId: sessionA.sessionId)
+
+        let aShared = await coordinator.awaitOutcome(sessionId: sessionA.sessionId, priceId: "pri_shared", timeout: 5.0)
+        let aOnly = await coordinator.awaitOutcome(sessionId: sessionA.sessionId, priceId: "pri_a_only", timeout: 5.0)
+        let bShared = await coordinator.awaitOutcome(sessionId: sessionB.sessionId, priceId: "pri_shared", timeout: 5.0)
+        let bOnly = await coordinator.awaitOutcome(sessionId: sessionB.sessionId, priceId: "pri_b_only", timeout: 5.0)
 
         guard case .notStarted = aShared else {
             XCTFail("session_a/pri_shared should have been wiped by cancelForSession(session_a); got \(aShared)")
@@ -835,7 +844,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
 
         coordinator.prefetch(
-            sessionId: testSessionId,
+            paywallSession: testSession,
             priceIds: ["pri_a", "pri_b"],
             paddleClientToken: "test_xyz",
             iosBundleId: nil

@@ -33,7 +33,7 @@ enum WebCheckoutOutcome {
 /// Orchestrates the external web checkout flow (browser-based) for payment providers.
 public class ExternalWebCheckoutManager: NSObject {
 
-    private let provider: PaymentProviderConfig
+    let provider: PaymentProviderConfig
     private let entitlementsSource: HeliumPaymentEntitlementsSource
 
     // Checkout state
@@ -65,6 +65,21 @@ public class ExternalWebCheckoutManager: NSObject {
     /// pre-checkout entitlement check resolved the flow without opening the browser.
     @MainActor
     func startCheckoutFlow(
+        for productKey: String,
+        triggerName: String,
+        paywallSession: PaywallSession
+    ) async throws -> WebCheckoutOutcome {
+        return try await withFlowTelemetry(productKey: productKey, paywallSession: paywallSession) {
+            try await self.runCheckoutFlow(
+                for: productKey,
+                triggerName: triggerName,
+                paywallSession: paywallSession
+            )
+        }
+    }
+
+    @MainActor
+    private func runCheckoutFlow(
         for productKey: String,
         triggerName: String,
         paywallSession: PaywallSession
@@ -101,14 +116,25 @@ public class ExternalWebCheckoutManager: NSObject {
             )
             let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
 
+            let awaitStart = Date()
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
                 priceIds: priceIdsToAwait
             )
+            let awaitDurationMs = msSince(awaitStart)
 
-            if let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+            let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
                 in: outcomes, tappedPriceId: tappedPriceId
-            ) {
+            )
+            emitPaddleAwaitResolved(
+                tappedPriceId: tappedPriceId,
+                awaitDurationMs: awaitDurationMs,
+                outcomes: outcomes,
+                shortCircuited: shortCircuit != nil,
+                paywallSession: paywallSession
+            )
+
+            if let shortCircuit {
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch alreadyEntitled (\(shortCircuit.code)): \(shortCircuit.message) — skipping browser")
                 entitlementsSource.invalidateCache()
@@ -144,7 +170,6 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-
     /// True if every offered product is intro-offer eligible.
     /// Prefers the server's per-customer signal from `/check-entitlement` when
     /// available — the local price map can go stale (e.g., host app sets
@@ -176,7 +201,7 @@ public class ExternalWebCheckoutManager: NSObject {
         paddleAlreadyEntitled: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw WebCheckoutError.failedToBuildEnrichedURL
+            throw WebCheckoutError.invalidBaseURLForComponents
         }
 
         var ctx: [String: Any] = [:]
@@ -223,7 +248,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
 
         guard let compressed = CtxCompression.deflateRaw(ctxData) else {
-            throw WebCheckoutError.failedToBuildEnrichedURL
+            throw WebCheckoutError.failedToCompressCtx
         }
 
         var queryItems = components.queryItems ?? []
@@ -236,7 +261,7 @@ public class ExternalWebCheckoutManager: NSObject {
         components.fragment = "ctx=" + compressed.base64URLEncodedString()
 
         guard let url = components.url else {
-            throw WebCheckoutError.failedToBuildEnrichedURL
+            throw WebCheckoutError.failedToAssembleEnrichedURL
         }
         return url
     }
@@ -262,6 +287,10 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let opened = await UIApplication.shared.open(url)
+        HeliumObservabilityManager.shared.track(
+            WebCheckoutBrowserOpenAttempted(provider: provider.providerSlug, success: opened),
+            scope: paywallSession.observabilityScope
+        )
         guard opened else {
             activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
             throw WebCheckoutError.failedToOpenEnrichedURL
@@ -374,6 +403,11 @@ public class ExternalWebCheckoutManager: NSObject {
     private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
         let delays: [UInt64] = [0, 2_000_000_000]
 
+        guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
+            return false
+        }
+        let oldestOpenedAt = activeCheckoutObservations.values.min(by: { $0.addedAt < $1.addedAt })?.addedAt
+
         for (i, delay) in delays.enumerated() {
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
@@ -381,11 +415,23 @@ public class ExternalWebCheckoutManager: NSObject {
             if Task.isCancelled { return false }
             guard !activeCheckoutObservations.isEmpty else { return false }
 
-            let purchaseDetected = await checkForNewPurchase(fromSuccessRedirect: fromSuccessRedirect)
+            let purchaseDetected = await checkForNewPurchase(
+                fromSuccessRedirect: fromSuccessRedirect,
+                retryAttempt: i + 1
+            )
             if Task.isCancelled { return false }
             HeliumLogger.log(.debug, category: .entitlements, "Detected new \(provider.displayName) purchase? \(purchaseDetected) (attempt #\(i + 1))")
             if purchaseDetected { return true }
         }
+        HeliumObservabilityManager.shared.track(
+            WebCheckoutPurchaseCheckExhausted(
+                provider: provider.providerSlug,
+                retries: delays.count,
+                msSinceOpen: oldestOpenedAt.map { msSince($0) },
+                fromSuccessRedirect: fromSuccessRedirect
+            ),
+            scope: newestObservation.paywallSession.observabilityScope
+        )
         return false
     }
 
@@ -399,7 +445,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// offered on the same paywall. In either case, observations are cleared
     /// and paywalls hidden. Succeeded wins over Restored across all sessions.
     @MainActor
-    private func checkForNewPurchase(fromSuccessRedirect: Bool = false) async -> Bool {
+    private func checkForNewPurchase(fromSuccessRedirect: Bool = false, retryAttempt: Int = 1) async -> Bool {
         await entitlementsSource.refreshEntitlements()
         let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
         HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase", metadata: [
@@ -444,6 +490,17 @@ public class ExternalWebCheckoutManager: NSObject {
                     paywallSession: observation.paywallSession,
                     sendToAnalytics: false
                 )
+                HeliumObservabilityManager.shared.track(
+                    WebCheckoutPurchaseDetected(
+                        provider: provider.providerSlug,
+                        productId: purchasedProductId,
+                        source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
+                        retryAttempt: retryAttempt,
+                        msSinceOpen: msSince(observation.addedAt),
+                        wasRestore: false
+                    ),
+                    scope: observation.paywallSession.observabilityScope
+                )
                 activeCheckoutObservations.removeAll()
                 Helium.shared.hideAllPaywalls()
                 InlinePaywallDismissRegistry.dismissAll()
@@ -472,6 +529,17 @@ public class ExternalWebCheckoutManager: NSObject {
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false
             )
+            HeliumObservabilityManager.shared.track(
+                WebCheckoutPurchaseDetected(
+                    provider: provider.providerSlug,
+                    productId: restored.productId,
+                    source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
+                    retryAttempt: retryAttempt,
+                    msSinceOpen: msSince(restored.observation.addedAt),
+                    wasRestore: true
+                ),
+                scope: restored.observation.paywallSession.observabilityScope
+            )
             activeCheckoutObservations.removeAll()
             Helium.shared.hideAllPaywalls()
             InlinePaywallDismissRegistry.dismissAll()
@@ -489,7 +557,19 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
-        guard !activeCheckoutObservations.isEmpty else { return }
+        guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
+            return
+        }
+
+        HeliumObservabilityManager.shared.track(
+            WebCheckoutRedirectReceived(
+                provider: provider.providerSlug,
+                redirectKind: redirectKind.rawValue,
+                msSinceOpen: msSince(newest.addedAt),
+                observationCount: activeCheckoutObservations.count
+            ),
+            scope: newest.paywallSession.observabilityScope
+        )
 
         // Redirect is authoritative — suppress the foreground-observer safety net
         // while we run explicit logic for this redirect.
