@@ -18,7 +18,7 @@ struct PaymentProviderConfig {
     /// web set is empty — used on the success-redirect path as a safety net
     /// against server config drift (web bundle URL present, web products missing).
     let getOfferedProducts: (HeliumPaywallInfo, _ includeInAppSetIfWebEmpty: Bool) -> [String]?
-    let purchaseEventPaymentProcessor: HeliumPaymentProcessor
+    let kind: HeliumPaymentProcessor
 
     var checkEntitlementPath: String { "\(providerSlug)/check-entitlement" }
     var updateCustomerMetadataPath: String { "\(providerSlug)/update-customer-metadata" }
@@ -36,7 +36,7 @@ struct PaymentProviderConfig {
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
         getOfferedProducts: { paywallInfo, _ in paywallInfo.productsOfferedStripe },
-        purchaseEventPaymentProcessor: .stripe
+        kind: .stripe
     )
 
     static let paddle = PaymentProviderConfig(
@@ -56,6 +56,6 @@ struct PaymentProviderConfig {
             }
             return includeInAppSetIfWebEmpty ? paywallInfo.productsOfferedPaddle : nil
         },
-        purchaseEventPaymentProcessor: .paddle
+        kind: .paddle
     )
 }

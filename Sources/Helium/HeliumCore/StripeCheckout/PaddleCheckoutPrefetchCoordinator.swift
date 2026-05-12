@@ -426,6 +426,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)
+            if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
+                PaymentProviderConfig.paddle.setCustomerId(customerId)
+            }
+            
             trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
         } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
             trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
