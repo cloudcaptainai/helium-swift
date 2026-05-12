@@ -16,7 +16,7 @@ extension PaddleCheckoutPrefetchCoordinator {
 
     nonisolated static func trackBanditCompletion(
         priceId: String,
-        paywallSession: PaywallSession,
+        scope: PaywallObservabilityScope,
         startedAt: Date,
         chainStartedAt: Date,
         result: PrefetchBanditStep
@@ -64,7 +64,7 @@ extension PaddleCheckoutPrefetchCoordinator {
                 endpointCall: endpointCall,
                 alreadyEntitledCode: alreadyEntitledCode
             ),
-            paywallSession: paywallSession
+            scope: scope
         )
 
         if let terminalOutcome {
@@ -76,7 +76,7 @@ extension PaddleCheckoutPrefetchCoordinator {
                     totalDurationMs: msSince(chainStartedAt),
                     ipGeoCountry: nil
                 ),
-                paywallSession: paywallSession
+                scope: scope
             )
         }
     }
@@ -84,7 +84,7 @@ extension PaddleCheckoutPrefetchCoordinator {
     nonisolated static func trackBffCompletion(
         priceId: String,
         transactionId: String,
-        paywallSession: PaywallSession,
+        scope: PaywallObservabilityScope,
         startedAt: Date,
         chainStartedAt: Date,
         result: PrefetchBffStep
@@ -129,7 +129,7 @@ extension PaddleCheckoutPrefetchCoordinator {
                 transactionId: transactionId,
                 endpointCall: endpointCall
             ),
-            paywallSession: paywallSession
+            scope: scope
         )
 
         HeliumObservabilityManager.shared.track(
@@ -140,7 +140,7 @@ extension PaddleCheckoutPrefetchCoordinator {
                 totalDurationMs: msSince(chainStartedAt),
                 ipGeoCountry: ipGeo
             ),
-            paywallSession: paywallSession
+            scope: scope
         )
     }
 }

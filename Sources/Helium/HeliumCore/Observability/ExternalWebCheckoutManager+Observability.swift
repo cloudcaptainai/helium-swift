@@ -9,9 +9,10 @@ extension ExternalWebCheckoutManager {
         _ body: () async throws -> WebCheckoutOutcome
     ) async throws -> WebCheckoutOutcome {
         let flowStart = Date()
+        let scope = paywallSession.observabilityScope
         HeliumObservabilityManager.shared.track(
             WebCheckoutFlowStarted(provider: provider.providerSlug, productKey: productKey),
-            paywallSession: paywallSession
+            scope: scope
         )
         do {
             let result = try await body()
@@ -28,7 +29,7 @@ extension ExternalWebCheckoutManager {
                     errorClass: nil, errorMessage: nil,
                     totalDurationMs: msSince(flowStart)
                 ),
-                paywallSession: paywallSession
+                scope: scope
             )
             return result
         } catch {
@@ -42,7 +43,7 @@ extension ExternalWebCheckoutManager {
                     errorMessage: decomposed.errorMessage,
                     totalDurationMs: msSince(flowStart)
                 ),
-                paywallSession: paywallSession
+                scope: scope
             )
             throw error
         }
@@ -79,7 +80,7 @@ extension ExternalWebCheckoutManager {
                 notStartedCount: notStarted,
                 shortCircuited: shortCircuited
             ),
-            paywallSession: paywallSession
+            scope: paywallSession.observabilityScope
         )
     }
 }

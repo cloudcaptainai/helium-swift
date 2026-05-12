@@ -35,16 +35,13 @@ class HeliumObservabilityManager {
 
     func track(
         _ event: any HeliumObservabilityEvent,
-        paywallSession: PaywallSession? = nil
+        scope: PaywallObservabilityScope
     ) {
         let eventName = event.name
         let eventProps = event.properties
         queue.async { [weak self] in
             guard let self else { return }
-            let enriched = enrich(
-                eventProps: eventProps,
-                paywallSession: paywallSession
-            )
+            let enriched = enrich(eventProps: eventProps, scope: scope)
             let send: (Analytics) -> Void = { analytics in
                 analytics.track(name: eventName, properties: enriched)
             }
@@ -58,7 +55,7 @@ class HeliumObservabilityManager {
 
     private func enrich(
         eventProps: [String: Any],
-        paywallSession: PaywallSession?
+        scope: PaywallObservabilityScope
     ) -> [String: Any] {
         var p = eventProps
         p["sdkVersion"] = BuildConstants.version
@@ -69,12 +66,10 @@ class HeliumObservabilityManager {
             p["revenueCatAppUserId"] = rcId
         }
         p["heliumSessionId"] = HeliumIdentityManager.shared.getHeliumSessionId()
-        if let session = paywallSession {
-            p["heliumPaywallSessionId"] = session.sessionId
-            p["triggerName"] = session.trigger
-            if let uuid = session.paywallInfoWithBackups?.paywallUUID {
-                p["paywallUUID"] = uuid
-            }
+        p["heliumPaywallSessionId"] = scope.sessionId
+        p["triggerName"] = scope.trigger
+        if let uuid = scope.paywallUUID {
+            p["paywallUUID"] = uuid
         }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             p["organizationId"] = orgId

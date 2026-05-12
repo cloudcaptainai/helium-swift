@@ -99,6 +99,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         iosBundleId: String?
     ) {
         let sessionId = paywallSession.sessionId
+        let scope = paywallSession.observabilityScope
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId)
@@ -114,7 +115,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     iosBundleId: iosBundleId,
                     banditClient: bandit,
                     bffClient: bff,
-                    paywallSession: paywallSession
+                    scope: scope
                 )
             }
             startedPriceIds.append(priceId)
@@ -122,7 +123,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         if !startedPriceIds.isEmpty {
             HeliumObservabilityManager.shared.track(
                 PaddlePrefetchStarted(priceIds: startedPriceIds),
-                paywallSession: paywallSession
+                scope: scope
             )
         }
     }
@@ -417,19 +418,19 @@ final class PaddleCheckoutPrefetchCoordinator {
         iosBundleId: String?,
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient,
-        paywallSession: PaywallSession
+        scope: PaywallObservabilityScope
     ) async -> PaddlePrefetchOutcome {
         let chainStart = Date()
         let banditStart = Date()
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)
-            trackBanditCompletion(priceId: priceId, paywallSession: paywallSession, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
+            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
         } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
-            trackBanditCompletion(priceId: priceId, paywallSession: paywallSession, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
+            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
             return .alreadyEntitled(code: code, message: message, existingSubscriptionId: existingSubscriptionId)
         } catch {
-            trackBanditCompletion(priceId: priceId, paywallSession: paywallSession, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
 
@@ -441,13 +442,13 @@ final class PaddleCheckoutPrefetchCoordinator {
                 iosBundleId: iosBundleId
             )
             if let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
-                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, paywallSession: paywallSession, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, paywallSession: paywallSession, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, paywallSession: paywallSession, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
     }

@@ -289,7 +289,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let opened = await UIApplication.shared.open(url)
         HeliumObservabilityManager.shared.track(
             WebCheckoutBrowserOpenAttempted(provider: provider.providerSlug, success: opened),
-            paywallSession: paywallSession
+            scope: paywallSession.observabilityScope
         )
         guard opened else {
             activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
@@ -403,8 +403,10 @@ public class ExternalWebCheckoutManager: NSObject {
     private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
         let delays: [UInt64] = [0, 2_000_000_000]
 
+        guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
+            return false
+        }
         let oldestOpenedAt = activeCheckoutObservations.values.min(by: { $0.addedAt < $1.addedAt })?.addedAt
-        let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt })
 
         for (i, delay) in delays.enumerated() {
             if delay > 0 {
@@ -428,7 +430,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 msSinceOpen: oldestOpenedAt.map { msSince($0) },
                 fromSuccessRedirect: fromSuccessRedirect
             ),
-            paywallSession: newestObservation?.paywallSession
+            scope: newestObservation.paywallSession.observabilityScope
         )
         return false
     }
@@ -497,7 +499,7 @@ public class ExternalWebCheckoutManager: NSObject {
                         msSinceOpen: msSince(observation.addedAt),
                         wasRestore: false
                     ),
-                    paywallSession: observation.paywallSession
+                    scope: observation.paywallSession.observabilityScope
                 )
                 activeCheckoutObservations.removeAll()
                 Helium.shared.hideAllPaywalls()
@@ -536,7 +538,7 @@ public class ExternalWebCheckoutManager: NSObject {
                     msSinceOpen: msSince(restored.observation.addedAt),
                     wasRestore: true
                 ),
-                paywallSession: restored.observation.paywallSession
+                scope: restored.observation.paywallSession.observabilityScope
             )
             activeCheckoutObservations.removeAll()
             Helium.shared.hideAllPaywalls()
@@ -555,17 +557,18 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
-        guard !activeCheckoutObservations.isEmpty else { return }
+        guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
+            return
+        }
 
-        let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt })
         HeliumObservabilityManager.shared.track(
             WebCheckoutRedirectReceived(
                 provider: provider.providerSlug,
                 redirectKind: redirectKind.rawValue,
-                msSinceOpen: newest.map { msSince($0.addedAt) },
+                msSinceOpen: msSince(newest.addedAt),
                 observationCount: activeCheckoutObservations.count
             ),
-            paywallSession: newest?.paywallSession
+            scope: newest.paywallSession.observabilityScope
         )
 
         // Redirect is authoritative — suppress the foreground-observer safety net
