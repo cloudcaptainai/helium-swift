@@ -276,6 +276,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         return [
             "banditResponse": banditDict,
             "paddleCheckoutResponse": trimmedPaddleResponse,
+            "paddleCheckoutGeneratedAt": formatAsTimestamp(date: paddle.generatedAt),
         ]
     }
 

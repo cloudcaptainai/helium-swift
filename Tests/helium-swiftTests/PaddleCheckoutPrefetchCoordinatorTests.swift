@@ -90,7 +90,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         return PaddleTransactionCheckoutResult(
             rawBody: "{}".data(using: .utf8)!,
             checkoutId: "che_x",
-            transactionId: "txn_x"
+            transactionId: "txn_x",
+            generatedAt: Date()
         )
     }
 
@@ -501,13 +502,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a")
         let paddle1 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
-            checkoutId: "che_a", transactionId: "txn_a")
+            checkoutId: "che_a", transactionId: "txn_a", generatedAt: Date())
 
         let bandit2 = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
         let paddle2 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
-            checkoutId: "che_b", transactionId: "txn_b")
+            checkoutId: "che_b", transactionId: "txn_b", generatedAt: Date())
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_a": .ready(bandit: bandit1, paddle: paddle1),
@@ -530,7 +531,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_x")
+            checkoutId: "che_x", transactionId: "txn_x", generatedAt: Date())
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_ready": .ready(bandit: bandit, paddle: paddle),
@@ -558,7 +559,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_test")
+            checkoutId: "che_x", transactionId: "txn_test", generatedAt: Date())
 
         let map = try XCTUnwrap(
             PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
@@ -617,7 +618,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_x")
+            checkoutId: "che_x", transactionId: "txn_x", generatedAt: Date())
 
         let map = try XCTUnwrap(
             PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
