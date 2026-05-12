@@ -6,9 +6,8 @@ import UIKit
 class HeliumObservabilityManager {
     static let shared = HeliumObservabilityManager()
 
-    // TODO: replace placeholders with the real observability Jitsu writeKey + endpoint.
-    private let observabilityWriteKey = "<TBD>"
-    private let observabilityEndpoint = "<TBD>"
+    private let observabilityWriteKey = "rd7IAMin23xZal1auumIJURjaNrHIh7t:lJ8ssvJjYfGE8FT5ItaHkVwgqvOiMQjV"
+    private let observabilityEndpoint = "cmp1v4znj00002e6pt8smcti9.d.jitsu.com"
 
     private let queue = DispatchQueue(label: "com.helium.observabilityManager")
     private var analytics: Analytics?
