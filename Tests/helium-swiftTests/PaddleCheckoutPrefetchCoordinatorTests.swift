@@ -90,8 +90,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         return PaddleTransactionCheckoutResult(
             rawBody: "{}".data(using: .utf8)!,
             checkoutId: "che_x",
-            transactionId: "txn_x",
-            generatedAt: Date()
+            transactionId: "txn_x"
         )
     }
 
@@ -502,13 +501,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a")
         let paddle1 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
-            checkoutId: "che_a", transactionId: "txn_a", generatedAt: Date())
+            checkoutId: "che_a", transactionId: "txn_a")
 
         let bandit2 = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
         let paddle2 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
-            checkoutId: "che_b", transactionId: "txn_b", generatedAt: Date())
+            checkoutId: "che_b", transactionId: "txn_b")
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_a": .ready(bandit: bandit1, paddle: paddle1),
@@ -531,7 +530,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_x", generatedAt: Date())
+            checkoutId: "che_x", transactionId: "txn_x")
 
         let outcomes: [String: PaddlePrefetchOutcome] = [
             "pri_ready": .ready(bandit: bandit, paddle: paddle),
@@ -559,7 +558,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_test", generatedAt: Date())
+            checkoutId: "che_x", transactionId: "txn_test")
 
         let map = try XCTUnwrap(
             PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
@@ -575,6 +574,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["currency_code"] as? String, "USD")
         XCTAssertEqual(data["ip_geo_country_code"] as? String, "US")
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "94102")
+        XCTAssertEqual(data["created_at"] as? String, "2026-05-07T02:53:11+00:00")
 
         let customer = try XCTUnwrap(data["customer"] as? [String: Any])
         XCTAssertEqual(customer["email"] as? String, "u@e.com")
@@ -618,7 +618,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
-            checkoutId: "che_x", transactionId: "txn_x", generatedAt: Date())
+            checkoutId: "che_x", transactionId: "txn_x")
 
         let map = try XCTUnwrap(
             PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
@@ -632,7 +632,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             "experimentation",
             "settings",
             "custom_data",
-            "type", "is_free", "environment", "created_at",
+            "type", "is_free", "environment",
             "ip_geo_region", "source_page", "messages", "subscription",
         ] {
             XCTAssertNil(data[key], "Field `\(key)` should be dropped by the trim")

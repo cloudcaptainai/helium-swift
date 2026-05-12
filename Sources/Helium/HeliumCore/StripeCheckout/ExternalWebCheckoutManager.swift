@@ -260,8 +260,8 @@ public class ExternalWebCheckoutManager: NSObject {
         // so if the bundle is already open from a prior tap it would render
         // stale ctx (wrong selected product, stale entitled-banner state).
         // A unique query item forces a fresh navigation each time.
-        queryItems.removeAll { $0.name == "_t" }
-        queryItems.append(URLQueryItem(name: "_t", value: String(Int64(Date().timeIntervalSince1970 * 1000))))
+        queryItems.removeAll { $0.name == "hlm_ts" }
+        queryItems.append(URLQueryItem(name: "hlm_ts", value: String(Int64(Date().timeIntervalSince1970 * 1000))))
         components.queryItems = queryItems
 
         components.fragment = "ctx=" + compressed.base64URLEncodedString()

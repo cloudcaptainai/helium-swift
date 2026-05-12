@@ -276,7 +276,6 @@ final class PaddleCheckoutPrefetchCoordinator {
         return [
             "banditResponse": banditDict,
             "paddleCheckoutResponse": trimmedPaddleResponse,
-            "paddleCheckoutGeneratedAt": formatAsTimestamp(date: paddle.generatedAt),
         ]
     }
 
@@ -297,6 +296,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         for key in [
             "id", "transaction_id", "status", "currency_code",
             "ip_geo_country_code", "ip_geo_postal_code",
+            "created_at",
         ] {
             if let value = raw[key] { trimmed[key] = value }
         }

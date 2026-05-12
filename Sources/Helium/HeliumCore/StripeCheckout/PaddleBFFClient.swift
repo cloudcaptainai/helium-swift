@@ -15,7 +15,6 @@ public struct PaddleTransactionCheckoutResult {
     public let rawBody: Data
     public let checkoutId: String
     public let transactionId: String
-    public let generatedAt: Date
 }
 
 final class PaddleBFFClient {
@@ -76,8 +75,7 @@ final class PaddleBFFClient {
         return PaddleTransactionCheckoutResult(
             rawBody: data,
             checkoutId: envelope.data.id,
-            transactionId: envelope.data.transactionId,
-            generatedAt: Date()
+            transactionId: envelope.data.transactionId
         )
     }
 
