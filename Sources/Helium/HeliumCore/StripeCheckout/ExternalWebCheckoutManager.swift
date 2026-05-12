@@ -255,8 +255,14 @@ public class ExternalWebCheckoutManager: NSObject {
         if !queryItems.contains(where: { $0.name == "helium_ios_bundle_id" }) {
             let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
             queryItems.append(URLQueryItem(name: "helium_ios_bundle_id", value: bundleId))
-            components.queryItems = queryItems
         }
+        // Cache-bust per open: a fragment-only change doesn't reload the page,
+        // so if the bundle is already open from a prior tap it would render
+        // stale ctx (wrong selected product, stale entitled-banner state).
+        // A unique query item forces a fresh navigation each time.
+        queryItems.removeAll { $0.name == "hlm_ts" }
+        queryItems.append(URLQueryItem(name: "hlm_ts", value: String(Int64(Date().timeIntervalSince1970 * 1000))))
+        components.queryItems = queryItems
 
         components.fragment = "ctx=" + compressed.base64URLEncodedString()
 

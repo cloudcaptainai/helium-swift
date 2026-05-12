@@ -574,6 +574,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["currency_code"] as? String, "USD")
         XCTAssertEqual(data["ip_geo_country_code"] as? String, "US")
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "94102")
+        XCTAssertEqual(data["created_at"] as? String, "2026-05-07T02:53:11+00:00")
 
         let customer = try XCTUnwrap(data["customer"] as? [String: Any])
         XCTAssertEqual(customer["email"] as? String, "u@e.com")
@@ -631,7 +632,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             "experimentation",
             "settings",
             "custom_data",
-            "type", "is_free", "environment", "created_at",
+            "type", "is_free", "environment",
             "ip_geo_region", "source_page", "messages", "subscription",
         ] {
             XCTAssertNil(data[key], "Field `\(key)` should be dropped by the trim")
