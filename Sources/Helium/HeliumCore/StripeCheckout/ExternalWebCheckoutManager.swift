@@ -100,7 +100,7 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
             storeKitTransactionId: nil,
             storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -109,7 +109,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
-        if provider.providerSlug == "paddle",
+        if provider.kind == .paddle,
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
                 from: paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? []
@@ -491,7 +491,7 @@ public class ExternalWebCheckoutManager: NSObject {
                         paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                         storeKitTransactionId: nil,
                         storeKitOriginalTransactionId: nil,
-                        paymentProcessor: provider.purchaseEventPaymentProcessor
+                        paymentProcessor: provider.kind
                     ),
                     paywallSession: observation.paywallSession,
                     sendToAnalytics: false
@@ -530,7 +530,7 @@ public class ExternalWebCheckoutManager: NSObject {
                     triggerName: restored.observation.paywallSession.trigger,
                     paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                     restoreOrigin: .detectedPostWebCheckout,
-                    paymentProcessor: provider.purchaseEventPaymentProcessor
+                    paymentProcessor: provider.kind
                 ),
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false

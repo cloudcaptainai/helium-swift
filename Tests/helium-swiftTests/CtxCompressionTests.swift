@@ -140,7 +140,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -194,7 +194,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -235,7 +235,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -274,7 +274,7 @@ final class CtxCompressionTests: XCTestCase {
             paywallName: "Test Paywall",
             storeKitTransactionId: nil,
             storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -326,7 +326,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -403,7 +403,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -449,7 +449,7 @@ final class CtxCompressionTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: "t", paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.purchaseEventPaymentProcessor
+            paymentProcessor: provider.kind
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,

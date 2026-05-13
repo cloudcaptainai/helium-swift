@@ -383,12 +383,12 @@ public class Helium {
     // MARK: - URL Handling
 
     /// Forward incoming deep links / universal links to Helium so the SDK can react to
-    /// external web checkout success/cancel redirects without waiting for the app to foreground.
+    /// external web checkout redirects.
     ///
     /// This is not required, but encouraged for smoother post-purchase experience.
     ///
-    /// Safe to call with unrelated URLs — returns `false` if external web checkout is
-    /// disabled or the URL does not match the success/cancel URLs configured via
+    /// Safe to call with unrelated URLs — returns `nil` if external web checkout is
+    /// disabled or the URL does not match the URLs configured via
     /// ``HeliumConfig/enableExternalWebCheckout(successURL:cancelURL:)``.
     ///
     /// Call this from `.onOpenURL`, `SceneDelegate.scene(_:openURLContexts:)`, or
@@ -404,7 +404,7 @@ public class Helium {
     /// ```
     ///
     /// - Parameter url: The URL the host app received.
-    /// - Returns: `true` if the URL was a Helium checkout redirect and is being processed.
+    /// - Returns: The matched redirect type when the URL is a Helium checkout redirect; otherwise `nil`.
     @discardableResult
     public func handleURL(_ url: URL) -> HeliumCheckoutRedirectType? {
         guard Helium.config.webCheckoutEnabled else {
