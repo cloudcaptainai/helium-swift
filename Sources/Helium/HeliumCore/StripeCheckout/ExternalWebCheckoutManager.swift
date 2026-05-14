@@ -420,7 +420,10 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase was detected.
     @MainActor
     private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
-        let delays: [UInt64] = [0, 2_000_000_000]
+        var delays: [UInt64] = [0, 2_000_000_000]
+        if fromSuccessRedirect {
+            delays.append(3_000_000_000)
+        }
 
         guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return false
