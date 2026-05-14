@@ -283,8 +283,7 @@ enum WebCheckoutError: LocalizedError {
         }
     }
 
-    /// Stable case name for observability. Excludes associated values so
-    /// errorClass groupings don't fragment per-payload.
+    /// Stable case name for observability.
     var caseName: String {
         switch self {
         case .cannotPresentCheckout: return "cannotPresentCheckout"
