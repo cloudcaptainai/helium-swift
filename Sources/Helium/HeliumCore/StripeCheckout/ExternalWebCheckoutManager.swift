@@ -141,10 +141,10 @@ public class ExternalWebCheckoutManager: NSObject {
                 return .preCheckResolved
             }
 
-            if PaddleCheckoutPrefetchCoordinator.anyCaliforniaBlocked(in: outcomes) {
+            if let caPostal = PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: outcomes) {
                 HeliumLogger.log(.debug, category: .entitlements,
-                                 "\(provider.displayName) prefetch blocked for California IP — failing checkout")
-                throw WebCheckoutError.californiaBuyerBlocked
+                                 "\(provider.displayName) prefetch blocked for California IP (postal \(caPostal)) — failing checkout")
+                throw WebCheckoutError.californiaBuyerBlocked(postalCode: caPostal)
             }
 
             // Every offered product must be in a renderable state.
@@ -599,6 +599,17 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
+            NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
+            // Cap the spinner — a slow network call could leave app in unusable state.
+            let overlayTimeoutTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                if Task.isCancelled { return }
+                NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
+            }
+            defer {
+                overlayTimeoutTask.cancel()
+                NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
+            }
             _ = await checkForNewPurchaseWithRetry(fromSuccessRedirect: true)
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()

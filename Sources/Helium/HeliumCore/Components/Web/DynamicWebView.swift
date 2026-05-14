@@ -9,6 +9,7 @@ enum FileLoadAttempt {
 
 extension Notification.Name {
     static let heliumEmbeddedPaywallRenderFail = Notification.Name("heliumEmbeddedPaywallRenderFail")
+    static let heliumWebCheckoutProcessingChanged = Notification.Name("heliumWebCheckoutProcessingChanged")
 }
 
 struct DynamicWebView: View {
@@ -35,6 +36,7 @@ struct DynamicWebView: View {
     @State private var webView: WKWebView? = nil
     @State private var showControlPanel = false
     @State private var viewLoadStartTime: Date?
+    @State private var processingVisible = false
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
     
@@ -116,6 +118,27 @@ struct DynamicWebView: View {
                    .ignoresSafeArea()
                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
            }
+
+           if processingVisible {
+               let activeBgConfig = effectiveColorScheme == .dark && darkModePostLoadBackgroundConfig != nil
+                   ? darkModePostLoadBackgroundConfig : postLoadBackgroundConfig
+               ZStack {
+                   if let activeBgConfig {
+                       activeBgConfig.makeBackgroundView()
+                           .opacity(0.65)
+                           .ignoresSafeArea()
+                   } else {
+                       Color.black.opacity(0.3)
+                           .ignoresSafeArea()
+                   }
+                   ProgressView()
+                       .progressViewStyle(.circular)
+                       .controlSize(.large)
+                       .tint(activeBgConfig?.preferredContrastColor ?? .white)
+               }
+               .transition(.opacity)
+               .allowsHitTesting(true)
+           }
        }
        .edgesIgnoringSafeArea(.all)
        .sheet(isPresented: $showControlPanel) {
@@ -155,6 +178,10 @@ struct DynamicWebView: View {
           if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               webViewLoadFail(reason: "Failed to render paywall.")
           }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
+          guard let visible = notification.userInfo?["visible"] as? Bool else { return }
+          withAnimation(.easeInOut(duration: 0.15)) { processingVisible = visible }
       }
     }
 

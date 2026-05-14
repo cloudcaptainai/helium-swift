@@ -375,15 +375,15 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
-    nonisolated static func anyCaliforniaBlocked(
+    nonisolated static func californiaBlockedPostalCode(
         in outcomes: [String: PaddlePrefetchOutcome]
-    ) -> Bool {
-        return outcomes.values.contains { outcome in
-            if case let .failed(error) = outcome, error is PaddleCaliforniaBlocked {
-                return true
+    ) -> String? {
+        for outcome in outcomes.values {
+            if case let .failed(error) = outcome, let ca = error as? PaddleCaliforniaBlocked {
+                return ca.postalCode
             }
-            return false
         }
+        return nil
     }
 
     // MARK: - Composite key helpers

@@ -421,8 +421,8 @@ public class Helium {
         ])
 
         Task { @MainActor in
-            await StripeCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
             await PaddleCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
+            await StripeCheckoutManager.shared.handleExternalReturn(redirectKind: redirectKind)
         }
         return redirectKind
     }

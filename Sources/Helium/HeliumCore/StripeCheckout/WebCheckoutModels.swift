@@ -260,7 +260,7 @@ enum WebCheckoutError: LocalizedError {
     case failedToAssembleEnrichedURL
     case failedToOpenEnrichedURL
     case webPaywallBundleUrlMissing
-    case californiaBuyerBlocked
+    case californiaBuyerBlocked(postalCode: String)
     case paddlePrefetchNotReady(priceIds: [String])
 
     var errorDescription: String? {
@@ -279,10 +279,25 @@ enum WebCheckoutError: LocalizedError {
             return "Could not open enriched checkout URL in browser."
         case .webPaywallBundleUrlMissing:
             return "No web paywall bundle URL available for this paywall."
-        case .californiaBuyerBlocked:
-            return "Checkout not available for California buyers."
+        case .californiaBuyerBlocked(let postalCode):
+            return "Checkout not available for California buyers (detected ZIP \(postalCode))."
         case .paddlePrefetchNotReady(let priceIds):
             return "Paddle prefetch did not complete successfully for offered priceIds: \(priceIds.joined(separator: ", "))."
+        }
+    }
+
+    /// Stable case name for observability.
+    var caseName: String {
+        switch self {
+        case .cannotPresentCheckout: return "cannotPresentCheckout"
+        case .checkoutURLsNotConfigured: return "checkoutURLsNotConfigured"
+        case .invalidBaseURLForComponents: return "invalidBaseURLForComponents"
+        case .failedToCompressCtx: return "failedToCompressCtx"
+        case .failedToAssembleEnrichedURL: return "failedToAssembleEnrichedURL"
+        case .failedToOpenEnrichedURL: return "failedToOpenEnrichedURL"
+        case .webPaywallBundleUrlMissing: return "webPaywallBundleUrlMissing"
+        case .californiaBuyerBlocked: return "californiaBuyerBlocked"
+        case .paddlePrefetchNotReady: return "paddlePrefetchNotReady"
         }
     }
 }
