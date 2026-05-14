@@ -590,6 +590,7 @@ public class ExternalWebCheckoutManager: NSObject {
             // Cap the spinner — a slow network call could leave app in unusable state.
             let overlayTimeoutTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 8_000_000_000)
+                if Task.isCancelled { return }
                 NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
             }
             defer {
