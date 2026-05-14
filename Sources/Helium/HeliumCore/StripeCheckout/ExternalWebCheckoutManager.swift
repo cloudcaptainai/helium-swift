@@ -587,7 +587,13 @@ public class ExternalWebCheckoutManager: NSObject {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
             NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
+            // Cap the spinner — a slow network call could leave app in unusable state.
+            let overlayTimeoutTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
+            }
             defer {
+                overlayTimeoutTask.cancel()
                 NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
             }
             _ = await checkForNewPurchaseWithRetry(fromSuccessRedirect: true)
