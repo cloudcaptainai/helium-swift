@@ -260,7 +260,7 @@ enum WebCheckoutError: LocalizedError {
     case failedToAssembleEnrichedURL
     case failedToOpenEnrichedURL
     case webPaywallBundleUrlMissing
-    case californiaBuyerBlocked
+    case californiaBuyerBlocked(postalCode: String)
 
     var errorDescription: String? {
         switch self {
@@ -278,8 +278,23 @@ enum WebCheckoutError: LocalizedError {
             return "Could not open enriched checkout URL in browser."
         case .webPaywallBundleUrlMissing:
             return "No web paywall bundle URL available for this paywall."
-        case .californiaBuyerBlocked:
-            return "Checkout not available for California buyers."
+        case .californiaBuyerBlocked(let postalCode):
+            return "Checkout not available for California buyers (detected ZIP \(postalCode))."
+        }
+    }
+
+    /// Stable case name for observability. Excludes associated values so
+    /// errorClass groupings don't fragment per-payload.
+    var caseName: String {
+        switch self {
+        case .cannotPresentCheckout: return "cannotPresentCheckout"
+        case .checkoutURLsNotConfigured: return "checkoutURLsNotConfigured"
+        case .invalidBaseURLForComponents: return "invalidBaseURLForComponents"
+        case .failedToCompressCtx: return "failedToCompressCtx"
+        case .failedToAssembleEnrichedURL: return "failedToAssembleEnrichedURL"
+        case .failedToOpenEnrichedURL: return "failedToOpenEnrichedURL"
+        case .webPaywallBundleUrlMissing: return "webPaywallBundleUrlMissing"
+        case .californiaBuyerBlocked: return "californiaBuyerBlocked"
         }
     }
 }
