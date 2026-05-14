@@ -38,7 +38,7 @@ func decomposeError(_ error: Error) -> (httpStatus: Int?, errorClass: String, er
         }
     }
     if let webErr = error as? WebCheckoutError {
-        return (nil, "WebCheckoutError.\(webErr)", webErr.errorDescription)
+        return (nil, "WebCheckoutError.\(webErr.caseName)", webErr.errorDescription)
     }
     let className = String(describing: type(of: error))
     let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
@@ -127,6 +127,8 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
     let errorClass: String?
     let totalDurationMs: Int
     let ipGeoCountry: String?
+    let ipGeoRegion: String?
+    let ipGeoPostal: String?
 
     var name: String { "paddle_prefetch_outcome_finalized" }
     var properties: [String: Any] {
@@ -137,6 +139,8 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
         ]
         if let errorClass { p["errorClass"] = errorClass }
         if let ipGeoCountry { p["ipGeoCountry"] = ipGeoCountry }
+        if let ipGeoRegion { p["ipGeoRegion"] = ipGeoRegion }
+        if let ipGeoPostal { p["ipGeoPostal"] = ipGeoPostal }
         return p
     }
 }

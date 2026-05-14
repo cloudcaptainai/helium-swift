@@ -74,7 +74,9 @@ extension PaddleCheckoutPrefetchCoordinator {
                     outcome: terminalOutcome,
                     errorClass: terminalErrorClass,
                     totalDurationMs: msSince(chainStartedAt),
-                    ipGeoCountry: nil
+                    ipGeoCountry: nil,
+                    ipGeoRegion: nil,
+                    ipGeoPostal: nil
                 ),
                 scope: scope
             )
@@ -92,7 +94,7 @@ extension PaddleCheckoutPrefetchCoordinator {
         let endpointCall: EndpointCallTelemetry
         let outcome: PaddlePrefetchOutcomeKind
         let errorClass: String?
-        let ipGeo: String?
+        let ipGeo: (country: String?, region: String?, postal: String?)
 
         switch result {
         case let .success(rawBody):
@@ -101,14 +103,14 @@ extension PaddleCheckoutPrefetchCoordinator {
             )
             outcome = .ready
             errorClass = nil
-            ipGeo = ipGeoCountryCode(in: rawBody)
+            ipGeo = ipGeoFields(in: rawBody)
         case let .caBlocked(rawBody):
             endpointCall = EndpointCallTelemetry(
                 durationMs: msSince(startedAt), success: true
             )
             outcome = .caBlocked
             errorClass = "PaddleCaliforniaBlocked"
-            ipGeo = ipGeoCountryCode(in: rawBody)
+            ipGeo = ipGeoFields(in: rawBody)
         case let .failed(error):
             let decomposed = decomposeError(error)
             endpointCall = EndpointCallTelemetry(
@@ -120,7 +122,7 @@ extension PaddleCheckoutPrefetchCoordinator {
             )
             outcome = .failed
             errorClass = decomposed.errorClass
-            ipGeo = nil
+            ipGeo = (nil, nil, nil)
         }
 
         HeliumObservabilityManager.shared.track(
@@ -138,18 +140,23 @@ extension PaddleCheckoutPrefetchCoordinator {
                 outcome: outcome,
                 errorClass: errorClass,
                 totalDurationMs: msSince(chainStartedAt),
-                ipGeoCountry: ipGeo
+                ipGeoCountry: ipGeo.country,
+                ipGeoRegion: ipGeo.region,
+                ipGeoPostal: ipGeo.postal
             ),
             scope: scope
         )
     }
 }
 
-private func ipGeoCountryCode(in rawBody: Data) -> String? {
+private func ipGeoFields(in rawBody: Data) -> (country: String?, region: String?, postal: String?) {
     guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
-          let data = parsed["data"] as? [String: Any],
-          let cc = data["ip_geo_country_code"] as? String else {
-        return nil
+          let data = parsed["data"] as? [String: Any] else {
+        return (nil, nil, nil)
     }
-    return cc
+    return (
+        data["ip_geo_country_code"] as? String,
+        data["ip_geo_region"] as? String,
+        data["ip_geo_postal_code"] as? String
+    )
 }
