@@ -586,6 +586,10 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
+            NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
+            defer {
+                NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
+            }
             _ = await checkForNewPurchaseWithRetry(fromSuccessRedirect: true)
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()

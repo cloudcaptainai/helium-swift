@@ -7,6 +7,19 @@
 
 import Foundation
 import SwiftUI
+import UIKit
+
+extension Color {
+    /// WCAG relative luminance in sRGB. nil if components can't be resolved.
+    var relativeLuminance: CGFloat? {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        func linearize(_ c: CGFloat) -> CGFloat {
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+    }
+}
 
 // Represents a color stop in a gradient
 public struct GradientStop: Equatable {
@@ -90,6 +103,28 @@ public struct BackgroundConfig {
         return UnitPoint(x: x, y: y)
     }
     
+    var representativeColor: Color? {
+        switch type {
+        case .color(let c):
+            return c
+        case .linearGradient(let stops, _, _):
+            guard !stops.isEmpty else { return nil }
+            return stops[stops.count / 2].color
+        case .image:
+            return nil
+        }
+    }
+
+    var preferredContrastColor: Color {
+        // Default to white for image backgrounds — photographic content varies
+        // and white reads on more of it than black does.
+        guard let color = representativeColor,
+              let luminance = color.relativeLuminance else {
+            return .white
+        }
+        return luminance > 0.5 ? .black : .white
+    }
+
     // Generate the background view
     public func makeBackgroundView() -> some View {
         switch type {
