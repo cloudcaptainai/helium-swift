@@ -280,8 +280,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     /// Allow-list trim of the Paddle BFF response. On parse failure
-    /// returns `{ "data": [:] }` rather than throwing — the bundle's
-    /// null-checks then default to its live-fetch path.
+    /// returns `{ "data": [:] }` rather than throwing.
     private nonisolated static func trimPaddleCheckoutResponse(rawBody: Data) -> [String: Any] {
         guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
               let rawData = parsed["data"] as? [String: Any] else {

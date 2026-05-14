@@ -147,6 +147,19 @@ public class ExternalWebCheckoutManager: NSObject {
                 throw WebCheckoutError.californiaBuyerBlocked(postalCode: caPostal)
             }
 
+            // Every offered product must be in a renderable state.
+            let notReadyOffered = allPriceIds.filter { priceId in
+                switch outcomes[priceId] ?? .notStarted {
+                case .ready, .alreadyEntitled: return false
+                case .failed, .notStarted: return true
+                }
+            }
+            if !notReadyOffered.isEmpty {
+                HeliumLogger.log(.debug, category: .entitlements,
+                                 "\(provider.displayName) prefetch not ready for offered priceIds: \(notReadyOffered) — failing checkout")
+                throw WebCheckoutError.paddlePrefetchNotReady(priceIds: notReadyOffered)
+            }
+
             paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
                 outcomesByPriceId: outcomes
             )
