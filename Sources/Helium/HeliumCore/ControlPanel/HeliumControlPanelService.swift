@@ -8,6 +8,9 @@ class HeliumControlPanelService {
         if HeliumFetchedConfigManager.shared.fetchedConfig?.enableProductionPaywallPreviews == true {
             return true
         }
+        guard Helium.config.paywallPreviewsAutoEnabledInDevBuilds else {
+            return false
+        }
         let env = AppReceiptsHelper.shared.getEnvironment()
         return env == AppReceiptsHelper.Environment.debug.rawValue
             || env == AppReceiptsHelper.Environment.sandbox.rawValue
