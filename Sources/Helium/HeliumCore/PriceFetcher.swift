@@ -310,6 +310,10 @@ class PriceFetcher {
     
     @available(iOS 15.0, *)
     static func checkIntroOfferEligibility(for product: Product) async -> Bool {
+        if let simulated = await Helium.testing.simulatedIntroOfferEligibilityIfActive(productId: product.id) {
+            return simulated
+        }
+
         guard let subscription = product.subscription else {
             return false
         }

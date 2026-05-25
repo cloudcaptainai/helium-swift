@@ -69,32 +69,37 @@ class HeliumPaywallDelegateWrapper {
         let transactionStatus: HeliumPaywallTransactionStatus
 
         let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
-        let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
 
-        if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
-            do {
-                let outcome = try await StripeCheckoutManager.shared.startCheckoutFlow(
-                    for: productKey,
-                    triggerName: triggerName,
-                    paywallSession: paywallSession
-                )
-                transactionStatus = outcome.transactionStatus
-            } catch {
-                transactionStatus = .failed(error)
-            }
-        } else if paymentProcessor == .paddle {
-            do {
-                let outcome = try await PaddleCheckoutManager.shared.startCheckoutFlow(
-                    for: productKey,
-                    triggerName: triggerName,
-                    paywallSession: paywallSession
-                )
-                transactionStatus = outcome.transactionStatus
-            } catch {
-                transactionStatus = .failed(error)
-            }
+        if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: productKey) {
+            transactionStatus = simulated
         } else {
-            transactionStatus = await delegate.makePurchase(productId: productKey)
+            let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
+
+            if paymentProcessor == .stripe && !stripeApplePayFlowEnabled {
+                do {
+                    let outcome = try await StripeCheckoutManager.shared.startCheckoutFlow(
+                        for: productKey,
+                        triggerName: triggerName,
+                        paywallSession: paywallSession
+                    )
+                    transactionStatus = outcome.transactionStatus
+                } catch {
+                    transactionStatus = .failed(error)
+                }
+            } else if paymentProcessor == .paddle {
+                do {
+                    let outcome = try await PaddleCheckoutManager.shared.startCheckoutFlow(
+                        for: productKey,
+                        triggerName: triggerName,
+                        paywallSession: paywallSession
+                    )
+                    transactionStatus = outcome.transactionStatus
+                } catch {
+                    transactionStatus = .failed(error)
+                }
+            } else {
+                transactionStatus = await delegate.makePurchase(productId: productKey)
+            }
         }
 
         switch transactionStatus {
@@ -161,19 +166,25 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
-        var result = await delegate.restorePurchases()
+        var result: Bool
         var restoringProcessor: HeliumPaymentProcessor = .appStore
 
-        let processors = Helium.config.webCheckoutProcessors
-        if !result && processors.contains(.paddle) {
-            await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
-            result = await !HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds().isEmpty
-            if result { restoringProcessor = .paddle }
-        }
-        if !result && processors.contains(.stripe) {
-            await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
-            result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
-            if result { restoringProcessor = .stripe }
+        if let simulated = await Helium.testing.simulatedRestoreResultIfActive() {
+            result = simulated
+        } else {
+            result = await delegate.restorePurchases()
+
+            let processors = Helium.config.webCheckoutProcessors
+            if !result && processors.contains(.paddle) {
+                await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshEntitlements()
+                result = await !HeliumEntitlementsManager.shared.paddleEntitlementsSource.purchasedHeliumProductIds().isEmpty
+                if result { restoringProcessor = .paddle }
+            }
+            if !result && processors.contains(.stripe) {
+                await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshEntitlements()
+                result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
+                if result { restoringProcessor = .stripe }
+            }
         }
         if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .restorePurchases, paymentProcessor: restoringProcessor), paywallSession: paywallSession)

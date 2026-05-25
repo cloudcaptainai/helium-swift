@@ -21,6 +21,7 @@ public class Helium {
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
+    public static let testing = HeliumTesting()
     @HeliumAtomic static var lastApiKeyUsed: String? = nil
     
     /// Initializes the Helium paywall system.
@@ -940,6 +941,88 @@ public class HeliumEntitlements {
     
 }
 
+/// Helpers for stubbing purchases and restores in automated tests.
+///
+/// Useful for UI tests, CI pipelines, and Expo/EAS builds where StoreKit configuration files are awkward to use.
+///
+/// DO NOT ship a production build with test handlers set. (If a production environment is detected,
+/// Helium will use the normal purchase flows, but best not to rely on that.)
+///
+/// ## Example
+/// ```swift
+/// Helium.testing.purchaseHandler = { productId in
+///     productId.contains("trial") ? .purchased : .cancelled
+/// }
+/// ```
+public class HeliumTesting {
+
+    init() {}
+
+    /// Returns a stubbed transaction status for the given product ID.
+    /// When set, replaces the real purchase flow.
+    public var purchaseHandler: ((String) async -> HeliumPaywallTransactionStatus)?
+
+    /// Returns a stubbed restore result. When set, replaces the real restore flow.
+    public var restoreHandler: (() async -> Bool)?
+
+    /// Returns a stubbed intro-offer eligibility for the given product ID.
+    /// When set, overrides StoreKit's real eligibility check — useful for testing
+    /// the "no trial offer" UI branch, which sandbox accounts can rarely reproduce
+    /// without making a real purchase.
+    ///
+    /// - Important: Eligibility is read during config fetch and cached in the
+    ///   localized price map, so this must be set *before* `Helium.shared.initialize(...)`
+    ///   for the initial paywall render to reflect the override.
+    public var introOfferEligibility: ((String) async -> Bool)?
+
+    /// Clears all configured test handlers.
+    public func reset() {
+        purchaseHandler = nil
+        restoreHandler = nil
+        introOfferEligibility = nil
+    }
+
+    func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
+        guard let handler = purchaseHandler else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Helium.testing.purchaseHandler is ignored in production environment.")
+            return nil
+        }
+
+        let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
+        if priceMap[productId] == nil {
+            HeliumLogger.log(.error, category: .core, "Helium.testing.purchaseHandler: product '\(productId)' is not in your Helium paywall configuration. Returning .failed to surface the misconfiguration. Verify the product ID and that the product is set up in App Store Connect (or synced from Paddle/Stripe in the Helium dashboard).")
+            return .failed(HeliumPurchaseError.testingProductNotFound(productId: productId))
+        }
+
+        HeliumLogger.log(.warn, category: .core, "Helium.testing.purchaseHandler active — returning a test transaction status, no real purchase will occur.", metadata: ["productId": productId])
+        return await handler(productId)
+    }
+
+    func simulatedIntroOfferEligibilityIfActive(productId: String) async -> Bool? {
+        guard let handler = introOfferEligibility else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Helium.testing.introOfferEligibility is ignored in production environment.")
+            return nil
+        }
+        return await handler(productId)
+    }
+
+    func simulatedRestoreResultIfActive() async -> Bool? {
+        guard let handler = restoreHandler else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Helium.testing.restoreHandler is ignored in production environment.")
+            return nil
+        }
+        HeliumLogger.log(.warn, category: .core, "Helium.testing.restoreHandler active — returning a test restore result, no real restore will occur.")
+        return await handler()
+    }
+
+    private var isProductionEnvironment: Bool {
+        AppReceiptsHelper.shared.getEnvironment() == AppReceiptsHelper.Environment.production.rawValue
+    }
+}
+
 @available(iOS 15.0, *)
 extension Product {
     /// Initiates a product purchase with specific configuration to support Helium analytics.
@@ -975,11 +1058,14 @@ extension Product {
 
 public enum HeliumPurchaseError: LocalizedError {
     case appAccountTokenMismatch
-    
+    case testingProductNotFound(productId: String)
+
     public var errorDescription: String? {
         switch self {
         case .appAccountTokenMismatch:
             return "If providing appAccountToken, it MUST match Helium's appAccountToken. Set via Helium.identify.appAccountToken = <UUID>, ideally before initializing Helium."
+        case .testingProductNotFound(let productId):
+            return "Helium.testing: product '\(productId)' is not in your Helium paywall configuration. Verify the product ID and that the product is set up in App Store Connect (or synced from Paddle/Stripe in the Helium dashboard)."
         }
     }
 }
