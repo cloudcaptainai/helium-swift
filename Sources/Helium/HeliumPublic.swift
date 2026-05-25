@@ -654,7 +654,7 @@ public class HeliumConfig {
     /// Set this to `false` to disable the diagnostic view for all users in DEBUG builds.
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
 
-    /// Controls whether the triple-tap paywall previews UI is automatically enabled in DEBUG and TestFlight builds..
+    /// Controls whether the triple-tap paywall previews UI is automatically enabled in DEBUG and TestFlight builds.
     ///
     /// Defaults to `true`.
     public var paywallPreviewsAutoEnabledInDevBuilds: Bool = true
