@@ -28,8 +28,6 @@ struct HeliumExampleApp: App {
         let fallbackTestMode = ProcessInfo.processInfo.environment["FALLBACK_TEST_MODE"]
         preInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
         
-        Helium.shared.addHeliumEventListener(LogHeliumEventListener.shared)
-        
         let apiKey: String = if fallbackTestMode == FallbackTestMode.downloadFailure.rawValue {
             "invalid_api_key_for_testing"
         } else {
@@ -87,14 +85,6 @@ struct HeliumExampleApp: App {
                 print("[Helium Example] fallback loading_budget - Could not show paywall. \(reason)")
             }
         }
-    }
-}
-
-fileprivate class LogHeliumEventListener: HeliumEventListener {
-    static let shared = LogHeliumEventListener()
-
-    func onHeliumEvent(event: any HeliumEvent) {
-        print("[Helium Example] Helium event - \(event.toDictionary())")
     }
 }
 
