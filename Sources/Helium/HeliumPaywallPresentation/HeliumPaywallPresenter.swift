@@ -559,9 +559,9 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNoCustomUserId, presentationContext: presentationContext)
             }
             let processors = Helium.config.webCheckoutProcessors
-            let paddleUsable = hasPaddleProducts && processors.contains(.paddle)
-            let stripeUsable = hasStripeProducts && processors.contains(.stripe)
-            if hasAppToWebProducts && !(paddleUsable || stripeUsable) {
+            let paddleBroken = hasPaddleProducts && !processors.contains(.paddle)
+            let stripeBroken = hasStripeProducts && !processors.contains(.stripe)
+            if paddleBroken || stripeBroken {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
             
