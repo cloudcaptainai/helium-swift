@@ -936,9 +936,7 @@ public class HeliumEntitlements {
     
 }
 
-/// Helpers for stubbing purchases and restores in automated tests.
-///
-/// Useful for UI tests, CI pipelines, and Expo/EAS builds where StoreKit configuration files are awkward to use.
+/// Helpers for stubbing purchase and restore actions in automated tests.
 ///
 /// DO NOT ship a production build with test handlers set. (If a production environment is detected,
 /// Helium will use the normal purchase flows, but best not to rely on that.)
@@ -961,13 +959,9 @@ public class HeliumTesting {
     public var restoreHandler: (() async -> Bool)?
 
     /// Returns a stubbed intro-offer eligibility for the given product ID.
-    /// When set, overrides StoreKit's real eligibility check — useful for testing
-    /// the "no trial offer" UI branch, which sandbox accounts can rarely reproduce
-    /// without making a real purchase.
+    /// When set, overrides StoreKit's real eligibility check.
     ///
-    /// - Important: Eligibility is read during config fetch and cached in the
-    ///   localized price map, so this must be set *before* `Helium.shared.initialize(...)`
-    ///   for the initial paywall render to reflect the override.
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
     public var introOfferEligibility: ((String) async -> Bool)?
 
     /// Clears all configured test handlers.
@@ -980,24 +974,24 @@ public class HeliumTesting {
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
         guard let handler = purchaseHandler else { return nil }
         guard !isProductionEnvironment else {
-            HeliumLogger.log(.warn, category: .core, "Helium.testing.purchaseHandler is ignored in production environment.")
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.purchaseHandler.")
             return nil
         }
 
         let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
         if priceMap[productId] == nil {
-            HeliumLogger.log(.error, category: .core, "Helium.testing.purchaseHandler: product '\(productId)' is not in your Helium paywall configuration. Returning .failed to surface the misconfiguration. Verify the product ID and that the product is set up in App Store Connect (or synced from Paddle/Stripe in the Helium dashboard).")
+            HeliumLogger.log(.error, category: .core, "Helium.testing.purchaseHandler: Could not find product '\(productId)'. Please ensure products are properly configured in the Helium dashboard. Returning .failed to surface the misconfiguration.")
             return .failed(HeliumPurchaseError.testingProductNotFound(productId: productId))
         }
 
-        HeliumLogger.log(.warn, category: .core, "Helium.testing.purchaseHandler active — returning a test transaction status, no real purchase will occur.", metadata: ["productId": productId])
+        HeliumLogger.log(.info, category: .core, "Helium.testing.purchaseHandler active — returning a test transaction status, no real purchase will occur.", metadata: ["productId": productId])
         return await handler(productId)
     }
 
     func simulatedIntroOfferEligibilityIfActive(productId: String) async -> Bool? {
         guard let handler = introOfferEligibility else { return nil }
         guard !isProductionEnvironment else {
-            HeliumLogger.log(.warn, category: .core, "Helium.testing.introOfferEligibility is ignored in production environment.")
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.introOfferEligibility.")
             return nil
         }
         return await handler(productId)
@@ -1006,10 +1000,10 @@ public class HeliumTesting {
     func simulatedRestoreResultIfActive() async -> Bool? {
         guard let handler = restoreHandler else { return nil }
         guard !isProductionEnvironment else {
-            HeliumLogger.log(.warn, category: .core, "Helium.testing.restoreHandler is ignored in production environment.")
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.restoreHandler.")
             return nil
         }
-        HeliumLogger.log(.warn, category: .core, "Helium.testing.restoreHandler active — returning a test restore result, no real restore will occur.")
+        HeliumLogger.log(.info, category: .core, "Helium.testing.restoreHandler active — returning a test restore result, no real restore will occur.")
         return await handler()
     }
 
