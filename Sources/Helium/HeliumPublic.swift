@@ -1046,7 +1046,7 @@ extension Product {
 
 public enum HeliumPurchaseError: LocalizedError {
     case appAccountTokenMismatch
-    case testingProductNotFound(productId: String)
+    case testingProductNotFound
 
     public var errorDescription: String? {
         switch self {
