@@ -980,8 +980,7 @@ public class HeliumTesting {
 
         let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
         if priceMap[productId] == nil {
-            HeliumLogger.log(.error, category: .core, "Helium.testing.purchaseHandler: Could not find product '\(productId)'. Please ensure products are properly configured in the Helium dashboard. Returning .failed to surface the misconfiguration.")
-            return .failed(HeliumPurchaseError.testingProductNotFound(productId: productId))
+            return .failed(HeliumPurchaseError.testingProductNotFound)
         }
 
         HeliumLogger.log(.info, category: .core, "Helium.testing.purchaseHandler active — returning a test transaction status, no real purchase will occur.", metadata: ["productId": productId])
@@ -1053,8 +1052,8 @@ public enum HeliumPurchaseError: LocalizedError {
         switch self {
         case .appAccountTokenMismatch:
             return "If providing appAccountToken, it MUST match Helium's appAccountToken. Set via Helium.identify.appAccountToken = <UUID>, ideally before initializing Helium."
-        case .testingProductNotFound(let productId):
-            return "Helium.testing: product '\(productId)' is not in your Helium paywall configuration. Verify the product ID and that the product is set up in App Store Connect (or synced from Paddle/Stripe in the Helium dashboard)."
+        case .testingProductNotFound:
+            return "Could not find product. Please ensure products are properly configured in the Helium dashboard. Returning .failed to surface the misconfiguration."
         }
     }
 }
