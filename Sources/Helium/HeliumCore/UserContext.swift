@@ -47,6 +47,9 @@ struct CodableApplicationInfo: Codable {
     var environment: String
     var latestInstallTimestamp: String?
     var firstInstallTimestamp: String?
+    var testingPurchaseHandlerSet: Bool
+    var testingRestoreHandlerSet: Bool
+    var testingIntroOfferEligibilitySet: Bool
 }
 
 struct CodableDeviceInfo: Codable {
@@ -98,7 +101,10 @@ func createApplicationInfo() -> CodableApplicationInfo {
         purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
         environment: AppReceiptsHelper.shared.getEnvironment().uppercased(),
         latestInstallTimestamp: latestInstallTime,
-        firstInstallTimestamp: firstInstallTime
+        firstInstallTimestamp: firstInstallTime,
+        testingPurchaseHandlerSet: Helium.testing.purchaseHandler != nil,
+        testingRestoreHandlerSet: Helium.testing.restoreHandler != nil,
+        testingIntroOfferEligibilitySet: Helium.testing.introOfferEligibility != nil
     )
 }
 
@@ -180,7 +186,10 @@ public struct CodableUserContext: Codable {
             "purchaseDelegate": self.applicationInfo.purchaseDelegate,
             "environment": self.applicationInfo.environment,
             "latestInstallTimestamp": self.applicationInfo.latestInstallTimestamp ?? "",
-            "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? ""
+            "firstInstallTimestamp": self.applicationInfo.firstInstallTimestamp ?? "",
+            "testingPurchaseHandlerSet": self.applicationInfo.testingPurchaseHandlerSet,
+            "testingRestoreHandlerSet": self.applicationInfo.testingRestoreHandlerSet,
+            "testingIntroOfferEligibilitySet": self.applicationInfo.testingIntroOfferEligibilitySet
         ]
         
         return [

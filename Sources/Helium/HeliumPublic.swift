@@ -21,6 +21,7 @@ public class Helium {
     public static let config = HeliumConfig()
     public static let experiments = HeliumExperiments()
     public static let entitlements = HeliumEntitlements()
+    public static let testing = HeliumTesting()
     @HeliumAtomic static var lastApiKeyUsed: String? = nil
     
     /// Initializes the Helium paywall system.
@@ -935,6 +936,81 @@ public class HeliumEntitlements {
     
 }
 
+/// Helpers for stubbing purchase and restore actions in automated tests.
+///
+/// DO NOT ship a production build with test handlers set. (If a production environment is detected,
+/// Helium will use the normal purchase flows, but best not to rely on that.)
+///
+/// ## Example
+/// ```swift
+/// Helium.testing.purchaseHandler = { productId in
+///     productId.contains("trial") ? .purchased : .cancelled
+/// }
+/// ```
+public class HeliumTesting {
+
+    init() {}
+
+    /// Returns a stubbed transaction status for the given product ID.
+    /// When set, replaces the real purchase flow.
+    public var purchaseHandler: ((String) async -> HeliumPaywallTransactionStatus)?
+
+    /// Returns a stubbed restore result. When set, replaces the real restore flow.
+    public var restoreHandler: (() async -> Bool)?
+
+    /// Returns a stubbed intro-offer eligibility for the given product ID.
+    /// When set, overrides StoreKit's real eligibility check.
+    ///
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
+    public var introOfferEligibility: ((String) async -> Bool)?
+
+    /// Clears all configured test handlers.
+    public func reset() {
+        purchaseHandler = nil
+        restoreHandler = nil
+        introOfferEligibility = nil
+    }
+
+    func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
+        guard let handler = purchaseHandler else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.purchaseHandler.")
+            return nil
+        }
+
+        let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
+        if priceMap[productId] == nil {
+            return .failed(HeliumPurchaseError.testingProductNotFound)
+        }
+
+        HeliumLogger.log(.info, category: .core, "Helium.testing.purchaseHandler active — returning a test transaction status, no real purchase will occur.", metadata: ["productId": productId])
+        return await handler(productId)
+    }
+
+    func simulatedIntroOfferEligibilityIfActive(productId: String) async -> Bool? {
+        guard let handler = introOfferEligibility else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.introOfferEligibility.")
+            return nil
+        }
+        return await handler(productId)
+    }
+
+    func simulatedRestoreResultIfActive() async -> Bool? {
+        guard let handler = restoreHandler else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.restoreHandler.")
+            return nil
+        }
+        HeliumLogger.log(.info, category: .core, "Helium.testing.restoreHandler active — returning a test restore result, no real restore will occur.")
+        return await handler()
+    }
+
+    private var isProductionEnvironment: Bool {
+        AppReceiptsHelper.shared.getEnvironment() == AppReceiptsHelper.Environment.production.rawValue
+    }
+}
+
 @available(iOS 15.0, *)
 extension Product {
     /// Initiates a product purchase with specific configuration to support Helium analytics.
@@ -970,11 +1046,14 @@ extension Product {
 
 public enum HeliumPurchaseError: LocalizedError {
     case appAccountTokenMismatch
-    
+    case testingProductNotFound
+
     public var errorDescription: String? {
         switch self {
         case .appAccountTokenMismatch:
             return "If providing appAccountToken, it MUST match Helium's appAccountToken. Set via Helium.identify.appAccountToken = <UUID>, ideally before initializing Helium."
+        case .testingProductNotFound:
+            return "Could not find product. Please ensure products are properly configured in the Helium dashboard. Returning .failed to surface the misconfiguration."
         }
     }
 }
