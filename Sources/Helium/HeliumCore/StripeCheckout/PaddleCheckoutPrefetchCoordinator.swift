@@ -77,9 +77,19 @@ final class PaddleCheckoutPrefetchCoordinator {
         let priceIds = Self.extractPriceIds(from: webProducts)
         guard !priceIds.isEmpty else { return }
 
+        // Map each composite key ("pro_xxx:pri_yyy") to its creator-configured
+        // discount id, so the prefetch transaction is created WITH the discount
+        // attached. The bandit applies its own intro-offer eligibility gate
+        // (shouldAttachDiscount), so we forward unconditionally here.
+        let discountIdByPriceId = Self.discountIdByPriceId(
+            from: webProducts,
+            priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()
+        )
+
         prefetch(
             paywallSession: paywallSession,
             priceIds: priceIds,
+            discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
             iosBundleId: Bundle.main.bundleIdentifier
         )
@@ -95,6 +105,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     func prefetch(
         paywallSession: PaywallSession,
         priceIds: [String],
+        discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
         iosBundleId: String?
     ) {
@@ -107,10 +118,12 @@ final class PaddleCheckoutPrefetchCoordinator {
 
             let bandit = banditClient
             let bff = bffClient
+            let discountId = discountIdByPriceId[priceId]
 
             cache[key] = Task.detached(priority: .userInitiated) {
                 await Self.runPrefetchChain(
                     priceId: priceId,
+                    discountId: discountId,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     banditClient: bandit,
@@ -407,6 +420,31 @@ final class PaddleCheckoutPrefetchCoordinator {
         return composites.compactMap(extractPriceId)
     }
 
+    /// Builds a `priceId → discountId` map by looking up each composite key
+    /// ("pro_xxx:pri_yyy") in the Paddle products price map and reading its
+    /// `defaultDiscountId`. Keys with no configured discount are omitted.
+    ///
+    /// The price map is keyed by the same "pro:pri" composite the on-launch
+    /// `paddleProducts` object uses, so we look up by composite first and
+    /// fall back to the bare priceId for resilience to key-shape drift.
+    /// Pure: no SDK / network. Returns priceId-keyed so callers can index by
+    /// the bare priceId they already iterate.
+    nonisolated static func discountIdByPriceId(
+        from composites: [String],
+        priceMap: [String: ServerProductPrice]?
+    ) -> [String: String] {
+        guard let priceMap, !priceMap.isEmpty else { return [:] }
+        var result: [String: String] = [:]
+        for composite in composites {
+            guard let priceId = extractPriceId(from: composite) else { continue }
+            let entry = priceMap[composite] ?? priceMap[priceId]
+            if let discountId = entry?.defaultDiscountId, !discountId.isEmpty {
+                result[priceId] = discountId
+            }
+        }
+        return result
+    }
+
     // MARK: - Internal chain runner
 
     /// `nonisolated` is load-bearing: without it, this static method
@@ -414,6 +452,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// the main actor, defeating off-actor URLSession dispatch.
     private nonisolated static func runPrefetchChain(
         priceId: String,
+        discountId: String?,
         paddleClientToken: String,
         iosBundleId: String?,
         banditClient: HeliumPaymentAPIClient,
@@ -424,7 +463,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         let banditStart = Date()
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
-            banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)
+            banditResponse = try await banditClient.createPaddleTransactionForPaywall(
+                priceId: priceId,
+                discountId: discountId
+            )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)
             }

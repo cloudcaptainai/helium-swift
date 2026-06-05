@@ -101,12 +101,20 @@ public class HeliumPaymentAPIClient {
     /// `HeliumPaymentAPIError.serverError`. `priceId` is the bare
     /// `pri_xxx` form.
     func createPaddleTransactionForPaywall(
-        priceId: String
+        priceId: String,
+        discountId: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
         body["priceId"] = priceId
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
+        }
+        // Forward the creator-configured discount id when present. The bandit
+        // treats an empty/absent discountId as a no-op, so omit it entirely
+        // rather than sending "" — the attach decision (incl. intro-offer
+        // eligibility) is enforced server-side in shouldAttachDiscount.
+        if let discountId, !discountId.isEmpty {
+            body["discountId"] = discountId
         }
 
         let request = try makePostRequest(path: "paddle/create-transaction-for-paywall", body: body)
