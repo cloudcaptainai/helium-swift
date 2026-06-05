@@ -91,6 +91,7 @@ struct PaddlePrefetchStarted: HeliumObservabilityEvent {
 
 struct PaddlePrefetchBanditCompleted: HeliumObservabilityEvent {
     let priceId: String
+    let discountId: String?
     let endpointCall: EndpointCallTelemetry
     let alreadyEntitledCode: String?
 
@@ -98,6 +99,7 @@ struct PaddlePrefetchBanditCompleted: HeliumObservabilityEvent {
     var properties: [String: Any] {
         var p = endpointCall.properties
         p["priceId"] = priceId
+        if let discountId { p["discountId"] = discountId }
         if let alreadyEntitledCode { p["alreadyEntitledCode"] = alreadyEntitledCode }
         return p
     }

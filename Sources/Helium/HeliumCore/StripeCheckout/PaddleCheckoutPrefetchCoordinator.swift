@@ -77,10 +77,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         let priceIds = Self.extractPriceIds(from: webProducts)
         guard !priceIds.isEmpty else { return }
 
-        // Map each composite key ("pro_xxx:pri_yyy") to its creator-configured
-        // discount id, so the prefetch transaction is created WITH the discount
-        // attached. The bandit applies its own intro-offer eligibility gate
-        // (shouldAttachDiscount), so we forward unconditionally here.
+        // Map each offered price to its creator-configured discount id and
+        // forward it with the prefetch. The backend decides whether to apply
+        // it, so we forward whenever a discount is configured.
         let discountIdByPriceId = Self.discountIdByPriceId(
             from: webProducts,
             priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
@@ -471,12 +470,12 @@ final class PaddleCheckoutPrefetchCoordinator {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)
             }
             
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
         } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
             return .alreadyEntitled(code: code, message: message, existingSubscriptionId: existingSubscriptionId)
         } catch {
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
 

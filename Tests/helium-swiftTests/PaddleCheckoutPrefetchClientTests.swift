@@ -331,7 +331,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
     }
 
-    // MARK: - createPaddleTransactionForPaywall — discountId forwarding
+    // MARK: - createPaddleTransactionForPaywall discountId forwarding
 
     func testCreatePaddleTransactionForPaywall_includesDiscountIdWhenProvided() async throws {
         let bodyJSON = """
@@ -355,7 +355,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(
             bodyDict["discountId"] as? String,
             "dsc_01kt7y5xsh94z97bwfq4de1f7k",
-            "Expected the bucket-level discount id to be forwarded to /paddle/create-transaction-for-paywall so the bandit can attach it"
+            "Expected the bucket-level discount id to be forwarded in the create-transaction request body"
         )
     }
 
@@ -397,11 +397,11 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         )
         XCTAssertNil(
             bodyDict["discountId"],
-            "An empty discountId must not be sent — the bandit treats empty as no-op, so omit it entirely"
+            "An empty discountId must not be sent; omit it entirely when no discount is configured"
         )
     }
 
-    // MARK: - ServerProductPrice — defaultDiscountId decoding
+    // MARK: - ServerProductPrice defaultDiscountId decoding
 
     func testServerProductPrice_decodesDefaultDiscountId() throws {
         let json = """

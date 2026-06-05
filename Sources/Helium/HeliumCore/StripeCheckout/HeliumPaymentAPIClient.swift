@@ -109,10 +109,9 @@ public class HeliumPaymentAPIClient {
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
         }
-        // Forward the creator-configured discount id when present. The bandit
-        // treats an empty/absent discountId as a no-op, so omit it entirely
-        // rather than sending "" — the attach decision (incl. intro-offer
-        // eligibility) is enforced server-side in shouldAttachDiscount.
+        // Forward the creator-configured discount id when present; omit it
+        // entirely rather than sending "". The backend decides whether to
+        // apply it based on the customer's eligibility.
         if let discountId, !discountId.isEmpty {
             body["discountId"] = discountId
         }

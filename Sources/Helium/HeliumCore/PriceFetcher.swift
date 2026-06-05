@@ -136,10 +136,10 @@ public struct ServerProductPrice: Codable {
     public let productType: String?
     public let subscriptionPeriod: String?
     public let subscription: ServerSubscriptionDetail?
-    /// Bucket-level Paddle discount id (dsc_xxx) the creator attached to this
-    /// price in the dashboard. Forwarded to /paddle/create-transaction-for-paywall
-    /// so the bandit can attach it (subject to the bandit's intro-offer
-    /// eligibility gate). Nil when no discount is configured. Paddle-only.
+    /// Bucket-level Paddle discount id (dsc_xxx) configured by the creator.
+    /// Forwarded to the create-transaction endpoint, which decides whether to
+    /// apply it based on the customer's eligibility. Nil when no discount is
+    /// configured. Paddle-only.
     public let defaultDiscountId: String?
 
     public func toLocalizedPrice() -> LocalizedPrice {
