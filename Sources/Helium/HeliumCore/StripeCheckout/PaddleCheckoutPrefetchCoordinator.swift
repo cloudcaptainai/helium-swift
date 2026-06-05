@@ -83,7 +83,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         // (shouldAttachDiscount), so we forward unconditionally here.
         let discountIdByPriceId = Self.discountIdByPriceId(
             from: webProducts,
-            priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()
+            priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
         )
 
         prefetch(
@@ -426,14 +426,14 @@ final class PaddleCheckoutPrefetchCoordinator {
     ///
     /// The price map is keyed by the same "pro:pri" composite the on-launch
     /// `paddleProducts` object uses, so we look up by composite first and
-    /// fall back to the bare priceId for resilience to key-shape drift.
+    /// otherwise use the bare priceId for resilience to key-shape drift.
     /// Pure: no SDK / network. Returns priceId-keyed so callers can index by
     /// the bare priceId they already iterate.
     nonisolated static func discountIdByPriceId(
         from composites: [String],
-        priceMap: [String: ServerProductPrice]?
+        priceMap: [String: ServerProductPrice] = [:]
     ) -> [String: String] {
-        guard let priceMap, !priceMap.isEmpty else { return [:] }
+        guard !priceMap.isEmpty else { return [:] }
         var result: [String: String] = [:]
         for composite in composites {
             guard let priceId = extractPriceId(from: composite) else { continue }
