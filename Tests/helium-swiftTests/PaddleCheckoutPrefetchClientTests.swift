@@ -330,4 +330,96 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
         XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
     }
+
+    // MARK: - createPaddleTransactionForPaywall discountId forwarding
+
+    func testCreatePaddleTransactionForPaywall_includesDiscountIdWhenProvided() async throws {
+        let bodyJSON = """
+        {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x"}
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(
+            priceId: "pri_specific_price",
+            discountId: "dsc_01kt7y5xsh94z97bwfq4de1f7k"
+        )
+
+        let captured = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let bodyDict = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: captured.httpBody ?? Data()) as? [String: Any]
+        )
+        XCTAssertEqual(bodyDict["priceId"] as? String, "pri_specific_price")
+        XCTAssertEqual(
+            bodyDict["discountId"] as? String,
+            "dsc_01kt7y5xsh94z97bwfq4de1f7k",
+            "Expected the bucket-level discount id to be forwarded in the create-transaction request body"
+        )
+    }
+
+    func testCreatePaddleTransactionForPaywall_omitsDiscountIdWhenNil() async throws {
+        let bodyJSON = """
+        {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x"}
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_no_discount")
+
+        let captured = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let bodyDict = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: captured.httpBody ?? Data()) as? [String: Any]
+        )
+        XCTAssertNil(
+            bodyDict["discountId"],
+            "discountId must be omitted (not sent empty) when the price has no configured discount"
+        )
+    }
+
+    func testCreatePaddleTransactionForPaywall_omitsDiscountIdWhenEmptyString() async throws {
+        let bodyJSON = """
+        {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x"}
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_empty", discountId: "")
+
+        let captured = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let bodyDict = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: captured.httpBody ?? Data()) as? [String: Any]
+        )
+        XCTAssertNil(
+            bodyDict["discountId"],
+            "An empty discountId must not be sent; omit it entirely when no discount is configured"
+        )
+    }
+
+    // MARK: - ServerProductPrice defaultDiscountId decoding
+
+    func testServerProductPrice_decodesDefaultDiscountId() throws {
+        let json = """
+        {
+            "id": "pro_01kt7406rbge4zkz8qx48dt7mh",
+            "priceId": "pri_01kt740yd827h5dweb3yxpg2x5",
+            "defaultDiscountId": "dsc_01kt7y5xsh94z97bwfq4de1f7k"
+        }
+        """
+        let price = try JSONDecoder().decode(ServerProductPrice.self, from: json.data(using: .utf8)!)
+        XCTAssertEqual(price.defaultDiscountId, "dsc_01kt7y5xsh94z97bwfq4de1f7k")
+    }
+
+    func testServerProductPrice_defaultDiscountIdAbsentWhenOmitted() throws {
+        let json = """
+        { "id": "pro_x", "priceId": "pri_x" }
+        """
+        let price = try JSONDecoder().decode(ServerProductPrice.self, from: json.data(using: .utf8)!)
+        XCTAssertNil(price.defaultDiscountId)
+    }
 }

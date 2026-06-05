@@ -16,6 +16,7 @@ extension PaddleCheckoutPrefetchCoordinator {
 
     nonisolated static func trackBanditCompletion(
         priceId: String,
+        discountId: String?,
         scope: PaywallObservabilityScope,
         startedAt: Date,
         chainStartedAt: Date,
@@ -61,6 +62,7 @@ extension PaddleCheckoutPrefetchCoordinator {
         HeliumObservabilityManager.shared.track(
             PaddlePrefetchBanditCompleted(
                 priceId: priceId,
+                discountId: discountId,
                 endpointCall: endpointCall,
                 alreadyEntitledCode: alreadyEntitledCode
             ),

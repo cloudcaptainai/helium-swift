@@ -77,9 +77,18 @@ final class PaddleCheckoutPrefetchCoordinator {
         let priceIds = Self.extractPriceIds(from: webProducts)
         guard !priceIds.isEmpty else { return }
 
+        // Map each offered price to its creator-configured discount id and
+        // forward it with the prefetch. The backend decides whether to apply
+        // it, so we forward whenever a discount is configured.
+        let discountIdByPriceId = Self.discountIdByPriceId(
+            from: webProducts,
+            priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
+        )
+
         prefetch(
             paywallSession: paywallSession,
             priceIds: priceIds,
+            discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
             iosBundleId: Bundle.main.bundleIdentifier
         )
@@ -95,6 +104,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     func prefetch(
         paywallSession: PaywallSession,
         priceIds: [String],
+        discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
         iosBundleId: String?
     ) {
@@ -107,10 +117,12 @@ final class PaddleCheckoutPrefetchCoordinator {
 
             let bandit = banditClient
             let bff = bffClient
+            let discountId = discountIdByPriceId[priceId]
 
             cache[key] = Task.detached(priority: .userInitiated) {
                 await Self.runPrefetchChain(
                     priceId: priceId,
+                    discountId: discountId,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     banditClient: bandit,
@@ -407,6 +419,31 @@ final class PaddleCheckoutPrefetchCoordinator {
         return composites.compactMap(extractPriceId)
     }
 
+    /// Builds a `priceId → discountId` map by looking up each composite key
+    /// ("pro_xxx:pri_yyy") in the Paddle products price map and reading its
+    /// `defaultDiscountId`. Keys with no configured discount are omitted.
+    ///
+    /// The price map is keyed by the same "pro:pri" composite the on-launch
+    /// `paddleProducts` object uses, so we look up by composite first and
+    /// otherwise use the bare priceId for resilience to key-shape drift.
+    /// Pure: no SDK / network. Returns priceId-keyed so callers can index by
+    /// the bare priceId they already iterate.
+    nonisolated static func discountIdByPriceId(
+        from composites: [String],
+        priceMap: [String: ServerProductPrice] = [:]
+    ) -> [String: String] {
+        guard !priceMap.isEmpty else { return [:] }
+        var result: [String: String] = [:]
+        for composite in composites {
+            guard let priceId = extractPriceId(from: composite) else { continue }
+            let entry = priceMap[composite] ?? priceMap[priceId]
+            if let discountId = entry?.defaultDiscountId, !discountId.isEmpty {
+                result[priceId] = discountId
+            }
+        }
+        return result
+    }
+
     // MARK: - Internal chain runner
 
     /// `nonisolated` is load-bearing: without it, this static method
@@ -414,6 +451,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// the main actor, defeating off-actor URLSession dispatch.
     private nonisolated static func runPrefetchChain(
         priceId: String,
+        discountId: String?,
         paddleClientToken: String,
         iosBundleId: String?,
         banditClient: HeliumPaymentAPIClient,
@@ -424,17 +462,20 @@ final class PaddleCheckoutPrefetchCoordinator {
         let banditStart = Date()
         let banditResponse: PaddleCreateTransactionForPaywallResponse
         do {
-            banditResponse = try await banditClient.createPaddleTransactionForPaywall(priceId: priceId)
+            banditResponse = try await banditClient.createPaddleTransactionForPaywall(
+                priceId: priceId,
+                discountId: discountId
+            )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)
             }
             
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
         } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
             return .alreadyEntitled(code: code, message: message, existingSubscriptionId: existingSubscriptionId)
         } catch {
-            trackBanditCompletion(priceId: priceId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
 

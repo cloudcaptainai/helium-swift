@@ -101,12 +101,19 @@ public class HeliumPaymentAPIClient {
     /// `HeliumPaymentAPIError.serverError`. `priceId` is the bare
     /// `pri_xxx` form.
     func createPaddleTransactionForPaywall(
-        priceId: String
+        priceId: String,
+        discountId: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
         body["priceId"] = priceId
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
+        }
+        // Forward the creator-configured discount id when present; omit it
+        // entirely rather than sending "". The backend decides whether to
+        // apply it based on the customer's eligibility.
+        if let discountId, !discountId.isEmpty {
+            body["discountId"] = discountId
         }
 
         let request = try makePostRequest(path: "paddle/create-transaction-for-paywall", body: body)
