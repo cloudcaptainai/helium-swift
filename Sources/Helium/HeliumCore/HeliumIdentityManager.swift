@@ -28,7 +28,7 @@ public class HeliumIdentityManager {
     // MARK: - Properties
     private let heliumSessionId: String
     private(set) var heliumInitializeId: String
-    private var heliumUserTraits: HeliumUserTraits
+    @HeliumAtomic private var heliumUserTraits: HeliumUserTraits = HeliumUserTraits([:])
     private(set) var isFirstHeliumSession: Bool = false
     
     // Used to connect StoreKit purchase events
@@ -104,7 +104,7 @@ public class HeliumIdentityManager {
     }
 
     func addToCustomUserTraits(_ additionalTraits: HeliumUserTraits) {
-        heliumUserTraits.merge(additionalTraits)
+        _heliumUserTraits.withValue { $0.merge(additionalTraits) }
         persistUserTraits()
     }
 
