@@ -21,11 +21,12 @@ jobs:
       SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
-      - name: Run SwiftPM tests
+      - name: Run SwiftPM tests with Thread Sanitizer
         run: |
           xcodebuild test \
             -scheme helium-swift \
             -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            -enableThreadSanitizer YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
