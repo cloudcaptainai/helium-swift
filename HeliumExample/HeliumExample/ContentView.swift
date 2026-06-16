@@ -138,7 +138,7 @@ struct ContentView: View {
                 Button("open stripe portal") {
                     Task {
                         do {
-                            let url = try await Helium.shared.createStripePortalSession(returnUrl: "")
+                            let url = try await Helium.shared.createStripePortalSession(returnUrl: "heliumexamplestripe://openapp")
                             UIApplication.shared.open(url, options: [:], completionHandler: nil)
                         } catch {
                             errorMessage = "Could not open Stripe portal: \(error.localizedDescription)"
