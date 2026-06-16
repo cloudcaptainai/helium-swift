@@ -56,7 +56,7 @@ public class HeliumFallbackViewManager {
                     
                     if let date = parseISODate(decodedConfig.generatedAt),
                        let daysAgo = Calendar.current.dateComponents([.day], from: date, to: Date()).day,
-                       daysAgo > 30 {
+                       daysAgo > 60 {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks were generated \(daysAgo) days ago! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     } else if generatedAtDisplay == invalidDateString {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
