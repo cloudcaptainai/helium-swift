@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var dontShowIfAlreadyEntitled: Bool = false
     @State private var showEntitlementAlert: Bool = false
     @State private var entitlementInfo: String = ""
+    @State private var showErrorAlert: Bool = false
+    @State private var errorMessage: String = ""
     @State private var trigger: String = AppConfig.triggerKey
     @State private var userId: String = Helium.identify.userId ?? "nil"
 
@@ -127,15 +129,21 @@ struct ContentView: View {
                             let url = try await Helium.shared.createPaddlePortalSession()
                             UIApplication.shared.open(url, options: [:], completionHandler: nil)
                         } catch {
-                            
+                            errorMessage = "Could not open Paddle portal: \(error.localizedDescription)"
+                            showErrorAlert = true
                         }
                     }
                 }
-                
+
                 Button("open stripe portal") {
                     Task {
-                        let url = try await Helium.shared.createStripePortalSession(returnUrl: "")
-                        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                        do {
+                            let url = try await Helium.shared.createStripePortalSession(returnUrl: "")
+                            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                        } catch {
+                            errorMessage = "Could not open Stripe portal: \(error.localizedDescription)"
+                            showErrorAlert = true
+                        }
                     }
                 }
             }
@@ -144,6 +152,11 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(entitlementInfo)
+        }
+        .alert("Error", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
         }
     }
 }
