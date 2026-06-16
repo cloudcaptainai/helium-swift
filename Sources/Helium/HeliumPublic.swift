@@ -678,17 +678,16 @@ public class HeliumConfig {
     /// will not show. Your fallback paywall/s, if provided, will show instead.
     ///
     /// You must provide redirect URLs so Helium knows where to send the user after checkout completes or is cancelled.
+    /// It is ok to use the same url for both success and cancel.
     ///
     /// - Parameters:
     ///   - successURL: The URL to redirect to after a successful payment.
     ///   - cancelURL: The URL the provider redirects to when the user cancels checkout.
-    ///   - paymentProcessors: Which payment processors to enable. Defaults to `.all` (both Paddle and Stripe).
-    ///     Pass `.paddle` or `.stripe` if your app only uses one to skip the unused processor's
-    ///     entitlement network calls.
+    ///   - paymentProcessors: Which payment processors to enable. Paddle, Stripe, or both.
     public func enableExternalWebCheckout(
         successURL: String,
         cancelURL: String,
-        paymentProcessors: WebCheckoutProcessors = .all
+        paymentProcessors: WebCheckoutProcessors
     ) {
         guard let successParsed = URL(string: successURL), successParsed.scheme != nil,
               let cancelParsed = URL(string: cancelURL), cancelParsed.scheme != nil else {
