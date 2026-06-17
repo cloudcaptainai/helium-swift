@@ -135,6 +135,223 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(paddle.rawBody.count, 0)
     }
 
+    // MARK: - California consent gate (AB 2863)
+
+    /// BFF success body whose IP-geo resolves to a US California ZIP. The same
+    /// `ip_geo_postal_code` field the web bundle reads to drive its consent modal.
+    private func bffCaliforniaBody(
+        checkoutId: String,
+        transactionId: String,
+        postalCode: String = "94102"
+    ) -> String {
+        return """
+        {
+            "data": {
+                "id": "\(checkoutId)",
+                "transaction_id": "\(transactionId)",
+                "status": "draft",
+                "ip_geo_country_code": "US",
+                "ip_geo_postal_code": "\(postalCode)"
+            }
+        }
+        """
+    }
+
+    private func californiaHandler(
+        transactionId: String = "txn_ca",
+        checkoutId: String = "che_ca",
+        postalCode: String = "94102"
+    ) -> ((URLRequest) throws -> (HTTPURLResponse, Data?)) {
+        return { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: transactionId).data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, self.bffCaliforniaBody(checkoutId: checkoutId, transactionId: transactionId, postalCode: postalCode).data(using: .utf8)!)
+            }
+            throw NSError(domain: "PaddleCheckoutPrefetchCoordinatorTests", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Unexpected URL: \(url)"])
+        }
+    }
+
+    /// Flag ON: the server-side kill switch is flipped, so a California buyer must
+    /// reach the (consent-aware) web paywall. The prefetch resolves `.ready`.
+    func testAwaitOutcome_returnsReady_forCaliforniaZip_whenConsentFlagOn() async throws {
+        MockURLProtocol.requestHandler = californiaHandler()
+
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_ca"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test",
+            allowCaliforniaCheckout: true
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .ready = outcome else {
+            XCTFail("With the CA consent flag ON, a California-IP prefetch must resolve .ready so the buyer reaches the consent paywall; got \(outcome)")
+            return
+        }
+    }
+
+    /// Flag OFF (the default): the binary-shipped safety net keeps blocking
+    /// California buyers until the server flips the kill switch. Regression guard
+    /// for the default behavior — there was previously no behavioral test of the
+    /// block, so this pins it.
+    func testAwaitOutcome_returnsCaliforniaBlocked_forCaliforniaZip_whenConsentFlagOff() async throws {
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "90001")
+
+        // No `allowCaliforniaCheckout` argument — defaults to false (block).
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_ca"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test"
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .failed(let error) = outcome, let blocked = error as? PaddleCaliforniaBlocked else {
+            XCTFail("With the consent flag OFF (default), a California-IP prefetch must stay blocked; got \(outcome)")
+            return
+        }
+        XCTAssertEqual(blocked.postalCode, "90001")
+    }
+
+    /// The gate is California-specific, not all-of-US. A US ZIP outside the
+    /// 90001–96162 range must resolve `.ready` even with the flag off, so the
+    /// block never over-reaches to non-CA buyers.
+    func testAwaitOutcome_returnsReady_forNonCaliforniaUsZip_whenConsentFlagOff() async throws {
+        // 10001 = New York, US — outside the California ZIP range.
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "10001")
+
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_ny"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test"
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ny")
+
+        guard case .ready = outcome else {
+            XCTFail("A non-California US ZIP must not be blocked even with the flag off; got \(outcome)")
+            return
+        }
+    }
+
+    /// Inclusive upper bound of the CA range (90001–96162) — must stay blocked.
+    func testAwaitOutcome_returnsCaliforniaBlocked_forUpperBoundaryZip96162_whenConsentFlagOff() async throws {
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "96162")
+
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_ca"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test"
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .failed(let error) = outcome, error is PaddleCaliforniaBlocked else {
+            XCTFail("96162 is the inclusive upper bound of the CA range and must stay blocked with the flag off; got \(outcome)")
+            return
+        }
+    }
+
+    /// 96701 = Hawaii (HI ZIPs start at 96701). The block must never reach past
+    /// the CA range into Hawaii — over-block guard for an off-by-one at the bound.
+    func testAwaitOutcome_returnsReady_forHawaiiZip96701_whenConsentFlagOff() async throws {
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "96701")
+
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_hi"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test"
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_hi")
+
+        guard case .ready = outcome else {
+            XCTFail("Hawaii ZIP 96701 must never be blocked (over-block guard); got \(outcome)")
+            return
+        }
+    }
+
+    /// Just above the CA upper bound — must not be blocked.
+    func testAwaitOutcome_returnsReady_forZipJustAboveCaRange96163_whenConsentFlagOff() async throws {
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "96163")
+
+        coordinator.prefetch(
+            paywallSession: testSession,
+            priceIds: ["pri_above"],
+            paddleClientToken: "test_xyz",
+            iosBundleId: "com.example.test"
+        )
+
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_above")
+
+        guard case .ready = outcome else {
+            XCTFail("96163 is just above the CA upper bound (96162) and must not be blocked; got \(outcome)")
+            return
+        }
+    }
+
+    /// End-to-end wiring: `handlePaywallOpen` must read the kill switch off the
+    /// paywall info (`additionalPaywallFields.allowCaliforniaWebCheckout`) and
+    /// forward it into the prefetch. Flag ON => a California buyer reaches the
+    /// (consent-aware) paywall.
+    func testHandlePaywallOpen_forwardsConsentFlag_californiaResolvesReady_whenFlagOn() async throws {
+        var config = makeTestConfig(triggers: [:])
+        config.paddleClientToken = "test_paddle_token"
+        injectConfig(config)
+        addTeardownBlock { HeliumFetchedConfigManager.reset() }
+
+        MockURLProtocol.requestHandler = californiaHandler()
+
+        var info = makeTestPaywallInfo()
+        info.webProductsOfferedPaddle = ["pro_x:pri_ca"]
+        info.additionalPaywallFields = JSON(["allowCaliforniaWebCheckout": true])
+        let session = makeTestSession(paywallInfo: info)
+
+        coordinator.handlePaywallOpen(paywallSession: session)
+
+        let outcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_ca")
+
+        guard case .ready = outcome else {
+            XCTFail("handlePaywallOpen must forward allowCaliforniaWebCheckout=true so the CA buyer reaches the paywall; got \(outcome)")
+            return
+        }
+    }
+
+    /// Flag absent on the paywall info => default block, end to end.
+    func testHandlePaywallOpen_forwardsConsentFlag_californiaStaysBlocked_whenFlagAbsent() async throws {
+        var config = makeTestConfig(triggers: [:])
+        config.paddleClientToken = "test_paddle_token"
+        injectConfig(config)
+        addTeardownBlock { HeliumFetchedConfigManager.reset() }
+
+        MockURLProtocol.requestHandler = californiaHandler(postalCode: "90001")
+
+        var info = makeTestPaywallInfo()
+        info.webProductsOfferedPaddle = ["pro_x:pri_ca"]
+        // additionalPaywallFields omitted => allowCaliforniaWebCheckout defaults false.
+        let session = makeTestSession(paywallInfo: info)
+
+        coordinator.handlePaywallOpen(paywallSession: session)
+
+        let outcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_ca")
+
+        guard case .failed(let error) = outcome, error is PaddleCaliforniaBlocked else {
+            XCTFail("handlePaywallOpen must keep CA blocked when the flag is absent; got \(outcome)")
+            return
+        }
+    }
+
     // MARK: - alreadyEntitled
 
     func testAwaitOutcome_returnsAlreadyEntitled_whenBanditReturns409Duplicate_andSkipsBFFCall() async throws {
