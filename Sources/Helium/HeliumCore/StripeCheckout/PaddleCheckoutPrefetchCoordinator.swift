@@ -90,7 +90,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             priceIds: priceIds,
             discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
-            iosBundleId: Bundle.main.bundleIdentifier
+            iosBundleId: Bundle.main.bundleIdentifier,
+            allowCaliforniaCheckout: info.allowCaliforniaWebCheckout
         )
     }
 
@@ -106,7 +107,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         priceIds: [String],
         discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
-        iosBundleId: String?
+        iosBundleId: String?,
+        allowCaliforniaCheckout: Bool = false
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
@@ -125,6 +127,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     discountId: discountId,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
+                    allowCaliforniaCheckout: allowCaliforniaCheckout,
                     banditClient: bandit,
                     bffClient: bff,
                     scope: scope
@@ -454,6 +457,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountId: String?,
         paddleClientToken: String,
         iosBundleId: String?,
+        allowCaliforniaCheckout: Bool,
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient,
         scope: PaywallObservabilityScope
@@ -486,7 +490,13 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
+            // California (AB 2863) hard-block. Gated behind a server-config kill
+            // switch: when `allowCaliforniaCheckout` is on, CA buyers proceed to
+            // `.ready` and reach the consent-aware web paywall. Default is off
+            // (block) so binary-shipped old versions keep blocking until the
+            // bundler consent flow is confirmed live end-to-end. The ip_geo
+            // observability below still fires either way.
+            if !allowCaliforniaCheckout, let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }

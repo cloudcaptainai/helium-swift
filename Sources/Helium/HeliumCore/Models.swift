@@ -92,7 +92,17 @@ public struct HeliumPaywallInfo: Codable {
         }
         return nil
     }
-    
+
+    /// Server-config kill switch for the California (AB 2863) checkout block.
+    /// When the web bundle's affirmative-consent flow is confirmed live, the
+    /// server sets this true and California buyers are allowed through to the
+    /// (consent-aware) web paywall instead of being hard-blocked upstream.
+    /// Defaults to `false` (block) so binary-shipped older SDK versions — and any
+    /// config that omits the field — keep the safety net until the server flips it.
+    var allowCaliforniaWebCheckout: Bool {
+        return additionalPaywallFields?["allowCaliforniaWebCheckout"].bool ?? false
+    }
+
     /// Local file path for the bundle - converts extractedBundleUrl to local path
     var localBundlePath: String? {
         guard let bundleUrl = extractedBundleUrl else { return nil }
