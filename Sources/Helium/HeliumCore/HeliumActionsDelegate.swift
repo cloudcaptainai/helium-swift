@@ -38,7 +38,11 @@ class ActionsDelegateWrapper: ObservableObject {
     init(delegate: HeliumActionsDelegate) {
         self.delegate = delegate
     }
-    
+
+    var productHapticsEnabled: [String] {
+        delegate.paywallInfo.productHapticsEnabled ?? []
+    }
+
     func dismiss(dispatchEvent: Bool = true) {
         delegate.dismiss(dispatchEvent: dispatchEvent)
     }

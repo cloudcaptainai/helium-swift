@@ -12,7 +12,17 @@ import WebKit
 
 class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var delegateWrapper: ActionsDelegateWrapper?
-    
+
+    /// This handler instance is reused across paywall presentations, so haptics resolve their
+    /// enabled actions against the current delegate on each event rather than capturing them once.
+    @MainActor
+    private lazy var haptics: PaywallHaptics = PaywallHapticsImpl(
+        player: UIKitHapticPlayer(),
+        enabledActions: { [weak self] in
+            ProductHapticAction.from(self?.delegateWrapper?.productHapticsEnabled ?? [])
+        }
+    )
+
     func setActionsDelegate(delegateWrapper: ActionsDelegateWrapper) {
         self.delegateWrapper = delegateWrapper
     }
@@ -56,6 +66,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     break
                 }
                 self.delegateWrapper?.selectProduct(productId: productId)
+                self.haptics.onProductSelected()
                 respond(["status": "success", "selectedProduct": productId])
             case "cta-pressed":
                 guard let componentName = data["componentName"] as? String else {
@@ -66,15 +77,18 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 respond(["status": "success"])
                 
             case "subscribe":
+                self.haptics.onPurchasePressed()
                 if let productId = data["product"] as? String {
                     self.delegateWrapper?.selectProduct(productId: productId)
                 }
                 if let result = await self.delegateWrapper?.makePurchase() {
                     switch result {
                     case .purchased:
+                        self.haptics.onPurchaseSucceeded()
                         respond(["status": "purchased"]);
                         self.delegateWrapper?.dismissAll(dispatchEvent: false);
                     case .cancelled:
+                        self.haptics.onPurchaseCancelled()
                         respond(["status": "cancelled"])
                     case .pending:
                         respond(["status": "pending"])
@@ -82,6 +96,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                         respond(["status": "restored"])
                         self.delegateWrapper?.dismissAll(dispatchEvent: false);
                     case .failed:
+                        self.haptics.onPurchaseFailed()
                         respond(["status": "failed"])
                     }
                 } else {
@@ -123,6 +138,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                    let params = data["params"] as? [String: Any] {
                     // Convert Objective-C types to Swift types
                     let swiftParams = convertToSwiftTypes(params) as? [String: Any] ?? params
+                    self.haptics.onCustomHaptic(swiftParams[PaywallHapticsImpl.customHapticParam] as? String)
                     self.delegateWrapper?.onCustomAction(actionName: actionName, params: swiftParams)
                     respond(["status": "success"])
                 } else {
