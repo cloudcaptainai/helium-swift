@@ -79,13 +79,11 @@ enum WebCheckoutRedirect {
 // MARK: - Payment Success Response
 
 public struct PaymentSuccessResponse: Sendable {
-    public let productId: String
     public let priceId: String?
     public let expiresAt: Date?
     public let transactionId: String?
 
-    public init(productId: String, priceId: String?, expiresAt: Date? = nil, transactionId: String? = nil) {
-        self.productId = productId
+    public init(priceId: String? = nil, expiresAt: Date? = nil, transactionId: String? = nil) {
         self.priceId = priceId
         self.expiresAt = expiresAt
         self.transactionId = transactionId
@@ -109,9 +107,8 @@ public struct ExecutePurchaseResponse: Decodable {
         subscriptionItemId ?? subscriptionId ?? paymentIntentId
     }
 
-    public func toPaymentSuccessResponse(backupProductId: String = "") -> PaymentSuccessResponse {
+    public func toPaymentSuccessResponse() -> PaymentSuccessResponse {
         PaymentSuccessResponse(
-            productId: productId ?? backupProductId,
             priceId: priceId,
             expiresAt: parseISODate(expiresAt),
             transactionId: transactionId
