@@ -223,13 +223,24 @@ public struct CodableUserContext: Codable {
         ]
     }
 
+    // Derive the language from the user's top preferred language rather than
+    // Locale.current, which is constrained to the host app's localizations and
+    // can disagree with the language Helium paywalls actually render.
+    static func resolveCurrentLanguage() -> String? {
+        if let preferred = Locale.preferredLanguages.first,
+           let code = Locale(identifier: preferred).languageCode {
+            return code
+        }
+        return Locale.current.languageCode
+    }
+
     static func create(userTraits: HeliumUserTraits?) -> CodableUserContext {
-        
+
         let locale = CodableLocale(
             currentCountry: Locale.current.regionCode,
             currentCurrency: Locale.current.currencyCode,
             currentCurrencySymbol: Locale.current.currencySymbol,
-            currentLanguage: Locale.current.languageCode,
+            currentLanguage: resolveCurrentLanguage(),
             preferredLanguages: Locale.preferredLanguages,
             currentTimeZone: TimeZone.current,
             currentTimeZoneName: TimeZone.current.identifier,
