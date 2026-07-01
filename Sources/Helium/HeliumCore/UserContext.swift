@@ -227,8 +227,9 @@ public struct CodableUserContext: Codable {
     // Locale.current, which is constrained to the host app's localizations and
     // can disagree with the language Helium paywalls actually render.
     static func resolveCurrentLanguage() -> String? {
-        if let preferred = Locale.preferredLanguages.first {
-            return Locale(identifier: preferred).languageCode
+        if let preferred = Locale.preferredLanguages.first,
+           let code = Locale(identifier: preferred).languageCode {
+            return code
         }
         return Locale.current.languageCode
     }
