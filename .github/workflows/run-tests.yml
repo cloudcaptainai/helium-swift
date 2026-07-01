@@ -12,6 +12,12 @@ on:
         default: "core"
   workflow_dispatch:
 
+# Pin Xcode so the WarpBuild image's rolling default can't change the toolchain
+# under us. The macos-26 default moved to 26.5 on 2026-06-08, which broke the UI
+# test suite; 26.4.1 was the prior default. Bump this deliberately, not implicitly.
+env:
+  XCODE_PATH: /Applications/Xcode_26.4.1.app
+
 jobs:
   unit-tests:
     runs-on: warp-macos-26-arm64-6x
@@ -21,6 +27,11 @@ jobs:
       SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode_*.app 2>/dev/null || true
+          sudo xcode-select -s "$XCODE_PATH"
+          xcodebuild -version
       - name: Run SwiftPM tests with Thread Sanitizer
         run: |
           xcodebuild test \
@@ -39,6 +50,12 @@ jobs:
       SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode_*.app 2>/dev/null || true
+          sudo xcode-select -s "$XCODE_PATH"
+          xcodebuild -version
 
       - name: Verify secrets are available
         run: |
