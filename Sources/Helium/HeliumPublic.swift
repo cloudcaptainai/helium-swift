@@ -369,8 +369,25 @@ public class Helium {
     /// the user manage their subscriptions.
     ///
     /// - Returns: The portal session URL.
+    @available(*, deprecated, message: "Use getPaddleCustomerId() and pass the ID to your server to generate a Paddle customer portal session instead.")
     public func createPaddlePortalSession() async throws -> URL {
         return try await PaddleCheckoutManager.shared.createPortalSession()
+    }
+
+    /// Returns the Paddle customer ID for the current user, if one exists.
+    ///
+    /// Pass this ID to your server to generate a Paddle customer portal session,
+    /// allowing the user to manage their subscriptions.
+    ///
+    /// - Returns: The Paddle customer ID, or `nil` if none has been assigned.
+    public func getPaddleCustomerId() async -> String? {
+        if let customerId = HeliumIdentityManager.shared.getPaddleCustomerId() {
+            return customerId
+        }
+        let paddleSource = HeliumEntitlementsManager.shared.paddleEntitlementsSource
+        guard paddleSource.isConfigured else { return nil }
+        await paddleSource.refreshEntitlementsIfNeeded()
+        return HeliumIdentityManager.shared.getPaddleCustomerId()
     }
     
     /// Resets Paddle entitlements and clears the user ID.
