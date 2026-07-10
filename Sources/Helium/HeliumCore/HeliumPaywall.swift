@@ -28,7 +28,7 @@ import SwiftUI
 ///   UIKit via `UIHostingController`, update the controller's `rootView` (or drive it from an
 ///   `ObservableObject`) so the config is current before display — otherwise the paywall may show
 ///   trait values captured when the controller was first created. See
-///   https://docs.tryhelium.com/sdk/quickstart-ios for a UIKit example.
+///   https://docs.tryhelium.com/guides/ways-to-show-paywall#embedded-view for a UIKit example.
 public struct HeliumPaywall<PaywallNotShownView: View>: View {
     
     let trigger: String
