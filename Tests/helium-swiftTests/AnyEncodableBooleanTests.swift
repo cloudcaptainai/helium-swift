@@ -166,4 +166,42 @@ final class AnyEncodableBooleanTests: XCTestCase {
         XCTAssertTrue(isJSONBoolean(list?[1]));  XCTAssertEqual(list?[1] as? Bool, false)
         XCTAssertFalse(isJSONBoolean(list?[2])); XCTAssertEqual(list?[2] as? Int, 1)
     }
+
+    // MARK: - SwiftyJSON round-trip (the ACTUAL webview injection path)
+
+    /// Encodes via the trait path, then runs the encoded data through SwiftyJSON's
+    /// `JSON(data:)` → `rawString()` — the exact serialization the paywall webview is
+    /// injected with (see `DynamicWebView`). The other tests stop at `JSONEncoder`; this
+    /// one guards the additional SwiftyJSON round-trip, where a boolean could still be
+    /// collapsed back to 1/0 even though the encoder produced it correctly.
+    private func encodeTraitThroughSwiftyJSONAndReparse(_ dict: [String: Any], key: String) throws -> Any? {
+        let data = try encoder.encode(HeliumUserTraits(dict))
+        let rawString = try JSON(data: data).rawString() ?? ""
+        let obj = try JSONSerialization.jsonObject(with: Data(rawString.utf8)) as? [String: Any]
+        return obj?[key]
+    }
+
+    func testBooleanSurvivesSwiftyJSONRoundTrip() throws {
+        // The tokens actually injected into the webview come from SwiftyJSON's rawString(),
+        // not JSONEncoder. Booleans must stay boolean and numbers must stay numeric through
+        // that round-trip — otherwise a `showOnlyPremium: true` trait ships as 1.
+        let parsed = try JSONSerialization.jsonObject(
+            with: Data(#"{"showOnlyPremium": true, "isTrial": false, "count": 1, "zero": 0}"#.utf8)) as! [String: Any]
+
+        let showOnlyPremium = try encodeTraitThroughSwiftyJSONAndReparse(parsed, key: "showOnlyPremium")
+        XCTAssertTrue(isJSONBoolean(showOnlyPremium), "boolean must survive the SwiftyJSON round-trip as a JSON boolean")
+        XCTAssertEqual(showOnlyPremium as? Bool, true)
+
+        let isTrial = try encodeTraitThroughSwiftyJSONAndReparse(parsed, key: "isTrial")
+        XCTAssertTrue(isJSONBoolean(isTrial))
+        XCTAssertEqual(isTrial as? Bool, false)
+
+        let count = try encodeTraitThroughSwiftyJSONAndReparse(parsed, key: "count")
+        XCTAssertFalse(isJSONBoolean(count), "numeric trait must not collapse to a boolean through the round-trip")
+        XCTAssertEqual(count as? Int, 1)
+
+        let zero = try encodeTraitThroughSwiftyJSONAndReparse(parsed, key: "zero")
+        XCTAssertFalse(isJSONBoolean(zero))
+        XCTAssertEqual(zero as? Int, 0)
+    }
 }
