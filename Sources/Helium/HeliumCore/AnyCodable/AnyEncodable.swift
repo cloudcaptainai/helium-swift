@@ -68,14 +68,28 @@ extension _AnyEncodable {
         #endif
         case is Void:
             try container.encodeNil()
-        // HELIUM MODIFICATION: Added `where type(of: value) == Bool.self` guard to prevent
-        // NSNumber from incorrectly matching as Bool. Without this guard, NSNumber(0.0) and
-        // NSNumber(1.0) from Expo/Flutter bridges match this case and encode as false/true
-        // instead of numeric values. The guard ensures only native Swift Bool matches here,
-        // while NSNumber values fall through to numeric cases (Int, Float, etc.) and encode
-        // as numbers.
+        // HELIUM MODIFICATION: Boolean handling for a type-erased `Any` is ambiguous because
+        // Swift's `NSNumber` bridging is lenient in BOTH directions: a numeric `NSNumber(1)`
+        // succeeds as `value as? Bool` (== true), AND a boolean `NSNumber`/`CFBoolean`
+        // succeeds as `value as? Int` (== 1). So we must disambiguate by the value's real
+        // type, in this exact order:
+        //
+        //   1. Native Swift `Bool` -> encode as bool.
+        //   2. `CFBoolean` (a.k.a. `__NSCFBoolean`) -> encode as bool. This is how a *genuine*
+        //      boolean arrives from `JSONSerialization`, Objective-C (`@YES`/`@NO`), and
+        //      React Native / Expo / Flutter bridges. Without this case it falls through to
+        //      `case let int as Int` (via lenient `as? Int`) and serializes as 0/1, silently
+        //      corrupting boolean values (e.g. a `showOnlyPremium: true` paywall trait).
+        //   3. Numeric `NSNumber` (e.g. NSNumber(0)/NSNumber(1) from Expo/Flutter) -> the
+        //      `type(of:) == Bool.self` guard keeps these OUT of case 1, and the
+        //      `CFGetTypeID` check keeps them out of case 2, so they fall through to the
+        //      numeric cases below and encode as numbers.
         case let bool as Bool where type(of: value) == Bool.self:
             try container.encode(bool)
+        #if canImport(Foundation)
+        case let number as NSNumber where CFGetTypeID(number) == CFBooleanGetTypeID():
+            try container.encode(number.boolValue)
+        #endif
         case let int as Int:
             try container.encode(int)
         case let int8 as Int8:
