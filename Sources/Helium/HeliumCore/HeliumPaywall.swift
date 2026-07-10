@@ -24,7 +24,8 @@ import SwiftUI
 /// ```
 ///
 /// - Note: `customPaywallTraits` are captured when the paywall displays and then fixed for that
-///   presentation. In SwiftUI the config stays current automatically. When hosting this view in
+///   presentation. In SwiftUI this happens automatically as long as the traits come from state that
+///   re-renders the view (the normal case). When hosting this view in
 ///   UIKit via `UIHostingController`, update the controller's `rootView` (or drive it from an
 ///   `ObservableObject`) so the config is current before display — otherwise the paywall may show
 ///   trait values captured when the controller was first created. See
