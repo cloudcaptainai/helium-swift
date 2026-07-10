@@ -84,6 +84,13 @@ struct ContentView: View {
                 }
             }
 
+            Section("Spikes") {
+                NavigationLink("Apple Pay probe (HEL-5834)") {
+                    ApplePayProbeSpikeView()
+                }
+                .accessibilityIdentifier("openApplePayProbeSpike")
+            }
+
             Section("Test Default Paywall") {
                 Button("show fallback (invalid trigger)") {
                     Helium.shared.presentPaywall(trigger: "nonexistent_trigger_that_does_not_exist") { reason in

@@ -503,10 +503,31 @@ final class PaddleCheckoutPrefetchCoordinator {
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
+            logSpikeStripeApplePayKey(rawBody: paddleResult.rawBody) // TEMP HEL-5834 spike - remove
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error), caConsentModalEnabled: caModalEnabled)
             return .failed(error: error)
+        }
+    }
+
+    /// TEMP (HEL-5834 spike): print the Stripe publishable key + country the
+    /// Paddle BFF hands back for Apple Pay, so it can be pasted into the
+    /// WebApplePayProbe spike. Remove once the spike is done.
+    private nonisolated static func logSpikeStripeApplePayKey(rawBody: Data) {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any],
+              let payments = data["payments"] as? [String: Any],
+              let methods = payments["methods_available"] as? [[String: Any]] else {
+            print("[HEL-5834 SPIKE] no payments.methods_available in BFF response")
+            return
+        }
+        for method in methods {
+            guard (method["type"] as? String) == "PI_APPLE_PAY",
+                  let stripe = method["stripe_options"] as? [String: Any] else { continue }
+            let key = (stripe["api_key"] as? String) ?? "<none>"
+            let country = (stripe["country_code"] as? String) ?? "<none>"
+            print("[HEL-5834 SPIKE] Stripe Apple Pay -> api_key=\(key)  country_code=\(country)")
         }
     }
 
