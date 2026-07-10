@@ -627,14 +627,9 @@ public class ExternalWebCheckoutManager: NSObject {
 
     // MARK: - API Calls
 
-    /// Syncs Stripe customer metadata with the current user identity.
+    /// Syncs customer metadata with the current user identity.
     @discardableResult
-    func updateCustomerMetadata(
-        name: String? = nil,
-        email: String? = nil,
-        phone: String? = nil,
-        description: String? = nil
-    ) async throws -> Bool {
+    func updateCustomerMetadata() async throws -> Bool {
         var body = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         body["metadata"] = [
             "userId": body["userId"] as? String ?? "",
@@ -642,11 +637,6 @@ public class ExternalWebCheckoutManager: NSObject {
             "heliumPersistentId": body["heliumPersistentId"] as? String ?? "",
             "appTransactionId": body["appTransactionId"] as? String ?? ""
         ]
-
-        if let name { body["name"] = name }
-        if let email { body["email"] = email }
-        if let phone { body["phone"] = phone }
-        if let description { body["description"] = description }
 
         let response: UpdateCustomerMetadataResponse = try await HeliumPaymentAPIClient.shared.post(provider.updateCustomerMetadataPath, body: body)
         if let customerId = response.customerId, provider.getCustomerId() == nil {
