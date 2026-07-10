@@ -39,6 +39,7 @@ struct DynamicWebView: View {
     @State private var processingVisible = false
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.heliumDynamicPaywallTraits) private var dynamicPaywallTraits: HeliumUserTraits?
     
     private var effectiveColorScheme: ColorScheme {
         switch Helium.config.lightDarkModeOverride {
@@ -209,7 +210,10 @@ struct DynamicWebView: View {
             // customPaywallTraits are key/values that Helium customer can direct paywall editor to read.
             var combinedTraits = HeliumUserTraits(["trigger": triggerName ?? ""])
             combinedTraits.merge(HeliumIdentityManager.shared.getUserTraits())
-            if let paywallTraits = paywallSession?.presentationContext.customPaywallTraits {
+            // Prefer the live environment traits so a paywall constructed off-screen still injects the latest
+            // traits at display time; the frozen session value is the safety net (and covers the presented path,
+            // which does not set the environment).
+            if let paywallTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits {
                 combinedTraits.merge(paywallTraits)
             }
             let combinedTraitsData = try JSONEncoder().encode(combinedTraits)

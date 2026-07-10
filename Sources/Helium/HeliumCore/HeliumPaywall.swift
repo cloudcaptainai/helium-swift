@@ -103,6 +103,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             case .ready(let paywallViewAndSession):
                 paywallViewAndSession.view
                     .environment(\.heliumLoadTimeTakenMS, resolvedLoadTimeTakenMS)
+                    .environment(\.heliumDynamicPaywallTraits, config.customPaywallTraits)
             case .noShow(let reason):
                 paywallNotShownView(reason)
                     .onAppear {
@@ -297,5 +298,20 @@ extension EnvironmentValues {
     var heliumLoadTimeTakenMS: UInt64? {
         get { self[HeliumLoadTimeTakenMSKey.self] }
         set { self[HeliumLoadTimeTakenMSKey.self] = newValue }
+    }
+}
+
+// Carries the presentation's customPaywallTraits down to the webview through the environment (resolved at
+// render time) rather than only via the frozen PaywallSession captured when state first resolved to .ready.
+// This lets an embedded paywall that was constructed while off-screen (e.g. a non-selected TabView tab, or an
+// eagerly-built navigation destination) inject the latest traits when it finally displays.
+private struct HeliumDynamicPaywallTraitsKey: EnvironmentKey {
+    static let defaultValue: HeliumUserTraits? = nil
+}
+
+extension EnvironmentValues {
+    var heliumDynamicPaywallTraits: HeliumUserTraits? {
+        get { self[HeliumDynamicPaywallTraitsKey.self] }
+        set { self[HeliumDynamicPaywallTraitsKey.self] = newValue }
     }
 }
