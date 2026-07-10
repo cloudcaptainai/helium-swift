@@ -69,11 +69,6 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
-    /// Refreshes only if the cache is stale, respecting the cache TTL.
-    func refreshEntitlementsIfNeeded() async {
-        await refreshIfNeeded()
-    }
-
     /// Latest server-reported intro-offer eligibility for this customer, or nil
     /// if unknown (no fetch yet, or server omitted the field on partial failure).
     open func introOfferEligible() async -> Bool? {
@@ -131,8 +126,6 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         }
     }
 
-    // MARK: - Private
-
     private var currentHeliumProductIds: Set<String> {
         if let cached {
             return cached.activeHeliumProductIds
@@ -147,7 +140,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         return Set(persisted.filter { $0.subscriptionExpiresAt != nil && $0.isActive }.map { $0.heliumProductId })
     }
 
-    private func refreshIfNeeded() async {
+    func refreshIfNeeded() async {
         let needsRefresh: Bool = lock.withLock {
             guard let cached else { return true }
             return cached.needsRefresh

@@ -386,7 +386,7 @@ public class Helium {
         }
         let paddleSource = HeliumEntitlementsManager.shared.paddleEntitlementsSource
         guard paddleSource.isConfigured else { return nil }
-        await paddleSource.refreshEntitlementsIfNeeded()
+        await paddleSource.refreshIfNeeded()
         return HeliumIdentityManager.shared.getPaddleCustomerId()
     }
     
