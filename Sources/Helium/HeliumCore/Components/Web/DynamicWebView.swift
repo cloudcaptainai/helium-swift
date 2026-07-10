@@ -52,6 +52,14 @@ struct DynamicWebView: View {
     private var paywallSession: PaywallSession? {
         return actionsDelegate.delegate.paywallSession
     }
+
+    /// The `customPaywallTraits` to inject into the webview, resolved at display time. This is
+    /// normally the presentation's snapshot carried on the session (the case for the presented path).
+    /// An environment override, when set, takes precedence — it lets an embedded `HeliumPaywall` that
+    /// was constructed before it displayed still inject current traits.
+    private var resolvedInjectedPaywallTraits: HeliumUserTraits? {
+        return dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits
+    }
     
     init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
         self.filePath = filePath
@@ -210,10 +218,7 @@ struct DynamicWebView: View {
             // customPaywallTraits are key/values that Helium customer can direct paywall editor to read.
             var combinedTraits = HeliumUserTraits(["trigger": triggerName ?? ""])
             combinedTraits.merge(HeliumIdentityManager.shared.getUserTraits())
-            // Prefer the live environment traits so a paywall constructed off-screen still injects the latest
-            // traits at display time; the frozen session value is the safety net (and covers the presented path,
-            // which does not set the environment).
-            if let paywallTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits {
+            if let paywallTraits = resolvedInjectedPaywallTraits {
                 combinedTraits.merge(paywallTraits)
             }
             let combinedTraitsData = try JSONEncoder().encode(combinedTraits)

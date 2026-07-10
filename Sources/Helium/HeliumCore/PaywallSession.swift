@@ -20,6 +20,11 @@ struct PaywallPresentationContext {
     let onEntitled: (() -> Void)?
     let onPaywallNotShown: ((PaywallNotShownReason) -> Void)?
     
+    /// The `customPaywallTraits` supplied for this presentation. On the presented path this is also
+    /// exactly what the webview receives. If a paywall is instead constructed before it is displayed
+    /// (e.g. an embedded `HeliumPaywall`), the injected value is resolved at display time (see
+    /// `DynamicWebView.resolvedInjectedPaywallTraits`)
+    /// and can be more current than this snapshot — so read this only for the as-supplied input.
     var customPaywallTraits: HeliumUserTraits? {
         return config.customPaywallTraits
     }
