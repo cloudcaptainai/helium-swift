@@ -805,7 +805,7 @@ public enum PaywallOpenViewType : String {
     case embedded = "embedded"
 }
 
-public enum PaywallUnavailableReason: String, Codable {
+public enum PaywallUnavailableReason: String, Codable, CaseIterable {
     case notInitialized
     case triggerHasNoPaywall
     case forceShowFallback

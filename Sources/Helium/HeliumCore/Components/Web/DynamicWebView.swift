@@ -20,6 +20,10 @@ struct DynamicWebView: View {
     @State private var fileLoadAttempt: FileLoadAttempt = .initialLoad
     
     let triggerName: String?
+    /// Describes `filePath` when it is a fallback paywall; nil when it is the live remote paywall.
+    let fallbackStatus: FallbackStatusContext?
+    /// Describes the fallback paywall `backupFilePath` serves if the primary content fails to render.
+    let backupFallbackStatus: FallbackStatusContext?
     let actionConfig: JSON
     let templateConfig: JSON
     var actionsDelegate: ActionsDelegateWrapper
@@ -52,11 +56,18 @@ struct DynamicWebView: View {
     private var paywallSession: PaywallSession? {
         return actionsDelegate.delegate.paywallSession
     }
+
+    /// The status of the fallback paywall currently on screen, or nil when the live remote paywall is.
+    private var displayedFallbackStatus: FallbackStatusContext? {
+        fileLoadAttempt == .backupLoad ? backupFallbackStatus : fallbackStatus
+    }
     
-    init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?) {
+    init(filePath: String, backupFilePath: String?, json: JSON, actionsDelegate: ActionsDelegateWrapper, triggerName: String?, fallbackStatus: FallbackStatusContext? = nil, backupFallbackStatus: FallbackStatusContext? = nil) {
         self.filePath = filePath
         self.backupFilePath = backupFilePath
-        
+        self.fallbackStatus = fallbackStatus
+        self.backupFallbackStatus = backupFallbackStatus
+
         bundleId = HeliumAssetManager.shared.getBundleIdFromURL(filePath)
         if let backupFilePath {
             backupBundleId = HeliumAssetManager.shared.getBundleIdFromURL(backupFilePath)
@@ -144,11 +155,11 @@ struct DynamicWebView: View {
        .edgesIgnoringSafeArea(.all)
        .sheet(isPresented: $showControlPanel) {
            if #available(iOS 16.0, *) {
-               HeliumControlPanelView()
+               HeliumControlPanelView(fallbackStatus: displayedFallbackStatus)
                    .presentationDetents([.large])
                    .presentationDragIndicator(.visible)
            } else {
-               HeliumControlPanelView()
+               HeliumControlPanelView(fallbackStatus: displayedFallbackStatus)
            }
        }
        .onAppear {

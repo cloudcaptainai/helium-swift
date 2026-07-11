@@ -212,6 +212,35 @@ func injectConfig(_ config: HeliumFetchedConfig) {
     HeliumFetchedConfigManager.shared.injectConfigForTesting(config)
 }
 
+/// Loads a fallback bundle into `HeliumFallbackViewManager`. Resolution only treats an entry as
+/// usable when it has products and the bundle's raw JSON carries a `resolvedConfig` for it, so
+/// both the decoded config and its JSON have to be injected.
+func loadFallbackBundle(
+    triggers: [String],
+    paywallNames: [String: String] = [:],
+    triggersWithoutProducts: Set<String> = [],
+    triggersWithoutResolvedConfig: Set<String> = []
+) {
+    var triggerToPaywalls: [String: HeliumPaywallInfo] = [:]
+    var rawTriggers: [String: Any] = [:]
+
+    for trigger in triggers {
+        triggerToPaywalls[trigger] = makeTestPaywallInfo(
+            trigger: trigger,
+            paywallName: paywallNames[trigger] ?? "paywall_\(trigger)",
+            products: triggersWithoutProducts.contains(trigger) ? [] : ["com.test.product"]
+        )
+        rawTriggers[trigger] = triggersWithoutResolvedConfig.contains(trigger)
+            ? [:]
+            : ["resolvedConfig": ["baseStack": ["componentProps": [:]]]]
+    }
+
+    HeliumFallbackViewManager.shared.injectConfigForTesting(
+        makeTestConfig(triggers: triggerToPaywalls),
+        json: JSON(["triggerToPaywalls": rawTriggers])
+    )
+}
+
 func makeTestSession(
     trigger: String = "test_trigger",
     eventHandlers: PaywallEventHandlers? = nil,

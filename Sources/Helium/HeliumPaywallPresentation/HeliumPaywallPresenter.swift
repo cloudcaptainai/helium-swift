@@ -570,15 +570,28 @@ extension HeliumPaywallPresenter {
                     HeliumLogger.log(.warn, category: .ui, "No local bundle path for trigger", metadata: ["trigger": trigger])
                     return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .couldNotFindBundleUrl, presentationContext: presentationContext)
                 }
-                let backupFilePath = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.localBundlePath
-                
+                // The backup only ever renders after the primary content fails in the webview,
+                // so webviewRenderFail is the only reason it can carry.
+                var backupFilePath: String?
+                var backupFallbackStatus: FallbackStatusContext?
+                if let resolvedFallback = HeliumFallbackViewManager.shared.resolveFallback(for: trigger),
+                   let backupPath = resolvedFallback.paywallInfo?.localBundlePath {
+                    backupFilePath = backupPath
+                    backupFallbackStatus = FallbackStatusContext(
+                        requestedTrigger: trigger,
+                        reason: .webviewRenderFail,
+                        bundleStatus: resolvedFallback.status
+                    )
+                }
+
                 let paywallSession = PaywallSession(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackType: .notFallback, presentationContext: presentationContext)
-                
+
                 let paywallView = try AnyView(DynamicBaseTemplateView(
                     paywallSession: paywallSession,
-                    fallbackReason: nil,
+                    fallbackStatus: nil,
                     filePath: filePath,
                     backupFilePath: backupFilePath,
+                    backupFallbackStatus: backupFallbackStatus,
                     resolvedConfig: HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(trigger)
                 ))
                 HeliumLogger.log(.debug, category: .ui, "Created paywall view for trigger", metadata: ["trigger": trigger])
@@ -619,17 +632,23 @@ extension HeliumPaywallPresenter {
         }
         
         // Check existing fallback mechanisms
-        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+        if let resolvedFallback = HeliumFallbackViewManager.shared.resolveFallback(for: trigger),
+           let fallbackPaywallInfo = resolvedFallback.paywallInfo,
            let filePath = fallbackPaywallInfo.localBundlePath {
             do {
                 let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle, presentationContext: presentationContext)
                 let fallbackBundleView = try AnyView(
                     DynamicBaseTemplateView(
                         paywallSession: fallbackBundlePaywallSession,
-                        fallbackReason: fallbackReason,
+                        fallbackStatus: FallbackStatusContext(
+                            requestedTrigger: trigger,
+                            reason: fallbackReason,
+                            bundleStatus: resolvedFallback.status
+                        ),
                         filePath: filePath,
                         backupFilePath: nil,
-                        resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                        backupFallbackStatus: nil,
+                        resolvedConfig: resolvedFallback.resolvedConfigJSON
                     )
                 )
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)

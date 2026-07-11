@@ -16,9 +16,12 @@ public struct DynamicBaseTemplateView: View {
     let backupFilePath: String?
     var componentPropsJSON: JSON
     var triggerName: String?
-    let fallbackReason: PaywallUnavailableReason?
-    
-    init(paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, filePath: String, backupFilePath: String?, resolvedConfig: JSON?) throws {
+    /// Describes `filePath` when it is a fallback paywall; nil when it is the live remote paywall.
+    let fallbackStatus: FallbackStatusContext?
+    /// Describes the fallback paywall `backupFilePath` serves if the primary content fails to render.
+    let backupFallbackStatus: FallbackStatusContext?
+
+    init(paywallSession: PaywallSession, fallbackStatus: FallbackStatusContext?, filePath: String, backupFilePath: String?, backupFallbackStatus: FallbackStatusContext?, resolvedConfig: JSON?) throws {
         let trigger = paywallSession.trigger
         guard let paywallInfo = paywallSession.paywallInfoWithBackups else {
             throw TemplateError.missingRequiredFields("Missing paywallInfo")
@@ -40,7 +43,8 @@ public struct DynamicBaseTemplateView: View {
         
         self.componentPropsJSON = templateValues["baseStack"]["componentProps"]
         self.triggerName = trigger;
-        self.fallbackReason = fallbackReason
+        self.fallbackStatus = fallbackStatus
+        self.backupFallbackStatus = backupFallbackStatus
     }
     
     public var body: some View {
@@ -50,7 +54,9 @@ public struct DynamicBaseTemplateView: View {
             backupFilePath: backupFilePath,
             json: componentPropsJSON,
             actionsDelegate: actionsDelegateWrapper,
-            triggerName: triggerName
+            triggerName: triggerName,
+            fallbackStatus: fallbackStatus,
+            backupFallbackStatus: backupFallbackStatus
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)
@@ -64,7 +70,7 @@ public struct DynamicBaseTemplateView: View {
                 }
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
-                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
+                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackStatus?.reason, loadTimeTakenMS: loadTimeTakenMS)
                 }
             }
         }

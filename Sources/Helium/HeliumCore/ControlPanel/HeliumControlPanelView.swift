@@ -9,6 +9,13 @@ struct HeliumControlPanelView: View {
     @State private var searchText: String = ""
     @State private var paywallLoadError: String? = nil
 
+    /// Set only when the paywall behind this panel is a fallback.
+    private let fallbackStatus: FallbackStatusContext?
+
+    init(fallbackStatus: FallbackStatusContext? = nil) {
+        self.fallbackStatus = fallbackStatus
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -17,53 +24,7 @@ struct HeliumControlPanelView: View {
                 })
                 .ignoresSafeArea()
 
-                switch state {
-                case .loading:
-                    ProgressView("Loading paywalls...")
-                case .loaded(let response):
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            descriptionHeader
-
-                            if response.paywalls.isEmpty {
-                                Text("No paywalls found.")
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.top, 20)
-                            } else {
-                                let filtered = response.paywalls.filter {
-                                    searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
-                                }
-                                if filtered.isEmpty {
-                                    Text("No paywalls match \"\(searchText)\".")
-                                        .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.top, 20)
-                                } else {
-                                    LazyVStack(spacing: 16) {
-                                        ForEach(filtered) { paywall in
-                                            paywallCard(paywall)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
-                case .error(let message):
-                    VStack(spacing: 16) {
-                        Text(message)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        Button("Retry") {
-                            state = .loading
-                            fetchTask?.cancel()
-                            fetchTask = Task { await fetchPaywalls() }
-                        }
-                    }
-                }
+                remoteListContent
             }
             .navigationTitle("Paywall Previews")
             .searchable(text: $searchText, prompt: "Search paywalls")
@@ -98,6 +59,78 @@ struct HeliumControlPanelView: View {
         .onDisappear {
             fetchTask?.cancel()
             previewTask?.cancel()
+        }
+    }
+
+    /// Shown in every list state so a developer always sees why they're looking at a fallback,
+    /// and above the paywall list so it is never filtered by search.
+    @ViewBuilder
+    private var fallbackStatusSection: some View {
+        if let fallbackStatus {
+            FallbackStatusCard(status: fallbackStatus)
+        }
+    }
+
+    @ViewBuilder
+    private var remoteListContent: some View {
+        switch state {
+        case .loading:
+            VStack(spacing: 0) {
+                fallbackStatusSection
+                    .padding([.horizontal, .top])
+                ProgressView("Loading paywalls...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        case .loaded(let response):
+            ScrollView {
+                VStack(spacing: 16) {
+                    fallbackStatusSection
+
+                    descriptionHeader
+
+                    if response.paywalls.isEmpty {
+                        Text("No paywalls found.")
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 20)
+                    } else {
+                        let filtered = response.paywalls.filter {
+                            searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
+                        }
+                        if filtered.isEmpty {
+                            Text("No paywalls match \"\(searchText)\".")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 20)
+                        } else {
+                            LazyVStack(spacing: 16) {
+                                ForEach(filtered) { paywall in
+                                    paywallCard(paywall)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+        case .error(let message):
+            VStack(spacing: 0) {
+                fallbackStatusSection
+                    .padding([.horizontal, .top])
+                VStack(spacing: 16) {
+                    Text(message)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    Button("Retry") {
+                        state = .loading
+                        fetchTask?.cancel()
+                        fetchTask = Task { await fetchPaywalls() }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 

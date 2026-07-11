@@ -7,21 +7,67 @@
 import SwiftUI
 import Foundation
 
+/// Which entry of the fallback bundle a resolution picked: the requested trigger's own entry, or
+/// the bundle's default entry that stands in for triggers without a usable one.
+enum ResolvedFallbackEntry {
+    case triggerOwnEntry
+    case defaultEntry
+}
+
+/// What the loaded fallback bundle served for one requested trigger.
+struct FallbackBundleStatus: Equatable {
+    let resolvedTrigger: String
+    let resolvedEntry: ResolvedFallbackEntry
+    let paywallTemplateName: String?
+    /// Number of triggers with their own bundle entry; the default entry is not one of them.
+    let configuredTriggerCount: Int
+}
+
+/// One resolution of a trigger against the loaded fallback bundle, captured in a single read of
+/// the bundle state so the paywall that renders and the diagnostics describing it cannot disagree.
+struct ResolvedFallback {
+    let paywallInfo: HeliumPaywallInfo?
+    let resolvedConfigJSON: JSON?
+    let status: FallbackBundleStatus
+}
+
 public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
     public static let shared = HeliumFallbackViewManager()
     static func reset() {
-        shared.loadedConfig = nil
-        shared.loadedConfigJSON = nil
+        shared.setLoadedState(config: nil, json: nil)
     }
-    
+
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
-    private let defaultFallbackTrigger = "hlm_ios_default_flbk"
-    
+
+    /// The bundle entry that stands in for any trigger without one of its own.
+    static let defaultFallbackTrigger = "hlm_ios_default_flbk"
+
+    /// Guards `loadedConfig`/`loadedConfigJSON`, which are written from `setUpFallbackBundle`'s
+    /// background task while presentation code paths read them from other threads.
+    private let stateLock = NSLock()
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
-    
+
+    private var loadedState: (config: HeliumFetchedConfig?, json: JSON?) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return (loadedConfig, loadedConfigJSON)
+    }
+
+    private func setLoadedState(config: HeliumFetchedConfig?, json: JSON?) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        loadedConfig = config
+        loadedConfigJSON = json
+    }
+
+    /// Inject a fallback bundle for testing purposes only. Accessible via @testable import.
+    func injectConfigForTesting(_ config: HeliumFetchedConfig?, json: JSON? = nil) {
+        setLoadedState(config: config, json: json)
+    }
+
     func setUpFallbackBundle() {
         var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
         if let customURL = Helium.config.customFallbacksURL {
@@ -44,12 +90,9 @@ public class HeliumFallbackViewManager {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
 
-                loadedConfig = decodedConfig
-                if let json = try? JSON(data: data) {
-                    loadedConfigJSON = json
-                }
+                setLoadedState(config: decodedConfig, json: try? JSON(data: data))
 
-                if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
+                if let bundles = decodedConfig.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     let generatedAtDisplay = formatDateForDisplay(decodedConfig.generatedAt)
                     HeliumLogger.log(.info, category: .fallback, "👷 Successfully loaded paywalls from fallbacks file! 🎉", metadata: ["name": fallbackBundleURL.lastPathComponent, "generated at": generatedAtDisplay])
@@ -65,46 +108,63 @@ public class HeliumFallbackViewManager {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
                 
-                let triggersMissingProducts = loadedConfig?.getTriggersWithMissingProducts() ?? []
+                let triggersMissingProducts = decodedConfig.getTriggersWithMissingProducts()
                 if !triggersMissingProducts.isEmpty {
                     HeliumLogger.log(.error, category: .fallback, "👷 Some triggers in your fallbacks file have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
                 }
-                
-                if let config = loadedConfig {
-                    HeliumAnalyticsManager.shared.setUpAnalytics(
-                        writeKey: config.segmentBrowserWriteKey,
-                        endpoint: config.segmentAnalyticsEndpoint
-                    )
-                }
-                
-                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
+
+                HeliumAnalyticsManager.shared.setUpAnalytics(
+                    writeKey: decodedConfig.segmentBrowserWriteKey,
+                    endpoint: decodedConfig.segmentAnalyticsEndpoint
+                )
+
+                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: decodedConfig)
             } catch {
                 HeliumLogger.log(.error, category: .fallback, "👷 Failed to load fallbacks file ‼️⚠️‼️", metadata: ["error": error.localizedDescription])
             }
         }
     }
     
-    /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig
-    private func resolvedTrigger(for trigger: String) -> String {
-        let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
-        let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
+    /// Picks the bundle entry serving `trigger`: the trigger's own entry when it is usable (has
+    /// products and a resolved config), otherwise the bundle's default entry.
+    private static func resolveEntry(for trigger: String, config: HeliumFetchedConfig, json: JSON?) -> (key: String, entry: ResolvedFallbackEntry) {
+        let fallbackPaywallInfo = config.triggerToPaywalls[trigger]
+        let resolvedConfigJson = json?["triggerToPaywalls"][trigger]["resolvedConfig"]
         let hasResolvedConfig = resolvedConfigJson?.exists() == true && resolvedConfigJson?.type != .null
         if fallbackPaywallInfo?.hasProducts == true && hasResolvedConfig {
-            return trigger
+            return (trigger, .triggerOwnEntry)
         }
-        return defaultFallbackTrigger
+        return (Self.defaultFallbackTrigger, .defaultEntry)
     }
-    
+
+    /// Resolves `trigger` against the loaded bundle, or nil when no bundle is loaded.
+    func resolveFallback(for trigger: String) -> ResolvedFallback? {
+        let state = loadedState
+        guard let config = state.config else { return nil }
+
+        let resolved = Self.resolveEntry(for: trigger, config: config, json: state.json)
+        return ResolvedFallback(
+            paywallInfo: config.triggerToPaywalls[resolved.key],
+            resolvedConfigJSON: state.json?["triggerToPaywalls"][resolved.key]["resolvedConfig"],
+            status: FallbackBundleStatus(
+                resolvedTrigger: resolved.key,
+                resolvedEntry: resolved.entry,
+                paywallTemplateName: config.triggerToPaywalls[resolved.key]?.paywallTemplateName,
+                configuredTriggerCount: config.triggerToPaywalls.keys.filter { $0 != Self.defaultFallbackTrigger }.count
+            )
+        )
+    }
+
     func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
-        return loadedConfig?.triggerToPaywalls[resolvedTrigger(for: trigger)]
+        return resolveFallback(for: trigger)?.paywallInfo
     }
-    
+
     func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        return loadedConfigJSON?["triggerToPaywalls"][resolvedTrigger(for: trigger)]["resolvedConfig"]
+        return resolveFallback(for: trigger)?.resolvedConfigJSON
     }
-    
+
     public func getConfig() -> HeliumFetchedConfig? {
-        return loadedConfig
+        return loadedState.config
     }
     
     public func getBackgroundConfigForTrigger(_ trigger: String) -> BackgroundConfig? {
