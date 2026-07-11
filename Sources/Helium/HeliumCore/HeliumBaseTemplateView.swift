@@ -87,12 +87,13 @@ public struct DynamicBaseTemplateView: View {
     private var paywallContent: some View {
         #if DEBUG
         if FallbackDebugBadge.shouldShow(fallbackReason: fallbackReason) {
-            ZStack(alignment: .topLeading) {
+            ZStack(alignment: .bottomLeading) {
                 paywallWebView
                 // The stack keeps its safe-area inset while the paywall bleeds past it, so the
-                // badge stays clear of the status bar and notch.
+                // badge stays clear of the home indicator. Bottom-leading keeps it away from the
+                // close button paywalls place along the top edge.
                 FallbackDebugBadge()
-                    .padding(.top, 12)
+                    .padding(.bottom, 12)
                     .padding(.leading, 12)
             }
         } else {
