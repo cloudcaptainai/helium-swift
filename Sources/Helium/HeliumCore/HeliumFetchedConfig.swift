@@ -231,7 +231,9 @@ public class HeliumFetchedConfigManager {
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4 // roughly 7 seconds of delays in between attempts
     
-    private(set) var fetchedConfig: HeliumFetchedConfig?
+    /// Written by the background fetch task and read from arbitrary threads (paywall presentation,
+    /// diagnostics), so access must be atomic.
+    @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
     private(set) var fetchedConfigJSON: JSON?
     private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]

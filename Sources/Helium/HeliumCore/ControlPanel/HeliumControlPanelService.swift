@@ -11,9 +11,8 @@ class HeliumControlPanelService {
         guard Helium.config.paywallPreviewsAutoEnabledInDevBuilds else {
             return false
         }
-        let env = AppReceiptsHelper.shared.getEnvironment()
-        return env == AppReceiptsHelper.Environment.debug.rawValue
-            || env == AppReceiptsHelper.Environment.sandbox.rawValue
+        let environment = AppReceiptsHelper.shared.environment
+        return environment == .debug || environment == .sandbox
     }
 
     private var heliumBaseURL: String { HeliumAPIEndpoint.baseURL }

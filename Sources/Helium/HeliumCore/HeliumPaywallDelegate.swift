@@ -51,7 +51,12 @@ public extension HeliumPaywallDelegate {
 class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
-    
+
+    /// Authored diagnostic copy, shared by the log lines and the diagnostic modal so the two can
+    /// never describe the same reason differently.
+    private static let diagnosticContentMapper = DiagnosticContentMapper()
+    private static let diagnosticLogLineMapper = DiagnosticLogLineMapper()
+
     /// Tracks Transaction.updates observation tasks for pending purchases, keyed by product ID
     @HeliumAtomic private var pendingPurchaseTasks: [String: Task<Void, Never>] = [:]
     
@@ -328,80 +333,73 @@ class HeliumPaywallDelegateWrapper {
         fallbackShown: Bool,
         logMetadata: [String: String]
     ) {
+        let content = Self.diagnosticContentMapper.mapUnavailable(
+            paywallUnavailableReason,
+            context: .live(trigger: trigger)
+        )
         let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
-        var notShownAddendum: String = ""
-        switch paywallUnavailableReason {
-        case .notInitialized:
-            notShownAddendum = "Helium is not initialized"
-        case .triggerHasNoPaywall:
-            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow. Note that changes to a workflow may take a few minutes to be reflected here. https://app.tryhelium.com/workflows"
-        case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
-            notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
-        case .paywallsDownloadFail:
-            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key"
-        case .alreadyPresented:
-            notShownAddendum = "A Helium paywall is already being presented"
-        case .noProductsIOS:
-            var paywallLink = "https://app.tryhelium.com/paywalls"
-            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-            if let paywallId = paywallInfo?.paywallUUID {
-                paywallLink += "/\(paywallId)"
-            }
-            notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
-        case .webCheckoutNoCustomUserId:
-            notShownAddendum = "External Web Checkout requires a custom user ID to be set"
-        case .webCheckoutNotEnabled:
-            notShownAddendum = "External Web Checkout is not enabled for a payment processor this paywall requires. See Helium.config.enableExternalWebCheckout. Enabled processors: \(Helium.config.webCheckoutProcessors)"
-        case .bundleFetchCannotDecodeContent:
-            notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
-        case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:
-            notShownAddendum = "Could not retrieve paywall. Contact Helium if this continues to be an issue."
-        case .couldNotFindBundleUrl:
-            notShownAddendum = "Could not extract paywall url. Contact Helium if this continues to be an issue."
-        default:
-            notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
-        }
-        HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
-        
-#if DEBUG
-        let canShowDiagnosticView = true
-#else
-        let canShowDiagnosticView = trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
-#endif
-        if canShowDiagnosticView {
-            if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
-                Task { @MainActor in
-                    HeliumPaywallDiagnosticView.presentIfNeeded(
-                        trigger: trigger,
-                        message: notShownAddendum
-                    )
-                }
-            }
-        }
+        HeliumLogger.log(
+            .error,
+            category: .fallback,
+            "\(logPrefix) \(Self.diagnosticLogLineMapper.map(content))",
+            metadata: logMetadata
+        )
+
+        presentDiagnosticIfNeeded(
+            trigger: trigger,
+            content: content,
+            unavailableReason: paywallUnavailableReason,
+            fallbackShown: fallbackShown
+        )
     }
-    
+
     private func logPaywallSkip(
         trigger: String,
         skipReason: PaywallSkippedReason,
         logMetadata: [String: String]
     ) {
-        var skipMessage: String = ""
-        switch skipReason {
-        case .targetingHoldout:
-            skipMessage = "Paywall skipped due to targeting holdout. Check your workflow configuration if this is not expected https://app.tryhelium.com/workflows"
-        case .alreadyEntitled:
-            skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
-        }
-        HeliumLogger.log(.warn, category: .ui, skipMessage, metadata: logMetadata)
-        
-#if DEBUG
+        let content = Self.diagnosticContentMapper.mapSkip(skipReason)
+        HeliumLogger.log(
+            .warn,
+            category: .ui,
+            Self.diagnosticLogLineMapper.map(content),
+            metadata: logMetadata
+        )
+
+        // A skip is never a suppressed reason, and nothing rendered.
+        presentDiagnosticIfNeeded(
+            trigger: trigger,
+            content: content,
+            unavailableReason: nil,
+            fallbackShown: false
+        )
+    }
+
+    /// Single gating funnel for both the unavailable and skip paths, so neither can drift from the
+    /// visibility rules.
+    private func presentDiagnosticIfNeeded(
+        trigger: String,
+        content: DiagnosticContent,
+        unavailableReason: PaywallUnavailableReason?,
+        fallbackShown: Bool
+    ) {
+        let allowed = HeliumDiagnosticGate.shouldShow(
+            unavailableReason: unavailableReason,
+            fallbackShown: fallbackShown,
+            isPreviewTrigger: trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
+            environment: AppReceiptsHelper.shared.environment,
+            displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
+            enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
+            serverFlagEnabled: HeliumFetchedConfigManager.shared.fetchedConfig?.diagnosticModalEnabled ?? true,
+            doNotShowAgain: {
+                UserDefaults.standard.bool(forKey: HeliumDiagnosticGate.doNotShowAgainKey)
+            }
+        )
+        guard allowed else { return }
+
         Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(
-                trigger: trigger,
-                message: skipMessage
-            )
+            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
         }
-#endif
     }
     
     // MARK: - Pending Purchase Observation

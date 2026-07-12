@@ -33,7 +33,7 @@ class AppReceiptsHelper {
             // AppTransaction.shared can trigger Apple account sign-in dialog in debug/sandbox
             // if not signed into a sandbox account, which is annoying for sdk integrators. So avoid
             // that call if can determine sandbox from receipt.
-            if getEnvironment() == Environment.sandbox.rawValue {
+            if environment == .sandbox {
                 return
             }
         }
@@ -80,19 +80,23 @@ class AppReceiptsHelper {
 #endif
     }
     
-    func getEnvironment() -> String {
+    var environment: Environment {
 #if DEBUG || targetEnvironment(simulator)
-        return Environment.debug.rawValue
+        return .debug
 #else
         if let appTransactionEnvironment {
-            return appTransactionEnvironment.rawValue
+            return appTransactionEnvironment
         }
 
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
 
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        return isTestFlight ? Environment.sandbox.rawValue : Environment.production.rawValue
+        return isTestFlight ? .sandbox : .production
 #endif
+    }
+
+    func getEnvironment() -> String {
+        environment.rawValue
     }
     
     func getFirstInstallTime() -> Date? {
