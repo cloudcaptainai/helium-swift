@@ -86,15 +86,18 @@ public struct DynamicBaseTemplateView: View {
     @ViewBuilder
     private var paywallContent: some View {
         #if DEBUG
-        if FallbackDebugBadge.shouldShow(fallbackReason: fallbackReason) {
-            ZStack(alignment: .bottomLeading) {
+        if FallbackDebugBanner.shouldShow(fallbackReason: fallbackReason) {
+            ZStack(alignment: .top) {
                 paywallWebView
                 // The stack keeps its safe-area inset while the paywall bleeds past it, so the
-                // badge stays clear of the home indicator. Bottom-leading keeps it away from the
-                // close button paywalls place along the top edge.
-                FallbackDebugBadge()
-                    .padding(.bottom, 12)
-                    .padding(.leading, 12)
+                // banner clears the status bar and Dynamic Island. Centering keeps it out of the
+                // top corners, where paywalls place their close button.
+                FallbackDebugBanner(
+                    trigger: triggerName ?? "",
+                    fallbackReason: fallbackReason
+                )
+                .padding(.top, 12)
+                .padding(.horizontal, 12)
             }
         } else {
             paywallWebView
