@@ -5,6 +5,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     private let mapper = DiagnosticContentMapper()
     private let trigger = "onboarding_end"
+    private let fallbackGuideUrl = "https://docs.tryhelium.com/guides/fallback-bundle"
 
     private func context(paywallId: String? = nil, processors: WebCheckoutProcessors = []) -> DiagnosticContext {
         DiagnosticContext(trigger: trigger, paywallId: paywallId, webCheckoutProcessors: processors)
@@ -141,6 +142,13 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertEqual(mapper.mapSkip(.alreadyEntitled).title, "Already subscribed")
     }
 
+    func testAlreadyEntitledUsersLineStatesOnlyTheSplitOutcome() {
+        XCTAssertEqual(
+            mapper.mapSkip(.alreadyEntitled).usersWillSee,
+            "Subscribed users see no paywall; users without the entitlement see it normally."
+        )
+    }
+
     /// The trigger here is the second-try trigger, not the paywall the user is looking at.
     func testSecondTryMissNamesTheTriggerAndLinksTheEditor() {
         let content = content(for: .secondTryNoMatch)
@@ -243,5 +251,53 @@ final class DiagnosticContentMapperTests: XCTestCase {
             content(for: .alreadyPresented).title,
             "A Helium paywall is already being presented"
         )
+    }
+
+    // MARK: - Users-will-see matrix
+
+    /// A bundled fallback would have covered these users, so the outcome points at the guide.
+    func testFallbackCoverableReasonsSuggestTheFallbackGuide() {
+        let coverable: [PaywallUnavailableReason] = [
+            .triggerHasNoPaywall, .noProductsIOS,
+            .webCheckoutNoCustomUserId, .webCheckoutNotEnabled,
+            .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress,
+            .productsFetchInProgress, .paywallsDownloadFail,
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
+            .bundleFetch403, .bundleFetch404, .bundleFetch410, .bundleFetchCannotDecodeContent,
+            .webviewRenderFail, .bridgingError, .invalidResolvedConfig,
+        ]
+
+        for reason in coverable {
+            XCTAssertTrue(
+                content(for: reason).usersWillSee.contains(fallbackGuideUrl),
+                reason.rawValue
+            )
+        }
+    }
+
+    /// These stop the SDK before the loader runs, so no fallback could render either.
+    func testPreLoaderFailuresDoNotAdviseAFallback() {
+        for reason in [PaywallUnavailableReason.notInitialized, .noRootController] {
+            let usersWillSee = content(for: reason).usersWillSee
+            XCTAssertFalse(usersWillSee.contains(fallbackGuideUrl), reason.rawValue)
+            XCTAssertFalse(usersWillSee.contains("Consider adding"), reason.rawValue)
+            XCTAssertTrue(usersWillSee.contains("no fallback can load"), reason.rawValue)
+        }
+    }
+
+    /// Waiting on the download is the one miss real users experience with visible UI.
+    func testPaywallsStillDownloadingNamesTheLoadingState() {
+        XCTAssertTrue(
+            content(for: .paywallsNotDownloaded).usersWillSee.contains("loading indication")
+        )
+    }
+
+    /// notInitialized fires only when initialize() was never called, not while it is in flight —
+    /// `initialized` is set synchronously at the top of initialize().
+    func testNotInitializedBodySaysInitializeWasNeverCalled() {
+        let body = content(for: .notInitialized).body
+
+        XCTAssertTrue(body.contains("never called"))
+        XCTAssertFalse(body.contains("completed"))
     }
 }
