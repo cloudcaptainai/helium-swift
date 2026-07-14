@@ -154,20 +154,13 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(previewInfo?.extractedBundleUrl, previewBundleUrl)
     }
 
-    func testJsonMirrorScrubsWebCheckoutUrlAndUpdatesBundleUrl() throws {
+    func testJsonMirrorUpdatesBundleUrl() throws {
         let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
         let configJSON = try JSON(data: JSONEncoder().encode(config))
         injectConfig(config, json: configJSON)
 
         try setPreviewConfig()
 
-        let mirror = HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger]
-        XCTAssertNotNil(mirror)
-        XCTAssertEqual(
-            mirror?["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"].string,
-            previewBundleUrl
-        )
-        XCTAssertNil(mirror?["additionalPaywallFields"]["webPaywallBundleUrl"].string)
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?["baseStack"]["componentProps"]["bundleURL"].string,
             previewBundleUrl
@@ -198,21 +191,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(previewInfo?.productsOfferedIOS, ["second.product"])
         // First preview's checkout URL must not leak into the second
         XCTAssertNil(previewInfo?.webPaywallBundleUrl)
-    }
-
-    func testJsonMirrorUsesProvidedWebCheckoutUrl() throws {
-        let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
-        let configJSON = try JSON(data: JSONEncoder().encode(config))
-        injectConfig(config, json: configJSON)
-        let previewWebCheckoutUrl = "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html"
-
-        try setPreviewConfig(webPaywallBundleUrl: previewWebCheckoutUrl)
-
-        let mirror = HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger]
-        XCTAssertEqual(
-            mirror?["additionalPaywallFields"]["webPaywallBundleUrl"].string,
-            previewWebCheckoutUrl
-        )
     }
 
     func testThrowsWhenNoConfigAvailable() {

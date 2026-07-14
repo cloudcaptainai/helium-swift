@@ -1092,13 +1092,6 @@ public class HeliumFetchedConfigManager {
         if var configJSON = fetchedConfigJSON {
             var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
             sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
-            if sourceJSON["additionalPaywallFields"].exists() {
-                if let webPaywallBundleUrl, !webPaywallBundleUrl.isEmpty {
-                    sourceJSON["additionalPaywallFields"]["webPaywallBundleUrl"] = JSON(webPaywallBundleUrl)
-                } else {
-                    sourceJSON["additionalPaywallFields"]["webPaywallBundleUrl"] = JSON.null
-                }
-            }
             configJSON["triggerToPaywalls"][Self.HELIUM_PREVIEW_TRIGGER] = sourceJSON
             fetchedConfigJSON = configJSON
         }
