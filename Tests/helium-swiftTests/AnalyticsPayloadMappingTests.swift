@@ -27,7 +27,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     private func parsingParams(_ payload: NSDictionary) throws -> NSDictionary {
         guard let paramsString = payload["params"] as? String else { return payload }
         let parsed = try JSONSerialization.jsonObject(with: Data(paramsString.utf8))
-        let copy = payload.mutableCopy() as! NSMutableDictionary
+        let copy = try XCTUnwrap(payload.mutableCopy() as? NSMutableDictionary)
         copy["params"] = parsed
         return copy
     }
