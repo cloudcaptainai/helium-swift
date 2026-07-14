@@ -214,8 +214,9 @@ public class HeliumFetchedConfigManager {
     }
 
     /// Inject config for testing purposes only. Accessible via @testable import.
-    func injectConfigForTesting(_ config: HeliumFetchedConfig) {
+    func injectConfigForTesting(_ config: HeliumFetchedConfig, json: JSON? = nil) {
         self.fetchedConfig = config
+        self.fetchedConfigJSON = json
         self._downloadStatus = .downloadSuccess
     }
 
@@ -1027,6 +1028,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripe: [String],
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
+        webPaywallBundleUrl: String? = nil,
     ) throws {
         guard var config = fetchedConfig else {
             throw HeliumControlPanelError.noConfigAvailable
@@ -1054,6 +1056,15 @@ public class HeliumFetchedConfigManager {
         // Update additionalPaywallFields
         var additionalFields = previewPaywallInfo.additionalPaywallFields ?? JSON([:])
         additionalFields["paywallBundleUrl"] = JSON(bundleUrl)
+        // Use the previewed version's own web checkout URL. When the preview response
+        // doesn't provide one, the value inherited from the source trigger would open the
+        // wrong web paywall at checkout, so null it and let app2web checkout fail
+        // explicitly (webPaywallBundleUrlMissing) instead.
+        if let webPaywallBundleUrl, !webPaywallBundleUrl.isEmpty {
+            additionalFields["webPaywallBundleUrl"] = JSON(webPaywallBundleUrl)
+        } else {
+            additionalFields["webPaywallBundleUrl"] = JSON.null
+        }
         previewPaywallInfo.additionalPaywallFields = additionalFields
 
         // Update product IDs

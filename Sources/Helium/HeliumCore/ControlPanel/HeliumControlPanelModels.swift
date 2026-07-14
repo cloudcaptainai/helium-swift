@@ -2,7 +2,6 @@ import Foundation
 
 struct HeliumControlPanelResponse: Codable {
     let productIds: [String]
-    let stripeProductIds: [String]?
     let paywalls: [HeliumPaywallPreviewEntry]
 }
 
@@ -23,6 +22,7 @@ struct HeliumPaywallPreviewVersion: Codable, Identifiable {
     let stripeProductIds: [String]?
     let paddleProductIds: [String]?
     let webPaddleProductIds: [String]?
+    let webPaywallBundleUrl: String?
     let lastSavedAt: String?
     var id: String { versionId }
 
