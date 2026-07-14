@@ -21,11 +21,27 @@ jobs:
       SIMULATOR_NAME: iPhone 17
     steps:
       - uses: actions/checkout@v4
+      - name: Select simulator runtime
+        run: |
+          # Pin the destination OS to the newest stable iOS runtime (the highest
+          # runtime <= the default Xcode's simulator SDK version). Without an OS,
+          # xcodebuild picks the highest-version matching device, which on WarpBuild
+          # images can be a beta runtime with broken/slow XCUITest support.
+          SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          IOS_TEST_OS=$(xcrun simctl list runtimes -j | python3 -c "
+          import json, sys
+          sdk = tuple(map(int, '$SDK_VERSION'.split('.')))
+          def v(s): return tuple(map(int, s.split('.')))
+          rts = [r['version'] for r in json.load(sys.stdin)['runtimes']
+                 if r['platform'] == 'iOS' and r['isAvailable'] and v(r['version'])[:len(sdk)] <= sdk]
+          print(max(rts, key=v))")
+          echo "Using iOS $IOS_TEST_OS (SDK $SDK_VERSION)"
+          echo "IOS_TEST_OS=$IOS_TEST_OS" >> "$GITHUB_ENV"
       - name: Run SwiftPM tests with Thread Sanitizer
         run: |
           xcodebuild test \
             -scheme helium-swift \
-            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME,OS=$IOS_TEST_OS" \
             -enableThreadSanitizer YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
@@ -57,22 +73,45 @@ jobs:
       - name: Check Xcode version and available simulators
         run: |
           xcodebuild -version
+          echo "=== Installed Simulator Runtimes ==="
+          xcrun simctl list runtimes
           echo "=== Available iOS Simulators ==="
           xcrun simctl list devices available | grep -E "iPhone"
 
-#add back preboot if seeing simulator issues
-#      - name: Pre-boot simulator
-#        run: |
-#          xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
-#          xcrun simctl bootstatus "$SIMULATOR_NAME" -b
-#          echo "Simulator ready"
+      - name: Select simulator runtime and pre-boot simulator
+        run: |
+          # Pick the newest stable iOS runtime (the highest runtime <= the default
+          # Xcode's simulator SDK version). Without a runtime pin, xcodebuild picks
+          # the highest-version matching device, which on WarpBuild images can be a
+          # beta runtime with broken/slow XCUITest support.
+          SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          IOS_RUNTIME_ID=$(xcrun simctl list runtimes -j | python3 -c "
+          import json, sys
+          sdk = tuple(map(int, '$SDK_VERSION'.split('.')))
+          def v(s): return tuple(map(int, s.split('.')))
+          rts = [r for r in json.load(sys.stdin)['runtimes']
+                 if r['platform'] == 'iOS' and r['isAvailable'] and v(r['version'])[:len(sdk)] <= sdk]
+          print(max(rts, key=lambda r: v(r['version']))['identifier'])")
+          echo "Using runtime $IOS_RUNTIME_ID (SDK $SDK_VERSION)"
+
+          # Create a dedicated simulator and boot it ahead of the test run. UI tests
+          # run directly on this settled device (cloning disabled via
+          # -parallel-testing-enabled NO): on a freshly-booted simulator clone, the
+          # app's paywall config fetch competes with the first-boot daemon storm and
+          # can exceed the paywall loading budget, which breaks the loading-state test.
+          SIM_UDID=$(xcrun simctl create "ci-test-iphone" "$SIMULATOR_NAME" "$IOS_RUNTIME_ID")
+          echo "Created simulator $SIM_UDID"
+          xcrun simctl boot "$SIM_UDID"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          echo "Simulator ready"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
 
       - name: Build for testing
         run: |
           xcodebuild build-for-testing \
             -project HeliumExample/HeliumExample.xcodeproj \
             -scheme "CI HeliumExample" \
-            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            -destination "id=$SIM_UDID" \
             HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
             HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
             CODE_SIGN_IDENTITY="" \
@@ -93,8 +132,9 @@ jobs:
             xcodebuild test-without-building \
               -project HeliumExample/HeliumExample.xcodeproj \
               -scheme "CI HeliumExample" \
-              -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+              -destination "id=$SIM_UDID" \
               $RUN_ONLY_TESTING \
+              -parallel-testing-enabled NO \
               -disable-concurrent-destination-testing \
               HELIUM_API_KEY="${{ secrets.HELIUM_API_KEY }}" \
               HELIUM_TRIGGER_KEY="${{ secrets.HELIUM_TRIGGER_KEY }}" \
