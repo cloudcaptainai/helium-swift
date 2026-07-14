@@ -208,8 +208,8 @@ func makeTestConfig(
     )
 }
 
-func injectConfig(_ config: HeliumFetchedConfig) {
-    HeliumFetchedConfigManager.shared.injectConfigForTesting(config)
+func injectConfig(_ config: HeliumFetchedConfig, json: JSON? = nil) {
+    HeliumFetchedConfigManager.shared.injectConfigForTesting(config, json: json)
 }
 
 func makeTestSession(
