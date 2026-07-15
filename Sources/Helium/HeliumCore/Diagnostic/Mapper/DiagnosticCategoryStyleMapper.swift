@@ -7,9 +7,9 @@ import Foundation
 
 /// Maps a diagnostic category onto the banner resources that render it.
 ///
-/// Icons are per category, but tints are per severity: `.setup` and `.network` deliberately share
-/// the amber pair, which is also the fallback debug badge's palette, so a Helium developer warning
-/// reads as one signal wherever it surfaces.
+/// Icons are per category, but tints are per severity: `.setup` and `.network` are different
+/// categories at the same (warning) severity, so they share the amber pair while keeping distinct
+/// icons.
 struct DiagnosticCategoryStyleMapper {
 
     private enum Palette {

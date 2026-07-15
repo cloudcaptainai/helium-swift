@@ -77,6 +77,7 @@ struct HeliumPaywallDiagnosticView: View {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
             }
+            .accessibilityLabel("Dismiss")
         }
         .foregroundColor(style.foreground)
         .padding(.horizontal, 20)
@@ -168,6 +169,7 @@ struct HeliumPaywallDiagnosticView: View {
                         .background(Color(.systemGray5))
                         .cornerRadius(12)
                 }
+                .accessibilityLabel("Copy URL")
             }
             .padding(.top, 24)
 
