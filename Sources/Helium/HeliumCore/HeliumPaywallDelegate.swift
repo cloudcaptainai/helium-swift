@@ -329,38 +329,10 @@ class HeliumPaywallDelegateWrapper {
         logMetadata: [String: String]
     ) {
         let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
-        var notShownAddendum: String = ""
-        switch paywallUnavailableReason {
-        case .notInitialized:
-            notShownAddendum = "Helium is not initialized"
-        case .triggerHasNoPaywall:
-            notShownAddendum = "Could not find paywall for trigger \"\(trigger)\". Verify your trigger is in a workflow. Note that changes to a workflow may take a few minutes to be reflected here. https://app.tryhelium.com/workflows"
-        case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
-            notShownAddendum = "Paywalls have not completed downloading. Check your connection and consider adjusting loading budget or initializing Helium sooner before presenting paywall"
-        case .paywallsDownloadFail:
-            notShownAddendum = "Paywalls failed to download. Check your connection and Helium API key"
-        case .alreadyPresented:
-            notShownAddendum = "A Helium paywall is already being presented"
-        case .noProductsIOS:
-            var paywallLink = "https://app.tryhelium.com/paywalls"
-            let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
-            if let paywallId = paywallInfo?.paywallUUID {
-                paywallLink += "/\(paywallId)"
-            }
-            notShownAddendum = "Your paywall does not include any iOS products. Ensure you have synced your iOS products and selected products for your paywall \(paywallLink)"
-        case .webCheckoutNoCustomUserId:
-            notShownAddendum = "External Web Checkout requires a custom user ID to be set"
-        case .webCheckoutNotEnabled:
-            notShownAddendum = "External Web Checkout is not enabled for a payment processor this paywall requires. See Helium.config.enableExternalWebCheckout. Enabled processors: \(Helium.config.webCheckoutProcessors)"
-        case .bundleFetchCannotDecodeContent:
-            notShownAddendum = "Paywall html could not be read. Ensure the paywall is not corrupted and contact Helium if this continues to be an issue."
-        case .bundleFetchInvalidUrl, .bundleFetchInvalidUrlDetected, .bundleFetch403, .bundleFetch404, .bundleFetch410:
-            notShownAddendum = "Could not retrieve paywall. Contact Helium if this continues to be an issue."
-        case .couldNotFindBundleUrl:
-            notShownAddendum = "Could not extract paywall url. Contact Helium if this continues to be an issue."
-        default:
-            notShownAddendum = paywallUnavailableReason?.rawValue ?? ""
-        }
+        let notShownAddendum = PaywallDiagnosticMessages.remediationMessage(
+            for: paywallUnavailableReason,
+            trigger: trigger
+        )
         HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
         
 #if DEBUG

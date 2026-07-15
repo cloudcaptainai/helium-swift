@@ -44,16 +44,7 @@ public struct DynamicBaseTemplateView: View {
     }
     
     public var body: some View {
-        // Use validated componentProps
-        DynamicWebView(
-            filePath: filePath,
-            backupFilePath: backupFilePath,
-            json: componentPropsJSON,
-            actionsDelegate: actionsDelegateWrapper,
-            triggerName: triggerName
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .edgesIgnoringSafeArea(.all)
+        paywallContent
         .onAppear {
             actionsDelegate.setDismissAction {
                 dismiss()
@@ -77,6 +68,43 @@ public struct DynamicBaseTemplateView: View {
                 }
             }
         }
+    }
+
+    // Use validated componentProps
+    private var paywallWebView: some View {
+        DynamicWebView(
+            filePath: filePath,
+            backupFilePath: backupFilePath,
+            json: componentPropsJSON,
+            actionsDelegate: actionsDelegateWrapper,
+            triggerName: triggerName
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .edgesIgnoringSafeArea(.all)
+    }
+
+    @ViewBuilder
+    private var paywallContent: some View {
+        #if DEBUG
+        if FallbackDebugBanner.shouldShow(fallbackReason: fallbackReason) {
+            ZStack(alignment: .top) {
+                paywallWebView
+                // The stack keeps its safe-area inset while the paywall bleeds past it, so the
+                // banner clears the status bar and Dynamic Island. Centering keeps it out of the
+                // top corners, where paywalls place their close button.
+                FallbackDebugBanner(
+                    trigger: triggerName ?? "",
+                    fallbackReason: fallbackReason
+                )
+                .padding(.top, 12)
+                .padding(.horizontal, 12)
+            }
+        } else {
+            paywallWebView
+        }
+        #else
+        paywallWebView
+        #endif
     }
 }
 
