@@ -234,8 +234,8 @@ public class HeliumFetchedConfigManager {
     /// Written by the background fetch task and read from arbitrary threads (paywall presentation,
     /// diagnostics), so access must be atomic.
     @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
-    private(set) var fetchedConfigJSON: JSON?
-    private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
+    @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
+    @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
@@ -1030,7 +1030,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripe: [String],
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
-        webPaywallBundleUrl: String? = nil,
+        webPaywallBundleUrl: String? = nil
     ) throws {
         guard var config = fetchedConfig else {
             throw HeliumControlPanelError.noConfigAvailable
@@ -1091,11 +1091,12 @@ public class HeliumFetchedConfigManager {
         fetchedConfig = config
 
         // Also update fetchedConfigJSON so getResolvedConfigJSONForTrigger works
-        if var configJSON = fetchedConfigJSON {
+        _fetchedConfigJSON.withValue { json in
+            guard var configJSON = json else { return }
             var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
             sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
             configJSON["triggerToPaywalls"][Self.HELIUM_PREVIEW_TRIGGER] = sourceJSON
-            fetchedConfigJSON = configJSON
+            json = configJSON
         }
     }
 }

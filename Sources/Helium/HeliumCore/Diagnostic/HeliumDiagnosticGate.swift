@@ -30,10 +30,14 @@ enum HeliumDiagnosticGate {
     ///   - fallbackShown: whether a fallback rendered. A rendered fallback is the badge's territory,
     ///     not the modal's — the two are mutually exclusive, and that is what makes the modal's "no
     ///     fallback was available, so this user saw nothing" copy truthful.
-    ///   - isPreviewTrigger: dashboard paywall previews bypass the flag, environment and
+    ///   - isPreviewTrigger: dashboard paywall previews bypass the flag, build/environment and
     ///     do-not-show gates, but not suppression.
-    ///   - environment: debug always shows; sandbox (TestFlight, and Xcode-installed release
-    ///     builds) requires the opt-in; an App Store build structurally cannot show the modal.
+    ///   - isDebugBuild: whether the SDK was compiled with DEBUG. A debug build always shows;
+    ///     any other build is gated by the receipt environment.
+    ///   - environment: for non-DEBUG builds: sandbox (TestFlight, and Xcode-installed release
+    ///     builds) requires the opt-in; an App Store build structurally cannot show the modal;
+    ///     `.debug` — here a release-configuration simulator run, since a DEBUG build never
+    ///     reaches this gate — requires the opt-in as well.
     ///   - displayEnabled: the public master flag.
     ///   - enabledInTestFlight: the public TestFlight opt-in.
     ///   - serverFlagEnabled: the server-side kill switch.
@@ -43,6 +47,7 @@ enum HeliumDiagnosticGate {
         unavailableReason: PaywallUnavailableReason?,
         fallbackShown: Bool,
         isPreviewTrigger: Bool,
+        isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
         enabledInTestFlight: Bool,
@@ -53,18 +58,20 @@ enum HeliumDiagnosticGate {
         if let unavailableReason, suppressedReasons.contains(unavailableReason) { return false }
         if isPreviewTrigger { return true }
         guard displayEnabled else { return false }
-        guard isVisible(in: environment, enabledInTestFlight: enabledInTestFlight) else { return false }
+        guard isVisible(isDebugBuild: isDebugBuild, environment: environment, enabledInTestFlight: enabledInTestFlight) else { return false }
         guard serverFlagEnabled else { return false }
         return !doNotShowAgain()
     }
 
     private static func isVisible(
-        in environment: AppReceiptsHelper.Environment,
+        isDebugBuild: Bool,
+        environment: AppReceiptsHelper.Environment,
         enabledInTestFlight: Bool
     ) -> Bool {
+        if isDebugBuild { return true }
         switch environment {
-        case .debug: return true
-        case .sandbox: return enabledInTestFlight
+        // In a non-DEBUG build, .debug means a release-configuration simulator run.
+        case .debug, .sandbox: return enabledInTestFlight
         case .production: return false
         }
     }

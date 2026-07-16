@@ -10,6 +10,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         reason: PaywallUnavailableReason? = nil,
         fallbackShown: Bool = false,
         isPreviewTrigger: Bool = false,
+        isDebugBuild: Bool = false,
         environment: AppReceiptsHelper.Environment = .debug,
         displayEnabled: Bool = true,
         enabledInTestFlight: Bool = true,
@@ -20,6 +21,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             unavailableReason: reason ?? showableReason,
             fallbackShown: fallbackShown,
             isPreviewTrigger: isPreviewTrigger,
+            isDebugBuild: isDebugBuild,
             environment: environment,
             displayEnabled: displayEnabled,
             enabledInTestFlight: enabledInTestFlight,
@@ -59,6 +61,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 unavailableReason: nil,
                 fallbackShown: false,
                 isPreviewTrigger: false,
+                isDebugBuild: true,
                 environment: .debug,
                 displayEnabled: true,
                 enabledInTestFlight: true,
@@ -98,10 +101,10 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         XCTAssertFalse(shouldShow(environment: .sandbox, displayEnabled: false))
     }
 
-    // MARK: - Environment gate
+    // MARK: - Build / environment gate
 
-    func testDebugShows() {
-        XCTAssertTrue(shouldShow(environment: .debug))
+    func testDebugBuildShows() {
+        XCTAssertTrue(shouldShow(isDebugBuild: true, environment: .debug))
     }
 
     /// An App Store build structurally cannot show the modal.
@@ -115,9 +118,16 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         XCTAssertFalse(shouldShow(environment: .sandbox, enabledInTestFlight: false))
     }
 
-    /// Leaving the TestFlight opt-in off must not silence DEBUG diagnostics.
-    func testTestFlightOptInOffDoesNotAffectDebug() {
-        XCTAssertTrue(shouldShow(environment: .debug, enabledInTestFlight: false))
+    /// A .debug receipt environment without a DEBUG-compiled build — a release-configuration
+    /// simulator run — is gated by the same opt-in as TestFlight.
+    func testDebugEnvironmentInAReleaseBuildRequiresTheOptIn() {
+        XCTAssertTrue(shouldShow(isDebugBuild: false, environment: .debug, enabledInTestFlight: true))
+        XCTAssertFalse(shouldShow(isDebugBuild: false, environment: .debug, enabledInTestFlight: false))
+    }
+
+    /// Leaving the TestFlight opt-in off must not silence DEBUG-build diagnostics.
+    func testTestFlightOptInOffDoesNotAffectDebugBuilds() {
+        XCTAssertTrue(shouldShow(isDebugBuild: true, environment: .debug, enabledInTestFlight: false))
     }
 
     // MARK: - Server kill switch

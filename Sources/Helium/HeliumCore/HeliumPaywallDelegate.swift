@@ -383,10 +383,16 @@ class HeliumPaywallDelegateWrapper {
         unavailableReason: PaywallUnavailableReason?,
         fallbackShown: Bool
     ) {
+#if DEBUG
+        let isDebugBuild = true
+#else
+        let isDebugBuild = false
+#endif
         let allowed = HeliumDiagnosticGate.shouldShow(
             unavailableReason: unavailableReason,
             fallbackShown: fallbackShown,
             isPreviewTrigger: trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
+            isDebugBuild: isDebugBuild,
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
             enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,

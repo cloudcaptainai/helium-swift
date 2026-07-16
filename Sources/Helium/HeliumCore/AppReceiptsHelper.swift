@@ -17,7 +17,9 @@ class AppReceiptsHelper {
     
     static let shared = AppReceiptsHelper()
     
-    private var appTransactionEnvironment: Environment? = nil
+    /// Written by the AppTransaction task in `setUp()` and read from arbitrary threads via
+    /// `environment`, so access must be atomic.
+    @HeliumAtomic private var appTransactionEnvironment: Environment? = nil
     private var setupCompleted: Bool = false
     
     private var appFirstInstallTime: Date? = nil
