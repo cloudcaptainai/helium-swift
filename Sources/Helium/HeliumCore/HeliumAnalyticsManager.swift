@@ -173,7 +173,13 @@ class HeliumAnalyticsManager {
             heliumEventPayload = try SegmentJSON(HeliumAnalyticsMapper.mapToAnalyticsPayload(event))
         } catch {
             HeliumLogger.log(.error, category: .events, "Failed to serialize analytics payload", metadata: ["event": event.eventName])
-            heliumEventPayload = .object(["type": .string(HeliumAnalyticsMapper.getEventName(event))])
+            // Keep the real type so the event still aggregates normally;
+            // payloadMappingError makes the failure queryable in the pipeline
+            // (the log line alone is invisible from inside host apps).
+            heliumEventPayload = .object([
+                "type": .string(HeliumAnalyticsMapper.getEventName(event)),
+                "payloadMappingError": .string("\(error)"),
+            ])
         }
 
         return HeliumPaywallLoggedEvent(

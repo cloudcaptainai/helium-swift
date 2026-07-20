@@ -13,9 +13,23 @@ import Foundation
 public protocol HeliumEvent {
     var eventName: String { get }
     var timestamp: Date { get }
-    
+
     /// Convert to dictionary for analytics/logging
     func toDictionary() -> [String: Any]
+
+    // MARK: Analytics wire format — implemented in HeliumAnalyticsMapper.swift.
+    // Not intended as public API; public only because this protocol is the public
+    // listener surface. IMPORTANT: never add default implementations for these —
+    // having no default is what forces the compiler to reject a new event type
+    // until its analytics mapping is written.
+
+    /// Analytics event name — the payload `type` discriminator and the suffix of
+    /// the `helium_`-prefixed track name. Differs from `eventName` for purchase
+    /// events (legacy subscription-era names).
+    var analyticsEventName: String { get }
+
+    /// Analytics payload sent under the `heliumEvent` key of `HeliumPaywallLoggedEvent`.
+    func analyticsPayload() -> [String: Any]
 }
 
 // MARK: - Event Context Protocols
