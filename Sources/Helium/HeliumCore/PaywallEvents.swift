@@ -13,12 +13,23 @@ import Foundation
 public protocol HeliumEvent {
     var eventName: String { get }
     var timestamp: Date { get }
-    
+
     /// Convert to dictionary for analytics/logging
     func toDictionary() -> [String: Any]
-    
-    /// Convert to legacy enum format for backward compatibility
-    func toLegacyEvent() -> HeliumPaywallEvent
+
+    // MARK: Analytics wire format — conformances grouped with HeliumAnalyticsMapper.
+    // Not intended as public API; public only because this protocol is the public
+    // listener surface. IMPORTANT: never add default implementations for these —
+    // having no default is what forces the compiler to reject a new event type
+    // until its analytics mapping is written.
+
+    /// Analytics event name — the payload `type` discriminator and the suffix of
+    /// the `helium_`-prefixed track name. Differs from `eventName` for purchase
+    /// events (legacy subscription-era names).
+    var analyticsEventName: String { get }
+
+    /// Analytics payload sent under the `heliumEvent` key of `HeliumPaywallLoggedEvent`.
+    func analyticsPayload() -> [String: Any]
 }
 
 // MARK: - Event Context Protocols
@@ -130,9 +141,6 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpen(triggerName: triggerName, paywallTemplateName: paywallName, viewType: viewType.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS, paywallUnavailableReason: paywallUnavailableReason?.rawValue, newWindowCreated: newWindowCreated)
-    }
 }
 
 /// Event fired when a paywall is closed
@@ -175,9 +183,6 @@ public struct PaywallCloseEvent: PaywallContextEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallClose(triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 /// Event fired when user dismisses a paywall
@@ -219,9 +224,6 @@ public struct PaywallDismissedEvent: PaywallContextEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallDismissed(triggerName: triggerName, paywallTemplateName: paywallName, dismissAll: dismissAll)
-    }
 }
 
 public struct PaywallOpenFailedEvent: PaywallContextEvent {
@@ -303,9 +305,6 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallOpenFailed(triggerName: triggerName, paywallTemplateName: paywallName, error: error, paywallUnavailableReason: paywallUnavailableReason?.rawValue, loadTimeTakenMS: loadTimeTakenMS, loadingBudgetMS: loadingBudgetMS, newWindowCreated: newWindowCreated)
-    }
 }
 
 /// Event fired when paywall is not shown due to targeting holdout, workflow configuration, or user having existing entitlement to a product in the paywall.
@@ -338,9 +337,6 @@ public struct PaywallSkippedEvent: HeliumEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallSkipped(triggerName: triggerName, skipReason: skipReason.rawValue)
-    }
 }
 
 /// Event fired when user presses a non-purchase button in the paywall
@@ -382,9 +378,6 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .ctaPressed(ctaName: buttonName, triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 /// Event fired when a custom action is triggered from the paywall
@@ -438,9 +431,6 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .customPaywallAction(actionName: actionName, params: params, triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 // MARK: - Purchase Events
@@ -484,9 +474,6 @@ public struct ProductSelectedEvent: ProductEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .offerSelected(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 /// Event fired when user initiates a purchase
@@ -531,10 +518,6 @@ public struct PurchasePressedEvent: ProductEvent {
             "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
-    }
-
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionPressed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, paymentProcessor: paymentProcessor)
     }
 }
 
@@ -622,9 +605,6 @@ public struct PurchaseSucceededEvent: ProductEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionSucceeded(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId, skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS, canonicalJoinTransactionId: storeKitTransactionId, paymentProcessor: paymentProcessor)
-    }
 }
 
 /// Event fired when StoreKit returns .cancelled status from makePurchase() delegate method
@@ -671,9 +651,6 @@ public struct PurchaseCancelledEvent: ProductEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionCancelled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, paymentProcessor: paymentProcessor)
-    }
 }
 
 /// Event fired when a purchase fails
@@ -729,9 +706,6 @@ public struct PurchaseFailedEvent: ProductEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionFailed(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, error: error?.localizedDescription, paymentProcessor: paymentProcessor)
-    }
 }
 
 /// Distinguishes how an existing entitlement was surfaced to the SDK.
@@ -797,10 +771,6 @@ public struct PurchaseRestoredEvent: ProductEvent {
             "timestamp": timestamp.timeIntervalSince1970
         ]
     }
-
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionRestored(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, restoreOrigin: restoreOrigin)
-    }
 }
 
 /// Event fired when restorePurchases() delegate method returns false
@@ -836,9 +806,6 @@ public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionRestoreFailed(triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 /// Event fired when user attempts to purchase a non-consumable product they already own
@@ -897,10 +864,6 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
         }
         return dict
     }
-
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .purchaseAlreadyEntitled(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName, storeKitTransactionId: storeKitTransactionId, storeKitOriginalTransactionId: storeKitOriginalTransactionId)
-    }
 }
 
 /// Event fired when StoreKit returns .pending status (e.g., waiting for parental approval)
@@ -947,9 +910,6 @@ public struct PurchasePendingEvent: ProductEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .subscriptionPending(productKey: productId, triggerName: triggerName, paywallTemplateName: paywallName)
-    }
 }
 
 // MARK: - System Events
@@ -974,9 +934,6 @@ public struct InitializeCalledEvent: HeliumEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .initializeCalled
-    }
 }
 
 /// Event fired after successful network fetch and parsing of paywall configuration from Helium servers
@@ -1104,25 +1061,6 @@ public struct PaywallsDownloadSuccessEvent: HeliumEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        // For legacy compatibility, we need to provide a configId - use a dummy UUID
-        let dummyConfigId = UUID()
-        return .paywallsDownloadSuccess(
-            configId: dummyConfigId,
-            downloadTimeTakenMS: downloadTimeTakenMS,
-            imagesDownloadTimeTakenMS: imagesDownloadTimeTakenMS,
-            fontsDownloadTimeTakenMS: fontsDownloadTimeTakenMS,
-            bundleDownloadTimeMS: bundleDownloadTimeMS,
-            localizedPriceTimeMS: localizedPriceTimeMS,
-            localizedPriceSuccess: localizedPriceSuccess,
-            numBundles: numBundles,
-            numBundlesFromCache: numBundlesFromCache,
-            uncachedBundleSizeKB: uncachedBundleSizeKB,
-            numAttempts: numAttempts,
-            numBundleAttempts: numBundleAttempts,
-            totalInitializeTimeMS: totalInitializeTimeMS
-        )
-    }
 }
 
 /// Event fired when paywall configuration download fails
@@ -1217,19 +1155,6 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallsDownloadError(
-            error: error,
-            configDownloaded: configDownloaded,
-            downloadTimeTakenMS: downloadTimeTakenMS,
-            bundleDownloadTimeMS: bundleDownloadTimeMS,
-            numBundles: numBundles,
-            numBundlesNotDownloaded: numBundlesNotDownloaded,
-            numAttempts: numAttempts,
-            numBundleAttempts: numBundleAttempts,
-            totalInitializeTimeMS: totalInitializeTimeMS
-        )
-    }
 }
 
 /// Event fired when paywall web view finishes rendering
@@ -1281,14 +1206,6 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
         return dict
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .paywallWebViewRendered(
-            triggerName: triggerName,
-            paywallTemplateName: paywallName,
-            webviewRenderTimeTakenMS: webviewRenderTimeTakenMS,
-            paywallUnavailableReason: paywallUnavailableReason?.rawValue
-        )
-    }
 }
 
 // MARK: - Experiment Events
@@ -1325,7 +1242,4 @@ public struct UserAllocatedEvent: HeliumEvent {
         ]
     }
     
-    public func toLegacyEvent() -> HeliumPaywallEvent {
-        return .userAllocated(triggerName: trigger, experimentInfo: experimentInfo)
-    }
 }

@@ -136,7 +136,6 @@ class HeliumAnalyticsManager {
         paywallSession: PaywallSession?,
         overridePaywallSessionId: String? = nil
     ) -> HeliumPaywallLoggedEvent {
-        let legacyEvent = event.toLegacyEvent()
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
         var experimentID: String? = nil
@@ -147,7 +146,7 @@ class HeliumAnalyticsManager {
         if let paywallSession {
             isFallback = paywallSession.fallbackType != .notFallback
         }
-        if let triggerName = (legacyEvent.getTriggerIfExists() ?? paywallSession?.trigger) {
+        if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
             experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
             modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
             experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
@@ -160,7 +159,7 @@ class HeliumAnalyticsManager {
                 if paywallInfo == nil {
                     isFallback = true
                 } else {
-                    let eventPaywallTemplateName = legacyEvent.getPaywallTemplateNameIfExists() ?? ""
+                    let eventPaywallTemplateName = HeliumAnalyticsMapper.getPaywallTemplateName(event) ?? ""
                     isFallback = eventPaywallTemplateName.starts(with: "fallback_")
                 }
             }
@@ -168,8 +167,23 @@ class HeliumAnalyticsManager {
         
         let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
+
+        let heliumEventPayload: SegmentJSON
+        do {
+            heliumEventPayload = try SegmentJSON(HeliumAnalyticsMapper.mapToAnalyticsPayload(event))
+        } catch {
+            HeliumLogger.log(.error, category: .events, "Failed to serialize analytics payload", metadata: ["event": event.eventName])
+            // Keep the real type so the event still aggregates normally;
+            // payloadMappingError makes the failure queryable in the pipeline
+            // (the log line alone is invisible from inside host apps).
+            heliumEventPayload = .object([
+                "type": .string(HeliumAnalyticsMapper.getEventName(event)),
+                "payloadMappingError": .string("\(error)"),
+            ])
+        }
+
         return HeliumPaywallLoggedEvent(
-            heliumEvent: legacyEvent,
+            heliumEvent: heliumEventPayload,
             fetchedConfigId: fetchedConfigId,
             timestamp: formatAsTimestamp(date: Date()),
             contextTraits: HeliumIdentityManager.shared.getUserContext(),
@@ -197,7 +211,7 @@ class HeliumAnalyticsManager {
     }
 
     /// Tracks a paywall event, building the logged event and sending to analytics.
-    /// Handles conversion to legacy format, event enrichment, and flushing for critical events.
+    /// Handles analytics payload mapping, event enrichment, and flushing for critical events.
     /// - Parameters:
     ///   - event: The event to track
     ///   - paywallSession: Optional paywall session for context
@@ -220,17 +234,16 @@ class HeliumAnalyticsManager {
             )
             
             // Track event and flush for critical events
-            let legacyEvent = eventForLogging.heliumEvent
-            let eventName = "helium_" + legacyEvent.caseString()
+            let eventName = "helium_" + HeliumAnalyticsMapper.getEventName(event)
             let trackAndFlush: (Analytics) -> Void = { analytics in
                 analytics.track(name: eventName, properties: eventForLogging)
-                
+
                 // Flush immediately for critical events to minimize event loss
-                switch legacyEvent {
-                case .paywallOpen, .subscriptionSucceeded:
+                switch event {
+                case is PaywallOpenEvent, is PurchaseSucceededEvent:
                     analytics.flush()
-                case .paywallClose:
-                    if (event as? PaywallContextEvent)?.isSecondTry != true {
+                case let closeEvent as PaywallCloseEvent:
+                    if !closeEvent.isSecondTry {
                         analytics.flush()
                     }
                 default:
