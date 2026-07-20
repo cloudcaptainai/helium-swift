@@ -1,11 +1,12 @@
 //
 //  HeliumAnalyticsMapper.swift
 //
-//  The analytics wire format previously produced by the legacy
-//  HeliumPaywallEvent enum's custom Codable encoding. Mirrors Android's
-//  AnalyticsMapper. The keys and `type` discriminators here intentionally
-//  differ from HeliumEvent.eventName / toDictionary() (the public listener
-//  surface) and must not change without a backend migration.
+//  Maps HeliumEvent instances to the analytics payload sent under the
+//  `heliumEvent` key of HeliumPaywallLoggedEvent. Mirrors Android's
+//  AnalyticsMapper. The keys and `type` discriminators here are the analytics
+//  wire format — they intentionally differ from HeliumEvent.eventName /
+//  toDictionary() (the public listener surface) and must not change without a
+//  backend migration.
 //
 //  Every event's mapping lives in this file as `analyticsEventName` /
 //  `analyticsPayload()` conformances. Those are HeliumEvent protocol
@@ -66,10 +67,7 @@ extension PaywallContextEvent {
 }
 
 extension ProductEvent {
-    /// Context fields plus `productKey`. `paymentProcessor` is intentionally NOT
-    /// here — its wire presence is not uniform (offerSelected, subscriptionRestored,
-    /// subscriptionPending, and purchase_already_entitled omit it), so events that
-    /// send it add it explicitly.
+    /// Context fields plus `productKey`.
     fileprivate func productAnalyticsPayload() -> [String: Any] {
         var payload = contextAnalyticsPayload()
         payload["productKey"] = productId
