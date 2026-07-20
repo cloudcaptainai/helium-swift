@@ -146,7 +146,7 @@ class HeliumAnalyticsManager {
         if let paywallSession {
             isFallback = paywallSession.fallbackType != .notFallback
         }
-        if let triggerName = (HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger) {
+        if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
             experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
             modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
             experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
@@ -242,8 +242,8 @@ class HeliumAnalyticsManager {
                 switch event {
                 case is PaywallOpenEvent, is PurchaseSucceededEvent:
                     analytics.flush()
-                case is PaywallCloseEvent:
-                    if (event as? PaywallContextEvent)?.isSecondTry != true {
+                case let closeEvent as PaywallCloseEvent:
+                    if !closeEvent.isSecondTry {
                         analytics.flush()
                     }
                 default:
