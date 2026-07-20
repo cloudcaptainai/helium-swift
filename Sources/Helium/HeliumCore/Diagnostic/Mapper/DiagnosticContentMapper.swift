@@ -168,8 +168,8 @@ struct DiagnosticContentMapper {
         DiagnosticContent(
             category: .setup,
             title: "Helium isn't initialized",
-            body: "Helium.initialize() was never called. Initialize Helium at app launch, before "
-                + "any trigger can fire.",
+            body: "Helium.shared.initialize(apiKey:) was never called. Initialize Helium at app "
+                + "launch, before any trigger can fire.",
             usersWillSee: UsersWillSee.seesNothingNoFallbackPossible,
             cta: .openUrl(label: "View Setup Docs", url: Url.quickstart),
             reasonCode: code

@@ -233,7 +233,7 @@ public enum HeliumPaymentAPIError: LocalizedError {
         case .checkoutSessionNotCompleted:
             return "Checkout session has not been completed"
         case .notInitialized:
-            return "Helium has not been initialized. Call Helium.initialize() before making payment API calls."
+            return "Helium has not been initialized. Call Helium.shared.initialize(apiKey:) before making payment API calls."
         }
     }
 }
