@@ -21,6 +21,12 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 - `Tests/helium-swiftTests/` — Unit tests.
 - `HeliumExample/` — Example app with UI tests.
 
+## Code comments
+
+- **Comment only when it adds genuine value; otherwise write none.** Most well-written code reads fine on its own. A comment should explain something the code can't — a non-obvious "why", a subtle invariant, a gotcha — not restate what the code plainly does.
+- **Keep comments durable and self-contained.** Don't reference other files or specific line numbers, and don't describe details that will drift out of date as the code changes.
+- **Never write change-narrating comments.** No notes about what the code used to be, why it changed, or what a comment replaced. That context belongs in the commit/PR, not the source — it's meaningless to a future reader who never saw the old version.
+
 ## Conventions
 
 - Version is tracked in `Sources/Helium/HeliumCore/BuildConstants.swift`.
