@@ -8,17 +8,10 @@
 //  toDictionary() (the public listener surface) and must not change without a
 //  backend migration.
 //
-//  Every event's mapping lives in this file as `analyticsEventName` /
-//  `analyticsPayload()` conformances. Those are HeliumEvent protocol
-//  requirements with no default implementation, so a new event type will not
-//  compile until its mapping is added here.
-//
-//  Wire-format notes (locked down by AnalyticsPayloadMappingTests):
-//  - `type` uses legacy analytics names, not `eventName`.
-//  - Errors are keyed `errorDescription`.
-//  - `storeKitTransactionId` is duplicated into `canonicalJoinTransactionId`
-//    for purchase success / already-entitled events.
-//  - nil optionals are omitted.
+//  Every event's mapping lives here as `analyticsEventName` /
+//  `analyticsPayload()` conformances — HeliumEvent protocol requirements with
+//  no default implementation, so a new event type will not compile until its
+//  mapping is added.
 //
 
 import Foundation

@@ -5,17 +5,15 @@ import XCTest
 /// `heliumEvent` key of `HeliumPaywallLoggedEvent` and the `helium_`-prefixed
 /// track-event names.
 ///
-/// Each golden test asserts the exact payload against a hardcoded expectation.
-/// The expectations were originally verified against the legacy
-/// `HeliumPaywallEvent` Codable encoding before its removal (HEL-6201) and are
-/// the permanent regression net for the analytics wire format — do not change
-/// them without a backend migration.
+/// Each golden test asserts the exact payload against a hardcoded expectation —
+/// the regression net for the analytics wire format. Do not change the
+/// expectations without a backend migration.
 final class AnalyticsPayloadMappingTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Payload produced by the new central mapper, round-tripped through
-    /// SegmentJSON + JSONEncoder — i.e. exactly what goes on the wire.
+    /// Payload round-tripped through SegmentJSON + JSONEncoder — i.e. exactly
+    /// what goes on the wire.
     private func mapperPayload(for event: HeliumEvent) throws -> NSDictionary {
         let json = try SegmentJSON(HeliumAnalyticsMapper.mapToAnalyticsPayload(event))
         let data = try JSONEncoder().encode(json)
@@ -315,8 +313,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     }
 
     func testPurchaseRestoredPayload() throws {
-        // paymentProcessor is intentionally absent — the legacy wire format for
-        // subscriptionRestored never carried it.
+        // The subscriptionRestored wire format does not carry paymentProcessor.
         try assertWirePayload(
             PurchaseRestoredEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
@@ -374,7 +371,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     }
 
     func testPurchasePendingPayload() throws {
-        // Legacy subscriptionPending never carried paymentProcessor.
+        // The subscriptionPending wire format does not carry paymentProcessor.
         try assertWirePayload(
             PurchasePendingEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore),
             equals: [
@@ -415,8 +412,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             "totalInitializeTimeMS": 900,
         ]
 
-        // Intentional wire change (HEL-6201): no configId — the legacy encoding
-        // sent a meaningless random UUID here. The real config id is sent
+        // configId is intentionally absent; the real config id is sent
         // top-level as HeliumPaywallLoggedEvent.fetchedConfigId.
         XCTAssertEqual(try mapperPayload(for: fullEvent), expected)
         XCTAssertEqual(try mapperPayload(for: PaywallsDownloadSuccessEvent()),

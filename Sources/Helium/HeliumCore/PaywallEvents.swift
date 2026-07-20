@@ -17,7 +17,7 @@ public protocol HeliumEvent {
     /// Convert to dictionary for analytics/logging
     func toDictionary() -> [String: Any]
 
-    // MARK: Analytics wire format — implemented in HeliumAnalyticsMapper.swift.
+    // MARK: Analytics wire format — conformances grouped with HeliumAnalyticsMapper.
     // Not intended as public API; public only because this protocol is the public
     // listener surface. IMPORTANT: never add default implementations for these —
     // having no default is what forces the compiler to reject a new event type

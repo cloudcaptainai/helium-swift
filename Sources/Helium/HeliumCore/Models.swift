@@ -198,10 +198,9 @@ public struct HeliumFetchedConfig: Codable {
 
 public struct HeliumPaywallLoggedEvent: Codable {
     /// Analytics payload built by `HeliumAnalyticsMapper.mapToAnalyticsPayload`.
-    /// Deliberately the vendored `SegmentJSON` (not `AnyCodable`): its throwing
-    /// init validates the dictionary eagerly at the mapping site — enabling the
-    /// degrade path in `buildLoggedEvent` — and it is the type Segment converts
-    /// Codable properties into internally, so the tracking path is unchanged.
+    /// Deliberately `SegmentJSON` rather than `AnyCodable`: its throwing init
+    /// validates the payload eagerly at construction, and it is the type Segment
+    /// converts Codable properties into internally.
     var heliumEvent: SegmentJSON
     var fetchedConfigId: UUID?
     var timestamp: String
