@@ -16,6 +16,8 @@ struct FallbackDebugBanner: View {
     let trigger: String
     let fallbackReason: PaywallUnavailableReason?
 
+    private static let diagnosticContentMapper = DiagnosticContentMapper()
+
     @Environment(\.colorScheme) private var colorScheme
     @State private var isPresented = false
 
@@ -86,12 +88,12 @@ struct FallbackDebugBanner: View {
     /// has turned diagnostics off or ticked "do not show again".
     private func openDiagnostics() {
         guard !trigger.isEmpty else { return }
-        let message = PaywallDiagnosticMessages.remediationMessage(
-            for: fallbackReason,
-            trigger: trigger
+        let content = Self.diagnosticContentMapper.mapUnavailable(
+            fallbackReason,
+            context: .live(trigger: trigger)
         )
         Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, message: message)
+            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
         }
     }
 

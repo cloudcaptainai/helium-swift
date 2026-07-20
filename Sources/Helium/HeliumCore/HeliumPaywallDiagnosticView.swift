@@ -4,44 +4,12 @@
 //
 //  Diagnostic modal shown when a paywall fails to display or is skipped.
 //
+//  All displayed copy arrives as an authored `DiagnosticContent`, so nothing here has to infer
+//  meaning — or a CTA destination — from message text.
+//
 
 import SwiftUI
 import UIKit
-
-// MARK: - Data Model
-
-struct DiagnosticContent {
-    let bodyText: String
-    let ctaTitle: String
-    let ctaURL: URL
-
-    private static let defaultURL = URL(string: "https://docs.tryhelium.com/sdk/quickstart-ios")!
-
-    /// Extracts the first URL found in the given text and returns it along with the text stripped of that URL.
-    private static func extractAndStripURL(from text: String) -> (url: URL, strippedText: String) {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue),
-              let match = detector.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range, in: text),
-              let url = URL(string: String(text[range])) else {
-            return (defaultURL, text)
-        }
-        let stripped = text.replacingCharacters(in: range, with: "").trimmingCharacters(in: .whitespaces)
-        return (url, stripped)
-    }
-
-    static func from(bodyText: String) -> DiagnosticContent {
-        let (url, strippedText) = extractAndStripURL(from: bodyText)
-        let ctaTitle: String
-        if url == defaultURL {
-            ctaTitle = "View Docs"
-        } else if url.host?.contains("app.tryhelium.com") == true {
-            ctaTitle = "Open Dashboard"
-        } else {
-            ctaTitle = "View Docs"
-        }
-        return DiagnosticContent(bodyText: strippedText, ctaTitle: ctaTitle, ctaURL: url)
-    }
-}
 
 // MARK: - SwiftUI View
 
@@ -50,129 +18,243 @@ struct HeliumPaywallDiagnosticView: View {
     let triggerName: String
     let onDismiss: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain")
 
-    private var triggerTextColor: Color {
-        colorScheme == .dark
-            ? Color(red: 241/255, green: 233/255, blue: 253/255)
-            : Color(red: 44/255, green: 112/255, blue: 106/255)
+    private let styleMapper = DiagnosticCategoryStyleMapper()
+    private let reportMapper = DiagnosticReportMapper()
+
+    private var style: DiagnosticCategoryStyle {
+        styleMapper.map(content.category)
     }
 
-    private var triggerBackgroundColor: Color {
-        colorScheme == .dark
-            ? Color(red: 118/255, green: 44/255, blue: 200/255)
-            : Color(red: 213/255, green: 248/255, blue: 239/255)
+    private var report: String {
+        reportMapper.map(content, trigger: triggerName, sdkVersion: BuildConstants.version)
     }
-    
+
     private var isForPreview: Bool {
-        return triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+        triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Dismiss button
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        onDismiss()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.secondary)
+                bannerStrip
+
+                VStack(alignment: .leading, spacing: 0) {
+                    overline
+                    title
+                    if !isForPreview {
+                        triggerPill
                     }
+                    bodyText
+                    usersCallout
+                    primaryAction
+                    secondaryAction
+                    if !isForPreview {
+                        doNotShowAgainToggle
+                    }
+                    footer
                 }
-                .padding(.top, 8)
-
-                // Logo + Trigger group
-                Image("heliumlogo", bundle: .heliumResources)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 200)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-
-                if !isForPreview {
-                    Button(action: {
-                        UIPasteboard.general.string = triggerName
-                    }) {
-                        HStack(spacing: 10) {
-                            VStack(spacing: 5) {
-                                Text("Trigger")
-                                    .font(.subheadline)
-                                    .foregroundColor(triggerTextColor)
-                                Text(triggerName)
-                                    .font(.title3)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(triggerTextColor)
-                            }
-                            Image(systemName: "doc.on.doc")
-                                .font(.caption)
-                                .foregroundColor(triggerTextColor)
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(triggerBackgroundColor)
-                        .cornerRadius(12)
-                    }
-                    .padding(.top, 40)
-                }
-
-                // Body text
-                Text(content.bodyText)
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 32)
-
-                // CTA button + copy
-                HStack(spacing: 12) {
-                    Button(action: {
-                        UIApplication.shared.open(content.ctaURL)
-                    }) {
-                        Text(content.ctaTitle)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-
-                    Button(action: {
-                        UIPasteboard.general.string = content.ctaURL.absoluteString
-                    }) {
-                        Image(systemName: "doc.on.doc")
-                            .font(.body)
-                            .padding(14)
-                            .background(Color(.systemGray5))
-                            .cornerRadius(12)
-                    }
-                }
-                .padding(.top, 40)
-
-                if !isForPreview {
-                    // Checkbox + Footer
-                    Toggle(isOn: $doNotShowAgain) {
-                        Text("Do not show again on this device")
-                            .font(.subheadline)
-                    }
-                    .toggleStyle(CheckboxToggleStyle())
-                    .onChange(of: doNotShowAgain) { newValue in
-                        UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
-                    }
-                    .padding(.top, 30)
-                    
-                    Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 38)
-                }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+                .padding(.bottom, 30)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 30)
         }
+    }
+
+    // MARK: - Elements
+
+    /// Full-width tinted row. The modal is classifiable before a single word of prose is read.
+    private var bannerStrip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: style.systemImageName)
+                .font(.body)
+            Text(content.category.bannerLabel)
+                .font(.subheadline.weight(.bold))
+                .kerning(0.8)
+            Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .foregroundColor(style.foreground)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(style.background)
+    }
+
+    /// Branding demotes so the diagnosis can promote.
+    private var overline: some View {
+        Text("HELIUM PAYWALL DIAGNOSTIC")
+            .font(.caption2.weight(.bold))
+            .kerning(1)
+            .foregroundColor(.secondary)
+    }
+
+    private var title: some View {
+        Text(content.title)
+            .font(.title.weight(.bold))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 10)
+    }
+
+    private var triggerPill: some View {
+        Button(action: { UIPasteboard.general.string = triggerName }) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Trigger")
+                    .font(.subheadline)
+                Text(triggerName)
+                    .font(.title3.weight(.semibold))
+                Text("(tap to copy)")
+                    .font(.caption2)
+                    .opacity(0.7)
+            }
+            .foregroundColor(triggerTextColor)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(triggerBackgroundColor)
+            .cornerRadius(12)
+        }
+        .padding(.top, 20)
+    }
+
+    private var bodyText: some View {
+        Text(content.body)
+            .font(.body)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 20)
+    }
+
+    /// A distinct element rather than body prose: it answers the tester's actual question — did real
+    /// customers get a broken experience?
+    private var usersCallout: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("WHAT REAL USERS SEE")
+                .font(.caption2.weight(.bold))
+                .kerning(0.8)
+                .foregroundColor(.secondary)
+            Text(content.usersWillSee)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(.separator), lineWidth: 1)
+        )
+        .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var primaryAction: some View {
+        switch content.cta {
+        case let .openUrl(label, urlString):
+            HStack(spacing: 12) {
+                filledCtaButton(label) { open(urlString) }
+                Button(action: { UIPasteboard.general.string = urlString }) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.body)
+                        .padding(14)
+                        .background(Color(.systemGray5))
+                        .cornerRadius(12)
+                }
+                .accessibilityLabel("Copy URL")
+            }
+            .padding(.top, 24)
+
+        // The report is the only action worth offering — no support URL is invented for it.
+        case .copyReport:
+            filledCtaButton("Copy Diagnostic Report", action: copyReport)
+                .padding(.top, 24)
+        }
+    }
+
+    /// Hidden when copying the report is already the primary CTA.
+    @ViewBuilder
+    private var secondaryAction: some View {
+        if case .openUrl = content.cta {
+            Button(action: copyReport) {
+                Text("Copy Diagnostic Report")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func filledCtaButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+    }
+
+    private func copyReport() {
+        UIPasteboard.general.string = report
+    }
+
+    private var doNotShowAgainToggle: some View {
+        Toggle(isOn: $doNotShowAgain) {
+            Text("Do not show again on this device")
+                .font(.subheadline)
+        }
+        .toggleStyle(CheckboxToggleStyle())
+        .onChange(of: doNotShowAgain) { newValue in
+            UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
+        }
+        .padding(.top, 20)
+    }
+
+    /// The visibility disclaimer is only true on the non-preview path: dashboard previews bypass
+    /// the display flag, so the claim may not render there.
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !isForPreview {
+                Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            Text("Reason code: \(content.reasonCode)")
+                .font(.caption2.monospaced())
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 28)
+    }
+
+    // MARK: - Colors
+
+    private var triggerTextColor: Color {
+        RGB.dynamicColor(light: RGB(r: 44, g: 112, b: 106), dark: RGB(r: 127, g: 216, b: 201))
+    }
+
+    private var triggerBackgroundColor: Color {
+        RGB.dynamicColor(light: RGB(r: 213, g: 248, b: 239), dark: RGB(r: 18, g: 59, b: 53))
+    }
+
+    /// An unopenable link is not worth crashing or trapping over — the copy-URL affordance beside
+    /// the CTA still gets the developer where they are going.
+    private func open(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -216,13 +298,8 @@ extension HeliumPaywallDiagnosticView {
     }
 
     @MainActor
-    static func presentIfNeeded(
-        trigger: String,
-        message: String
-    ) {
+    static func presentIfNeeded(trigger: String, content: DiagnosticContent) {
         guard shouldPresent(trigger: trigger) else { return }
-
-        let content = DiagnosticContent.from(bodyText: message)
         present(content: content, triggerName: trigger)
     }
 

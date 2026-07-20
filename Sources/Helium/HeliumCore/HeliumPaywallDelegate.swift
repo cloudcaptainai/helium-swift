@@ -51,7 +51,12 @@ public extension HeliumPaywallDelegate {
 class HeliumPaywallDelegateWrapper {
     
     public static let shared = HeliumPaywallDelegateWrapper()
-    
+
+    /// Authored diagnostic copy, shared by the log lines and the diagnostic modal so the two can
+    /// never describe the same reason differently.
+    private static let diagnosticContentMapper = DiagnosticContentMapper()
+    private static let diagnosticLogLineMapper = DiagnosticLogLineMapper()
+
     /// Tracks Transaction.updates observation tasks for pending purchases, keyed by product ID
     @HeliumAtomic private var pendingPurchaseTasks: [String: Task<Void, Never>] = [:]
     
@@ -328,13 +333,18 @@ class HeliumPaywallDelegateWrapper {
         fallbackShown: Bool,
         logMetadata: [String: String]
     ) {
-        let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
-        let notShownAddendum = PaywallDiagnosticMessages.remediationMessage(
-            for: paywallUnavailableReason,
-            trigger: trigger
+        let content = Self.diagnosticContentMapper.mapUnavailable(
+            paywallUnavailableReason,
+            context: .live(trigger: trigger)
         )
-        HeliumLogger.log(.error, category: .fallback, "\(logPrefix) \(notShownAddendum)", metadata: logMetadata)
-        
+        let logPrefix = fallbackShown ? "Fallback paywall shown!" : "Paywall not shown!"
+        HeliumLogger.log(
+            .error,
+            category: .fallback,
+            "\(logPrefix) \(Self.diagnosticLogLineMapper.map(content))",
+            metadata: logMetadata
+        )
+
 #if DEBUG
         let canShowDiagnosticView = true
 #else
@@ -343,39 +353,32 @@ class HeliumPaywallDelegateWrapper {
         if canShowDiagnosticView {
             if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
                 Task { @MainActor in
-                    HeliumPaywallDiagnosticView.presentIfNeeded(
-                        trigger: trigger,
-                        message: notShownAddendum
-                    )
+                    HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
                 }
             }
         }
     }
-    
+
     private func logPaywallSkip(
         trigger: String,
         skipReason: PaywallSkippedReason,
         logMetadata: [String: String]
     ) {
-        var skipMessage: String = ""
-        switch skipReason {
-        case .targetingHoldout:
-            skipMessage = "Paywall skipped due to targeting holdout. Check your workflow configuration if this is not expected https://app.tryhelium.com/workflows"
-        case .alreadyEntitled:
-            skipMessage = "Paywall not shown because user is already entitled to a product in the paywall. To disable this, ensure dontShowIfAlreadyEntitled is false. https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements"
-        }
-        HeliumLogger.log(.warn, category: .ui, skipMessage, metadata: logMetadata)
-        
+        let content = Self.diagnosticContentMapper.mapSkip(skipReason)
+        HeliumLogger.log(
+            .warn,
+            category: .ui,
+            Self.diagnosticLogLineMapper.map(content),
+            metadata: logMetadata
+        )
+
 #if DEBUG
         Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(
-                trigger: trigger,
-                message: skipMessage
-            )
+            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
         }
 #endif
     }
-    
+
     // MARK: - Pending Purchase Observation
 
     /// How long to wait for a pending purchase (e.g., Ask to Buy) before giving up.
