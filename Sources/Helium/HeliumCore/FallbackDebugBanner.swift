@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// A floating banner overlaid on a Helium fallback paywall, so a developer can tell at a glance
+/// A banner spanning the top edge of a Helium fallback paywall, so a developer can tell at a glance
 /// that the live remote paywall was not the one that rendered.
 ///
 /// Shown from DEBUG builds only. The SDK ships as source rather than a binary, so `#if DEBUG`
 /// resolves against the host app's build configuration and this never reaches a TestFlight or
 /// App Store build.
 ///
-/// Sits top-center and stays narrow, because that is the one region paywalls reliably leave free:
-/// their close button sits in a top corner, their purchase call to action along the bottom edge.
-/// The card is interactive, so whatever it covers it also blocks.
+/// It spans the width so it reads as a notification rather than a chip. That is a deliberate trade:
+/// the card is interactive, so at full width it covers the top corners where paywalls place their
+/// close button, and swallows those taps. Dismissing is the way out, so the paywall's own close
+/// button is never more than one extra tap away.
 struct FallbackDebugBanner: View {
 
     let trigger: String
@@ -31,7 +32,7 @@ struct FallbackDebugBanner: View {
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
     }
 
     var body: some View {
@@ -61,12 +62,15 @@ struct FallbackDebugBanner: View {
                     .font(.system(size: 12, weight: .regular))
                     .opacity(0.9)
             }
+            // Taking the slack is what pins the dismiss control to the trailing edge.
+            .frame(maxWidth: .infinity, alignment: .leading)
             dismissButton
                 .padding(.leading, 2)
         }
         .foregroundColor(foregroundColor)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
         .background(shape.fill(backgroundColor))
         // A soft rim keeps the card legible on a paywall of any colour.
         .overlay(shape.strokeBorder(Color.black.opacity(0.2), lineWidth: 1))

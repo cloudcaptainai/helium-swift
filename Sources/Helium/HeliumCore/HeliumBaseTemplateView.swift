@@ -90,8 +90,8 @@ public struct DynamicBaseTemplateView: View {
             ZStack(alignment: .top) {
                 paywallWebView
                 // The stack keeps its safe-area inset while the paywall bleeds past it, so the
-                // banner clears the status bar and Dynamic Island. Centering keeps it out of the
-                // top corners, where paywalls place their close button.
+                // full-width banner clears the status bar, the Dynamic Island, and a landscape
+                // notch without measuring any of them.
                 FallbackDebugBanner(
                     trigger: triggerName ?? "",
                     fallbackReason: fallbackReason
