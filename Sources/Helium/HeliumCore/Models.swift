@@ -244,7 +244,7 @@ public enum PaywallOpenViewType : String {
     case embedded = "embedded"
 }
 
-public enum PaywallUnavailableReason: String, Codable {
+public enum PaywallUnavailableReason: String, Codable, CaseIterable {
     case notInitialized
     case triggerHasNoPaywall
     case forceShowFallback
@@ -298,7 +298,7 @@ public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
     }
 }
 
-public enum PaywallSkippedReason: String, Codable {
+public enum PaywallSkippedReason: String, Codable, CaseIterable {
     case targetingHoldout
     case alreadyEntitled
 }
