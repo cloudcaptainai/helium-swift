@@ -51,6 +51,7 @@ public struct HeliumPaywallInfo: Codable {
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
     var presentationStyle: PaywallPresentationStyle?
+    var productHapticsEnabled: [String]? = nil
     
     var productIdsIOS: [String] {
         productsOfferedIOS ?? productsOffered ?? []
