@@ -298,7 +298,7 @@ public enum PaywallNotShownReason: Equatable, CustomStringConvertible {
     }
 }
 
-public enum PaywallSkippedReason: String, Codable {
+public enum PaywallSkippedReason: String, Codable, CaseIterable {
     case targetingHoldout
     case alreadyEntitled
 }

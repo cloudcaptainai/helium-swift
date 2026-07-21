@@ -22,11 +22,20 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         XCTAssertTrue(line.hasSuffix("https://app.tryhelium.com/workflows"))
     }
 
-    func testCopyReportCtaAppendsNoUrl() {
+    /// A copy-report reason has no CTA destination, so the line carries the remediation link.
+    func testCopyReportCtaAppendsTheRemediationUrl() {
         let line = logLine(for: .webviewRenderFail)
 
         XCTAssertTrue(line.hasPrefix("[webviewRenderFail] The paywall failed to render."))
-        XCTAssertFalse(line.contains("http"))
+        XCTAssertTrue(line.hasSuffix("https://docs.tryhelium.com/guides/fallback-bundle"))
+    }
+
+    /// One URL per line keeps every line the same shape for grep-based workflows.
+    func testNoLineCarriesMoreThanOneUrl() {
+        for reason in PaywallUnavailableReason.allCases {
+            let urls = logLine(for: reason).components(separatedBy: "http").count - 1
+            XCTAssertLessThanOrEqual(urls, 1, reason.rawValue)
+        }
     }
 
     /// Existing grep-based log workflows key off this wording.

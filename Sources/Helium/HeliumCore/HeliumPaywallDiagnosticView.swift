@@ -142,6 +142,7 @@ struct HeliumPaywallDiagnosticView: View {
             Text(content.usersWillSee)
                 .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
+            usersCalloutLink
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -154,6 +155,25 @@ struct HeliumPaywallDiagnosticView: View {
                 .stroke(Color(.separator), lineWidth: 1)
         )
         .padding(.top, 20)
+    }
+
+    /// A `Button` rather than a `Link` so an unparseable URL still renders the remediation, inert,
+    /// instead of dropping it from the callout entirely. Tinted with the modal's own blue rather
+    /// than the host app's accent, which is arbitrary and can land illegibly on this background.
+    @ViewBuilder
+    private var usersCalloutLink: some View {
+        if let link = content.usersWillSeeLink {
+            Button(action: { open(link.url) }) {
+                Text(link.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.blue)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityAddTraits(.isLink)
+        }
     }
 
     @ViewBuilder

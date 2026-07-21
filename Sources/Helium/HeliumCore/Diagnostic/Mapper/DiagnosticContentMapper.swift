@@ -8,9 +8,8 @@ import Foundation
 /// Maps a paywall-not-shown reason onto the authored copy that describes it.
 ///
 /// Two invariants hold across the whole matrix:
-///  - **No URLs in `DiagnosticContent.body`.** The CTA owns the URL, so nothing downstream has to
-///    detect one inside prose. `DiagnosticContent.usersWillSee` is the one exception — it may end
-///    with the fallback-guide URL, because the modal is the only surface that renders it.
+///  - **No URLs in prose.** `DiagnosticContent.cta` and `DiagnosticContent.usersWillSeeLink` own
+///    every URL, so nothing downstream has to detect one inside `title`, `body` or `usersWillSee`.
 ///  - **No raw reason codes as prose.** An unrecognised code maps to generic copy and surfaces its
 ///    code only as `DiagnosticContent.reasonCode`.
 ///
@@ -35,13 +34,19 @@ struct DiagnosticContentMapper {
     private enum UsersWillSee {
         /// Shared outcome for reasons a bundled fallback would have covered.
         static let seesNothingConsiderFallback =
-            "Users hitting this trigger see nothing. Consider adding a fallback paywall: "
-            + Url.fallbackGuide
+            "Users hitting this trigger see nothing. Consider adding a fallback paywall."
 
         /// Outcome for failures that stop the SDK before any paywall — fallback included — can load.
         static let seesNothingNoFallbackPossible =
             "Users hitting this trigger see nothing — no paywall and no fallback can load until "
             + "this is fixed."
+
+        /// Pairs with the outcomes above that advise a fallback: the prose gives the advice, this
+        /// points at how to act on it.
+        static let fallbackGuideLink = DiagnosticLink(
+            label: "Read the fallback paywall guide",
+            url: Url.fallbackGuide
+        )
     }
 
     /// Stands in for the reason code when the SDK reported no reason at all.
@@ -116,6 +121,7 @@ struct DiagnosticContentMapper {
                 + "Check your workflow configuration if this is not expected.",
             usersWillSee: "Users matched by this targeting rule see no paywall and the app simply "
                 + "continues. Other users see the paywall normally.",
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "Open Workflows", url: Url.workflows),
             reasonCode: PaywallSkippedReason.targetingHoldout.rawValue
         )
@@ -130,6 +136,7 @@ struct DiagnosticContentMapper {
                 + "to false.",
             usersWillSee: "Subscribed users see no paywall; users without the entitlement see it "
                 + "normally.",
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "Entitlement Docs", url: Url.entitlements),
             reasonCode: PaywallSkippedReason.alreadyEntitled.rawValue
         )
@@ -143,6 +150,7 @@ struct DiagnosticContentMapper {
             body: "Another Helium paywall is already on screen, so this request was ignored. "
                 + "Dismiss the current paywall before presenting another.",
             usersWillSee: "Users see the paywall that is already on screen.",
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -157,6 +165,7 @@ struct DiagnosticContentMapper {
             // The modal only appears when nothing rendered, so reaching it means the forced fallback
             // itself failed. The log path, where the fallback did render, never reads this field.
             usersWillSee: "The bundled fallback could not be rendered, so this user saw nothing.",
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -171,6 +180,7 @@ struct DiagnosticContentMapper {
             body: "Helium.shared.initialize(apiKey:) was never called. Initialize Helium at app "
                 + "launch, before any trigger can fire.",
             usersWillSee: UsersWillSee.seesNothingNoFallbackPossible,
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "View Setup Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -183,6 +193,7 @@ struct DiagnosticContentMapper {
             body: "Helium could not find a root view controller to present from. Trigger the paywall "
                 + "after your window and root view controller exist — not during app or scene startup.",
             usersWillSee: UsersWillSee.seesNothingNoFallbackPossible,
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "View Setup Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -195,6 +206,7 @@ struct DiagnosticContentMapper {
             body: "Could not find a paywall for the trigger \"\(context.trigger)\". Verify the trigger "
                 + "is in a workflow. Changes to a workflow can take a few minutes to be reflected here.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "Open Workflows", url: Url.workflows),
             reasonCode: code
         )
@@ -207,6 +219,7 @@ struct DiagnosticContentMapper {
             body: "The paywall for \"\(context.trigger)\" does not include any iOS products. Sync your "
                 + "App Store in-app products and subscriptions, then select them on this paywall.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context)),
             reasonCode: code
         )
@@ -219,6 +232,7 @@ struct DiagnosticContentMapper {
             body: "External web checkout requires a custom user ID so purchases can be linked to this "
                 + "user. Set one via Helium.identify.userId before showing the paywall.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -235,6 +249,7 @@ struct DiagnosticContentMapper {
             title: "Web checkout isn't enabled",
             body: body,
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -249,7 +264,8 @@ struct DiagnosticContentMapper {
             body: "Paywalls had not completed downloading when this trigger fired. Check your "
                 + "connection, and consider raising the loading budget or initializing Helium sooner.",
             usersWillSee: "Real users see a loading indication followed by no paywall. Consider "
-                + "adding a fallback paywall: \(Url.fallbackGuide)",
+                + "adding a fallback paywall.",
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -261,6 +277,7 @@ struct DiagnosticContentMapper {
             title: "Paywalls failed to download",
             body: "Paywalls failed to download. Check this device's connection and your Helium API key.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
@@ -275,6 +292,7 @@ struct DiagnosticContentMapper {
             body: "Helium could not fetch or read this paywall's bundle. Copy the diagnostic report "
                 + "and contact Helium if this continues to be an issue.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .copyReport,
             reasonCode: code
         )
@@ -287,6 +305,7 @@ struct DiagnosticContentMapper {
             body: "The paywall's web view failed to render, or could not communicate with the SDK. "
                 + "Retry once; if it reproduces, copy the diagnostic report and contact Helium.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .copyReport,
             reasonCode: code
         )
@@ -303,6 +322,7 @@ struct DiagnosticContentMapper {
                 + "\"\(context.trigger)\". Confirm the second try paywall exists and is connected.",
             usersWillSee: "Users who reach this step see no second try paywall — the paywall they are "
                 + "on stays on screen.",
+            usersWillSeeLink: nil,
             cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context)),
             reasonCode: code
         )
@@ -315,6 +335,7 @@ struct DiagnosticContentMapper {
             body: "The resolved configuration for this trigger failed validation. Copy the diagnostic "
                 + "report and contact Helium support.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .copyReport,
             reasonCode: code
         )
@@ -326,6 +347,7 @@ struct DiagnosticContentMapper {
             title: "The paywall couldn't be shown",
             body: "Helium hit an unexpected state. Copy the diagnostic report and contact Helium support.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .copyReport,
             reasonCode: code
         )

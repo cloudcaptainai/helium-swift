@@ -15,6 +15,13 @@ final class DiagnosticContentMapperTests: XCTestCase {
         mapper.mapUnavailable(reason, context: context())
     }
 
+    /// Every authored record: both skip reasons, every unavailable reason, and the nil path.
+    private func allContent() -> [DiagnosticContent] {
+        PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
+            + PaywallUnavailableReason.allCases.map { content(for: $0) }
+            + [content(for: nil)]
+    }
+
     // MARK: - Forward compat: no raw codes leak into displayed prose
 
     func testNoUnavailableReasonLeaksItsRawCodeIntoProse() {
@@ -39,13 +46,24 @@ final class DiagnosticContentMapperTests: XCTestCase {
         }
     }
 
-    /// The CTA owns the URL — body prose must never contain one.
-    func testNoBodyContainsAUrl() {
-        for reason in PaywallUnavailableReason.allCases {
-            XCTAssertFalse(
-                content(for: reason).body.contains("http"),
-                "\(reason.rawValue) embeds a URL in its body"
-            )
+    /// The CTA and the users-will-see link own every URL, so no prose field may contain one.
+    func testNoProseContainsAUrl() {
+        for content in allContent() {
+            for prose in [content.title, content.body, content.usersWillSee] {
+                XCTAssertFalse(
+                    prose.contains("http"),
+                    "\(content.reasonCode) embeds a URL in prose: \(prose)"
+                )
+            }
+        }
+    }
+
+    /// A malformed URL renders a remediation row that silently does nothing when tapped.
+    func testEveryAuthoredLinkIsOpenable() {
+        for content in allContent() {
+            guard let link = content.usersWillSeeLink else { continue }
+            XCTAssertNotNil(URL(string: link.url), "\(content.reasonCode) has an unopenable link")
+            XCTAssertFalse(link.label.isEmpty, "\(content.reasonCode) has an unlabelled link")
         }
     }
 
@@ -268,8 +286,9 @@ final class DiagnosticContentMapperTests: XCTestCase {
         ]
 
         for reason in coverable {
-            XCTAssertTrue(
-                content(for: reason).usersWillSee.contains(fallbackGuideUrl),
+            XCTAssertEqual(
+                content(for: reason).usersWillSeeLink?.url,
+                fallbackGuideUrl,
                 reason.rawValue
             )
         }
@@ -278,10 +297,10 @@ final class DiagnosticContentMapperTests: XCTestCase {
     /// These stop the SDK before the loader runs, so no fallback could render either.
     func testPreLoaderFailuresDoNotAdviseAFallback() {
         for reason in [PaywallUnavailableReason.notInitialized, .noRootController] {
-            let usersWillSee = content(for: reason).usersWillSee
-            XCTAssertFalse(usersWillSee.contains(fallbackGuideUrl), reason.rawValue)
-            XCTAssertFalse(usersWillSee.contains("Consider adding"), reason.rawValue)
-            XCTAssertTrue(usersWillSee.contains("no fallback can load"), reason.rawValue)
+            let content = content(for: reason)
+            XCTAssertNil(content.usersWillSeeLink, reason.rawValue)
+            XCTAssertFalse(content.usersWillSee.contains("Consider adding"), reason.rawValue)
+            XCTAssertTrue(content.usersWillSee.contains("no fallback can load"), reason.rawValue)
         }
     }
 
