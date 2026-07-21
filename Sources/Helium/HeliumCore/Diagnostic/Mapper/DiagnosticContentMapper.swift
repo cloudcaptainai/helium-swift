@@ -13,11 +13,11 @@ import Foundation
 ///  - **No raw reason codes as prose.** An unrecognised code maps to generic copy and surfaces its
 ///    code only as `DiagnosticContent.reasonCode`.
 ///
-/// One content record serves two contexts: the modal (nothing rendered) and the fallback-shown log
-/// (a fallback rendered). The fields divide along that seam — `body` states the *cause*, which is
-/// true in both contexts, while `usersWillSee` states what this user actually got and is rendered
-/// only by the modal. That is what lets a row like `forceShowFallback` read correctly in a log line
-/// saying a fallback was shown and in a modal that only appears when one wasn't.
+/// One content record serves every surface: the modal, the log line, and the support report. The
+/// fields divide along one seam. `body` states the *cause*, which is true whether or not a fallback
+/// then rendered, while `usersWillSee` states the outcome for a user who got nothing. Only the modal
+/// renders the outcome, and it omits it when a fallback paywall is on screen behind it, so the cause
+/// copy is the only part that has to hold in every context.
 ///
 /// Helium sells digital in-app products and subscriptions, so product copy names the store's
 /// vocabulary (in-app products, subscriptions, the App Store) and never generic commerce language.
@@ -162,8 +162,8 @@ struct DiagnosticContentMapper {
             title: "Fallback paywall forced for this trigger",
             body: "This trigger's paywall is configured to force the bundled fallback, so Helium "
                 + "attempted your fallback instead of the remote paywall.",
-            // The modal only appears when nothing rendered, so reaching it means the forced fallback
-            // itself failed. The log path, where the fallback did render, never reads this field.
+            // The outcome renders only when nothing was shown, so reaching a user means the forced
+            // fallback itself failed to render.
             usersWillSee: "The bundled fallback could not be rendered, so this user saw nothing.",
             usersWillSeeLink: nil,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),

@@ -16,6 +16,11 @@ import UIKit
 struct HeliumPaywallDiagnosticView: View {
     let content: DiagnosticContent
     let triggerName: String
+
+    /// True when a fallback paywall is on screen behind this modal, which makes the authored
+    /// outcome inapplicable: it describes a user who got no paywall at all.
+    let fallbackShown: Bool
+
     let onDismiss: () -> Void
 
     @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain")
@@ -131,30 +136,42 @@ struct HeliumPaywallDiagnosticView: View {
             .padding(.top, 20)
     }
 
-    /// A distinct element rather than body prose: it answers the tester's actual question — did real
+    /// The outcome this modal can honestly state, or nil when a rendered fallback paywall means the
+    /// authored one does not apply.
+    var usersWillSeeText: String? {
+        fallbackShown ? nil : content.usersWillSee
+    }
+
+    /// A distinct element rather than body prose: it answers the tester's actual question, did real
     /// customers get a broken experience?
+    ///
+    /// Dropped whole, remediation link included, when there is no outcome to state. Advice to add a
+    /// fallback paywall reads as nonsense next to one that is on screen.
+    @ViewBuilder
     private var usersCallout: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("WHAT REAL USERS SEE")
-                .font(.caption2.weight(.bold))
-                .kerning(0.8)
-                .foregroundColor(.secondary)
-            Text(content.usersWillSee)
-                .font(.subheadline)
-                .fixedSize(horizontal: false, vertical: true)
-            usersCalloutLink
+        if let outcome = usersWillSeeText {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("WHAT REAL USERS SEE")
+                    .font(.caption2.weight(.bold))
+                    .kerning(0.8)
+                    .foregroundColor(.secondary)
+                Text(outcome)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                usersCalloutLink
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(.separator), lineWidth: 1)
+            )
+            .padding(.top, 20)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(.separator), lineWidth: 1)
-        )
-        .padding(.top, 20)
     }
 
     /// A `Button` rather than a `Link` so an unparseable URL still renders the remediation, inert,
@@ -317,10 +334,13 @@ extension HeliumPaywallDiagnosticView {
         diagnosticWindow = nil
     }
 
+    /// - Parameter fallbackShown: true when a fallback paywall is on screen behind the diagnostic.
+    ///   Required rather than defaulted, because a caller that omits it is exactly the caller whose
+    ///   modal would claim an outcome its own paywall disproves.
     @MainActor
-    static func presentIfNeeded(trigger: String, content: DiagnosticContent) {
+    static func presentIfNeeded(trigger: String, content: DiagnosticContent, fallbackShown: Bool) {
         guard shouldPresent(trigger: trigger) else { return }
-        present(content: content, triggerName: trigger)
+        present(content: content, triggerName: trigger, fallbackShown: fallbackShown)
     }
 
     @MainActor
@@ -335,7 +355,7 @@ extension HeliumPaywallDiagnosticView {
     }
 
     @MainActor
-    private static func present(content: DiagnosticContent, triggerName: String) {
+    private static func present(content: DiagnosticContent, triggerName: String, fallbackShown: Bool) {
         guard let windowScene = UIWindowHelper.findActiveWindow()?.windowScene else { return }
 
         isCurrentlyPresented = true
@@ -343,6 +363,7 @@ extension HeliumPaywallDiagnosticView {
         let diagnosticView = HeliumPaywallDiagnosticView(
             content: content,
             triggerName: triggerName,
+            fallbackShown: fallbackShown,
             onDismiss: {
                 presentedController?.dismiss(animated: true) {
                     tearDown()

@@ -93,7 +93,11 @@ struct FallbackDebugBanner: View {
             context: .live(trigger: trigger)
         )
         Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
+            HeliumPaywallDiagnosticView.presentIfNeeded(
+                trigger: trigger,
+                content: content,
+                fallbackShown: true
+            )
         }
     }
 

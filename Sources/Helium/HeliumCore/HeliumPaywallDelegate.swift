@@ -353,7 +353,11 @@ class HeliumPaywallDelegateWrapper {
         if canShowDiagnosticView {
             if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
                 Task { @MainActor in
-                    HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
+                    HeliumPaywallDiagnosticView.presentIfNeeded(
+                        trigger: trigger,
+                        content: content,
+                        fallbackShown: fallbackShown
+                    )
                 }
             }
         }
@@ -374,7 +378,11 @@ class HeliumPaywallDelegateWrapper {
 
 #if DEBUG
         Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(trigger: trigger, content: content)
+            HeliumPaywallDiagnosticView.presentIfNeeded(
+                trigger: trigger,
+                content: content,
+                fallbackShown: false
+            )
         }
 #endif
     }
