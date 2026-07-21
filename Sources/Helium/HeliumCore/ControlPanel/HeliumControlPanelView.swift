@@ -258,6 +258,7 @@ struct HeliumControlPanelView: View {
                     productIdsStripe: version.stripeProductIds ?? [],
                     productIdsPaddle: version.paddleProductIds ?? [],
                     productIdsPaddleWeb: version.webPaddleProductIds ?? [],
+                    productIdsStripeWeb: version.webStripeProductIds ?? [],
                     webPaywallBundleUrl: version.webPaywallBundleUrl
                 )
 

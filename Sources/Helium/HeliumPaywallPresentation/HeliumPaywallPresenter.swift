@@ -554,6 +554,7 @@ extension HeliumPaywallPresenter {
             let hasPaddleProducts = !(templatePaywallInfo.productsOfferedPaddle ?? []).isEmpty
                 || !(templatePaywallInfo.webProductsOfferedPaddle ?? []).isEmpty
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
+                || !(templatePaywallInfo.webProductsOfferedStripe ?? []).isEmpty
             let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
             if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() && !Helium.config.allowWebCheckoutWithoutUserId {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNoCustomUserId, presentationContext: presentationContext)

@@ -46,6 +46,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
         productIdsStripe: [String] = [],
         productIdsPaddle: [String] = [],
         productIdsPaddleWeb: [String] = [],
+        productIdsStripeWeb: [String] = [],
         webPaywallBundleUrl: String? = nil
     ) throws {
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
@@ -56,6 +57,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsStripe: productIdsStripe,
             productIdsPaddle: productIdsPaddle,
             productIdsPaddleWeb: productIdsPaddleWeb,
+            productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl
         )
     }
@@ -182,6 +184,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsStripe: [],
             productIdsPaddle: [],
             productIdsPaddleWeb: [],
+            productIdsStripeWeb: [],
             webPaywallBundleUrl: nil
         )
 

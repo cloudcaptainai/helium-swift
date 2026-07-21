@@ -14,8 +14,8 @@ struct PaymentProviderConfig {
     let getCheckoutSuccessURL: () -> String?
     let getCheckoutCancelURL: () -> String?
     /// Products this provider considers "offered" for a given paywall.
-    /// `includeInAppSetIfWebEmpty` widens to the in-app Paddle set only when the
-    /// web set is empty — used on the success-redirect path as a safety net
+    /// `includeInAppSetIfWebEmpty` widens to the provider's in-app set only when
+    /// the web set is empty — used on the success-redirect path as a safety net
     /// against server config drift (web bundle URL present, web products missing).
     let getOfferedProducts: (HeliumPaywallInfo, _ includeInAppSetIfWebEmpty: Bool) -> [String]?
     let kind: HeliumPaymentProcessor
@@ -35,7 +35,12 @@ struct PaymentProviderConfig {
         entitlementsPersistenceFileName: "helium_stripe_entitlements.json",
         getCheckoutSuccessURL: { Helium.config.checkoutSuccessURL },
         getCheckoutCancelURL: { Helium.config.checkoutCancelURL },
-        getOfferedProducts: { paywallInfo, _ in paywallInfo.productsOfferedStripe },
+        getOfferedProducts: { paywallInfo, includeInAppSetIfWebEmpty in
+            if let web = paywallInfo.webProductsOfferedStripe, !web.isEmpty {
+                return web
+            }
+            return includeInAppSetIfWebEmpty ? paywallInfo.productsOfferedStripe : nil
+        },
         kind: .stripe
     )
 
