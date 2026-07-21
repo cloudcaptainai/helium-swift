@@ -1028,6 +1028,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripe: [String],
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
+        productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
     ) throws {
         guard var config = fetchedConfig else {
@@ -1072,6 +1073,7 @@ public class HeliumFetchedConfigManager {
         previewPaywallInfo.productsOfferedStripe = productIdsStripe
         previewPaywallInfo.productsOfferedPaddle = productIdsPaddle
         previewPaywallInfo.webProductsOfferedPaddle = productIdsPaddleWeb
+        previewPaywallInfo.webProductsOfferedStripe = productIdsStripeWeb
 
         // Clear fields inherited from source trigger that would interfere with preview
         previewPaywallInfo.forceShowFallback = nil
