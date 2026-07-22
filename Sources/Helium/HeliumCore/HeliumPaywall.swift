@@ -22,6 +22,14 @@ import SwiftUI
 ///     Text("Paywall not shown: \(reason.rawValue)")
 /// }
 /// ```
+///
+/// - Note: `customPaywallTraits` are captured when the paywall displays and then fixed for that
+///   presentation. In SwiftUI this happens automatically as long as the traits come from state that
+///   re-renders the view (the normal case). When hosting this view in
+///   UIKit via `UIHostingController`, update the controller's `rootView` (or drive it from an
+///   `ObservableObject`) so the config is current before display — otherwise the paywall may show
+///   trait values captured when the controller was first created. See
+///   https://docs.tryhelium.com/guides/ways-to-show-paywall#embedded-view for a UIKit example.
 public struct HeliumPaywall<PaywallNotShownView: View>: View {
     
     let trigger: String
