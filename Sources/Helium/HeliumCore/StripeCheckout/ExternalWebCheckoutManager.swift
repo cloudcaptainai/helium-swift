@@ -168,6 +168,13 @@ public class ExternalWebCheckoutManager: NSObject {
             )
         }
 
+        var stripeIntroOfferEligibleByProduct: [String: Bool]? = nil
+        if provider.kind == .stripe {
+            stripeIntroOfferEligibleByProduct = buildStripeIntroOfferEligibleByProduct(
+                paywallInfo: paywallSession.paywallInfoWithBackups
+            )
+        }
+
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -177,7 +184,8 @@ public class ExternalWebCheckoutManager: NSObject {
             cancelURL: resolvedCancelURL,
             introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
             paddleBootstraps: paddleBootstrapsDict,
-            paddleAlreadyEntitled: paddleAlreadyEntitledDict
+            paddleAlreadyEntitled: paddleAlreadyEntitledDict,
+            stripeIntroOfferEligibleByProduct: stripeIntroOfferEligibleByProduct
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
@@ -200,6 +208,25 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
     }
 
+    /// Stripe's intro-offer eligibility is genuinely per-product, so the web
+    /// paywall needs the full map rather than the coarse `introOfferEligible` bool.
+    /// Nil (nothing resolvable) leaves that coarse bool as the only signal.
+    private func buildStripeIntroOfferEligibleByProduct(paywallInfo: HeliumPaywallInfo?) -> [String: Bool]? {
+        guard let paywallInfo,
+              let products = provider.getOfferedProducts(paywallInfo, false),
+              !products.isEmpty,
+              let priceMap = HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() else {
+            return nil
+        }
+        var eligibilityByProduct: [String: Bool] = [:]
+        for productKey in products {
+            if let eligible = priceMap[productKey]?.subscription?.introOfferEligible {
+                eligibilityByProduct[productKey] = eligible
+            }
+        }
+        return eligibilityByProduct.isEmpty ? nil : eligibilityByProduct
+    }
+
     /// Builds the enriched checkout URL: existing query items are preserved,
     /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
@@ -211,7 +238,8 @@ public class ExternalWebCheckoutManager: NSObject {
         cancelURL: String,
         introOfferEligible: Bool,
         paddleBootstraps: [String: Any]? = nil,
-        paddleAlreadyEntitled: [String: Any]? = nil
+        paddleAlreadyEntitled: [String: Any]? = nil,
+        stripeIntroOfferEligibleByProduct: [String: Bool]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.invalidBaseURLForComponents
@@ -256,6 +284,9 @@ public class ExternalWebCheckoutManager: NSObject {
         }
         if let paddleAlreadyEntitled = paddleAlreadyEntitled {
             ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
+        }
+        if let stripeIntroOfferEligibleByProduct = stripeIntroOfferEligibleByProduct {
+            ctx["stripeIntroOfferEligibleByProduct"] = stripeIntroOfferEligibleByProduct
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)

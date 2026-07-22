@@ -340,20 +340,26 @@ public class Helium {
     ///
     /// - Parameter returnUrl: The URL Stripe redirects to after the user finishes in the portal.
     /// - Returns: The portal session URL.
-    ///
-    /// ## Example
-    /// ```swift
-    /// do {
-    ///     let portalURL = try await Helium.shared.createStripePortalSession(returnUrl: "myapp://settings")
-    ///     await UIApplication.shared.open(portalURL)
-    /// } catch {
-    ///     print("Failed to create portal session: \(error)")
-    /// }
-    /// ```
+    @available(*, deprecated, message: "Use getStripeCustomerId() and pass the ID to your server to generate a Stripe customer portal session instead.")
     public func createStripePortalSession(returnUrl: String) async throws -> URL {
         return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
     }
-    
+
+    /// Returns the Stripe customer ID for the current user, if one exists.
+    ///
+    /// Pass this ID to your server to generate a Stripe customer portal session,
+    /// allowing the user to manage their subscriptions.
+    ///
+    /// - Returns: The Stripe customer ID, or `nil` if none has been assigned.
+    public func getStripeCustomerId() async -> String? {
+        if let customerId = HeliumIdentityManager.shared.getStripeCustomerId() {
+            return customerId
+        }
+        guard Helium.config.webCheckoutProcessors.contains(.stripe) else { return nil }
+        await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshIfNeeded()
+        return HeliumIdentityManager.shared.getStripeCustomerId()
+    }
+
     /// Resets Stripe entitlements and clears the user ID.
     /// If your app can support multiple Stripe users on the same device, you'll want to call this to effectively "log out" a Stripe user.
     public func resetStripeEntitlements() {
