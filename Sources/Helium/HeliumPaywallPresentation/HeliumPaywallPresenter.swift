@@ -6,6 +6,9 @@ class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     
     private let configDownloadEventName = NSNotification.Name("HeliumConfigDownloadComplete")
+    // Retained here because `UIViewController.transitioningDelegate` is weak. Sharing one instance
+    // across every presentation is only safe while it stays stateless; per-transition state
+    // (e.g. an interaction controller) must live on the view controller instead.
     private let slideInTransitioningDelegate = SlideInTransitioningDelegate()
     
     private init() {
@@ -355,26 +358,41 @@ class HeliumPaywallPresenter {
         }
         
         let paywallInfo = fallbackReason == nil ? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger) : HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        switch paywallInfo?.presentationStyle {
-        case .slideUp:
-            break
-        case .slideLeft:
-            modalVC.modalPresentationStyle = .custom
-            modalVC.transitioningDelegate = slideInTransitioningDelegate
-        case .crossDissolve:
-            modalVC.modalTransitionStyle = .crossDissolve
-        case .flipHorizontal:
-            modalVC.modalTransitionStyle = .flipHorizontal
-        default:
-            break
-        }
+        applyPresentationStyle(
+            requested: presentationContext.config.presentationStyle,
+            configured: paywallInfo?.presentationStyle,
+            to: modalVC
+        )
         presenter.present(modalVC, animated: true)
-        
+
         paywallsDisplayed.append(modalVC)
 
         dispatchOpenEvent(paywallVC: modalVC)
     }
-    
+
+    /// Adjusts a view controller already configured for `.fullScreen` presentation. An
+    /// integrator-supplied style wins; the dashboard decides only when they did not specify one.
+    /// Slide up needs no adjustment because that is already how an unstyled full-screen presentation
+    /// animates.
+    @MainActor
+    func applyPresentationStyle(
+        requested: HeliumPresentationStyle?,
+        configured: HeliumPresentationStyle?,
+        to viewController: UIViewController
+    ) {
+        switch requested ?? configured {
+        case .slideUp, .none:
+            break
+        case .slideLeft:
+            viewController.modalPresentationStyle = .custom
+            viewController.transitioningDelegate = slideInTransitioningDelegate
+        case .crossDissolve:
+            viewController.modalTransitionStyle = .crossDissolve
+        case .flipHorizontal:
+            viewController.modalTransitionStyle = .flipHorizontal
+        }
+    }
+
     @discardableResult
     func hideUpsell(animated: Bool = true, overrideCloseEvent: (() -> Void)? = nil) -> Bool {
         guard !paywallsDisplayed.isEmpty else {

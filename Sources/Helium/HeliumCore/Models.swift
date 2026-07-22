@@ -9,24 +9,18 @@ import Foundation
 import UIKit
 import SwiftUI
 
-enum PaywallPresentationStyle: String, Codable {
-    case slideUp
-    case slideLeft
-    case crossDissolve
-    case flipHorizontal
-    case unknown
-
-    // Custom decoder to handle unknown values gracefully
-    init(from decoder: Decoder) throws {
-        guard let container = try? decoder.singleValueContainer() else {
-            self = .unknown
-            return
-        }
-        if let value = try? container.decode(String.self) {
-            self = PaywallPresentationStyle(rawValue: value) ?? .unknown
-        } else {
-            self = .unknown
-        }
+extension KeyedDecodingContainer {
+    /// A style this SDK version does not recognize is treated as unset. Synthesized decoding would
+    /// otherwise throw, and this field decodes alongside `resolvedConfig`, so one bad value would
+    /// fail the entire config and take every trigger down with it rather than just the animation.
+    ///
+    /// Only applies to optional properties; a non-optional declaration emits `decode` instead.
+    func decodeIfPresent(
+        _ type: HeliumPresentationStyle.Type,
+        forKey key: Key
+    ) throws -> HeliumPresentationStyle? {
+        guard let rawValue = try? decodeIfPresent(String.self, forKey: key) else { return nil }
+        return HeliumPresentationStyle(rawValue: rawValue)
     }
 }
 
@@ -51,7 +45,7 @@ public struct HeliumPaywallInfo: Codable {
     var resolvedConfigJSON: JSON?
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
-    var presentationStyle: PaywallPresentationStyle?
+    var presentationStyle: HeliumPresentationStyle?
     var productHapticsEnabled: [String]? = nil
     
     var productIdsIOS: [String] {
