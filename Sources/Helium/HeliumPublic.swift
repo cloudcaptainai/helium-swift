@@ -340,16 +340,6 @@ public class Helium {
     ///
     /// - Parameter returnUrl: The URL Stripe redirects to after the user finishes in the portal.
     /// - Returns: The portal session URL.
-    ///
-    /// ## Example
-    /// ```swift
-    /// do {
-    ///     let portalURL = try await Helium.shared.createStripePortalSession(returnUrl: "myapp://settings")
-    ///     await UIApplication.shared.open(portalURL)
-    /// } catch {
-    ///     print("Failed to create portal session: \(error)")
-    /// }
-    /// ```
     @available(*, deprecated, message: "Use getStripeCustomerId() and pass the ID to your server to generate a Stripe customer portal session instead.")
     public func createStripePortalSession(returnUrl: String) async throws -> URL {
         return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
