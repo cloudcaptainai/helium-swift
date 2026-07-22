@@ -452,29 +452,51 @@ public class Helium {
 
 }
 
+/// The animation used when Helium presents a paywall.
+public enum HeliumPresentationStyle: String, Codable, Sendable {
+    /// Slides up from the bottom on entry and back down on exit. This is the standard iOS
+    /// modal presentation.
+    case slideUp
+
+    /// Slides in from the trailing edge on entry and back out on exit, matching a navigation push.
+    case slideLeft
+
+    /// Fades in over the presenting screen. Has no Helium Android counterpart.
+    case crossDissolve
+
+    /// Flips the presenting screen over horizontally. Has no Helium Android counterpart.
+    case flipHorizontal
+}
+
 /// Configuration options for presenting a paywall.
 public struct PaywallPresentationConfig {
     var presentFromViewController: UIViewController?
     var customPaywallTraits: HeliumUserTraits?
     var dontShowIfAlreadyEntitled: Bool
+    var presentationStyle: HeliumPresentationStyle?
     var loadingBudget: TimeInterval?
 
     /// Creates a new paywall presentation configuration.
     /// - Parameters:
-    ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view.
+    ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view and the `.heliumPaywall` modifier.
     ///   - customPaywallTraits: Custom traits to send to the paywall. Note that user traits are automatically included as paywall traits, as is "trigger". If duplicate keys
     ///   exist, the value from customPaywallTraits will be used.
     ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
+    ///   - presentationStyle: Animation used to present the paywall. Defaults to `nil`, which lets your Helium dashboard
+    ///   configuration decide (slide up if unconfigured). Setting this overrides the dashboard. Ignored for `HeliumPaywall`
+    ///   embedded view and the `.heliumPaywall` modifier.
     ///   - loadingBudget: Maximum time (in seconds) to show loading state before switching to fallback logic. Use zero or negative to disable loading state. Defaults to `Helium.config.defaultLoadingBudget`.
     public init(
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: HeliumUserTraits? = nil,
         dontShowIfAlreadyEntitled: Bool = false,
+        presentationStyle: HeliumPresentationStyle? = nil,
         loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
         self.customPaywallTraits = customPaywallTraits
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
+        self.presentationStyle = presentationStyle
         self.loadingBudget = loadingBudget
     }
 }
