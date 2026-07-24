@@ -196,8 +196,8 @@ public class ExternalWebCheckoutManager: NSObject {
         if let serverValue = await entitlementsSource.introOfferEligible() {
             return serverValue
         }
-        let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
-        return products.allSatisfy { priceMap[$0]?.subscriptionInfo?.introOfferEligible == true }
+        let priceMap = provider.getProductsPriceMap() ?? [:]
+        return products.allSatisfy { priceMap[$0]?.subscription?.introOfferEligible == true }
     }
 
     /// Builds the enriched checkout URL: existing query items are preserved,

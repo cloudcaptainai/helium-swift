@@ -18,6 +18,9 @@ struct PaymentProviderConfig {
     /// the web set is empty — used on the success-redirect path as a safety net
     /// against server config drift (web bundle URL present, web products missing).
     let getOfferedProducts: (HeliumPaywallInfo, _ includeInAppSetIfWebEmpty: Bool) -> [String]?
+    /// The provider's server-fetched products map, keyed by the same product
+    /// keys `getOfferedProducts` returns.
+    let getProductsPriceMap: () -> [String: ServerProductPrice]?
     let kind: HeliumPaymentProcessor
 
     var checkEntitlementPath: String { "\(providerSlug)/check-entitlement" }
@@ -41,6 +44,7 @@ struct PaymentProviderConfig {
             }
             return includeInAppSetIfWebEmpty ? paywallInfo.productsOfferedStripe : nil
         },
+        getProductsPriceMap: { HeliumFetchedConfigManager.shared.getStripeProductsPriceMap() },
         kind: .stripe
     )
 
@@ -61,6 +65,7 @@ struct PaymentProviderConfig {
             }
             return includeInAppSetIfWebEmpty ? paywallInfo.productsOfferedPaddle : nil
         },
+        getProductsPriceMap: { HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() },
         kind: .paddle
     )
 }
