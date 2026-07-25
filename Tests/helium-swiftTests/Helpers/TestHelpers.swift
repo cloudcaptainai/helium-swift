@@ -168,7 +168,8 @@ func makeTestPaywallInfo(
     paywallName: String = "test_paywall",
     products: [String] = ["com.test.product"],
     shouldShow: Bool? = nil,
-    forceShowFallback: Bool? = nil
+    forceShowFallback: Bool? = nil,
+    presentationStyle: HeliumPresentationStyle? = nil
 ) -> HeliumPaywallInfo {
     return HeliumPaywallInfo(
         paywallID: 1,
@@ -187,7 +188,7 @@ func makeTestPaywallInfo(
         resolvedConfigJSON: nil,
         experimentInfo: nil,
         additionalPaywallFields: nil,
-        presentationStyle: nil
+        presentationStyle: presentationStyle
     )
 }
 
