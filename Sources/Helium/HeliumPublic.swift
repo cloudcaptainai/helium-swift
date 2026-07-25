@@ -460,12 +460,6 @@ public enum HeliumPresentationStyle: String, Codable, Sendable {
 
     /// Slides in from the trailing edge on entry and back out on exit, matching a navigation push.
     case slideLeft
-
-    /// Fades in over the presenting screen. Has no Helium Android counterpart.
-    case crossDissolve
-
-    /// Flips the presenting screen over horizontally. Has no Helium Android counterpart.
-    case flipHorizontal
 }
 
 /// Configuration options for presenting a paywall.

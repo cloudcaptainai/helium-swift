@@ -386,10 +386,6 @@ class HeliumPaywallPresenter {
         case .slideLeft:
             viewController.modalPresentationStyle = .custom
             viewController.transitioningDelegate = slideInTransitioningDelegate
-        case .crossDissolve:
-            viewController.modalTransitionStyle = .crossDissolve
-        case .flipHorizontal:
-            viewController.modalTransitionStyle = .flipHorizontal
         }
     }
 

@@ -8,7 +8,7 @@ import UIKit
 final class PaywallPresentationStyleTests: XCTestCase {
 
     private let allStyles: [HeliumPresentationStyle?] = [
-        nil, .slideUp, .slideLeft, .crossDissolve, .flipHorizontal
+        nil, .slideUp, .slideLeft
     ]
 
     private func makeViewController() -> UIViewController {
@@ -58,12 +58,6 @@ final class PaywallPresentationStyleTests: XCTestCase {
 
     func test_GIVEN_noIntegratorStyle_WHEN_applied_THEN_configuredStyleDrivesPresentation() {
         XCTAssertEqual(apply(requested: nil, configured: .slideLeft).modalPresentationStyle, .custom)
-        XCTAssertEqual(
-            apply(requested: nil, configured: .crossDissolve).modalTransitionStyle, .crossDissolve
-        )
-        XCTAssertEqual(
-            apply(requested: nil, configured: .flipHorizontal).modalTransitionStyle, .flipHorizontal
-        )
     }
 
     func test_GIVEN_nothingRequestedOrConfigured_WHEN_applied_THEN_leavesFullScreenBaselineAlone() {
@@ -81,15 +75,6 @@ final class PaywallPresentationStyleTests: XCTestCase {
 
         XCTAssertEqual(viewController.modalPresentationStyle, .custom)
         XCTAssertTrue(viewController.transitioningDelegate is SlideInTransitioningDelegate)
-    }
-
-    func test_GIVEN_transitionStyleOnly_WHEN_applied_THEN_keepsFullScreenPresentation() {
-        for style in [HeliumPresentationStyle.crossDissolve, .flipHorizontal] {
-            let viewController = apply(requested: style, configured: nil)
-
-            XCTAssertEqual(viewController.modalPresentationStyle, .fullScreen, "style: \(style)")
-            XCTAssertNil(viewController.transitioningDelegate)
-        }
     }
 
     // MARK: - Default configuration

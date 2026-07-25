@@ -38,9 +38,7 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
     func test_GIVEN_presentationStylePresent_WHEN_decoded_THEN_parsesEachKnownStyle() throws {
         let expected: [String: HeliumPresentationStyle] = [
             "slideUp": .slideUp,
-            "slideLeft": .slideLeft,
-            "crossDissolve": .crossDissolve,
-            "flipHorizontal": .flipHorizontal,
+            "slideLeft": .slideLeft
         ]
 
         for (raw, style) in expected {
