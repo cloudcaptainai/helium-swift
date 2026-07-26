@@ -23,7 +23,7 @@ struct HeliumPaywallDiagnosticView: View {
 
     let onDismiss: () -> Void
 
-    @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain")
+    @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: HeliumDiagnosticGate.doNotShowAgainKey)
 
     private let styleMapper = DiagnosticCategoryStyleMapper()
     private let reportMapper = DiagnosticReportMapper()
@@ -255,7 +255,7 @@ struct HeliumPaywallDiagnosticView: View {
         }
         .toggleStyle(CheckboxToggleStyle())
         .onChange(of: doNotShowAgain) { newValue in
-            UserDefaults.standard.set(newValue, forKey: "heliumDiagnosticDoNotShowAgain")
+            UserDefaults.standard.set(newValue, forKey: HeliumDiagnosticGate.doNotShowAgainKey)
         }
         .padding(.top, 20)
     }
@@ -265,7 +265,7 @@ struct HeliumPaywallDiagnosticView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !isForPreview {
-                Text("This diagnostic view is only shown in DEBUG builds.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
+                Text("Visible in debug builds, and in TestFlight builds only if opted in. App Store users never see this.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }
@@ -334,24 +334,17 @@ extension HeliumPaywallDiagnosticView {
         diagnosticWindow = nil
     }
 
+    /// Enforces only what no caller can be trusted to get wrong: that a full-screen developer modal
+    /// never reaches a build where diagnostics are off. Whether a given outcome deserves an
+    /// unprompted modal is the caller's judgement, and is re-checked here because callers reach the
+    /// main actor asynchronously and the flags can change on the way.
+    ///
     /// - Parameter fallbackShown: true when a fallback paywall is on screen behind the diagnostic.
-    ///   Required rather than defaulted, because a caller that omits it is exactly the caller whose
-    ///   modal would claim an outcome its own paywall disproves.
     @MainActor
     static func presentIfNeeded(trigger: String, content: DiagnosticContent, fallbackShown: Bool) {
-        guard shouldPresent(trigger: trigger) else { return }
+        guard !isCurrentlyPresented else { return }
+        guard HeliumDiagnosticGate.isEnabledNow(trigger: trigger) else { return }
         present(content: content, triggerName: trigger, fallbackShown: fallbackShown)
-    }
-
-    @MainActor
-    private static func shouldPresent(trigger: String) -> Bool {
-        guard !isCurrentlyPresented else { return false }
-        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
-            return true
-        }
-        guard Helium.config.paywallNotShownDiagnosticDisplayEnabled else { return false }
-        guard !UserDefaults.standard.bool(forKey: "heliumDiagnosticDoNotShowAgain") else { return false }
-        return true
     }
 
     @MainActor

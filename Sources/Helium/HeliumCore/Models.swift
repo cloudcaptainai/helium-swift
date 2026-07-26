@@ -122,6 +122,10 @@ public struct HeliumFetchedConfig: Codable {
     var stripeProducts: [String: ServerProductPrice]?
     var stripeCustomerId: String?
     var enableProductionPaywallPreviews: Bool?
+
+    /// Kill switch for the paywall-not-shown diagnostic modal. Best effort: outcomes that fire
+    /// before the on-launch response arrives cannot consult it.
+    var diagnosticModalEnabled: Bool?
     
     var paddleProducts: [String: ServerProductPrice]?
     var paddleCustomerId: String?

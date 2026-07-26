@@ -3,9 +3,8 @@ import SwiftUI
 /// A banner spanning the top edge of a Helium fallback paywall, so a developer can tell at a glance
 /// that the live remote paywall was not the one that rendered.
 ///
-/// Shown from DEBUG builds only. The SDK ships as source rather than a binary, so `#if DEBUG`
-/// resolves against the host app's build configuration and this never reaches a TestFlight or
-/// App Store build.
+/// Rendering and tapping are governed by the same predicate, so the card is never on screen
+/// advertising details it would refuse to open.
 ///
 /// It spans the width so it reads as a notification rather than a chip. That is a deliberate trade:
 /// the card is interactive, so at full width it covers the top corners where paywalls place their
@@ -84,8 +83,6 @@ struct FallbackDebugBanner: View {
         .accessibilityAction(named: "Show diagnostics") { openDiagnostics() }
     }
 
-    /// The diagnostic view keeps its own gating, so a tap is silently ignored when the developer
-    /// has turned diagnostics off or ticked "do not show again".
     private func openDiagnostics() {
         guard !trigger.isEmpty else { return }
         let content = Self.diagnosticContentMapper.mapUnavailable(
@@ -125,7 +122,13 @@ extension FallbackDebugBanner {
 
     /// A non-nil reason means Helium resolved a fallback bundle in place of the live remote
     /// paywall, which is exactly what the banner reports.
-    static func shouldShow(fallbackReason: PaywallUnavailableReason?) -> Bool {
-        return fallbackReason != nil
+    ///
+    /// `diagnosticsEnabled` is deferred so a live paywall never pays for a gate check it cannot act
+    /// on.
+    static func shouldShow(
+        fallbackReason: PaywallUnavailableReason?,
+        diagnosticsEnabled: @autoclosure () -> Bool
+    ) -> Bool {
+        fallbackReason != nil && diagnosticsEnabled()
     }
 }
