@@ -866,6 +866,39 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     }
 }
 
+/// The entitling event passed to `onEntitled`, identifying how the user became (or was found to be) entitled.
+public enum PaywallEntitledEvent {
+    /// A new purchase completed successfully.
+    case purchased(PurchaseSucceededEvent)
+    /// An existing entitlement was surfaced via restore.
+    case restored(PurchaseRestoredEvent)
+    /// A purchase attempt resolved to an entitlement the user already had.
+    case alreadyEntitled(PurchaseAlreadyEntitledEvent)
+    /// The paywall was not shown because the user is already entitled
+    /// (requires `PaywallPresentationConfig.dontShowIfAlreadyEntitled`).
+    case skipped(PaywallSkippedEvent)
+
+    /// The underlying SDK event.
+    public var event: HeliumEvent {
+        switch self {
+        case .purchased(let event): return event
+        case .restored(let event): return event
+        case .alreadyEntitled(let event): return event
+        case .skipped(let event): return event
+        }
+    }
+
+    /// The product involved, when known; `nil` for `.skipped`.
+    public var productId: String? {
+        switch self {
+        case .purchased(let event): return event.productId
+        case .restored(let event): return event.productId
+        case .alreadyEntitled(let event): return event.productId
+        case .skipped: return nil
+        }
+    }
+}
+
 /// Event fired when StoreKit returns .pending status (e.g., waiting for parental approval)
 /// - Note: Transaction is awaiting external action before completion
 public struct PurchasePendingEvent: ProductEvent {
