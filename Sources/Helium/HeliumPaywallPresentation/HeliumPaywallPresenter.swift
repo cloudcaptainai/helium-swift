@@ -21,7 +21,7 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
-    @HeliumAtomic private var sessionsWithEntitlement: Set<String> = []
+    @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     func isSecondTryPaywall(trigger: String) -> Bool {
         return paywallsDisplayed.contains {
@@ -30,30 +30,41 @@ class HeliumPaywallPresenter {
     }
     
     /// Mark a session as having achieved entitlement (purchase/restore succeeded).
-    /// The onEntitled callback will be called when the paywall closes.
-    func markSessionAsEntitled(sessionId: String) {
-        _sessionsWithEntitlement.withValue { $0.insert(sessionId) }
+    /// The onEntitled callback will be called with the event when the paywall closes.
+    /// If a session produces multiple entitling events, the most recent one wins.
+    func markSessionAsEntitled(sessionId: String, event: PaywallEntitledEvent) {
+        _sessionsWithEntitlement.withValue { $0[sessionId] = event }
+    }
+
+    /// Removes and returns the entitling event for a session, if one was marked.
+    func consumeEntitledEvent(forSessionId sessionId: String) -> PaywallEntitledEvent? {
+        return _sessionsWithEntitlement.withValue { $0.removeValue(forKey: sessionId) }
     }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
         if context.config.dontShowIfAlreadyEntitled {
             let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
             if skipIt == true {
-                Task { @MainActor in
-                    if let onEntitled = context.onEntitled {
-                        onEntitled()
-                    } else {
-                        context.onPaywallNotShown?(.alreadyEntitled)
-                    }
-                }
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
-                    paywallSession: nil
-                )
+                handleAlreadyEntitledSkip(trigger: trigger, context: context)
                 return true
             }
         }
         return false
+    }
+
+    func handleAlreadyEntitledSkip(trigger: String, context: PaywallPresentationContext) {
+        let skipEvent = PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled)
+        Task { @MainActor in
+            if let onEntitled = context.onEntitled {
+                onEntitled(.skipped(skipEvent))
+            } else {
+                context.onPaywallNotShown?(.alreadyEntitled)
+            }
+        }
+        HeliumPaywallDelegateWrapper.shared.fireEvent(
+            skipEvent,
+            paywallSession: nil
+        )
     }
     
     func skipPaywallIfNeeded(trigger: String, presentationContext: PaywallPresentationContext) -> Bool {
@@ -477,11 +488,9 @@ class HeliumPaywallPresenter {
 
         // Call onEntitled if this session had a successful purchase/restore
         let sessionId = paywallVC.paywallSession.sessionId
-        var wasEntitled = false
-        _sessionsWithEntitlement.withValue { wasEntitled = $0.remove(sessionId) != nil }
-        if wasEntitled {
+        if let entitledEvent = consumeEntitledEvent(forSessionId: sessionId) {
             Task { @MainActor in
-                paywallVC.presentationContext.onEntitled?()
+                paywallVC.presentationContext.onEntitled?(entitledEvent)
             }
         }
     }

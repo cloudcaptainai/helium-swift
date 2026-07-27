@@ -86,8 +86,10 @@ public class Helium {
     ///   - trigger: The trigger configured in the Helium dashboard.
     ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events.
-    ///   - onEntitled: (Optional) Called upon purchase success or purchase restore. If you set `dontShowIfAlreadyEntitled`
-    ///    to true, this handler will also be called when paywall not shown to users who already have entitlement for a product in the paywall.
+    ///   - onEntitled: (Optional) Called with the entitling event upon purchase success (`.purchased`), purchase restore (`.restored`),
+    ///    or a purchase attempt resolving to an existing entitlement (`.alreadyEntitled`) — in these cases it is called when the paywall closes.
+    ///    If you set `dontShowIfAlreadyEntitled` to true, this handler is also called immediately with `.skipped` when the paywall
+    ///    is not shown to users who already have entitlement for a product in the paywall.
     ///   - onPaywallNotShown: Called if desired paywall and fallback paywall did not show for any reason.
     ///
     /// - Important: If user is already entitled and `config.dontShowIfAlreadyEntitled` is true,  `onEntitled` will be called if provided otherwise `onPaywallNotShown(.alreadyEntitled)` will be called.
@@ -95,11 +97,11 @@ public class Helium {
         trigger: String,
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
-        onEntitled: (() -> Void)? = nil,
+        onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
         HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
-        
+
         let presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
@@ -110,8 +112,25 @@ public class Helium {
             HeliumLogger.log(.debug, category: .ui, "Paywall skipped for trigger", metadata: ["trigger": trigger])
             return
         }
-        
+
         HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: trigger, presentationContext: presentationContext)
+    }
+
+    @available(*, deprecated, message: "Use onEntitled: ((PaywallEntitledEvent) -> Void) to receive the relevant purchase/restore/skip event.")
+    public func presentPaywall(
+        trigger: String,
+        config: PaywallPresentationConfig = PaywallPresentationConfig(),
+        eventHandlers: PaywallEventHandlers? = nil,
+        onEntitled: @escaping () -> Void,
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
+    ) {
+        presentPaywall(
+            trigger: trigger,
+            config: config,
+            eventHandlers: eventHandlers,
+            onEntitled: { _ in onEntitled() },
+            onPaywallNotShown: onPaywallNotShown
+        )
     }
     
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
