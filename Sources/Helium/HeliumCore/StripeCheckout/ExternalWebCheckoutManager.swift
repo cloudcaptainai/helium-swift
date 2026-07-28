@@ -183,7 +183,9 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-    /// True if every offered product is intro-offer eligible.
+    /// Whether this customer is intro-offer eligible, for the web bundle to
+    /// decide whether to select each bucket's trial slot.
+    ///
     /// Prefers the server's per-customer signal from `/check-entitlement` when
     /// available — the local price map can go stale (e.g., host app sets
     /// userId after Helium initialized, so eligibility could change).
@@ -196,8 +198,33 @@ public class ExternalWebCheckoutManager: NSObject {
         if let serverValue = await entitlementsSource.introOfferEligible() {
             return serverValue
         }
-        let priceMap = provider.getProductsPriceMap() ?? [:]
-        return products.allSatisfy { priceMap[$0]?.subscription?.introOfferEligible == true }
+        return Self.introOfferEligible(
+            products: products,
+            priceMap: provider.getProductsPriceMap() ?? [:]
+        )
+    }
+
+    /// Fallback derivation of the per-customer intro-offer signal from the
+    /// server price map, used when `/check-entitlement` has no answer yet.
+    ///
+    /// A price's `subscription.introOfferEligible` already folds two things
+    /// together: the price carries a trial period, AND this customer has not
+    /// consumed an intro offer. A product with no trial therefore reports false
+    /// for everyone. Requiring EVERY offered product to report true let a
+    /// single no-trial product — a monthly plan sitting next to a yearly trial,
+    /// say — mask an eligible customer and suppress trials across the whole web
+    /// paywall.
+    ///
+    /// One product reporting true is sufficient. Eligibility is a property of
+    /// the customer, not of the product set, and the server applies that one
+    /// customer bit to every trial-bearing price. So a single true means the
+    /// customer is eligible, and an ineligible customer yields false on every
+    /// entry regardless of how many trials the paywall offers.
+    static func introOfferEligible(
+        products: [String],
+        priceMap: [String: ServerProductPrice]
+    ) -> Bool {
+        products.contains { priceMap[$0]?.subscription?.introOfferEligible == true }
     }
 
     /// Builds the enriched checkout URL: existing query items are preserved,
