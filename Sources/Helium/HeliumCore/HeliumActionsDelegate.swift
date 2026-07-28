@@ -167,6 +167,10 @@ class HeliumActionsDelegate: ObservableObject {
     
     func showSecondaryPaywall(uuid: String?) {
         if !isLoading {
+            if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+                showSecondTryUnsupportedInPreviewDiagnostic()
+                return
+            }
             // Re-use same presentation context as underlying paywall. Integrator can check
             // isSecondTry to distinguish events.
             let presentationContext = paywallSession.presentationContext
@@ -192,6 +196,18 @@ class HeliumActionsDelegate: ObservableObject {
         }
     }
     
+    private func showSecondTryUnsupportedInPreviewDiagnostic() {
+        let content = DiagnosticContentMapper().mapSecondTryInPreview()
+        HeliumLogger.log(.info, category: .ui, DiagnosticLogLineMapper().map(content), metadata: ["trigger": trigger])
+        Task { @MainActor in
+            HeliumPaywallDiagnosticView.presentIfNeeded(
+                trigger: trigger,
+                content: content,
+                fallbackShown: false
+            )
+        }
+    }
+
     func onCTAPress(contentComponentName: String) {
         if (!isLoading) {
             let event = PaywallButtonPressedEvent(
