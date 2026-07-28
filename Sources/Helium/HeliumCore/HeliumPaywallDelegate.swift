@@ -102,6 +102,12 @@ class HeliumPaywallDelegateWrapper {
                 } catch {
                     transactionStatus = .failed(error)
                 }
+            } else if paymentProcessor == .appStore,
+                      HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey) {
+                // The .appStore check is load-bearing: a registered Stripe key
+                // reaches here whenever Apple Pay is available, since the first
+                // branch requires !stripeApplePayFlowEnabled.
+                transactionStatus = .failed(HeliumPaymentRoutingError.unregisteredWebProductKey(productKey))
             } else {
                 transactionStatus = await delegate.makePurchase(productId: productKey)
             }

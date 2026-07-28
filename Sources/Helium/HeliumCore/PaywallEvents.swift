@@ -536,6 +536,19 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
         }
         return .appStore
     }
+
+    /// True for a `<productId>:<priceId>` composite in Paddle (`pro_…:pri_…`) or
+    /// Stripe (`prod_…:price_…`) form. Both halves must match one provider, so a
+    /// StoreKit identifier that merely contains a colon is not caught.
+    static func isWebProcessorCompositeKey(_ productKey: String) -> Bool {
+        let parts = productKey.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        let product = parts[0]
+        let price = parts[1]
+        let paddle = product.hasPrefix("pro_") && price.hasPrefix("pri_")
+        let stripe = product.hasPrefix("prod_") && price.hasPrefix("price_")
+        return paddle || stripe
+    }
 }
 
 /// Event fired when a purchase completes successfully.
