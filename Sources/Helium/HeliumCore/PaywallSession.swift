@@ -17,7 +17,7 @@ enum FallbackPaywallType {
 struct PaywallPresentationContext {
     let config: PaywallPresentationConfig
     let eventHandlers: PaywallEventHandlers?
-    let onEntitled: (() -> Void)?
+    let onEntitled: ((PaywallEntitledEvent) -> Void)?
     let onPaywallNotShown: ((PaywallNotShownReason) -> Void)?
     
     var customPaywallTraits: HeliumUserTraits? {
