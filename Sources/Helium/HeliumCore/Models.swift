@@ -123,9 +123,10 @@ public struct HeliumFetchedConfig: Codable {
     var stripeCustomerId: String?
     var enableProductionPaywallPreviews: Bool?
 
-    /// Kill switch for the paywall-not-shown diagnostic modal. Best effort: outcomes that fire
-    /// before the on-launch response arrives cannot consult it.
-    var diagnosticModalEnabled: Bool?
+    /// Server-side permission for the paywall-not-shown diagnostic modal outside DEBUG builds:
+    /// TestFlight, plus release builds on a simulator or launched from Xcode. A DEBUG build answers
+    /// to the SDK flag alone and never consults this. Absent means allowed.
+    var paywallDiagnosticModalAllowedInTestFlight: Bool?
     
     var paddleProducts: [String: ServerProductPrice]?
     var paddleCustomerId: String?

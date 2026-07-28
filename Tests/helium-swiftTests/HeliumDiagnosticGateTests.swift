@@ -14,7 +14,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         environment: AppReceiptsHelper.Environment = .debug,
         displayEnabled: Bool = true,
         enabledInTestFlight: Bool = true,
-        serverFlagEnabled: Bool = true,
+        serverAllowsInTestFlight: () -> Bool = { true },
         doNotShowAgain: () -> Bool = { false }
     ) -> Bool {
         HeliumDiagnosticGate.shouldShow(
@@ -25,7 +25,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             environment: environment,
             displayEnabled: displayEnabled,
             enabledInTestFlight: enabledInTestFlight,
-            serverFlagEnabled: serverFlagEnabled,
+            serverAllowsInTestFlight: serverAllowsInTestFlight(),
             doNotShowAgain: doNotShowAgain()
         )
     }
@@ -36,7 +36,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         environment: AppReceiptsHelper.Environment = .debug,
         displayEnabled: Bool = true,
         enabledInTestFlight: Bool = true,
-        serverFlagEnabled: Bool = true
+        serverAllowsInTestFlight: () -> Bool = { true }
     ) -> Bool {
         HeliumDiagnosticGate.isEnabled(
             isPreviewTrigger: isPreviewTrigger,
@@ -44,7 +44,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             environment: environment,
             displayEnabled: displayEnabled,
             enabledInTestFlight: enabledInTestFlight,
-            serverFlagEnabled: serverFlagEnabled
+            serverAllowsInTestFlight: serverAllowsInTestFlight()
         )
     }
 
@@ -126,7 +126,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 environment: .production,
                 displayEnabled: false,
                 enabledInTestFlight: false,
-                serverFlagEnabled: false,
+                serverAllowsInTestFlight: { false },
                 doNotShowAgain: { true }
             )
         )
@@ -166,11 +166,50 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         XCTAssertTrue(shouldShow(isDebugBuild: true, environment: .debug, enabledInTestFlight: false))
     }
 
-    // MARK: - Server kill switch
+    // MARK: - Server permission
 
-    func testServerKillSwitchOffNeverShows() {
-        XCTAssertFalse(shouldShow(serverFlagEnabled: false))
-        XCTAssertFalse(shouldShow(environment: .sandbox, serverFlagEnabled: false))
+    func testTheServerFlagClosesBuildsThatAreNotDebug() {
+        XCTAssertFalse(shouldShow(serverAllowsInTestFlight: { false }))
+        XCTAssertFalse(shouldShow(environment: .sandbox, serverAllowsInTestFlight: { false }))
+    }
+
+    /// The remote permission exists to keep a developer modal out of a tester's hands. A developer
+    /// running their own debug build is not a tester, so nothing remote can take the fallback badge
+    /// or the modal it opens away from them.
+    func testTheServerFlagDoesNotReachDebugBuilds() {
+        XCTAssertTrue(shouldShow(isDebugBuild: true, serverAllowsInTestFlight: { false }))
+        XCTAssertTrue(isEnabled(isDebugBuild: true, serverAllowsInTestFlight: { false }))
+        XCTAssertTrue(
+            isEnabled(
+                isDebugBuild: true,
+                environment: .sandbox,
+                enabledInTestFlight: false,
+                serverAllowsInTestFlight: { false }
+            )
+        )
+    }
+
+    func testTheSdkFlagIsTheOnlyThingThatClosesADebugBuild() {
+        XCTAssertFalse(
+            shouldShow(isDebugBuild: true, displayEnabled: false, serverAllowsInTestFlight: { false })
+        )
+        XCTAssertFalse(isEnabled(isDebugBuild: true, displayEnabled: false))
+    }
+
+    /// Reading the permission takes a lock a paywall render should never wait on, so every gate that
+    /// can answer without it has to.
+    func testAGateThatCanAnswerWithoutTheServerFlagNeverReadsIt() {
+        var reads = 0
+        let counting: () -> Bool = { reads += 1; return true }
+
+        _ = isEnabled(isDebugBuild: true, serverAllowsInTestFlight: counting)
+        _ = isEnabled(displayEnabled: false, serverAllowsInTestFlight: counting)
+        _ = isEnabled(environment: .production, serverAllowsInTestFlight: counting)
+        _ = isEnabled(environment: .sandbox, enabledInTestFlight: false, serverAllowsInTestFlight: counting)
+        _ = isEnabled(isPreviewTrigger: true, serverAllowsInTestFlight: counting)
+        _ = shouldShow(isDebugBuild: true, serverAllowsInTestFlight: counting)
+
+        XCTAssertEqual(reads, 0)
     }
 
     // MARK: - Do-not-show-again
@@ -194,7 +233,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         _ = shouldShow(fallbackShown: true, doNotShowAgain: counting)
         _ = shouldShow(displayEnabled: false, doNotShowAgain: counting)
         _ = shouldShow(environment: .production, doNotShowAgain: counting)
-        _ = shouldShow(serverFlagEnabled: false, doNotShowAgain: counting)
+        _ = shouldShow(serverAllowsInTestFlight: { false }, doNotShowAgain: counting)
         _ = shouldShow(isPreviewTrigger: true, doNotShowAgain: counting)
 
         XCTAssertEqual(reads, 0)
@@ -213,7 +252,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         XCTAssertFalse(isEnabled(displayEnabled: false))
         XCTAssertFalse(isEnabled(environment: .production))
         XCTAssertFalse(isEnabled(environment: .sandbox, enabledInTestFlight: false))
-        XCTAssertFalse(isEnabled(serverFlagEnabled: false))
+        XCTAssertFalse(isEnabled(serverAllowsInTestFlight: { false }))
     }
 
     func testDeliberatePathShowsWhenEveryPreferenceAllowsIt() {
@@ -229,7 +268,7 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 environment: .production,
                 displayEnabled: false,
                 enabledInTestFlight: false,
-                serverFlagEnabled: false
+                serverAllowsInTestFlight: { false }
             )
         )
     }

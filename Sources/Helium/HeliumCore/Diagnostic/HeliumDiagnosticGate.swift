@@ -28,7 +28,7 @@ enum HeliumDiagnosticGate {
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
         enabledInTestFlight: Bool,
-        serverFlagEnabled: Bool,
+        serverAllowsInTestFlight: @autoclosure () -> Bool,
         doNotShowAgain: @autoclosure () -> Bool
     ) -> Bool {
         // A rendered fallback paywall disproves the modal's authored outcome, which describes a user
@@ -43,7 +43,7 @@ enum HeliumDiagnosticGate {
             environment: environment,
             displayEnabled: displayEnabled,
             enabledInTestFlight: enabledInTestFlight,
-            serverFlagEnabled: serverFlagEnabled
+            serverAllowsInTestFlight: serverAllowsInTestFlight()
         ) else { return false }
         if isPreviewTrigger { return true }
         return !doNotShowAgain()
@@ -58,12 +58,16 @@ enum HeliumDiagnosticGate {
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
         enabledInTestFlight: Bool,
-        serverFlagEnabled: Bool
+        serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isPreviewTrigger { return true }
         guard displayEnabled else { return false }
-        guard isVisible(isDebugBuild: isDebugBuild, environment: environment, enabledInTestFlight: enabledInTestFlight) else { return false }
-        return serverFlagEnabled
+        return isAllowedOnThisBuild(
+            isDebugBuild: isDebugBuild,
+            environment: environment,
+            enabledInTestFlight: enabledInTestFlight,
+            serverAllowsInTestFlight: serverAllowsInTestFlight()
+        )
     }
 
     /// The SDK ships as source, so this resolves against the host app's build configuration.
@@ -92,16 +96,20 @@ enum HeliumDiagnosticGate {
         }
     }
 
-    private static func isVisible(
+    /// The TestFlight opt-in and the server permission exist to keep a developer modal out of a
+    /// tester's hands, and a developer running a DEBUG build of their own app is not a tester.
+    private static func isAllowedOnThisBuild(
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
-        enabledInTestFlight: Bool
+        enabledInTestFlight: Bool,
+        serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isDebugBuild { return true }
         switch environment {
         // In a non-DEBUG build, .debug still means a developer's own run: a release-configuration
-        // simulator build, or a device launched from Xcode (StoreKit's Xcode environment).
-        case .debug, .sandbox: return enabledInTestFlight
+        // simulator build, or a device launched from Xcode (StoreKit's Xcode environment). It is a
+        // release binary all the same, so it answers to the same two permissions as TestFlight.
+        case .debug, .sandbox: return enabledInTestFlight && serverAllowsInTestFlight()
         case .production: return false
         }
     }
@@ -122,7 +130,7 @@ extension HeliumDiagnosticGate {
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
             enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
-            serverFlagEnabled: serverFlagEnabled,
+            serverAllowsInTestFlight: serverAllowsInTestFlight,
             doNotShowAgain: UserDefaults.standard.bool(forKey: doNotShowAgainKey)
         )
     }
@@ -134,14 +142,14 @@ extension HeliumDiagnosticGate {
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
             enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
-            serverFlagEnabled: serverFlagEnabled
+            serverAllowsInTestFlight: serverAllowsInTestFlight
         )
     }
 
-    /// Defaults open, so an outcome that fires before the on-launch response arrives is still
-    /// explained.
-    private static var serverFlagEnabled: Bool {
-        HeliumFetchedConfigManager.shared.fetchedConfig?.diagnosticModalEnabled ?? true
+    /// Absent means the server has not said otherwise, so an outcome that fires before the
+    /// on-launch response arrives is still explained.
+    private static var serverAllowsInTestFlight: Bool {
+        HeliumFetchedConfigManager.shared.fetchedConfig?.paywallDiagnosticModalAllowedInTestFlight ?? true
     }
 
     private static func isPreviewTrigger(_ trigger: String) -> Bool {
