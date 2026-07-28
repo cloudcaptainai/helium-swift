@@ -536,6 +536,41 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
         }
         return .appStore
     }
+
+    /// True for a `<productId>:<priceId>` composite in Paddle (`pro_…:pri_…`) or
+    /// Stripe (`prod_…:price_…`) form.
+    ///
+    /// `resolve` answers `.appStore` for anything absent from both server price
+    /// maps, which is right for a bare StoreKit identifier but not for one of
+    /// these: App Store Connect has no product under a composite key, so the
+    /// purchase can only fail, and it fails reporting a missing App Store
+    /// product rather than the missing server-side registration that actually
+    /// caused it. Both halves are checked so a StoreKit identifier that merely
+    /// happens to contain a colon isn't caught.
+    static func isWebProcessorCompositeKey(_ productKey: String) -> Bool {
+        let parts = productKey.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        let product = parts[0]
+        let price = parts[1]
+        let paddle = product.hasPrefix("pro_") && price.hasPrefix("pri_")
+        let stripe = product.hasPrefix("prod_") && price.hasPrefix("price_")
+        return paddle || stripe
+    }
+}
+
+/// Raised when a purchase cannot be routed to a payment processor.
+public enum HeliumPaymentRoutingError: LocalizedError {
+    /// A Paddle/Stripe composite product key that neither server price map
+    /// knows about. Handing it to StoreKit would fail with a misleading App
+    /// Store Connect error, so the flow stops here instead.
+    case unregisteredWebProductKey(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unregisteredWebProductKey(let key):
+            return "Product \(key) looks like a Paddle or Stripe price but was not in the on-launch product list, so it cannot be purchased through the App Store. Check that this product is configured on this paywall in the Helium dashboard."
+        }
+    }
 }
 
 /// Event fired when a purchase completes successfully.

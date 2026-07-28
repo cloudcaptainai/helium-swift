@@ -102,6 +102,16 @@ class HeliumPaywallDelegateWrapper {
                 } catch {
                     transactionStatus = .failed(error)
                 }
+            } else if HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey) {
+                // Neither price map claimed a Paddle/Stripe-shaped key, so the
+                // paywall is offering a product the on-launch response never
+                // registered. StoreKit cannot own this identifier; passing it
+                // through would surface as "product not found in App Store
+                // Connect" and send the reader hunting through App Store
+                // Connect for a product that was never meant to live there.
+                HeliumLogger.log(.error, category: .core,
+                    "Product \(productKey) is a Paddle/Stripe price key but is absent from the on-launch paddleProducts/stripeProducts maps; refusing to route it to StoreKit.")
+                transactionStatus = .failed(HeliumPaymentRoutingError.unregisteredWebProductKey(productKey))
             } else {
                 transactionStatus = await delegate.makePurchase(productId: productKey)
             }
