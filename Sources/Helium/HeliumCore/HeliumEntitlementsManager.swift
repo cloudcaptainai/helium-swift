@@ -38,7 +38,7 @@ actor HeliumEntitlementsManager {
     
     /// How long until the cache should be considered stale, in seconds.
     private var cacheResetInterval: TimeInterval {
-        let isProduction = AppReceiptsHelper.shared.getEnvironment() == AppReceiptsHelper.Environment.production.rawValue
+        let isProduction = AppReceiptsHelper.shared.environment == .production
         let numMinutes: TimeInterval = isProduction ? 30 : 3
         return 60 * numMinutes
     }

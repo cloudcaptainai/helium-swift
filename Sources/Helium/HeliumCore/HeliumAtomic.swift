@@ -47,23 +47,12 @@ final class HeliumAtomic<T>: @unchecked Sendable {
     }
     
     /// Performs an atomic read-modify-write operation.
-    /// - Parameter operation: A closure that receives mutable access to the wrapped value
-    /// - Returns: The updated value after the operation completes
-    @discardableResult
-    func withValue(_ operation: (inout T) -> Void) -> T {
-        queue.sync {
-            operation(&self.value)
-            return self.value
-        }
-    }
-
-    /// Performs an atomic operation that returns an arbitrary result.
     /// - Parameter operation: A closure that receives mutable access to the wrapped value and returns a result
     /// - Returns: The result of the operation
     @discardableResult
-    func withValue<R>(_ operation: (inout T) -> R) -> R {
-        queue.sync {
-            operation(&self.value)
+    func withValue<R>(_ operation: (inout T) throws -> R) rethrows -> R {
+        try queue.sync {
+            try operation(&self.value)
         }
     }
 }

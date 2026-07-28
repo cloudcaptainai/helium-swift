@@ -348,22 +348,12 @@ class HeliumPaywallDelegateWrapper {
             metadata: logMetadata
         )
 
-#if DEBUG
-        let canShowDiagnosticView = true
-#else
-        let canShowDiagnosticView = trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
-#endif
-        if canShowDiagnosticView {
-            if !fallbackShown && paywallUnavailableReason != .alreadyPresented {
-                Task { @MainActor in
-                    HeliumPaywallDiagnosticView.presentIfNeeded(
-                        trigger: trigger,
-                        content: content,
-                        fallbackShown: fallbackShown
-                    )
-                }
-            }
-        }
+        presentDiagnosticIfNeeded(
+            trigger: trigger,
+            content: content,
+            outcome: .unavailable(paywallUnavailableReason),
+            fallbackShown: fallbackShown
+        )
     }
 
     private func logPaywallSkip(
@@ -379,15 +369,33 @@ class HeliumPaywallDelegateWrapper {
             metadata: logMetadata
         )
 
-#if DEBUG
+        presentDiagnosticIfNeeded(
+            trigger: trigger,
+            content: content,
+            outcome: .skipped(skipReason),
+            fallbackShown: false
+        )
+    }
+
+    private func presentDiagnosticIfNeeded(
+        trigger: String,
+        content: DiagnosticContent,
+        outcome: DiagnosticOutcome,
+        fallbackShown: Bool
+    ) {
+        guard HeliumDiagnosticGate.shouldShowNow(
+            outcome: outcome,
+            fallbackShown: fallbackShown,
+            trigger: trigger
+        ) else { return }
+
         Task { @MainActor in
             HeliumPaywallDiagnosticView.presentIfNeeded(
                 trigger: trigger,
                 content: content,
-                fallbackShown: false
+                fallbackShown: fallbackShown
             )
         }
-#endif
     }
 
     // MARK: - Pending Purchase Observation

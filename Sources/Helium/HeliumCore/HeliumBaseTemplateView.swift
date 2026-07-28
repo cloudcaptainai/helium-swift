@@ -85,8 +85,10 @@ public struct DynamicBaseTemplateView: View {
 
     @ViewBuilder
     private var paywallContent: some View {
-        #if DEBUG
-        if FallbackDebugBanner.shouldShow(fallbackReason: fallbackReason) {
+        if FallbackDebugBanner.shouldShow(
+            fallbackReason: fallbackReason,
+            diagnosticsEnabled: HeliumDiagnosticGate.isEnabledNow(trigger: triggerName ?? "")
+        ) {
             ZStack(alignment: .top) {
                 paywallWebView
                 // The stack keeps its safe-area inset while the paywall bleeds past it, so the
@@ -102,9 +104,6 @@ public struct DynamicBaseTemplateView: View {
         } else {
             paywallWebView
         }
-        #else
-        paywallWebView
-        #endif
     }
 }
 

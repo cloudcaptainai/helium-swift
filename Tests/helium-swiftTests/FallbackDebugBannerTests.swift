@@ -15,7 +15,23 @@ final class FallbackDebugBannerTests: XCTestCase {
     }
 
     func testBannerHiddenForLiveRemotePaywall() {
-        XCTAssertFalse(FallbackDebugBanner.shouldShow(fallbackReason: nil))
+        XCTAssertFalse(FallbackDebugBanner.shouldShow(fallbackReason: nil, diagnosticsEnabled: true))
+    }
+
+    /// The card's only action is opening the diagnostic modal, so it goes away with it rather than
+    /// sitting on the paywall offering details it would refuse to show.
+    func testBannerHiddenWhenDiagnosticsAreDisabled() {
+        XCTAssertFalse(
+            FallbackDebugBanner.shouldShow(fallbackReason: .triggerHasNoPaywall, diagnosticsEnabled: false)
+        )
+    }
+
+    func testTheGateIsNotConsultedForALiveRemotePaywall() {
+        var reads = 0
+
+        _ = FallbackDebugBanner.shouldShow(fallbackReason: nil, diagnosticsEnabled: { reads += 1; return true }())
+
+        XCTAssertEqual(reads, 0)
     }
 
     func testBannerShownWhenFallbackReasonPresent() {
@@ -34,7 +50,7 @@ final class FallbackDebugBannerTests: XCTestCase {
 
         for reason in reasons {
             XCTAssertTrue(
-                FallbackDebugBanner.shouldShow(fallbackReason: reason),
+                FallbackDebugBanner.shouldShow(fallbackReason: reason, diagnosticsEnabled: true),
                 "Expected the banner to show for fallback reason \(reason.rawValue)"
             )
         }
@@ -52,6 +68,8 @@ final class FallbackDebugBannerTests: XCTestCase {
         )
 
         XCTAssertEqual(result.fallbackReason, .triggerHasNoPaywall)
-        XCTAssertTrue(FallbackDebugBanner.shouldShow(fallbackReason: result.fallbackReason))
+        XCTAssertTrue(
+            FallbackDebugBanner.shouldShow(fallbackReason: result.fallbackReason, diagnosticsEnabled: true)
+        )
     }
 }

@@ -34,4 +34,26 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
 
         XCTAssertNil(decoded.paddleClientToken)
     }
+
+    // ---------- paywallDiagnosticModalAllowedInTestFlight contract ----------
+
+    func testDiagnosticModalPermissionDecodesFromJSON() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "paywallDiagnosticModalAllowedInTestFlight": false,
+        ])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertEqual(decoded.paywallDiagnosticModalAllowedInTestFlight, false)
+    }
+
+    /// Absent is how a customer's own fallbacks file always looks, so absent has to read as
+    /// permission granted rather than withheld.
+    func testDiagnosticModalPermissionIsNilWhenAbsent() throws {
+        let json = try makeOnLaunchJSON(extras: [:])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertNil(decoded.paywallDiagnosticModalAllowedInTestFlight)
+    }
 }

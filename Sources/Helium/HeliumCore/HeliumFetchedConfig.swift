@@ -231,9 +231,9 @@ public class HeliumFetchedConfigManager {
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4 // roughly 7 seconds of delays in between attempts
     
-    private(set) var fetchedConfig: HeliumFetchedConfig?
-    private(set) var fetchedConfigJSON: JSON?
-    private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
+    @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
+    @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
+    @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     
     func fetchConfig(
@@ -355,7 +355,8 @@ public class HeliumFetchedConfigManager {
             
             // Download assets
             
-            if (self.fetchedConfig?.bundles != nil && self.fetchedConfig?.bundles?.count ?? 0 > 0) {
+            let preloadedBundles = self.fetchedConfig?.bundles
+            if let preloadedBundles, !preloadedBundles.isEmpty {
                 // Start price fetch async (with timing), then do sync bundle save, then await price
                 async let priceTask: (UInt64, Bool) = {
                     let start = DispatchTime.now()
@@ -363,8 +364,7 @@ public class HeliumFetchedConfigManager {
                     return (dispatchTimeDifferenceInMS(from: start), success)
                 }()
 
-                let bundles = (self.fetchedConfig?.bundles)!
-                let bytesWritten = saveBundleAssets(bundles: bundles)
+                let bytesWritten = saveBundleAssets(bundles: preloadedBundles)
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
 
                 // Bundles saved, switch to products step
@@ -375,7 +375,7 @@ public class HeliumFetchedConfigManager {
 
                 let metrics = HeliumFetchMetrics(
                     numConfigAttempts: attemptCounter,
-                    numBundles: fetchedConfig?.bundles?.count ?? 0,
+                    numBundles: preloadedBundles.count,
                     numBundlesFromCache: 0,
                     bundleFailCount: 0,
                     configDownloadTimeMS: configDownloadTimeMS,
@@ -414,7 +414,7 @@ public class HeliumFetchedConfigManager {
                 
                 let bundles = bundlesResult.successMapBundleIdToHtml
                 guard !Task.isCancelled else { return }
-                fetchedConfig?.bundles = bundles
+                _fetchedConfig.withValue { $0?.bundles = bundles }
                 let bytesWritten = saveBundleAssets(bundles: bundles)
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
                 
@@ -1031,19 +1031,58 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
     ) throws {
-        guard var config = fetchedConfig else {
-            throw HeliumControlPanelError.noConfigAvailable
+        // Read-modify-write under the lock, so a fetch landing mid-update is not clobbered by the
+        // write-back of a copy taken before it.
+        let sourceTrigger = try _fetchedConfig.withValue { stored -> String in
+            guard var config = stored else {
+                throw HeliumControlPanelError.noConfigAvailable
+            }
+            let sourceTrigger = try Self.installPreviewTrigger(
+                in: &config,
+                bundleId: bundleId,
+                bundleUrl: bundleUrl,
+                bundleHtml: bundleHtml,
+                productIds: productIds,
+                productIdsStripe: productIdsStripe,
+                productIdsPaddle: productIdsPaddle,
+                productIdsPaddleWeb: productIdsPaddleWeb,
+                productIdsStripeWeb: productIdsStripeWeb,
+                webPaywallBundleUrl: webPaywallBundleUrl
+            )
+            stored = config
+            return sourceTrigger
         }
 
+        _fetchedConfigJSON.withValue { json in
+            guard let configJSON = json else { return }
+            json = Self.withPreviewTrigger(configJSON, clonedFrom: sourceTrigger, bundleUrl: bundleUrl)
+        }
+    }
+
+    /// Returns the trigger the preview was cloned from: the JSON mirror has to clone the same
+    /// entry, and only this transform knows which one it picked.
+    private static func installPreviewTrigger(
+        in config: inout HeliumFetchedConfig,
+        bundleId: String,
+        bundleUrl: String,
+        bundleHtml: String,
+        productIds: [String],
+        productIdsStripe: [String],
+        productIdsPaddle: [String],
+        productIdsPaddleWeb: [String],
+        productIdsStripeWeb: [String],
+        webPaywallBundleUrl: String?
+    ) throws -> String {
         guard let sourceTrigger = config.triggerToPaywalls.keys
-            .filter({ $0 != Self.HELIUM_PREVIEW_TRIGGER })
+            .filter({ $0 != HELIUM_PREVIEW_TRIGGER })
             .sorted()
             .first,
               var previewPaywallInfo = config.triggerToPaywalls[sourceTrigger] else {
             throw HeliumControlPanelError.noSourceTrigger
         }
 
-        // Update the bundle URL in resolvedConfig so extractedBundleUrl returns our new URL
+        // A paywall's bundle URL is resolved from this nested config before any other field, so a
+        // donor URL left in place here would win over the preview's own.
         guard var resolvedConfigDict = previewPaywallInfo.resolvedConfig.value as? [String: Any],
               var baseStack = resolvedConfigDict["baseStack"] as? [String: Any],
               var componentProps = baseStack["componentProps"] as? [String: Any] else {
@@ -1054,7 +1093,6 @@ public class HeliumFetchedConfigManager {
         resolvedConfigDict["baseStack"] = baseStack
         previewPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
 
-        // Update additionalPaywallFields
         var additionalFields = previewPaywallInfo.additionalPaywallFields ?? JSON([:])
         additionalFields["paywallBundleUrl"] = JSON(bundleUrl)
         // Use the previewed version's own web checkout URL. When the preview response
@@ -1068,35 +1106,36 @@ public class HeliumFetchedConfigManager {
         }
         previewPaywallInfo.additionalPaywallFields = additionalFields
 
-        // Update product IDs
         previewPaywallInfo.productsOfferedIOS = productIds
         previewPaywallInfo.productsOfferedStripe = productIdsStripe
         previewPaywallInfo.productsOfferedPaddle = productIdsPaddle
         previewPaywallInfo.webProductsOfferedPaddle = productIdsPaddleWeb
         previewPaywallInfo.webProductsOfferedStripe = productIdsStripeWeb
 
-        // Clear fields inherited from source trigger that would interfere with preview
+        // Inherited from the source trigger, where it would send the preview to a fallback paywall
+        // instead of the version the developer picked.
         previewPaywallInfo.forceShowFallback = nil
 
-        // Store the preview trigger config
-        config.triggerToPaywalls[Self.HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
+        config.triggerToPaywalls[HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
 
-        // Store the bundle HTML
         if config.bundles == nil {
             config.bundles = [:]
         }
         config.bundles?[bundleId] = bundleHtml
 
-        // Update the fetched config
-        fetchedConfig = config
+        return sourceTrigger
+    }
 
-        // Also update fetchedConfigJSON so getResolvedConfigJSONForTrigger works
-        if var configJSON = fetchedConfigJSON {
-            var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
-            sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
-            configJSON["triggerToPaywalls"][Self.HELIUM_PREVIEW_TRIGGER] = sourceJSON
-            fetchedConfigJSON = configJSON
-        }
+    private static func withPreviewTrigger(
+        _ configJSON: JSON,
+        clonedFrom sourceTrigger: String,
+        bundleUrl: String
+    ) -> JSON {
+        var configJSON = configJSON
+        var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
+        sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
+        configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = sourceJSON
+        return configJSON
     }
 }
 

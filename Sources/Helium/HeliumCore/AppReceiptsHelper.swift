@@ -17,23 +17,28 @@ class AppReceiptsHelper {
     
     static let shared = AppReceiptsHelper()
     
-    private var appTransactionEnvironment: Environment? = nil
-    private var setupCompleted: Bool = false
-    
-    private var appFirstInstallTime: Date? = nil
-    private var latestInstallTime: Date? = nil
+    @HeliumAtomic private var appTransactionEnvironment: Environment? = nil
+    @HeliumAtomic private var setupCompleted: Bool = false
+
+    @HeliumAtomic private var appFirstInstallTime: Date? = nil
+    @HeliumAtomic private var latestInstallTime: Date? = nil
     private let firstInstallTimeKey = "heliumFirstInstallTime"
-    
+
     func setUp() {
-        if setupCompleted {
+        // Test-and-set so concurrent callers run the body at most once.
+        let alreadySetUp = _setupCompleted.withValue { value in
+            if value { return true }
+            value = true
+            return false
+        }
+        if alreadySetUp {
             return
         }
-        setupCompleted = true
         if Bundle.main.appStoreReceiptURL != nil {
             // AppTransaction.shared can trigger Apple account sign-in dialog in debug/sandbox
             // if not signed into a sandbox account, which is annoying for sdk integrators. So avoid
             // that call if can determine sandbox from receipt.
-            if getEnvironment() == Environment.sandbox.rawValue {
+            if environment == .sandbox {
                 return
             }
         }
@@ -80,19 +85,23 @@ class AppReceiptsHelper {
 #endif
     }
     
-    func getEnvironment() -> String {
+    var environment: Environment {
 #if DEBUG || targetEnvironment(simulator)
-        return Environment.debug.rawValue
+        return .debug
 #else
         if let appTransactionEnvironment {
-            return appTransactionEnvironment.rawValue
+            return appTransactionEnvironment
         }
 
         // Note, if supporting mac catalyst, watch os, etc in the future consider looking at RevenueCat sdk for how they handle these special cases.
 
         let isTestFlight = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        return isTestFlight ? Environment.sandbox.rawValue : Environment.production.rawValue
+        return isTestFlight ? .sandbox : .production
 #endif
+    }
+
+    func getEnvironment() -> String {
+        environment.rawValue
     }
     
     func getFirstInstallTime() -> Date? {
@@ -119,8 +128,9 @@ class AppReceiptsHelper {
             return nil
         }
         let attributes = try? FileManager.default.attributesOfItem(atPath: documentsURL.path)
-        latestInstallTime = attributes?[.creationDate] as? Date
-        return latestInstallTime
+        let creationDate = attributes?[.creationDate] as? Date
+        latestInstallTime = creationDate
+        return creationDate
     }
 
 }
