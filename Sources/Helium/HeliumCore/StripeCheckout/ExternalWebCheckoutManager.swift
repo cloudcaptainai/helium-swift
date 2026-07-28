@@ -204,8 +204,8 @@ public class ExternalWebCheckoutManager: NSObject {
         )
     }
 
-    /// Fallback derivation of the per-customer intro-offer signal from the
-    /// server price map, used when `/check-entitlement` has no answer yet.
+    /// Derives the per-customer intro-offer signal from the server price map,
+    /// for when `/check-entitlement` returns no eligibility value.
     ///
     /// A price's `subscription.introOfferEligible` already folds two things
     /// together: the price carries a trial period, AND this customer has not

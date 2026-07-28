@@ -1,8 +1,8 @@
 import XCTest
 @testable import Helium
 
-/// Covers the fallback derivation used when `/check-entitlement` has not
-/// answered yet. Fixtures are decoded from the on-launch wire shape rather than
+/// Covers the price-map derivation used when `/check-entitlement` returns no
+/// eligibility value. Fixtures are decoded from the on-launch wire shape rather than
 /// hand-constructed, so a rename on the server side surfaces here.
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
