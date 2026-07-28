@@ -197,8 +197,8 @@ class HeliumActionsDelegate: ObservableObject {
     }
     
     private func showSecondTryUnsupportedInPreviewDiagnostic() {
-        HeliumLogger.log(.info, category: .ui, "Second try flows are not supported in paywall previews", metadata: ["trigger": trigger])
         let content = DiagnosticContentMapper().mapSecondTryInPreview()
+        HeliumLogger.log(.info, category: .ui, DiagnosticLogLineMapper().map(content), metadata: ["trigger": trigger])
         Task { @MainActor in
             HeliumPaywallDiagnosticView.presentIfNeeded(
                 trigger: trigger,
