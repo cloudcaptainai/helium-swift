@@ -283,3 +283,32 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
         return p
     }
 }
+
+/// Reports the fallback bundle an app ships. The event's presence in the stream is
+/// itself the "this app has fallbacks configured" signal, so it is only emitted when
+/// a bundle was found and parsed.
+///
+/// A trigger maps to nil when it has no resolved paywall. Such triggers count toward
+/// `triggerCount` but are absent from `triggerPaywallUUIDs`, so the two can disagree.
+struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
+    let generatedAt: String?
+    let organizationID: String?
+    let triggerToPaywallUUID: [String: String?]
+
+    var name: String { "fallback_paywalls_configured" }
+    var properties: [String: Any] {
+        let resolvedUUIDs = triggerToPaywallUUID.compactMapValues { $0 }
+        var p: [String: Any] = [
+            "triggerCount": triggerToPaywallUUID.count,
+            "triggerPaywallUUIDs": resolvedUUIDs,
+        ]
+        if let generatedAt { p["generatedAt"] = generatedAt }
+        if let organizationID { p["organizationId"] = organizationID }
+        // Surfaced separately so consumers don't need to know the per-platform
+        // default trigger name; the enriched `platform` property disambiguates.
+        if let defaultUUID = resolvedUUIDs[HeliumFallbackViewManager.defaultFallbackTrigger] {
+            p["defaultPaywallUUID"] = defaultUUID
+        }
+        return p
+    }
+}

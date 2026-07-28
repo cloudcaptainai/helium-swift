@@ -35,7 +35,7 @@ class HeliumObservabilityManager {
 
     func track(
         _ event: any HeliumObservabilityEvent,
-        scope: PaywallObservabilityScope
+        scope: PaywallObservabilityScope?
     ) {
         let eventName = event.name
         let eventProps = event.properties
@@ -53,9 +53,9 @@ class HeliumObservabilityManager {
         }
     }
 
-    private func enrich(
+    func enrich(
         eventProps: [String: Any],
-        scope: PaywallObservabilityScope
+        scope: PaywallObservabilityScope?
     ) -> [String: Any] {
         var p = eventProps
         p["sdkVersion"] = BuildConstants.version
@@ -66,10 +66,12 @@ class HeliumObservabilityManager {
             p["revenueCatAppUserId"] = rcId
         }
         p["heliumSessionId"] = HeliumIdentityManager.shared.getHeliumSessionId()
-        p["heliumPaywallSessionId"] = scope.sessionId
-        p["triggerName"] = scope.trigger
-        if let uuid = scope.paywallUUID {
-            p["paywallUUID"] = uuid
+        if let scope {
+            p["heliumPaywallSessionId"] = scope.sessionId
+            p["triggerName"] = scope.trigger
+            if let uuid = scope.paywallUUID {
+                p["paywallUUID"] = uuid
+            }
         }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             p["organizationId"] = orgId

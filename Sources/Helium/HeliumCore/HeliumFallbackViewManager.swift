@@ -17,7 +17,7 @@ public class HeliumFallbackViewManager {
     
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
-    private let defaultFallbackTrigger = "hlm_ios_default_flbk"
+    static let defaultFallbackTrigger = "hlm_ios_default_flbk"
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
@@ -61,6 +61,15 @@ public class HeliumFallbackViewManager {
                     } else if generatedAtDisplay == invalidDateString {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     }
+
+                    HeliumObservabilityManager.shared.track(
+                        FallbackPaywallsConfigured(
+                            generatedAt: decodedConfig.generatedAt,
+                            organizationID: decodedConfig.organizationID,
+                            triggerToPaywallUUID: decodedConfig.triggerToPaywalls.mapValues { $0.paywallUUID }
+                        ),
+                        scope: nil
+                    )
                 } else {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
@@ -92,7 +101,7 @@ public class HeliumFallbackViewManager {
         if fallbackPaywallInfo?.hasProducts == true && hasResolvedConfig {
             return trigger
         }
-        return defaultFallbackTrigger
+        return Self.defaultFallbackTrigger
     }
     
     func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
