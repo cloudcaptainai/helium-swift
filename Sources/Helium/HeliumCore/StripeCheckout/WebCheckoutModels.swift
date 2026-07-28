@@ -249,6 +249,19 @@ public enum PaddlePrefetchError: LocalizedError {
     }
 }
 
+/// Raised when a purchase cannot be routed to any payment processor.
+enum HeliumPaymentRoutingError: LocalizedError {
+    /// A Paddle/Stripe composite product key absent from both server price maps.
+    case unregisteredWebProductKey(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unregisteredWebProductKey(let key):
+            return "\(key) is not set up as a purchasable product on this paywall. Add it to the paywall's products in the Helium dashboard and republish, or remove it from the paywall."
+        }
+    }
+}
+
 enum WebCheckoutError: LocalizedError {
     case cannotPresentCheckout
     case checkoutURLsNotConfigured

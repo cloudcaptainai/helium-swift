@@ -104,20 +104,9 @@ class HeliumPaywallDelegateWrapper {
                 }
             } else if paymentProcessor == .appStore,
                       HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey) {
-                // `.appStore` means neither price map claimed the key, yet it is
-                // shaped like a Paddle/Stripe composite: the paywall is offering
-                // a product the on-launch response never registered. StoreKit
-                // cannot own this identifier, so passing it through surfaces as
-                // "product not found in App Store Connect" and sends the reader
-                // hunting through App Store Connect for a product that was never
-                // meant to live there.
-                //
-                // The processor check is load-bearing. A REGISTERED Stripe key
-                // reaches this point whenever Apple Pay is available, because
-                // the first branch requires !stripeApplePayFlowEnabled, and it
-                // has to continue on to the delegate.
-                HeliumLogger.log(.error, category: .core,
-                    "Product \(productKey) is a Paddle/Stripe price key but is absent from the on-launch paddleProducts/stripeProducts maps; refusing to route it to StoreKit.")
+                // The .appStore check is load-bearing: a registered Stripe key
+                // reaches here whenever Apple Pay is available, since the first
+                // branch requires !stripeApplePayFlowEnabled.
                 transactionStatus = .failed(HeliumPaymentRoutingError.unregisteredWebProductKey(productKey))
             } else {
                 transactionStatus = await delegate.makePurchase(productId: productKey)

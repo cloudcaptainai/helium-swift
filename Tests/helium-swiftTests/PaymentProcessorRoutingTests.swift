@@ -57,15 +57,14 @@ final class PaymentProcessorRoutingTests: XCTestCase {
 
     // MARK: - Error surface
 
-    func testUnregisteredWebProductKeyErrorNamesTheProductAndTheRealCause() throws {
+    func testUnregisteredWebProductKeyErrorNamesTheProduct() throws {
         let key = "pro_01krypc7fqwabtc3hcxsg54qfw:pri_01kxv658enrjcre5b3sr78j72p"
         let description = try XCTUnwrap(
             HeliumPaymentRoutingError.unregisteredWebProductKey(key).errorDescription)
 
-        XCTAssertTrue(description.contains(key))
-        XCTAssertTrue(description.contains("on-launch"),
-                      "the message must point at the server product list")
+        XCTAssertTrue(description.contains(key),
+                      "the developer needs to know which product failed to route")
         XCTAssertFalse(description.contains("App Store Connect"),
-                       "naming App Store Connect is what sent the last investigation the wrong way")
+                       "pointing at App Store Connect is the misdiagnosis this error exists to prevent")
     }
 }
