@@ -35,7 +35,7 @@ class HeliumObservabilityManager {
 
     func track(
         _ event: any HeliumObservabilityEvent,
-        scope: PaywallObservabilityScope? = nil
+        scope: PaywallObservabilityScope?
     ) {
         let eventName = event.name
         let eventProps = event.properties

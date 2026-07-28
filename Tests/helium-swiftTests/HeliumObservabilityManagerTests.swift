@@ -7,6 +7,24 @@ import XCTest
 /// context. Identity values depend on device/session state and are not pinned here.
 final class HeliumObservabilityManagerTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        // Enrichment reads the organization off the downloaded config; clear it so
+        // the no-downloaded-config path is what's under test.
+        HeliumFetchedConfigManager.reset()
+    }
+
+    /// Events that carry their own organization must keep it when no downloaded
+    /// config is available, otherwise early-startup telemetry loses its org.
+    func testEnrichKeepsAnEventSuppliedOrganizationWhenNoConfigIsDownloaded() {
+        let enriched = HeliumObservabilityManager.shared.enrich(
+            eventProps: ["organizationId": "org-from-bundle"],
+            scope: nil
+        )
+
+        XCTAssertEqual(enriched["organizationId"] as? String, "org-from-bundle")
+    }
+
     func testEnrichWithoutScopeOmitsPaywallScopeKeys() {
         let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
 

@@ -292,6 +292,7 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
 /// `triggerCount` but are absent from `triggerPaywallUUIDs`, so the two can disagree.
 struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
     let generatedAt: String?
+    let organizationID: String?
     let triggerToPaywallUUID: [String: String?]
 
     var name: String { "fallback_paywalls_configured" }
@@ -302,6 +303,7 @@ struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
             "triggerPaywallUUIDs": resolvedUUIDs,
         ]
         if let generatedAt { p["generatedAt"] = generatedAt }
+        if let organizationID { p["organizationId"] = organizationID }
         // Surfaced separately so consumers don't need to know the per-platform
         // default trigger name; the enriched `platform` property disambiguates.
         if let defaultUUID = resolvedUUIDs[HeliumFallbackViewManager.defaultFallbackTrigger] {

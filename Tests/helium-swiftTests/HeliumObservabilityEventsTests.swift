@@ -21,9 +21,10 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
     // MARK: - FallbackPaywallsConfigured
 
-    func testFullyPopulatedBundleCarriesGeneratedAtDefaultUUIDCountAndMap() throws {
+    func testFullyPopulatedBundleCarriesGeneratedAtOrgDefaultUUIDCountAndMap() throws {
         let event = FallbackPaywallsConfigured(
             generatedAt: "2025-10-01T12:00:00Z",
+            organizationID: "org-1",
             triggerToPaywallUUID: [
                 HeliumFallbackViewManager.defaultFallbackTrigger: "default-uuid",
                 "onboarding": "onboarding-uuid",
@@ -33,6 +34,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertEqual(event.name, "fallback_paywalls_configured")
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
             "generatedAt": "2025-10-01T12:00:00Z",
+            "organizationId": "org-1",
             "defaultPaywallUUID": "default-uuid",
             "triggerCount": 2,
             "triggerPaywallUUIDs": [
@@ -45,15 +47,27 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     func testBundleWithoutGeneratedAtOmitsTheKey() throws {
         let event = FallbackPaywallsConfigured(
             generatedAt: nil,
+            organizationID: "org-1",
             triggerToPaywallUUID: ["onboarding": "onboarding-uuid"]
         )
 
         XCTAssertNil(try wireProperties(for: event)["generatedAt"])
     }
 
+    func testBundleWithoutAnOrganizationOmitsTheKey() throws {
+        let event = FallbackPaywallsConfigured(
+            generatedAt: nil,
+            organizationID: nil,
+            triggerToPaywallUUID: ["onboarding": "onboarding-uuid"]
+        )
+
+        XCTAssertNil(try wireProperties(for: event)["organizationId"])
+    }
+
     func testBundleWithNoDefaultTriggerOmitsTheDefaultPaywallUUID() throws {
         let event = FallbackPaywallsConfigured(
             generatedAt: nil,
+            organizationID: nil,
             triggerToPaywallUUID: ["onboarding": "onboarding-uuid"]
         )
 
@@ -63,6 +77,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     func testDefaultTriggerWithoutAPaywallOmitsTheDefaultPaywallUUID() throws {
         let event = FallbackPaywallsConfigured(
             generatedAt: nil,
+            organizationID: nil,
             triggerToPaywallUUID: [HeliumFallbackViewManager.defaultFallbackTrigger: nil]
         )
 
@@ -72,6 +87,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     func testTriggerWithNoResolvedPaywallCountsButIsAbsentFromTheMap() throws {
         let event = FallbackPaywallsConfigured(
             generatedAt: nil,
+            organizationID: nil,
             triggerToPaywallUUID: ["configured": "configured-uuid", "unconfigured": nil]
         )
 
@@ -82,7 +98,11 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     }
 
     func testEmptyBundleReportsZeroTriggersAndAnEmptyMap() throws {
-        let event = FallbackPaywallsConfigured(generatedAt: nil, triggerToPaywallUUID: [:])
+        let event = FallbackPaywallsConfigured(
+            generatedAt: nil,
+            organizationID: nil,
+            triggerToPaywallUUID: [:]
+        )
 
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
             "triggerCount": 0,
