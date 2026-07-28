@@ -64,6 +64,8 @@ final class PaymentProcessorRoutingTests: XCTestCase {
 
         XCTAssertTrue(description.contains(key))
         XCTAssertTrue(description.contains("on-launch"),
-                      "the message must point at the server product list, not App Store Connect")
+                      "the message must point at the server product list")
+        XCTAssertFalse(description.contains("App Store Connect"),
+                       "naming App Store Connect is what sent the last investigation the wrong way")
     }
 }

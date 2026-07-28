@@ -559,13 +559,17 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
 }
 
 /// Raised when a purchase cannot be routed to a payment processor.
-public enum HeliumPaymentRoutingError: LocalizedError {
+///
+/// Internal: host apps still read the text through `localizedDescription` on
+/// the `Error` delivered by `.failed`, so keeping the type out of the public
+/// surface costs them nothing but the ability to pattern-match the case.
+enum HeliumPaymentRoutingError: LocalizedError {
     /// A Paddle/Stripe composite product key that neither server price map
     /// knows about. Handing it to StoreKit would fail with a misleading App
     /// Store Connect error, so the flow stops here instead.
     case unregisteredWebProductKey(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unregisteredWebProductKey(let key):
             return "Product \(key) looks like a Paddle or Stripe price but was not in the on-launch product list, so it cannot be purchased through the App Store. Check that this product is configured on this paywall in the Helium dashboard."
