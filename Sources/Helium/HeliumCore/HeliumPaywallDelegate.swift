@@ -304,21 +304,9 @@ class HeliumPaywallDelegateWrapper {
         }
         
         // Mark session for onEntitled callback on purchase/restore success
-        if let sessionId = overridePaywallSessionId ?? paywallSession?.sessionId {
-            let entitledEvent: PaywallEntitledEvent?
-            switch event {
-            case let purchased as PurchaseSucceededEvent:
-                entitledEvent = .purchased(purchased)
-            case let restored as PurchaseRestoredEvent:
-                entitledEvent = .restored(restored)
-            case let alreadyEntitled as PurchaseAlreadyEntitledEvent:
-                entitledEvent = .alreadyEntitled(alreadyEntitled)
-            default:
-                entitledEvent = nil
-            }
-            if let entitledEvent {
-                HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: entitledEvent)
-            }
+        if let sessionId = overridePaywallSessionId ?? paywallSession?.sessionId,
+           let entitledEvent = PaywallEntitledEvent(entitlingEvent: event) {
+            HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: entitledEvent)
         }
 
         if event is PaywallCloseEvent, let paywallSession {

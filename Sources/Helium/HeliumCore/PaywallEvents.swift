@@ -897,6 +897,21 @@ public enum PaywallEntitledEvent {
         case .skipped: return nil
         }
     }
+
+    /// Wraps a purchase-flow event that grants entitlement; `nil` for any other event.
+    /// `.skipped` is excluded — it is constructed directly at the skip site and never marks a session.
+    init?(entitlingEvent event: HeliumEvent) {
+        switch event {
+        case let purchased as PurchaseSucceededEvent:
+            self = .purchased(purchased)
+        case let restored as PurchaseRestoredEvent:
+            self = .restored(restored)
+        case let alreadyEntitled as PurchaseAlreadyEntitledEvent:
+            self = .alreadyEntitled(alreadyEntitled)
+        default:
+            return nil
+        }
+    }
 }
 
 /// Event fired when StoreKit returns .pending status (e.g., waiting for parental approval)

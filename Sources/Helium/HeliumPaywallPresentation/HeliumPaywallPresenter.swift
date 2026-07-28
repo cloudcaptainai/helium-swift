@@ -31,7 +31,7 @@ class HeliumPaywallPresenter {
     
     /// Mark a session as having achieved entitlement (purchase/restore succeeded).
     /// The onEntitled callback will be called with the event when the paywall closes.
-    /// If a session produces multiple entitling events, the most recent one wins.
+    /// A session is expected to produce at most one entitling event; if more occur, the most recent wins.
     func markSessionAsEntitled(sessionId: String, event: PaywallEntitledEvent) {
         _sessionsWithEntitlement.withValue { $0[sessionId] = event }
     }
