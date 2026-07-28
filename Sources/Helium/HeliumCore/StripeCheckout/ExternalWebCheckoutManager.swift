@@ -207,24 +207,26 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Derives the per-customer intro-offer signal from the server price map,
     /// for when `/check-entitlement` returns no eligibility value.
     ///
-    /// A price's `subscription.introOfferEligible` already folds two things
-    /// together: the price carries a trial period, AND this customer has not
-    /// consumed an intro offer. A product with no trial therefore reports false
-    /// for everyone. Requiring EVERY offered product to report true let a
-    /// single no-trial product — a monthly plan sitting next to a yearly trial,
-    /// say — mask an eligible customer and suppress trials across the whole web
-    /// paywall.
+    /// Mirrors the coarse-prop contract CML's `computeIntroOfferEligibleForAll`
+    /// already ships: only offer-bearing products count, every one of them must
+    /// be eligible, and no offer-bearing products at all means false.
     ///
-    /// One product reporting true is sufficient. Eligibility is a property of
-    /// the customer, not of the product set, and the server applies that one
-    /// customer bit to every trial-bearing price. So a single true means the
-    /// customer is eligible, and an ineligible customer yields false on every
-    /// entry regardless of how many trials the paywall offers.
+    /// Offer-bearing is keyed on `introOffers`, not on `introOfferEligible`.
+    /// That boolean folds two facts into one: the price carries a trial, AND
+    /// this customer has not consumed an intro offer. It is therefore false
+    /// both for a price with no trial and for a trial this customer cannot
+    /// have, and reading it alone cannot tell those apart. Testing every
+    /// offered product against it let a plain monthly plan sitting beside a
+    /// yearly trial report the customer permanently ineligible.
     static func introOfferEligible(
         products: [String],
         priceMap: [String: ServerProductPrice]
     ) -> Bool {
-        products.contains { priceMap[$0]?.subscription?.introOfferEligible == true }
+        let offerBearing = products
+            .compactMap { priceMap[$0]?.subscription }
+            .filter { !($0.introOffers ?? []).isEmpty }
+        guard !offerBearing.isEmpty else { return false }
+        return offerBearing.allSatisfy { $0.introOfferEligible == true }
     }
 
     /// Builds the enriched checkout URL: existing query items are preserved,
