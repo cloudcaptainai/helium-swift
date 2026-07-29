@@ -8,6 +8,7 @@ struct HeliumControlPanelView: View {
     @State private var previewTask: Task<Void, Never>?
     @State private var searchText: String = ""
     @State private var paywallLoadError: String? = nil
+    @State private var pendingWebPreviewURL: URL? = nil
 
     var body: some View {
         NavigationView {
@@ -92,6 +93,21 @@ struct HeliumControlPanelView: View {
         } message: {
             Text(paywallLoadError ?? "")
         }
+        .alert("Open Web Paywall?", isPresented: Binding(
+            get: { pendingWebPreviewURL != nil },
+            set: { if !$0 { pendingWebPreviewURL = nil } }
+        ), presenting: pendingWebPreviewURL) { url in
+            Button("Cancel", role: .cancel) { }
+            Button("Open in Browser") {
+                UIApplication.shared.open(url, options: [:]) { opened in
+                    if !opened {
+                        paywallLoadError = "Failed to open web preview."
+                    }
+                }
+            }
+        } message: { _ in
+            Text("Web paywalls open in your default browser for a display-only preview. Purchases won't work from this preview.")
+        }
         .onAppear {
             fetchTask = Task { await fetchPaywalls() }
         }
@@ -129,13 +145,23 @@ struct HeliumControlPanelView: View {
             // Right side: header + version rows
             VStack(alignment: .leading, spacing: 0) {
                 // Paywall name header
-                Text(paywall.paywallName)
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 14)
+                HStack(spacing: 6) {
+                    Text(paywall.paywallName)
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    if paywall.isWebPaywall {
+                        Text("Web")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(UIColor.tertiarySystemFill)))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 14)
                 
                 Rectangle()
                     .fill(Color.gray.opacity(0.5))
@@ -175,7 +201,7 @@ struct HeliumControlPanelView: View {
                         if isLoading {
                             ProgressView()
                         } else if version.bundleUrl != nil {
-                            Image(systemName: "magnifyingglass")
+                            Image(systemName: paywall.isWebPaywall ? "safari" : "magnifyingglass")
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
@@ -242,6 +268,20 @@ struct HeliumControlPanelView: View {
     private func selectVersion(_ version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard loadingVersionId == nil else { return }
         guard let bundleUrl = version.bundleUrl else { return }
+
+        // Web paywalls aren't renderable in-app — preview them in the browser
+        // after the user confirms, since payments won't work from a preview.
+        if paywall.isWebPaywall {
+            guard HeliumFetchedConfigManager.shared.isValidURL(bundleUrl),
+                  let url = URL(string: bundleUrl) else {
+                paywallLoadError = "Invalid web paywall URL."
+                return
+            }
+            HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected web paywall: \(paywall.paywallName) version: \(version.versionId)")
+            pendingWebPreviewURL = url
+            return
+        }
+
         loadingVersionId = version.id
         HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) version: \(version.versionId)")
 

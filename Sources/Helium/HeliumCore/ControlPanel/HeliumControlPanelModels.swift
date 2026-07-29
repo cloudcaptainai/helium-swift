@@ -8,8 +8,12 @@ struct HeliumControlPanelResponse: Codable {
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let paywallUuid: String
     let paywallName: String
+    let isWeb: Bool?
     let versions: [HeliumPaywallPreviewVersion]
     var id: String { paywallUuid }
+
+    /// Web paywalls render in a browser, not in-app; previews open them there.
+    var isWebPaywall: Bool { isWeb == true }
 }
 
 struct HeliumPaywallPreviewVersion: Codable, Identifiable {

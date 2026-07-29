@@ -297,5 +297,53 @@ final class PreviewTriggerConfigTests: XCTestCase {
 
         XCTAssertNil(response.paywalls[0].versions[0].webPaywallBundleUrl)
         XCTAssertNil(response.paywalls[0].versions[0].paddleProductIds)
+        XCTAssertFalse(response.paywalls[0].isWebPaywall)
+    }
+
+    func testDecodesWebPaywallEntry() throws {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            {
+              "paywallUuid": "0b7f5c1a-1111-4222-8333-444455556666",
+              "paywallName": "Web Checkout Paywall",
+              "isWeb": true,
+              "versions": [
+                {
+                  "versionId": "9d8c7b6a-aaaa-4bbb-8ccc-dddeeefff000",
+                  "versionStatus": "published",
+                  "versionNumber": 3,
+                  "bundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "stripeProductIds": [],
+                  "paddleProductIds": ["pro_web:pri_web"],
+                  "webPaddleProductIds": [],
+                  "webPaywallBundleUrl": null,
+                  "lastSavedAt": null
+                }
+              ]
+            },
+            {
+              "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+              "paywallName": "Native Paywall",
+              "isWeb": false,
+              "versions": []
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            HeliumControlPanelResponse.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertTrue(response.paywalls[0].isWebPaywall)
+        XCTAssertEqual(
+            response.paywalls[0].versions[0].bundleUrl,
+            "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html"
+        )
+        XCTAssertFalse(response.paywalls[1].isWebPaywall)
     }
 }
