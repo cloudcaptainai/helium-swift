@@ -107,7 +107,9 @@ struct DiagnosticContentMapper {
         case .alreadyPresented:
             return alreadyPresented(code)
         case .forceShowFallback:
-            return forceShowFallback(code)
+            return context.trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+                ? fallbackPreview(code)
+                : forceShowFallback(code)
         }
     }
 
@@ -185,6 +187,24 @@ struct DiagnosticContentMapper {
             usersWillSee: "The bundled fallback could not be rendered, so this user saw nothing.",
             usersWillSeeLink: nil,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
+            reasonCode: code
+        )
+    }
+
+    /// forceShowFallback on the preview trigger means the developer asked the control panel to
+    /// render the bundled fallback, so the copy describes the preview rather than any trigger
+    /// configuration.
+    private func fallbackPreview(_ code: String) -> DiagnosticContent {
+        DiagnosticContent(
+            category: .expected,
+            title: "Previewing your fallback paywall",
+            body: "You opened this from the control panel, so Helium rendered the fallback "
+                + "paywall bundled with your app instead of fetching a remote one. Nothing "
+                + "about your live paywalls or triggers changed.",
+            usersWillSee: "Nothing. This preview is local to this device; real users only see "
+                + "this fallback when a live paywall cannot be fetched.",
+            usersWillSeeLink: nil,
+            cta: .openUrl(label: "Fallback Docs", url: Url.fallbackGuide),
             reasonCode: code
         )
     }

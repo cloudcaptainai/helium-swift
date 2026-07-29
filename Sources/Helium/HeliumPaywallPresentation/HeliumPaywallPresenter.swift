@@ -556,7 +556,17 @@ extension HeliumPaywallPresenter {
             HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
             return PaywallViewResult(viewAndSession: nil, fallbackReason: .notInitialized)
         }
-        
+
+        // The control panel arms this to preview the bundled default fallback. Resolution reads
+        // only the fallback manager, never the fetched config, so the preview works offline and
+        // before any config download completes. A developer forcing the fallback render gets
+        // forceShowFallback, and with it the same banner, diagnostic copy, and analytics
+        // labeling as a trigger configured to force its fallback.
+        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
+           HeliumFetchedConfigManager.shared.isFallbackPreviewArmed {
+            return fallbackBundleViewFor(trigger: trigger, fallbackReason: .forceShowFallback, presentationContext: presentationContext)
+        }
+
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if Helium.shared.paywallsLoaded() {
             guard let templatePaywallInfo = paywallInfo else {
@@ -637,12 +647,15 @@ extension HeliumPaywallPresenter {
     
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         
-        // Do not show fallback for a paywall preview
+        // A failed preview must surface its failure, never silently render a fallback in its place.
         if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
             return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
         }
-        
-        // Check existing fallback mechanisms
+
+        return fallbackBundleViewFor(trigger: trigger, fallbackReason: fallbackReason, presentationContext: presentationContext)
+    }
+
+    private func fallbackBundleViewFor(trigger: String, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
            let filePath = fallbackPaywallInfo.localBundlePath {
             do {

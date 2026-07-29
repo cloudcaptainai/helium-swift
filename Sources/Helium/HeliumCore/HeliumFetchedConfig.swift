@@ -211,6 +211,7 @@ public class HeliumFetchedConfigManager {
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
+        shared.isFallbackPreviewArmed = false
     }
 
     /// Inject config for testing purposes only. Accessible via @testable import.
@@ -235,6 +236,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic private(set) var isFallbackPreviewArmed: Bool = false
     
     func fetchConfig(
         endpoint: String,
@@ -1018,6 +1020,27 @@ public class HeliumFetchedConfigManager {
 
     static let HELIUM_PREVIEW_TRIGGER = "helium_preview_trigger"
 
+    /// True when a bundled default fallback paywall is available to preview on this device.
+    func hasConfiguredFallbackPreview() -> Bool {
+        HeliumFallbackViewManager.shared.getFallbackInfo(
+            trigger: HeliumFallbackViewManager.defaultFallbackTrigger
+        ) != nil
+    }
+
+    /// Arms the preview trigger to render the bundled default fallback. The fallback bundle and
+    /// its resolved config are loaded at initialize, so arming needs no fetched config or
+    /// network. Returns false when no default fallback is configured.
+    func setFallbackPreviewTrigger() -> Bool {
+        guard hasConfiguredFallbackPreview() else { return false }
+        // An entry left by an earlier paywall version preview would otherwise feed this
+        // trigger's analytics enrichment and injected prices while the fallback renders.
+        _fetchedConfig.withValue {
+            $0?.triggerToPaywalls.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER)
+        }
+        isFallbackPreviewArmed = true
+        return true
+    }
+
     /// Sets up a preview trigger configuration for the control panel.
     /// Clones an existing trigger's config and updates it to use the specified bundle.
     func setPreviewTriggerConfig(
@@ -1057,6 +1080,8 @@ public class HeliumFetchedConfigManager {
             guard let configJSON = json else { return }
             json = Self.withPreviewTrigger(configJSON, clonedFrom: sourceTrigger, bundleUrl: bundleUrl)
         }
+
+        isFallbackPreviewArmed = false
     }
 
     /// Returns the trigger the preview was cloned from: the JSON mirror has to clone the same

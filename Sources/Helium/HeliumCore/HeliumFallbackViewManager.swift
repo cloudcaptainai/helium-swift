@@ -14,6 +14,12 @@ public class HeliumFallbackViewManager {
         shared.loadedConfig = nil
         shared.loadedConfigJSON = nil
     }
+
+    /// Inject fallback config for testing purposes only. Accessible via @testable import.
+    func injectFallbackConfigForTesting(_ config: HeliumFetchedConfig, json: JSON? = nil) {
+        loadedConfig = config
+        loadedConfigJSON = json
+    }
     
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"

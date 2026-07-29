@@ -18,52 +18,13 @@ struct HeliumControlPanelView: View {
                 })
                 .ignoresSafeArea()
 
-                switch state {
-                case .loading:
-                    ProgressView("Loading paywalls...")
-                case .loaded(let response):
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            descriptionHeader
-
-                            if response.paywalls.isEmpty {
-                                Text("No paywalls found.")
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.top, 20)
-                            } else {
-                                let filtered = response.paywalls.filter {
-                                    searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
-                                }
-                                if filtered.isEmpty {
-                                    Text("No paywalls match \"\(searchText)\".")
-                                        .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.top, 20)
-                                } else {
-                                    LazyVStack(spacing: 16) {
-                                        ForEach(filtered) { paywall in
-                                            paywallCard(paywall)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
-                case .error(let message):
+                ScrollView {
                     VStack(spacing: 16) {
-                        Text(message)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        Button("Retry") {
-                            state = .loading
-                            fetchTask?.cancel()
-                            fetchTask = Task { await fetchPaywalls() }
-                        }
+                        descriptionHeader
+                        fallbackPreviewCard
+                        stateContent
                     }
+                    .padding()
                 }
             }
             .navigationTitle("Paywall Previews")
@@ -114,6 +75,94 @@ struct HeliumControlPanelView: View {
         .onDisappear {
             fetchTask?.cancel()
             previewTask?.cancel()
+        }
+    }
+
+    @ViewBuilder
+    private var stateContent: some View {
+        switch state {
+        case .loading:
+            ProgressView("Loading paywalls...")
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+        case .loaded(let response):
+            if response.paywalls.isEmpty {
+                Text("No paywalls found.")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 20)
+            } else {
+                let filtered = response.paywalls.filter {
+                    searchText.isEmpty || $0.paywallName.localizedCaseInsensitiveContains(searchText)
+                }
+                if filtered.isEmpty {
+                    Text("No paywalls match \"\(searchText)\".")
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 20)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(filtered) { paywall in
+                            paywallCard(paywall)
+                        }
+                    }
+                }
+            }
+        case .error(let message):
+            VStack(spacing: 16) {
+                Text(message)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                Button("Retry") {
+                    state = .loading
+                    fetchTask?.cancel()
+                    fetchTask = Task { await fetchPaywalls() }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
+        }
+    }
+
+    @ViewBuilder
+    private var fallbackPreviewCard: some View {
+        let configured = HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview()
+        let card = VStack(alignment: .leading, spacing: 2) {
+            Text("Default Fallback Paywall")
+                .font(.system(.headline, design: .rounded))
+                .foregroundColor(.primary)
+            if configured {
+                Text("Tap to preview on this device")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("No fallback configured. [Set up a fallback paywall](https://docs.tryhelium.com/guides/fallback-bundle).")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .tint(.accentColor)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .background(Color(UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? .systemGroupedBackground : .white
+        }))
+        .cornerRadius(12)
+
+        if configured {
+            card
+                .contentShape(Rectangle())
+                .onTapGesture { presentFallbackPreview() }
+                .opacity(loadingVersionId == nil ? 1.0 : 0.4)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { presentFallbackPreview() }
+        } else {
+            // Inert: the setup link inside the text must stay the only tap target.
+            card
         }
     }
 
@@ -320,5 +369,23 @@ struct HeliumControlPanelView: View {
                 }
             }
         }
+    }
+
+    private func presentFallbackPreview() {
+        guard loadingVersionId == nil else { return }
+        guard HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger() else {
+            paywallLoadError = "No fallback paywall configured"
+            return
+        }
+        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected fallback paywall preview")
+        HeliumPaywallPresenter.shared.presentUpsell(
+            trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
+            presentationContext: PaywallPresentationContext(
+                config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
+                eventHandlers: nil,
+                onEntitled: nil,
+                onPaywallNotShown: nil
+            )
+        )
     }
 }

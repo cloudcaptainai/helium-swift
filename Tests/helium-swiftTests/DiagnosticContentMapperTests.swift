@@ -15,12 +15,21 @@ final class DiagnosticContentMapperTests: XCTestCase {
         mapper.mapUnavailable(reason, context: context())
     }
 
+    /// The forceShowFallback record branches on the trigger, so the preview variant is its own
+    /// authored record and must be covered by the matrix invariants like any other.
+    private func previewFallbackContent() -> DiagnosticContent {
+        mapper.mapUnavailable(
+            .forceShowFallback,
+            context: DiagnosticContext(trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
+        )
+    }
+
     /// Every authored record: both skip reasons, every unavailable reason, the nil path, and the
-    /// preview-only second try record.
+    /// preview-only records (second try, fallback preview).
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
-            + [content(for: nil), mapper.mapSecondTryInPreview()]
+            + [content(for: nil), mapper.mapSecondTryInPreview(), previewFallbackContent()]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -205,6 +214,22 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertEqual(content.title, "Fallback paywall forced for this trigger")
         XCTAssertTrue(content.body.contains("configured to force the bundled fallback"))
         XCTAssertTrue(content.usersWillSee.contains("could not be rendered"))
+    }
+
+    /// On the preview trigger, forceShowFallback is the developer's own control panel tap, so
+    /// the copy describes the preview and reassures that nothing about live config changed.
+    func testPreviewTriggerForceShowFallbackDescribesThePreview() {
+        let content = previewFallbackContent()
+
+        XCTAssertEqual(content.category, .expected)
+        XCTAssertEqual(content.title, "Previewing your fallback paywall")
+        XCTAssertTrue(content.body.contains("You opened this from the control panel"))
+        XCTAssertTrue(content.usersWillSee.contains("local to this device"))
+        XCTAssertEqual(
+            content.cta,
+            .openUrl(label: "Fallback Docs", url: fallbackGuideUrl)
+        )
+        XCTAssertEqual(content.reasonCode, "forceShowFallback")
     }
 
     // MARK: - Context enrichment
