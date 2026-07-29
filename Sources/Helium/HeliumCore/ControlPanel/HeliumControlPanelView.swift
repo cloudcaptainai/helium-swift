@@ -96,15 +96,16 @@ struct HeliumControlPanelView: View {
         .alert("Open Web Paywall?", isPresented: Binding(
             get: { pendingWebPreviewURL != nil },
             set: { if !$0 { pendingWebPreviewURL = nil } }
-        )) {
+        ), presenting: pendingWebPreviewURL) { url in
             Button("Cancel", role: .cancel) { }
             Button("Open in Browser") {
-                if let url = pendingWebPreviewURL {
-                    UIApplication.shared.open(url)
+                UIApplication.shared.open(url, options: [:]) { opened in
+                    if !opened {
+                        paywallLoadError = "Failed to open web preview."
+                    }
                 }
-                pendingWebPreviewURL = nil
             }
-        } message: {
+        } message: { _ in
             Text("Web paywalls open in your default browser for a display-only preview. Purchases won't work from this preview.")
         }
         .onAppear {
@@ -271,7 +272,11 @@ struct HeliumControlPanelView: View {
         // Web paywalls aren't renderable in-app — preview them in the browser
         // after the user confirms, since payments won't work from a preview.
         if paywall.isWebPaywall {
-            guard let url = URL(string: bundleUrl) else { return }
+            guard HeliumFetchedConfigManager.shared.isValidURL(bundleUrl),
+                  let url = URL(string: bundleUrl) else {
+                paywallLoadError = "Invalid web paywall URL."
+                return
+            }
             HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected web paywall: \(paywall.paywallName) version: \(version.versionId)")
             pendingWebPreviewURL = url
             return
