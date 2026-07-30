@@ -54,3 +54,16 @@ enum HeliumControlPanelState {
         return false
     }
 }
+
+/// What the control panel is currently doing to launch a preview. Launching mutates the shared
+/// preview-trigger config and hands presentation to a deferred main-actor job, so every preview
+/// tap target must stay disabled from the tap until the presenter reports an outcome (opened or
+/// not shown). Releasing sooner would let a second tap rewrite the preview-trigger config out
+/// from under a presentation that has not resolved it yet.
+enum HeliumControlPanelActivity: Equatable {
+    case idle
+    /// A paywall version's bundle is downloading; the id drives that version row's spinner.
+    case loadingVersion(id: String)
+    /// A preview has been handed to the presenter and no outcome has fired yet.
+    case presentingPaywall
+}

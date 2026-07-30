@@ -3,7 +3,7 @@ import SwiftUI
 struct HeliumControlPanelView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var state: HeliumControlPanelState = .loading
-    @State private var loadingVersionId: String? = nil
+    @State private var activity: HeliumControlPanelActivity = .idle
     @State private var fetchTask: Task<Void, Never>?
     @State private var previewTask: Task<Void, Never>?
     @State private var searchText: String = ""
@@ -36,13 +36,13 @@ struct HeliumControlPanelView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         state = .loading
-                        loadingVersionId = nil
+                        activity = .idle
                         fetchTask?.cancel()
                         fetchTask = Task { await fetchPaywalls() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(state.isLoading || loadingVersionId != nil)
+                    .disabled(state.isLoading || activity != .idle)
                 }
             }
         }
@@ -156,7 +156,7 @@ struct HeliumControlPanelView: View {
             card
                 .contentShape(Rectangle())
                 .onTapGesture { presentFallbackPreview() }
-                .opacity(loadingVersionId == nil ? 1.0 : 0.4)
+                .opacity(activity == .idle ? 1.0 : 0.4)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { presentFallbackPreview() }
@@ -219,8 +219,8 @@ struct HeliumControlPanelView: View {
 
                 // Version rows
                 ForEach(Array(paywall.versions.enumerated()), id: \.element.id) { index, version in
-                    let isEnabled = version.bundleUrl != nil && loadingVersionId == nil
-                    let isLoading = loadingVersionId == version.id
+                    let isEnabled = version.bundleUrl != nil && activity == .idle
+                    let isLoading = activity == .loadingVersion(id: version.id)
 
                     if index > 0 {
                         Rectangle()
@@ -315,7 +315,7 @@ struct HeliumControlPanelView: View {
     }
 
     private func selectVersion(_ version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
-        guard loadingVersionId == nil else { return }
+        guard activity == .idle else { return }
         guard let bundleUrl = version.bundleUrl else { return }
 
         // Web paywalls aren't renderable in-app — preview them in the browser
@@ -331,7 +331,7 @@ struct HeliumControlPanelView: View {
             return
         }
 
-        loadingVersionId = version.id
+        activity = .loadingVersion(id: version.id)
         HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) version: \(version.versionId)")
 
         previewTask?.cancel()
@@ -351,20 +351,18 @@ struct HeliumControlPanelView: View {
                     webPaywallBundleUrl: version.webPaywallBundleUrl
                 )
 
-                await MainActor.run { loadingVersionId = nil }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    await MainActor.run { activity = .idle }
+                    return
+                }
+                await MainActor.run { activity = .presentingPaywall }
                 HeliumPaywallPresenter.shared.presentUpsell(
                     trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
-                    presentationContext: PaywallPresentationContext(
-                        config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
-                        eventHandlers: nil,
-                        onEntitled: nil,
-                        onPaywallNotShown: nil
-                    )
+                    presentationContext: previewPresentationContext()
                 )
             } catch {
                 await MainActor.run {
-                    loadingVersionId = nil
+                    activity = .idle
                     paywallLoadError = "Failed to load paywall: \(error.localizedDescription)"
                 }
             }
@@ -372,20 +370,28 @@ struct HeliumControlPanelView: View {
     }
 
     private func presentFallbackPreview() {
-        guard loadingVersionId == nil else { return }
+        guard activity == .idle else { return }
         guard HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger() else {
             paywallLoadError = "No fallback paywall configured"
             return
         }
+        activity = .presentingPaywall
         HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected fallback paywall preview")
         HeliumPaywallPresenter.shared.presentUpsell(
             trigger: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
-            presentationContext: PaywallPresentationContext(
-                config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
-                eventHandlers: nil,
-                onEntitled: nil,
-                onPaywallNotShown: nil
-            )
+            presentationContext: previewPresentationContext()
+        )
+    }
+
+    /// Context for presenting a preview from the panel. The activity lock is released only by an
+    /// actual presentation outcome, so both the opened and the not-shown signal must re-enable
+    /// the panel; every presenter path ends in exactly one of the two.
+    private func previewPresentationContext() -> PaywallPresentationContext {
+        PaywallPresentationContext(
+            config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
+            eventHandlers: PaywallEventHandlers().onOpen { _ in activity = .idle },
+            onEntitled: nil,
+            onPaywallNotShown: { _ in activity = .idle }
         )
     }
 }
