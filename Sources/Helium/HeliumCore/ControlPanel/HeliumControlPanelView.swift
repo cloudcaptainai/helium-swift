@@ -383,13 +383,15 @@ struct HeliumControlPanelView: View {
         )
     }
 
-    /// Context for presenting a preview from the panel. The activity lock is released only by an
-    /// actual presentation outcome, so both the opened and the not-shown signal must re-enable
-    /// the panel; every presenter path ends in exactly one of the two.
+    /// Context for presenting a preview from the panel. The activity lock is released only when
+    /// the preview closes or reports it could not be shown, so both signals must re-enable the
+    /// panel; every presenter path ends in exactly one of the two. Releasing at close rather than
+    /// open keeps the panel inert the whole time a preview is on screen, so no tap can stack a
+    /// second preview over it.
     private func previewPresentationContext() -> PaywallPresentationContext {
         PaywallPresentationContext(
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
-            eventHandlers: PaywallEventHandlers().onOpen { _ in activity = .idle },
+            eventHandlers: PaywallEventHandlers().onClose { _ in activity = .idle },
             onEntitled: nil,
             onPaywallNotShown: { _ in activity = .idle }
         )
