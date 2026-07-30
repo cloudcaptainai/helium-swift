@@ -198,11 +198,14 @@ struct DiagnosticContentMapper {
         DiagnosticContent(
             category: .expected,
             title: "Previewing your fallback paywall",
-            body: "You opened this from the control panel, so Helium rendered the fallback "
-                + "paywall bundled with your app instead of fetching a remote one. Nothing "
-                + "about your live paywalls or triggers changed.",
-            usersWillSee: "Nothing. This preview is local to this device; real users only see "
-                + "this fallback when a live paywall cannot be fetched.",
+            body: "You asked the control panel to render the fallback paywall bundled with your "
+                + "app instead of fetching a remote one. Nothing about your live paywalls or "
+                + "triggers changed.",
+            // The outcome renders only when nothing was shown, so it describes a preview whose
+            // fallback failed to render.
+            usersWillSee: "The bundled fallback could not be rendered, so this preview showed "
+                + "nothing. Real users would hit the same failure whenever Helium needs this "
+                + "fallback.",
             usersWillSeeLink: nil,
             cta: .openUrl(label: "Fallback Docs", url: Url.fallbackGuide),
             reasonCode: code

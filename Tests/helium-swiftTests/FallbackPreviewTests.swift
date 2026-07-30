@@ -55,7 +55,8 @@ final class FallbackPreviewTests: XCTestCase {
                 ]
             ]
         ] as [String: Any])
-        injectConfig(makeTestConfig(triggers: ["a_trigger": donor]))
+        let config = makeTestConfig(triggers: ["a_trigger": donor])
+        injectConfig(config, json: try JSON(data: JSONEncoder().encode(config)))
 
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
             bundleId: "preview456",
@@ -87,6 +88,26 @@ final class FallbackPreviewTests: XCTestCase {
     }
 
     func testSetFallbackPreviewTriggerReturnsFalseWithNoFallbackLoaded() {
+        XCTAssertFalse(HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview())
+        XCTAssertFalse(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
+        XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+    }
+
+    /// A default entry can exist while missing the bundle URL presentation resolves its local
+    /// file from; such an entry must not offer a preview it cannot render.
+    func testFallbackEntryWithoutBundlePathIsNotPreviewable() {
+        let entryWithoutBundleUrl = makeTestPaywallInfo(
+            paywallName: "default_fallback_paywall",
+            products: ["fallback.product"]
+        )
+        let config = makeTestConfig(
+            triggers: [HeliumFallbackViewManager.defaultFallbackTrigger: entryWithoutBundleUrl]
+        )
+        HeliumFallbackViewManager.shared.injectFallbackConfigForTesting(config)
+
+        XCTAssertNil(HeliumFallbackViewManager.shared.getFallbackInfo(
+            trigger: HeliumFallbackViewManager.defaultFallbackTrigger
+        )?.localBundlePath)
         XCTAssertFalse(HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview())
         XCTAssertFalse(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
         XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
@@ -177,6 +198,47 @@ final class FallbackPreviewTests: XCTestCase {
         XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
 
         XCTAssertNil(HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls[previewTrigger])
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
+            ["fallback.product"]
+        )
+        let result = upsellResult(trigger: previewTrigger)
+        XCTAssertEqual(result.fallbackReason, .forceShowFallback)
+        XCTAssertEqual(result.viewAndSession?.paywallSession.fallbackType, .fallbackBundle)
+    }
+
+    /// Arming must leave no trace of a dashboard preview in either config store: the typed
+    /// entry feeds analytics enrichment, and the JSON mirror serves resolved-config readers,
+    /// so the two must agree that no entry exists under the preview trigger.
+    func testArmingClearsDashboardPreviewFromBothConfigStores() throws {
+        try injectFallbackConfig()
+        try installDashboardPreview()
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?.exists(),
+            true
+        )
+
+        XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
+
+        XCTAssertNil(HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls[previewTrigger])
+        XCTAssertNotEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?.exists(),
+            true
+        )
+    }
+
+    /// A config fetch landing after arming replaces both stores wholesale, and server responses
+    /// never contain the internal preview trigger; the armed preview must render the fallback
+    /// exactly as before the fetch.
+    func testConfigFetchAfterArmKeepsFallbackPreviewIntact() throws {
+        Helium.shared.markInitializedForTesting()
+        try injectFallbackConfig()
+        XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
+
+        let freshConfig = makeTestConfig(triggers: ["a_trigger": makeTestPaywallInfo(paywallName: "fresh_paywall")])
+        injectConfig(freshConfig, json: try JSON(data: JSONEncoder().encode(freshConfig)))
+
+        XCTAssertTrue(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
             ["fallback.product"]

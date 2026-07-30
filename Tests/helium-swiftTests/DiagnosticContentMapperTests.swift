@@ -216,15 +216,18 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertTrue(content.usersWillSee.contains("could not be rendered"))
     }
 
-    /// On the preview trigger, forceShowFallback is the developer's own control panel tap, so
-    /// the copy describes the preview and reassures that nothing about live config changed.
+    /// On the preview trigger, forceShowFallback is the developer's own control panel tap. The
+    /// body states only the cause, so it stays true when the preview fails to render, and the
+    /// outcome line the modal shows in that failure describes the failed render.
     func testPreviewTriggerForceShowFallbackDescribesThePreview() {
         let content = previewFallbackContent()
 
         XCTAssertEqual(content.category, .expected)
         XCTAssertEqual(content.title, "Previewing your fallback paywall")
-        XCTAssertTrue(content.body.contains("You opened this from the control panel"))
-        XCTAssertTrue(content.usersWillSee.contains("local to this device"))
+        XCTAssertTrue(content.body.contains("asked the control panel to render"))
+        XCTAssertFalse(content.body.contains("rendered the fallback"), "body must not claim an outcome")
+        XCTAssertTrue(content.usersWillSee.contains("could not be rendered"))
+        XCTAssertTrue(content.usersWillSee.contains("Real users would hit the same failure"))
         XCTAssertEqual(
             content.cta,
             .openUrl(label: "Fallback Docs", url: fallbackGuideUrl)

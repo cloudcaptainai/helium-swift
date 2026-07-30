@@ -1026,10 +1026,12 @@ public class HeliumFetchedConfigManager {
     static let HELIUM_PREVIEW_TRIGGER = "helium_preview_trigger"
 
     /// True when a bundled default fallback paywall is available to preview on this device.
+    /// Requires the same resolvable bundle path presentation requires, so a default entry that
+    /// exists but cannot render never offers a preview.
     func hasConfiguredFallbackPreview() -> Bool {
         HeliumFallbackViewManager.shared.getFallbackInfo(
             trigger: HeliumFallbackViewManager.defaultFallbackTrigger
-        ) != nil
+        )?.localBundlePath != nil
     }
 
     /// Arms the preview trigger to render the bundled default fallback. The fallback bundle and
@@ -1037,10 +1039,16 @@ public class HeliumFetchedConfigManager {
     /// network. Returns false when no default fallback is configured.
     func setFallbackPreviewTrigger() -> Bool {
         guard hasConfiguredFallbackPreview() else { return false }
-        // An entry left by an earlier paywall version preview would otherwise feed its
-        // experiment and model IDs into this trigger's analytics while the fallback renders.
+        // An entry left by an earlier paywall version preview would feed its experiment and
+        // model IDs into this trigger's analytics while the fallback renders, so drop it from
+        // the typed config and keep the JSON mirror agreeing that no entry exists.
         _fetchedConfig.withValue {
             $0?.triggerToPaywalls.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER)
+        }
+        _fetchedConfigJSON.withValue { json in
+            guard var triggers = json?["triggerToPaywalls"].dictionaryObject,
+                  triggers.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER) != nil else { return }
+            json?["triggerToPaywalls"].dictionaryObject = triggers
         }
         isFallbackPreviewArmed = true
         return true
