@@ -13,7 +13,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         isDebugBuild: Bool = false,
         environment: AppReceiptsHelper.Environment = .debug,
         displayEnabled: Bool = true,
-        enabledInTestFlight: Bool = true,
         serverAllowsInTestFlight: () -> Bool = { true },
         doNotShowAgain: () -> Bool = { false }
     ) -> Bool {
@@ -24,7 +23,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             isDebugBuild: isDebugBuild,
             environment: environment,
             displayEnabled: displayEnabled,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight(),
             doNotShowAgain: doNotShowAgain()
         )
@@ -35,7 +33,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         isDebugBuild: Bool = false,
         environment: AppReceiptsHelper.Environment = .debug,
         displayEnabled: Bool = true,
-        enabledInTestFlight: Bool = true,
         serverAllowsInTestFlight: () -> Bool = { true }
     ) -> Bool {
         HeliumDiagnosticGate.isEnabled(
@@ -43,7 +40,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             isDebugBuild: isDebugBuild,
             environment: environment,
             displayEnabled: displayEnabled,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight()
         )
     }
@@ -90,13 +86,13 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         }
     }
 
-    func testTheTestFlightOptInDoesNotBringSkipsWithIt() {
+    func testTheServerPermissionDoesNotBringSkipsWithIt() {
         XCTAssertFalse(
             shouldShow(
                 outcome: .skipped(.alreadyEntitled),
                 isDebugBuild: false,
                 environment: .sandbox,
-                enabledInTestFlight: true
+                serverAllowsInTestFlight: { true }
             )
         )
     }
@@ -125,7 +121,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 isPreviewTrigger: true,
                 environment: .production,
                 displayEnabled: false,
-                enabledInTestFlight: false,
                 serverAllowsInTestFlight: { false },
                 doNotShowAgain: { true }
             )
@@ -147,23 +142,19 @@ final class HeliumDiagnosticGateTests: XCTestCase {
 
     func testProductionNeverShows() {
         XCTAssertFalse(shouldShow(environment: .production))
-        XCTAssertFalse(shouldShow(environment: .production, enabledInTestFlight: true))
+        XCTAssertFalse(shouldShow(environment: .production, serverAllowsInTestFlight: { true }))
     }
 
-    func testTestFlightShowsOnlyWhenOptedIn() {
-        XCTAssertTrue(shouldShow(environment: .sandbox, enabledInTestFlight: true))
-        XCTAssertFalse(shouldShow(environment: .sandbox, enabledInTestFlight: false))
+    func testTestFlightShowsOnlyWhenTheServerAllowsIt() {
+        XCTAssertTrue(shouldShow(environment: .sandbox, serverAllowsInTestFlight: { true }))
+        XCTAssertFalse(shouldShow(environment: .sandbox, serverAllowsInTestFlight: { false }))
     }
 
     /// A .debug environment without a DEBUG-compiled build is a release-configuration run by a
     /// developer: a simulator, or a device launched from Xcode.
-    func testDebugEnvironmentInAReleaseBuildRequiresTheOptIn() {
-        XCTAssertTrue(shouldShow(isDebugBuild: false, environment: .debug, enabledInTestFlight: true))
-        XCTAssertFalse(shouldShow(isDebugBuild: false, environment: .debug, enabledInTestFlight: false))
-    }
-
-    func testTestFlightOptInOffDoesNotAffectDebugBuilds() {
-        XCTAssertTrue(shouldShow(isDebugBuild: true, environment: .debug, enabledInTestFlight: false))
+    func testDebugEnvironmentInAReleaseBuildRequiresTheServerPermission() {
+        XCTAssertTrue(shouldShow(isDebugBuild: false, environment: .debug, serverAllowsInTestFlight: { true }))
+        XCTAssertFalse(shouldShow(isDebugBuild: false, environment: .debug, serverAllowsInTestFlight: { false }))
     }
 
     // MARK: - Server permission
@@ -183,7 +174,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
             isEnabled(
                 isDebugBuild: true,
                 environment: .sandbox,
-                enabledInTestFlight: false,
                 serverAllowsInTestFlight: { false }
             )
         )
@@ -205,7 +195,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         _ = isEnabled(isDebugBuild: true, serverAllowsInTestFlight: counting)
         _ = isEnabled(displayEnabled: false, serverAllowsInTestFlight: counting)
         _ = isEnabled(environment: .production, serverAllowsInTestFlight: counting)
-        _ = isEnabled(environment: .sandbox, enabledInTestFlight: false, serverAllowsInTestFlight: counting)
         _ = isEnabled(isPreviewTrigger: true, serverAllowsInTestFlight: counting)
         _ = shouldShow(isDebugBuild: true, serverAllowsInTestFlight: counting)
 
@@ -251,14 +240,14 @@ final class HeliumDiagnosticGateTests: XCTestCase {
     func testDeliberatePathHonoursEveryOtherStandingPreference() {
         XCTAssertFalse(isEnabled(displayEnabled: false))
         XCTAssertFalse(isEnabled(environment: .production))
-        XCTAssertFalse(isEnabled(environment: .sandbox, enabledInTestFlight: false))
+        XCTAssertFalse(isEnabled(environment: .sandbox, serverAllowsInTestFlight: { false }))
         XCTAssertFalse(isEnabled(serverAllowsInTestFlight: { false }))
     }
 
     func testDeliberatePathShowsWhenEveryPreferenceAllowsIt() {
         XCTAssertTrue(isEnabled())
         XCTAssertTrue(isEnabled(isDebugBuild: true))
-        XCTAssertTrue(isEnabled(environment: .sandbox, enabledInTestFlight: true))
+        XCTAssertTrue(isEnabled(environment: .sandbox, serverAllowsInTestFlight: { true }))
     }
 
     func testDeliberatePathKeepsThePreviewBypass() {
@@ -267,7 +256,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 isPreviewTrigger: true,
                 environment: .production,
                 displayEnabled: false,
-                enabledInTestFlight: false,
                 serverAllowsInTestFlight: { false }
             )
         )

@@ -27,7 +27,6 @@ enum HeliumDiagnosticGate {
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool,
         doNotShowAgain: @autoclosure () -> Bool
     ) -> Bool {
@@ -42,7 +41,6 @@ enum HeliumDiagnosticGate {
             isDebugBuild: isDebugBuild,
             environment: environment,
             displayEnabled: displayEnabled,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight()
         ) else { return false }
         if isPreviewTrigger { return true }
@@ -57,7 +55,6 @@ enum HeliumDiagnosticGate {
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isPreviewTrigger { return true }
@@ -65,7 +62,6 @@ enum HeliumDiagnosticGate {
         return isAllowedOnThisBuild(
             isDebugBuild: isDebugBuild,
             environment: environment,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight()
         )
     }
@@ -96,20 +92,19 @@ enum HeliumDiagnosticGate {
         }
     }
 
-    /// The TestFlight opt-in and the server permission exist to keep a developer modal out of a
-    /// tester's hands, and a developer running a DEBUG build of their own app is not a tester.
+    /// The server permission exists to keep a developer modal out of a tester's hands, and a
+    /// developer running a DEBUG build of their own app is not a tester.
     private static func isAllowedOnThisBuild(
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isDebugBuild { return true }
         switch environment {
         // In a non-DEBUG build, .debug still means a developer's own run: a release-configuration
         // simulator build, or a device launched from Xcode (StoreKit's Xcode environment). It is a
-        // release binary all the same, so it answers to the same two permissions as TestFlight.
-        case .debug, .sandbox: return enabledInTestFlight && serverAllowsInTestFlight()
+        // release binary all the same, so it answers to the same server permission as TestFlight.
+        case .debug, .sandbox: return serverAllowsInTestFlight()
         case .production: return false
         }
     }
@@ -129,7 +124,6 @@ extension HeliumDiagnosticGate {
             isDebugBuild: isDebugBuild,
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
-            enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight,
             doNotShowAgain: UserDefaults.standard.bool(forKey: doNotShowAgainKey)
         )
@@ -141,7 +135,6 @@ extension HeliumDiagnosticGate {
             isDebugBuild: isDebugBuild,
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
-            enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight
         )
     }
