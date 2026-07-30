@@ -334,10 +334,10 @@ extension HeliumPaywallDiagnosticView {
         diagnosticWindow = nil
     }
 
-    /// Enforces only what no caller can be trusted to get wrong: that a full-screen developer modal
-    /// never reaches a build where diagnostics are off. Whether a given outcome deserves an
-    /// unprompted modal is the caller's judgement, and is re-checked here because callers reach the
-    /// main actor asynchronously and the flags can change on the way.
+    /// Last line of defense: re-checks only availability (the display flag, build and environment,
+    /// the server permission) because callers reach the main actor asynchronously and those flags
+    /// can change on the way. Whether the outcome deserves an unprompted modal remains the caller's
+    /// judgement and is not re-verified here.
     ///
     /// - Parameter fallbackShown: true when a fallback paywall is on screen behind the diagnostic.
     @MainActor
