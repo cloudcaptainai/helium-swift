@@ -992,7 +992,12 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getProductIDsForTrigger(_ trigger: String) -> [String]? {
-        fetchedConfig?.triggerToPaywalls[trigger]?.productIds
+        // While a fallback preview is armed, the paywall under the preview trigger is the
+        // bundled fallback entry, which only the fallback manager knows about.
+        if trigger == Self.HELIUM_PREVIEW_TRIGGER, isFallbackPreviewArmed {
+            return HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.productIds
+        }
+        return fetchedConfig?.triggerToPaywalls[trigger]?.productIds
     }
     
     public func getFetchedTriggerNames() -> [String] {
@@ -1032,8 +1037,8 @@ public class HeliumFetchedConfigManager {
     /// network. Returns false when no default fallback is configured.
     func setFallbackPreviewTrigger() -> Bool {
         guard hasConfiguredFallbackPreview() else { return false }
-        // An entry left by an earlier paywall version preview would otherwise feed this
-        // trigger's analytics enrichment and injected prices while the fallback renders.
+        // An entry left by an earlier paywall version preview would otherwise feed its
+        // experiment and model IDs into this trigger's analytics while the fallback renders.
         _fetchedConfig.withValue {
             $0?.triggerToPaywalls.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER)
         }

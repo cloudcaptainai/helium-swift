@@ -135,6 +135,24 @@ final class FallbackPreviewTests: XCTestCase {
         XCTAssertEqual(result.viewAndSession?.paywallSession.fallbackType, .fallbackBundle)
     }
 
+    /// The webview's injected context and price map resolve products by trigger name, and no
+    /// fetched-config entry exists under the preview trigger while armed, so the lookup must
+    /// serve the fallback entry's own products.
+    func testArmedPreviewServesFallbackProductContext() throws {
+        try injectFallbackConfig()
+        XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
+            ["fallback.product"]
+        )
+        let context = createHeliumContext(triggerName: previewTrigger)
+        XCTAssertEqual(
+            context["products"]["productIds"].arrayValue.map(\.stringValue),
+            ["fallback.product"]
+        )
+    }
+
     // MARK: - Mutual exclusion with dashboard previews
 
     func testDashboardPreviewDisarmsFallbackPreview() throws {
@@ -144,6 +162,10 @@ final class FallbackPreviewTests: XCTestCase {
         try installDashboardPreview()
 
         XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
+            ["preview.product"]
+        )
     }
 
     func testFallbackPreviewArmWinsOverEarlierDashboardPreview() throws {
@@ -155,6 +177,10 @@ final class FallbackPreviewTests: XCTestCase {
         XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
 
         XCTAssertNil(HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls[previewTrigger])
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
+            ["fallback.product"]
+        )
         let result = upsellResult(trigger: previewTrigger)
         XCTAssertEqual(result.fallbackReason, .forceShowFallback)
         XCTAssertEqual(result.viewAndSession?.paywallSession.fallbackType, .fallbackBundle)
