@@ -200,6 +200,37 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscription?.introOfferEligible == true }
     }
 
+    /// Projects the selected Stripe price's subscription detail into the
+    /// web-checkout ctx so the Apple Pay sheet can reflect trial / recurring
+    /// terms rather than charging the full price for a $0-today trial. Keys
+    /// mirror the injected `subscription` price shape.
+    private func buildStripeOfferTerms(productKey: String) -> [String: Any]? {
+        guard provider.kind == .stripe,
+              let sub = provider.getProductsPriceMap()?[productKey]?.subscription else {
+            return nil
+        }
+
+        var terms: [String: Any] = [:]
+        if let unit = sub.periodUnit { terms["periodUnit"] = unit }
+        if let value = sub.periodValue { terms["periodValue"] = value }
+        if let eligible = sub.introOfferEligible { terms["introOfferEligible"] = eligible }
+
+        // Stripe emits at most one intro offer.
+        if let offer = sub.introOffers?.first {
+            var offerDict: [String: Any] = [:]
+            if let type = offer.type { offerDict["type"] = type }
+            if let mode = offer.paymentMode { offerDict["paymentMode"] = mode }
+            if let unit = offer.periodUnit { offerDict["periodUnit"] = unit }
+            if let value = offer.periodValue { offerDict["periodValue"] = value }
+            if let periodCount = offer.periodCount { offerDict["periodCount"] = periodCount }
+            if let price = offer.price { offerDict["price"] = NSDecimalNumber(decimal: price).doubleValue }
+            if let displayPrice = offer.displayPrice { offerDict["displayPrice"] = displayPrice }
+            terms["introOffer"] = offerDict
+        }
+
+        return terms
+    }
+
     /// Builds the enriched checkout URL: existing query items are preserved,
     /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
@@ -241,6 +272,11 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
+
+        // Per-price offer terms, additive to the blanket `introOfferEligible` above.
+        if let stripeOfferTerms = buildStripeOfferTerms(productKey: productKey) {
+            ctx["stripeOfferTerms"] = stripeOfferTerms
+        }
 
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
