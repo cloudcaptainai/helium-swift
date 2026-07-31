@@ -205,6 +205,11 @@ public class ExternalWebCheckoutManager: NSObject {
     /// keyed by product key. The standalone paywall is interactive, so the user
     /// can re-select before authorizing — a single tapped-product block would go
     /// stale. Keys mirror the injected `subscription` price shape.
+    ///
+    /// The per-product `introOfferEligible` here is the on-launch snapshot and
+    /// can lag the live per-customer signal; the authoritative eligibility gate
+    /// is the top-level `introOfferEligible` in ctx. This block carries the
+    /// offer terms, not the gate.
     private func buildStripeOfferTerms(paywallInfo: HeliumPaywallInfo?) -> [String: Any]? {
         guard provider.kind == .stripe,
               let paywallInfo,
