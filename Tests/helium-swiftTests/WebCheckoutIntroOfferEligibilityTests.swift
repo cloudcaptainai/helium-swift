@@ -2,23 +2,26 @@ import XCTest
 @testable import Helium
 
 /// Covers the price-map derivation used when `/check-entitlement` returns no
-/// eligibility value. Fixtures are decoded from the on-launch wire shape rather
-/// than hand-constructed, so a rename on the server side surfaces here.
+/// eligibility value. Fixtures are decoded from JSON rather than hand-built, so
+/// a field rename surfaces here.
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
-    /// The shapes bandit emits for a price.
+    /// Price fixtures, named for what they represent and defined by the fields
+    /// they carry.
     private enum Shape {
-        /// Trial configured and this customer may have it: flag true, offer present.
+        /// `introOfferEligible: true`, `introOffers` non-empty.
         case eligibleTrial
-        /// Trial configured but already consumed: flag false, offer omitted.
+        /// `introOfferEligible: false`, `introOffers` omitted — a trial the
+        /// customer has already consumed.
         case consumedTrial
-        /// No trial on the price at all: flag false, offer omitted. Identical on
-        /// the wire to `consumedTrial`, which is why offer-bearing is the test.
+        /// `introOfferEligible: false`, `introOffers` omitted — a price with no
+        /// trial at all. Identical on the wire to `consumedTrial`, which is why
+        /// offer-bearing is keyed on `introOffers`.
         case noTrial
-        /// One-time product: no subscription block.
+        /// No `subscription` block.
         case oneTime
-        /// Not a shape bandit emits today. Pins that an offer-bearing price
-        /// reporting ineligible still fails the check.
+        /// `introOfferEligible: false`, `introOffers` non-empty. Pins that an
+        /// offer-bearing price reporting ineligible still fails the check.
         case offerButIneligible
     }
 
@@ -90,8 +93,8 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     // MARK: - Cases that must stay false
 
     func testConsumedTrialIsFalse() throws {
-        // Bandit omits introOffers once the customer has used their intro offer,
-        // so nothing is offer-bearing and the answer is false.
+        // A consumed trial arrives with no introOffers, so no price on the
+        // paywall is offer-bearing.
         let priceMap = try map([(yearlyTrial, .consumedTrial), (monthlyNoTrial, .noTrial)])
 
         XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
@@ -127,10 +130,9 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     // MARK: - Every offer-bearing product must agree
 
     func testOfferBearingButIneligibleFailsTheCheck() throws {
-        // Not a shape bandit emits today: it sets the flag and the offer array
-        // together. Pinned so the contract stays "every offer-bearing product is
-        // eligible" rather than degrading to "any product is eligible" if the
-        // server ever starts sending offers to ineligible customers.
+        // Pins the contract as "every offer-bearing product is eligible" rather
+        // than "any product is eligible", should a price ever arrive carrying an
+        // offer the customer is not eligible for.
         let priceMap = try map([
             (yearlyTrial, .eligibleTrial),
             ("pro_yearly:pri_trial_14d", .offerButIneligible),

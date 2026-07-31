@@ -203,8 +203,7 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Derives the intro-offer signal from the price map when
-    /// `/check-entitlement` returns no eligibility value. Matches the contract
-    /// of CML's `computeIntroOfferEligibleForAll`.
+    /// `/check-entitlement` returns no eligibility value.
     ///
     /// Only offer-bearing prices count. A price's `introOfferEligible` is false
     /// both when it carries no trial and when the customer already consumed
