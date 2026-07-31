@@ -184,10 +184,10 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-    /// True if every offered product is intro-offer eligible.
+    /// Whether this customer is deemed intro-offer eligible for the web paywall.
+    ///
     /// Prefers the server's per-customer signal from `/check-entitlement` when
-    /// available — the local price map can go stale (e.g., host app sets
-    /// userId after Helium initialized, so eligibility could change).
+    /// available — the local price map can go stale.
     private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) async -> Bool {
         guard let paywallInfo,
               let products = provider.getOfferedProducts(paywallInfo, false),
@@ -197,8 +197,28 @@ public class ExternalWebCheckoutManager: NSObject {
         if let serverValue = await entitlementsSource.introOfferEligible() {
             return serverValue
         }
-        let priceMap = provider.getProductsPriceMap() ?? [:]
-        return products.allSatisfy { priceMap[$0]?.subscription?.introOfferEligible == true }
+        return Self.blanketIntroOfferEligibility(
+            products: products,
+            priceMap: provider.getProductsPriceMap() ?? [:]
+        )
+    }
+
+    /// Derives the intro-offer signal from the price map when
+    /// `/check-entitlement` returns no eligibility value.
+    ///
+    /// Only offer-bearing prices count. A price's `introOfferEligible` is false
+    /// both when it carries no trial and when the customer already consumed
+    /// one, so requiring it of every offered product let a plain monthly plan
+    /// sitting beside a yearly trial report the customer ineligible.
+    static func blanketIntroOfferEligibility(
+        products: [String],
+        priceMap: [String: ServerProductPrice]
+    ) -> Bool {
+        let offerBearing = products
+            .compactMap { priceMap[$0]?.subscription }
+            .filter { !($0.introOffers ?? []).isEmpty }
+        guard !offerBearing.isEmpty else { return false }
+        return offerBearing.allSatisfy { $0.introOfferEligible == true }
     }
 
     /// Projects every offered Stripe product's subscription detail into a map
