@@ -176,6 +176,7 @@ public class ExternalWebCheckoutManager: NSObject {
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
             introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
+            stripeOfferTerms: buildStripeOfferTerms(paywallInfo: paywallSession.paywallInfoWithBackups),
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict
         )
@@ -200,6 +201,52 @@ public class ExternalWebCheckoutManager: NSObject {
         return products.allSatisfy { priceMap[$0]?.subscription?.introOfferEligible == true }
     }
 
+    /// Projects every offered Stripe product's subscription detail into a map
+    /// keyed by product key. The standalone paywall is interactive, so the user
+    /// can re-select before authorizing — a single tapped-product block would go
+    /// stale. Keys mirror the injected `subscription` price shape.
+    ///
+    /// The per-product `introOfferEligible` here is the on-launch snapshot and
+    /// can lag the live per-customer signal; the authoritative eligibility gate
+    /// is the top-level `introOfferEligible` in ctx. This block carries the
+    /// offer terms, not the gate.
+    private func buildStripeOfferTerms(paywallInfo: HeliumPaywallInfo?) -> [String: Any]? {
+        guard provider.kind == .stripe,
+              let paywallInfo,
+              let offered = provider.getOfferedProducts(paywallInfo, false),
+              !offered.isEmpty else {
+            return nil
+        }
+        let priceMap = provider.getProductsPriceMap() ?? [:]
+
+        var byProductKey: [String: Any] = [:]
+        for productKey in offered {
+            guard let sub = priceMap[productKey]?.subscription else { continue }
+
+            var terms: [String: Any] = [:]
+            if let unit = sub.periodUnit { terms["periodUnit"] = unit }
+            if let value = sub.periodValue { terms["periodValue"] = value }
+            if let eligible = sub.introOfferEligible { terms["introOfferEligible"] = eligible }
+
+            // Stripe emits at most one intro offer.
+            if let offer = sub.introOffers?.first {
+                var offerDict: [String: Any] = [:]
+                if let type = offer.type { offerDict["type"] = type }
+                if let mode = offer.paymentMode { offerDict["paymentMode"] = mode }
+                if let unit = offer.periodUnit { offerDict["periodUnit"] = unit }
+                if let value = offer.periodValue { offerDict["periodValue"] = value }
+                if let periodCount = offer.periodCount { offerDict["periodCount"] = periodCount }
+                if let price = offer.price { offerDict["price"] = NSDecimalNumber(decimal: price).doubleValue }
+                if let displayPrice = offer.displayPrice { offerDict["displayPrice"] = displayPrice }
+                terms["introOffer"] = offerDict
+            }
+
+            byProductKey[productKey] = terms
+        }
+
+        return byProductKey.isEmpty ? nil : byProductKey
+    }
+
     /// Builds the enriched checkout URL: existing query items are preserved,
     /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
@@ -210,6 +257,7 @@ public class ExternalWebCheckoutManager: NSObject {
         successURL: String,
         cancelURL: String,
         introOfferEligible: Bool,
+        stripeOfferTerms: [String: Any]? = nil,
         paddleBootstraps: [String: Any]? = nil,
         paddleAlreadyEntitled: [String: Any]? = nil
     ) throws -> URL {
@@ -241,6 +289,9 @@ public class ExternalWebCheckoutManager: NSObject {
             ctx["organizationId"] = organizationId
         }
         ctx["introOfferEligible"] = introOfferEligible
+
+        // Per-price offer terms, additive to the blanket `introOfferEligible` above.
+        if let stripeOfferTerms { ctx["stripeOfferTerms"] = stripeOfferTerms }
 
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
