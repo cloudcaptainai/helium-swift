@@ -83,6 +83,24 @@ final class HeliumDiagnosticGateTests: XCTestCase {
                 shouldShow(outcome: .skipped(reason), isDebugBuild: false, environment: .sandbox),
                 "Expected \(reason.rawValue) to show in TestFlight"
             )
+            XCTAssertFalse(
+                shouldShow(
+                    outcome: .skipped(reason),
+                    isDebugBuild: false,
+                    environment: .sandbox,
+                    serverAllowsInTestFlight: { false }
+                ),
+                "Expected \(reason.rawValue) to stay hidden when the server denies TestFlight"
+            )
+            XCTAssertFalse(
+                shouldShow(
+                    outcome: .skipped(reason),
+                    isDebugBuild: false,
+                    environment: .debug,
+                    serverAllowsInTestFlight: { false }
+                ),
+                "Expected \(reason.rawValue) to stay hidden in a server-denied release run from Xcode"
+            )
         }
     }
 
