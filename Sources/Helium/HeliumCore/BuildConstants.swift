@@ -8,5 +8,5 @@
  */
 public struct BuildConstants {
     /// Current SDK version
-    public static let version = "4.5.6"
+    public static let version = "4.6.0"
 }

@@ -227,7 +227,7 @@ public class HeliumFetchedConfigManager {
     
     @HeliumAtomic private var _downloadStatus: HeliumFetchedConfigStatus = .notDownloadedYet
     public var downloadStatus: HeliumFetchedConfigStatus { _downloadStatus }
-    private(set) var downloadStep: PaywallsDownloadStep = .config
+    @HeliumAtomic private(set) var downloadStep: PaywallsDownloadStep = .config
     
     static let MAX_NUM_CONFIG_ATTEMPTS: Int = 6 // roughly 36 seconds of delays in between attempts
     static let MAX_NUM_BUNDLE_ATTEMPTS: Int = 4 // roughly 7 seconds of delays in between attempts
@@ -1001,10 +1001,10 @@ public class HeliumFetchedConfigManager {
     }
     
     public func getFetchedTriggerNames() -> [String] {
-        if (fetchedConfig == nil || fetchedConfig?.triggerToPaywalls == nil) {
+        guard let config = fetchedConfig else {
             return []
         }
-        return Array(fetchedConfig!.triggerToPaywalls.keys);
+        return Array(config.triggerToPaywalls.keys)
     }
     
     public func getClientName() -> String? {
