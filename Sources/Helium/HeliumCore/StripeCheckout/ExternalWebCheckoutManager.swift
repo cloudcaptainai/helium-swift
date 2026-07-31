@@ -183,12 +183,10 @@ public class ExternalWebCheckoutManager: NSObject {
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
     }
 
-    /// Whether this customer is intro-offer eligible, for the web bundle to
-    /// decide whether to select each bucket's trial slot.
+    /// Whether this customer is deemed intro-offer eligible for the web paywall.
     ///
     /// Prefers the server's per-customer signal from `/check-entitlement` when
-    /// available — the local price map can go stale (e.g., host app sets
-    /// userId after Helium initialized, so eligibility could change).
+    /// available — the local price map can go stale.
     private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) async -> Bool {
         guard let paywallInfo,
               let products = provider.getOfferedProducts(paywallInfo, false),
@@ -198,27 +196,21 @@ public class ExternalWebCheckoutManager: NSObject {
         if let serverValue = await entitlementsSource.introOfferEligible() {
             return serverValue
         }
-        return Self.introOfferEligible(
+        return Self.blanketIntroOfferEligibility(
             products: products,
             priceMap: provider.getProductsPriceMap() ?? [:]
         )
     }
 
-    /// Derives the per-customer intro-offer signal from the server price map,
-    /// for when `/check-entitlement` returns no eligibility value.
+    /// Derives the intro-offer signal from the price map when
+    /// `/check-entitlement` returns no eligibility value. Matches the contract
+    /// of CML's `computeIntroOfferEligibleForAll`.
     ///
-    /// Mirrors the coarse-prop contract CML's `computeIntroOfferEligibleForAll`
-    /// already ships: only offer-bearing products count, every one of them must
-    /// be eligible, and no offer-bearing products at all means false.
-    ///
-    /// Offer-bearing is keyed on `introOffers`, not on `introOfferEligible`.
-    /// That boolean folds two facts into one: the price carries a trial, AND
-    /// this customer has not consumed an intro offer. It is therefore false
-    /// both for a price with no trial and for a trial this customer cannot
-    /// have, and reading it alone cannot tell those apart. Testing every
-    /// offered product against it let a plain monthly plan sitting beside a
-    /// yearly trial report the customer permanently ineligible.
-    static func introOfferEligible(
+    /// Only offer-bearing prices count. A price's `introOfferEligible` is false
+    /// both when it carries no trial and when the customer already consumed
+    /// one, so requiring it of every offered product let a plain monthly plan
+    /// sitting beside a yearly trial report the customer ineligible.
+    static func blanketIntroOfferEligibility(
         products: [String],
         priceMap: [String: ServerProductPrice]
     ) -> Bool {

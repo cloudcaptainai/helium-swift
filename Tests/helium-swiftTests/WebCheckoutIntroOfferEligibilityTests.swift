@@ -69,21 +69,21 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         // trial at all, so it is not offer-bearing and must not be counted.
         let priceMap = try map([(yearlyTrial, .eligibleTrial), (monthlyNoTrial, .noTrial)])
 
-        XCTAssertTrue(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [monthlyNoTrial, yearlyTrial], priceMap: priceMap))
     }
 
     func testOrderOfOfferedProductsDoesNotMatter() throws {
         let priceMap = try map([(yearlyTrial, .eligibleTrial), (monthlyNoTrial, .noTrial)])
 
-        XCTAssertTrue(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [yearlyTrial, monthlyNoTrial], priceMap: priceMap))
     }
 
     func testOneTimeProductDoesNotMaskAnEligibleCustomer() throws {
         let priceMap = try map([(yearlyTrial, .eligibleTrial), (lifetime, .oneTime)])
 
-        XCTAssertTrue(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [lifetime, yearlyTrial], priceMap: priceMap))
     }
 
@@ -94,33 +94,33 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         // so nothing is offer-bearing and the answer is false.
         let priceMap = try map([(yearlyTrial, .consumedTrial), (monthlyNoTrial, .noTrial)])
 
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [yearlyTrial, monthlyNoTrial], priceMap: priceMap))
     }
 
     func testPaywallWithNoTrialsAtAllIsFalse() throws {
         let priceMap = try map([(monthlyNoTrial, .noTrial)])
 
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [monthlyNoTrial], priceMap: priceMap))
     }
 
     func testEmptyProductListIsFalse() throws {
         let priceMap = try map([(yearlyTrial, .eligibleTrial)])
 
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [], priceMap: priceMap))
     }
 
     func testProductMissingFromPriceMapIsFalse() throws {
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [yearlyTrial], priceMap: [:]))
     }
 
     func testOnlyOneTimeProductsIsFalse() throws {
         let priceMap = try map([(lifetime, .oneTime)])
 
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [lifetime], priceMap: priceMap))
     }
 
@@ -136,14 +136,14 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             ("pro_yearly:pri_trial_14d", .offerButIneligible),
         ])
 
-        XCTAssertFalse(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [yearlyTrial, "pro_yearly:pri_trial_14d"], priceMap: priceMap))
     }
 
     func testUnknownProductAlongsideAnEligibleOneIsStillTrue() throws {
         let priceMap = try map([(yearlyTrial, .eligibleTrial)])
 
-        XCTAssertTrue(ExternalWebCheckoutManager.introOfferEligible(
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: ["pro_ghost:pri_missing", yearlyTrial], priceMap: priceMap))
     }
 }
