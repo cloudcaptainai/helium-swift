@@ -33,9 +33,7 @@ enum HeliumDiagnosticGate {
         // A rendered fallback paywall disproves the modal's authored outcome, which describes a user
         // who got nothing. That case is surfaced by the on-paywall badge instead.
         if fallbackShown { return false }
-        guard warrantsInterrupting(outcome, isPreviewTrigger: isPreviewTrigger, isDebugBuild: isDebugBuild) else {
-            return false
-        }
+        guard warrantsInterrupting(outcome) else { return false }
         guard isEnabled(
             isPreviewTrigger: isPreviewTrigger,
             isDebugBuild: isDebugBuild,
@@ -75,20 +73,16 @@ enum HeliumDiagnosticGate {
 #endif
     }
 
-    /// A skip is Helium working as configured, so there is nothing for the person holding the phone
-    /// to fix. Outside a debug build it stays in the log rather than taking over the screen of a
-    /// tester who is already subscribed or sitting in a targeting holdout.
-    private static func warrantsInterrupting(
-        _ outcome: DiagnosticOutcome,
-        isPreviewTrigger: Bool,
-        isDebugBuild: Bool
-    ) -> Bool {
+    /// A skip is Helium working as configured, but from the phone it looks the same as a paywall
+    /// that broke: the trigger fired and nothing appeared. It is explained like any failure, and
+    /// the do-not-show-again checkbox is the way to quiet it.
+    private static func warrantsInterrupting(_ outcome: DiagnosticOutcome) -> Bool {
         switch outcome {
         case .unavailable(let reason):
             guard let reason else { return true }
             return !suppressedReasons.contains(reason)
         case .skipped:
-            return isDebugBuild || isPreviewTrigger
+            return true
         }
     }
 

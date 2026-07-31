@@ -71,39 +71,27 @@ final class HeliumDiagnosticGateTests: XCTestCase {
 
     // MARK: - Skips
 
-    /// A skip is Helium working as configured, so it is worth a developer's attention but never a
-    /// tester's.
-    func testSkipsShowInDebugBuildsOnly() {
+    /// A skip is Helium working as configured, but a trigger that silently shows nothing reads as
+    /// breakage, so it is explained wherever failures are.
+    func testSkipsShowWhereverFailuresDo() {
         for reason in PaywallSkippedReason.allCases {
             XCTAssertTrue(
                 shouldShow(outcome: .skipped(reason), isDebugBuild: true),
                 "Expected \(reason.rawValue) to show in a debug build"
             )
-            XCTAssertFalse(
+            XCTAssertTrue(
                 shouldShow(outcome: .skipped(reason), isDebugBuild: false, environment: .sandbox),
-                "Expected \(reason.rawValue) to stay out of TestFlight"
+                "Expected \(reason.rawValue) to show in TestFlight"
             )
         }
     }
 
-    func testTheServerPermissionDoesNotBringSkipsWithIt() {
-        XCTAssertFalse(
-            shouldShow(
-                outcome: .skipped(.alreadyEntitled),
-                isDebugBuild: false,
-                environment: .sandbox,
-                serverAllowsInTestFlight: { true }
-            )
-        )
+    func testSkipsHonourTheDoNotShowAgainCheckbox() {
+        XCTAssertFalse(shouldShow(outcome: .skipped(.alreadyEntitled), doNotShowAgain: { true }))
     }
 
     func testSkipsStillExplainThemselvesInADashboardPreview() {
         XCTAssertTrue(shouldShow(outcome: .skipped(.alreadyEntitled), isPreviewTrigger: true))
-    }
-
-    /// The rule is about skips, not about everything outside a debug build.
-    func testAFailureStillShowsOutsideADebugBuild() {
-        XCTAssertTrue(shouldShow(isDebugBuild: false, environment: .sandbox))
     }
 
     // MARK: - Modal / badge exclusivity
@@ -218,7 +206,6 @@ final class HeliumDiagnosticGateTests: XCTestCase {
         let counting: () -> Bool = { reads += 1; return false }
 
         _ = shouldShow(outcome: .unavailable(.alreadyPresented), doNotShowAgain: counting)
-        _ = shouldShow(outcome: .skipped(.alreadyEntitled), doNotShowAgain: counting)
         _ = shouldShow(fallbackShown: true, doNotShowAgain: counting)
         _ = shouldShow(displayEnabled: false, doNotShowAgain: counting)
         _ = shouldShow(environment: .production, doNotShowAgain: counting)

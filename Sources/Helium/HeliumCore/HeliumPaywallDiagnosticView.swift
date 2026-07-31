@@ -265,7 +265,7 @@ struct HeliumPaywallDiagnosticView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !isForPreview {
-                Text("Visible in debug builds, and in TestFlight builds unless disabled from the Helium dashboard. App Store users never see this.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
+                Text("Visible in debug builds, and in TestFlight builds unless disabled from the Helium dashboard. Production users never see this.\n\nYou can disable it by setting Helium.config.paywallNotShownDiagnosticDisplayEnabled to false.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }

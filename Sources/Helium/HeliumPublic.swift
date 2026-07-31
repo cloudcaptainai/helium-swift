@@ -709,14 +709,11 @@ public class HeliumConfig {
     /// Whether a diagnostic view may appear explaining why a paywall failed to display or was
     /// skipped. Defaults to `true`; set to `false` to turn it off entirely.
     ///
-    /// The view can appear in DEBUG builds, and in TestFlight (or release builds run on a
-    /// simulator or launched from Xcode) unless Helium has disabled it remotely. App Store users
-    /// never see it. Skips where Helium is working as configured (an entitled user, a targeting
-    /// holdout) are only explained in DEBUG builds.
+    /// The view can appear in DEBUG builds, and in TestFlight unless disabled from the Helium
+    /// dashboard. Production users never see it.
     ///
     /// The view's "Do not show again" checkbox silences unprompted appearances per device via
-    /// UserDefaults; deleting the app resets it. Paywall previews from the Helium dashboard
-    /// always explain themselves, regardless of this setting.
+    /// UserDefaults; deleting the app resets it.
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
 
     /// Controls whether the triple-tap paywall previews gesture is enabled in DEBUG and TestFlight builds.
