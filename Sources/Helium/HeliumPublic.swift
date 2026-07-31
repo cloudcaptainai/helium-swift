@@ -706,29 +706,15 @@ public class HeliumConfig {
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
     
-    /// Controls whether a diagnostic view is shown when a paywall fails to display or is skipped.
-    /// Defaults to `true`.
+    /// Whether a diagnostic view may appear explaining why a paywall failed to display or was
+    /// skipped. Defaults to `true`; set to `false` to turn it off entirely.
     ///
-    /// Applies in DEBUG builds. Release builds running through TestFlight, on a simulator, or from
-    /// Xcode on a device also need ``paywallNotShownDiagnosticEnabledInTestFlight``. App Store
-    /// users never see it.
-    /// The diagnostic view also contains a "Do not show again" checkbox that persists per-device via UserDefaults (resets on app delete).
+    /// The view can appear in DEBUG builds, and in TestFlight unless disabled from the Helium
+    /// dashboard. Production users never see it.
     ///
-    /// Set this to `false` to turn the diagnostic view off. Paywall previews opened from the Helium
-    /// dashboard are exempt and continue to explain themselves. Helium can also disable the view
-    /// remotely, so `true` permits it rather than guarantees it.
+    /// The view's "Do not show again" checkbox silences unprompted appearances per device via
+    /// UserDefaults; deleting the app resets it.
     public var paywallNotShownDiagnosticDisplayEnabled: Bool = true
-
-    /// Controls whether the paywall diagnostic view is shown outside DEBUG builds, which covers
-    /// TestFlight testers and release builds run on a simulator or from Xcode on a device.
-    /// Defaults to `false`, since TestFlight builds reach real testers who would otherwise see a
-    /// full-screen developer modal. Set it to `true` for internal builds whose testers can act on
-    /// the diagnosis.
-    ///
-    /// Even when enabled, the view stays out of the way of anything working as configured: paywalls
-    /// skipped for entitled users or targeting holdouts are logged rather than shown. This has no
-    /// effect on App Store builds, which never show the diagnostic view.
-    public var paywallNotShownDiagnosticEnabledInTestFlight: Bool = false
 
     /// Controls whether the triple-tap paywall previews gesture is enabled in DEBUG and TestFlight builds.
     ///

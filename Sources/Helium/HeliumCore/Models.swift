@@ -125,7 +125,8 @@ public struct HeliumFetchedConfig: Codable {
 
     /// Server-side permission for the paywall-not-shown diagnostic modal outside DEBUG builds:
     /// TestFlight, plus release builds on a simulator or launched from Xcode. A DEBUG build answers
-    /// to the SDK flag alone and never consults this. Absent means allowed.
+    /// to the SDK's display flag alone and never consults this. Absent means allowed, so an outcome
+    /// that fires before the on-launch response arrives is still explained.
     var paywallDiagnosticModalAllowedInTestFlight: Bool?
     
     var paddleProducts: [String: ServerProductPrice]?

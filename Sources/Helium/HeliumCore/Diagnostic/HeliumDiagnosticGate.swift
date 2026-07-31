@@ -27,22 +27,18 @@ enum HeliumDiagnosticGate {
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool,
         doNotShowAgain: @autoclosure () -> Bool
     ) -> Bool {
         // A rendered fallback paywall disproves the modal's authored outcome, which describes a user
         // who got nothing. That case is surfaced by the on-paywall badge instead.
         if fallbackShown { return false }
-        guard warrantsInterrupting(outcome, isPreviewTrigger: isPreviewTrigger, isDebugBuild: isDebugBuild) else {
-            return false
-        }
+        guard warrantsInterrupting(outcome) else { return false }
         guard isEnabled(
             isPreviewTrigger: isPreviewTrigger,
             isDebugBuild: isDebugBuild,
             environment: environment,
             displayEnabled: displayEnabled,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight()
         ) else { return false }
         if isPreviewTrigger { return true }
@@ -57,7 +53,6 @@ enum HeliumDiagnosticGate {
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
         displayEnabled: Bool,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isPreviewTrigger { return true }
@@ -65,7 +60,6 @@ enum HeliumDiagnosticGate {
         return isAllowedOnThisBuild(
             isDebugBuild: isDebugBuild,
             environment: environment,
-            enabledInTestFlight: enabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight()
         )
     }
@@ -79,37 +73,32 @@ enum HeliumDiagnosticGate {
 #endif
     }
 
-    /// A skip is Helium working as configured, so there is nothing for the person holding the phone
-    /// to fix. Outside a debug build it stays in the log rather than taking over the screen of a
-    /// tester who is already subscribed or sitting in a targeting holdout.
-    private static func warrantsInterrupting(
-        _ outcome: DiagnosticOutcome,
-        isPreviewTrigger: Bool,
-        isDebugBuild: Bool
-    ) -> Bool {
+    /// A skip is Helium working as configured, but from the phone it looks the same as a paywall
+    /// that broke: the trigger fired and nothing appeared. It is explained like any failure, and
+    /// the do-not-show-again checkbox is the way to quiet it.
+    private static func warrantsInterrupting(_ outcome: DiagnosticOutcome) -> Bool {
         switch outcome {
         case .unavailable(let reason):
             guard let reason else { return true }
             return !suppressedReasons.contains(reason)
         case .skipped:
-            return isDebugBuild || isPreviewTrigger
+            return true
         }
     }
 
-    /// The TestFlight opt-in and the server permission exist to keep a developer modal out of a
-    /// tester's hands, and a developer running a DEBUG build of their own app is not a tester.
+    /// The server permission exists to keep a developer modal out of a tester's hands, and a
+    /// developer running a DEBUG build of their own app is not a tester.
     private static func isAllowedOnThisBuild(
         isDebugBuild: Bool,
         environment: AppReceiptsHelper.Environment,
-        enabledInTestFlight: Bool,
         serverAllowsInTestFlight: @autoclosure () -> Bool
     ) -> Bool {
         if isDebugBuild { return true }
         switch environment {
         // In a non-DEBUG build, .debug still means a developer's own run: a release-configuration
         // simulator build, or a device launched from Xcode (StoreKit's Xcode environment). It is a
-        // release binary all the same, so it answers to the same two permissions as TestFlight.
-        case .debug, .sandbox: return enabledInTestFlight && serverAllowsInTestFlight()
+        // release binary all the same, so it answers to the same server permission as TestFlight.
+        case .debug, .sandbox: return serverAllowsInTestFlight()
         case .production: return false
         }
     }
@@ -129,7 +118,6 @@ extension HeliumDiagnosticGate {
             isDebugBuild: isDebugBuild,
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
-            enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight,
             doNotShowAgain: UserDefaults.standard.bool(forKey: doNotShowAgainKey)
         )
@@ -141,7 +129,6 @@ extension HeliumDiagnosticGate {
             isDebugBuild: isDebugBuild,
             environment: AppReceiptsHelper.shared.environment,
             displayEnabled: Helium.config.paywallNotShownDiagnosticDisplayEnabled,
-            enabledInTestFlight: Helium.config.paywallNotShownDiagnosticEnabledInTestFlight,
             serverAllowsInTestFlight: serverAllowsInTestFlight
         )
     }
