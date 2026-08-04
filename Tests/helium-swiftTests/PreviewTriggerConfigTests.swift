@@ -26,7 +26,8 @@ final class PreviewTriggerConfigTests: XCTestCase {
         info.resolvedConfig = AnyCodable([
             "baseStack": [
                 "componentProps": [
-                    "bundleURL": donorBundleUrl
+                    "bundleURL": donorBundleUrl,
+                    "shouldEnableScroll": false
                 ]
             ]
         ] as [String: Any])
@@ -47,7 +48,8 @@ final class PreviewTriggerConfigTests: XCTestCase {
         productIdsPaddle: [String] = [],
         productIdsPaddleWeb: [String] = [],
         productIdsStripeWeb: [String] = [],
-        webPaywallBundleUrl: String? = nil
+        webPaywallBundleUrl: String? = nil,
+        shouldEnableScroll: Bool? = nil
     ) throws {
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
             bundleId: "preview456",
@@ -58,12 +60,21 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsPaddle: productIdsPaddle,
             productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
-            webPaywallBundleUrl: webPaywallBundleUrl
+            webPaywallBundleUrl: webPaywallBundleUrl,
+            shouldEnableScroll: shouldEnableScroll
         )
     }
 
     private var previewInfo: HeliumPaywallInfo? {
         HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls[previewTrigger]
+    }
+
+    private var previewComponentProps: [String: Any]? {
+        guard let resolved = previewInfo?.resolvedConfig.value as? [String: Any],
+              let baseStack = resolved["baseStack"] as? [String: Any] else {
+            return nil
+        }
+        return baseStack["componentProps"] as? [String: Any]
     }
 
     func testPreviewDoesNotInheritWebCheckoutUrl() throws {
@@ -122,6 +133,34 @@ final class PreviewTriggerConfigTests: XCTestCase {
         )
     }
 
+    func testPreviewDoesNotInheritDonorScrollSetting() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig()
+
+        XCTAssertEqual(previewComponentProps?["shouldEnableScroll"] as? Bool, true)
+    }
+
+    func testPreviewUsesProvidedScrollSetting() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(shouldEnableScroll: false)
+
+        XCTAssertEqual(previewComponentProps?["shouldEnableScroll"] as? Bool, false)
+    }
+
+    func testDonorTriggerKeepsItsScrollSetting() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig()
+
+        let donorInfo = HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls["a_trigger"]
+        let donorResolved = donorInfo?.resolvedConfig.value as? [String: Any]
+        let donorBaseStack = donorResolved?["baseStack"] as? [String: Any]
+        let donorProps = donorBaseStack?["componentProps"] as? [String: Any]
+        XCTAssertEqual(donorProps?["shouldEnableScroll"] as? Bool, false)
+    }
+
     func testPreviewClearsForceShowFallback() throws {
         injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
 
@@ -166,6 +205,32 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?["baseStack"]["componentProps"]["bundleURL"].string,
             previewBundleUrl
+        )
+    }
+
+    func testJsonMirrorUpdatesScrollSetting() throws {
+        let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
+        let configJSON = try JSON(data: JSONEncoder().encode(config))
+        injectConfig(config, json: configJSON)
+
+        try setPreviewConfig(shouldEnableScroll: false)
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?["baseStack"]["componentProps"]["shouldEnableScroll"].bool,
+            false
+        )
+    }
+
+    func testJsonMirrorDoesNotInheritDonorScrollSetting() throws {
+        let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
+        let configJSON = try JSON(data: JSONEncoder().encode(config))
+        injectConfig(config, json: configJSON)
+
+        try setPreviewConfig()
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(previewTrigger)?["baseStack"]["componentProps"]["shouldEnableScroll"].bool,
+            true
         )
     }
 
@@ -226,6 +291,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
               "paddleProductIds": ["pro_01knraky336brhcn1r0atkk2ac:pri_01knrarqkpxk9kvf785tny0y5e"],
               "webPaddleProductIds": ["pro_01kppzadma4mq2yx61e5spzgxe:pri_01kpsgnvzp69jyatar1znzxtex"],
               "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "shouldEnableScroll": false,
               "lastSavedAt": "2026-05-12T18:38:24.345+00:00"
             },
             {
@@ -259,7 +325,9 @@ final class PreviewTriggerConfigTests: XCTestCase {
             "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html"
         )
         XCTAssertEqual(versions[0].webPaddleProductIds, ["pro_01kppzadma4mq2yx61e5spzgxe:pri_01kpsgnvzp69jyatar1znzxtex"])
+        XCTAssertEqual(versions[0].shouldEnableScroll, false)
         XCTAssertNil(versions[1].webPaywallBundleUrl)
+        XCTAssertNil(versions[1].shouldEnableScroll)
     }
 
     func testDecodesLegacyPreviewsResponseWithoutNewFields() throws {
@@ -297,6 +365,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
 
         XCTAssertNil(response.paywalls[0].versions[0].webPaywallBundleUrl)
         XCTAssertNil(response.paywalls[0].versions[0].paddleProductIds)
+        XCTAssertNil(response.paywalls[0].versions[0].shouldEnableScroll)
         XCTAssertFalse(response.paywalls[0].isWebPaywall)
     }
 

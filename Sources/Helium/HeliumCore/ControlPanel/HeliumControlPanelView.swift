@@ -348,7 +348,8 @@ struct HeliumControlPanelView: View {
                     productIdsPaddle: version.paddleProductIds ?? [],
                     productIdsPaddleWeb: version.webPaddleProductIds ?? [],
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
-                    webPaywallBundleUrl: version.webPaywallBundleUrl
+                    webPaywallBundleUrl: version.webPaywallBundleUrl,
+                    shouldEnableScroll: version.shouldEnableScroll
                 )
 
                 guard !Task.isCancelled else {
