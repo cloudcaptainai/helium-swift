@@ -10,8 +10,8 @@ public class RestorePurchaseConfig {
     
     // Default values
     private static let defaultShowHeliumDialog = true
-    private static let defaultRestoreFailedTitle = "Restore Failed"
-    private static let defaultRestoreFailedMessage = "We couldn't find any previous purchases to restore."
+    private static let defaultRestoreFailedTitle = "No Purchases Found"
+    private static let defaultRestoreFailedMessage = "We couldn't find any previous purchases to restore. If you've purchased before, make sure you're signed in with the same account you used for the original purchase."
     private static let defaultRestoreFailedCloseButtonText = "OK"
 
     private(set) var showHeliumDialog: Bool = defaultShowHeliumDialog
