@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SafariServices
 import WebKit
 
 
@@ -117,7 +118,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     respond(["status": "error", "message": "Missing or invalid target"])
                     break
                 }
-                await UIApplication.shared.open(url)
+                self.openPaywallLink(url)
                 respond(["status": "success"])
                 
             case "show-secondary-paywall":
@@ -151,6 +152,22 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
     
+    /// Opens a link tapped in the paywall. When `Helium.config.openPaywallLinksInApp` is enabled,
+    /// http/https links are shown in an in-app browser presented over the paywall; all other
+    /// schemes (and any link when the in-app browser can't be presented) open externally.
+    @MainActor
+    func openPaywallLink(_ url: URL) {
+        if Helium.config.openPaywallLinksInApp,
+           let scheme = url.scheme?.lowercased(),
+           scheme == "http" || scheme == "https",
+           let presenter = UIWindowHelper.findTopMostViewController() {
+            let safariViewController = SFSafariViewController(url: url)
+            presenter.present(safariViewController, animated: true)
+        } else {
+            UIApplication.shared.open(url)
+        }
+    }
+
     /// Converts Objective-C types from JavaScript bridge to native Swift types
     private func convertToSwiftTypes(_ value: Any) -> Any {
         // Handle NSArray -> Swift Array
@@ -209,7 +226,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         // For now, open all urls externally.
         return true;
     }
-    
+
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
@@ -217,7 +234,9 @@ extension WebViewMessageHandler: WKNavigationDelegate {
     ) {
         if navigationAction.navigationType == .linkActivated,
            let url = navigationAction.request.url, shouldOpenExternally(url: url) {
-            UIApplication.shared.open(url);
+            Task { @MainActor in
+                self.openPaywallLink(url)
+            }
             decisionHandler(.cancel)
         } else {
             decisionHandler(.allow)

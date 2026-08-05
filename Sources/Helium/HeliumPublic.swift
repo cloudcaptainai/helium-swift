@@ -721,6 +721,14 @@ public class HeliumConfig {
     /// Defaults to `true`.
     public var paywallPreviewsAutoEnabledInDevBuilds: Bool = true
 
+    /// Opens http/https links tapped in paywalls in an in-app browser (`SFSafariViewController`)
+    /// presented over the paywall, instead of leaving the app for the external browser.
+    ///
+    /// Links with other schemes (e.g. `mailto:`, `tel:`, custom app schemes) always open externally.
+    ///
+    /// Defaults to `false` (links open in the external browser).
+    public var openPaywallLinksInApp: Bool = false
+
     // MARK: - External Web Checkout Configuration
 
     /// Which External Web Checkout payment processors are enabled. Empty means disabled.
