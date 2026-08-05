@@ -1066,6 +1066,7 @@ public class HeliumFetchedConfigManager {
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
+        shouldEnableScroll: Bool? = nil,
     ) throws {
         // Read-modify-write under the lock, so a fetch landing mid-update is not clobbered by the
         // write-back of a copy taken before it.
@@ -1083,7 +1084,8 @@ public class HeliumFetchedConfigManager {
                 productIdsPaddle: productIdsPaddle,
                 productIdsPaddleWeb: productIdsPaddleWeb,
                 productIdsStripeWeb: productIdsStripeWeb,
-                webPaywallBundleUrl: webPaywallBundleUrl
+                webPaywallBundleUrl: webPaywallBundleUrl,
+                shouldEnableScroll: shouldEnableScroll
             )
             stored = config
             return sourceTrigger
@@ -1091,7 +1093,12 @@ public class HeliumFetchedConfigManager {
 
         _fetchedConfigJSON.withValue { json in
             guard let configJSON = json else { return }
-            json = Self.withPreviewTrigger(configJSON, clonedFrom: sourceTrigger, bundleUrl: bundleUrl)
+            json = Self.withPreviewTrigger(
+                configJSON,
+                clonedFrom: sourceTrigger,
+                bundleUrl: bundleUrl,
+                shouldEnableScroll: shouldEnableScroll
+            )
         }
 
         isFallbackPreviewArmed = false
@@ -1109,7 +1116,8 @@ public class HeliumFetchedConfigManager {
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
-        webPaywallBundleUrl: String?
+        webPaywallBundleUrl: String?,
+        shouldEnableScroll: Bool?
     ) throws -> String {
         guard let sourceTrigger = config.triggerToPaywalls.keys
             .filter({ $0 != HELIUM_PREVIEW_TRIGGER })
@@ -1127,6 +1135,10 @@ public class HeliumFetchedConfigManager {
             throw HeliumControlPanelError.invalidResolvedConfig
         }
         componentProps["bundleURL"] = bundleUrl
+        // The donor's scroll setting has no relation to the previewed paywall. Use the
+        // previewed version's own setting; when the preview response doesn't provide one,
+        // use the platform default (scroll enabled) rather than the donor's value.
+        componentProps["shouldEnableScroll"] = shouldEnableScroll ?? true
         baseStack["componentProps"] = componentProps
         resolvedConfigDict["baseStack"] = baseStack
         previewPaywallInfo.resolvedConfig = AnyCodable(resolvedConfigDict)
@@ -1167,11 +1179,13 @@ public class HeliumFetchedConfigManager {
     private static func withPreviewTrigger(
         _ configJSON: JSON,
         clonedFrom sourceTrigger: String,
-        bundleUrl: String
+        bundleUrl: String,
+        shouldEnableScroll: Bool?
     ) -> JSON {
         var configJSON = configJSON
         var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
         sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
+        sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
         configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = sourceJSON
         return configJSON
     }
