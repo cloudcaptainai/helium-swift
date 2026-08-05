@@ -43,6 +43,10 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.paywallInfo.productHapticsEnabled ?? []
     }
 
+    var observabilityScope: PaywallObservabilityScope {
+        delegate.paywallSession.observabilityScope
+    }
+
     func dismiss(dispatchEvent: Bool = true) {
         delegate.dismiss(dispatchEvent: dispatchEvent)
     }

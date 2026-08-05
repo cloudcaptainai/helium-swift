@@ -19,6 +19,25 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
     }
 
+    // MARK: - PaywallLinkOpenAttempted
+
+    func testPaywallLinkOpenCarriesDestinationSuccessAndScheme() throws {
+        let event = PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: "https")
+
+        XCTAssertEqual(event.name, "paywall_link_open_attempted")
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "openedInApp": true,
+            "success": true,
+            "scheme": "https",
+        ]))
+    }
+
+    func testPaywallLinkOpenWithoutASchemeOmitsTheKey() throws {
+        let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil)
+
+        XCTAssertNil(try wireProperties(for: event)["scheme"])
+    }
+
     // MARK: - FallbackPaywallsConfigured
 
     func testFullyPopulatedBundleCarriesGeneratedAtOrgDefaultUUIDCountAndMap() throws {

@@ -157,14 +157,24 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     /// schemes (and any link when the in-app browser can't be presented) open externally.
     @MainActor
     func openPaywallLink(_ url: URL) {
+        let scope = delegateWrapper?.observabilityScope
+        let scheme = url.scheme?.lowercased()
         if Helium.config.openPaywallLinksInApp,
-           let scheme = url.scheme?.lowercased(),
            scheme == "http" || scheme == "https",
            let presenter = UIWindowHelper.findTopMostViewController() {
             let safariViewController = SFSafariViewController(url: url)
             presenter.present(safariViewController, animated: true)
+            HeliumObservabilityManager.shared.track(
+                PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: scheme),
+                scope: scope
+            )
         } else {
-            UIApplication.shared.open(url)
+            UIApplication.shared.open(url, options: [:]) { opened in
+                HeliumObservabilityManager.shared.track(
+                    PaywallLinkOpenAttempted(openedInApp: false, success: opened, scheme: scheme),
+                    scope: scope
+                )
+            }
         }
     }
 
