@@ -244,18 +244,13 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         HeliumLogger.log(.trace, category: .ui, "WebView did commit navigation")
     }
     
-    private func shouldOpenExternally(url: URL) -> Bool {
-        // For now, open all urls externally.
-        return true;
-    }
-
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         if navigationAction.navigationType == .linkActivated,
-           let url = navigationAction.request.url, shouldOpenExternally(url: url) {
+           let url = navigationAction.request.url {
             Task { @MainActor in
                 self.openPaywallLink(url)
             }
