@@ -35,7 +35,10 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     func testPaywallLinkOpenWithoutASchemeOmitsTheKey() throws {
         let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil)
 
-        XCTAssertNil(try wireProperties(for: event)["scheme"])
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "openedInApp": false,
+            "success": false,
+        ]))
     }
 
     // MARK: - FallbackPaywallsConfigured

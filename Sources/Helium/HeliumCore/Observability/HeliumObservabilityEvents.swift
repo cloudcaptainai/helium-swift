@@ -222,10 +222,11 @@ struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     }
 }
 
-/// A link tapped in paywall content was handed off to a browser — in-app
-/// (`SFSafariViewController`) when `openPaywallLinksInApp` is enabled for a web URL,
-/// external otherwise. Only the scheme is reported; full URLs stay out of the pipeline
-/// since their query strings can carry user data.
+/// A link tapped in paywall content was handed off to an in-app browser
+/// (`SFSafariViewController`) or an external app — in-app when `openPaywallLinksInApp`
+/// is enabled (the default) for a web URL, external otherwise (including non-web schemes
+/// like `mailto:` and `tel:`). Only the scheme is reported; full URLs stay out of the
+/// pipeline since their query strings can carry user data.
 struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
     let openedInApp: Bool
     let success: Bool
