@@ -19,6 +19,43 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
     }
 
+    // MARK: - PaywallLinkOpenAttempted
+
+    func testPaywallLinkOpenCarriesSourceDestinationSuccessSchemeAndUrl() throws {
+        let event = PaywallLinkOpenAttempted(
+            source: .navigate,
+            openedInApp: true,
+            success: true,
+            scheme: "https",
+            url: "https://tryhelium.com/pricing"
+        )
+
+        XCTAssertEqual(event.name, "paywall_link_open_attempted")
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "source": "navigate",
+            "openedInApp": true,
+            "success": true,
+            "scheme": "https",
+            "url": "https://tryhelium.com/pricing",
+        ]))
+    }
+
+    func testPaywallLinkOpenWithoutASchemeOmitsTheOptionalKeys() throws {
+        let event = PaywallLinkOpenAttempted(source: .anchor, openedInApp: false, success: false, scheme: nil, url: nil)
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "source": "anchor",
+            "openedInApp": false,
+            "success": false,
+        ]))
+    }
+
+    func testUrlForObservabilityCutsQueryAndFragment() throws {
+        let url = try XCTUnwrap(URL(string: "https://tryhelium.com/pricing?token=abc123#section"))
+
+        XCTAssertEqual(urlForObservability(url), "https://tryhelium.com/pricing")
+    }
+
     // MARK: - FallbackPaywallsConfigured
 
     func testFullyPopulatedBundleCarriesGeneratedAtOrgDefaultUUIDCountAndMap() throws {

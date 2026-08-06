@@ -14,6 +14,11 @@ func truncatedForObservability(_ s: String?, maxLength: Int = 500) -> String? {
     return String(s.prefix(maxLength)) + "…(truncated)"
 }
 
+/// Cuts a URL at its query/fragment, which can carry user data.
+func urlForObservability(_ url: URL) -> String {
+    String(url.absoluteString.prefix { $0 != "?" && $0 != "#" })
+}
+
 func msSince(_ start: Date) -> Int {
     Int(Date().timeIntervalSince(start) * 1000)
 }
@@ -219,6 +224,33 @@ struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     var name: String { "web_checkout_browser_open_attempted" }
     var properties: [String: Any] {
         ["provider": provider, "success": success]
+    }
+}
+
+/// How a paywall link was requested: the paywall's explicit navigate action, or a tapped
+/// HTML anchor. Only navigate links may open in-app.
+enum PaywallLinkSource: String {
+    case navigate, anchor
+}
+
+/// A link in paywall content was handed off to an in-app browser
+/// (`SFSafariViewController`) or an external app — in-app when the source is navigate,
+/// `openPaywallLinksInApp` is enabled (the default), and the URL is a web URL; external
+/// otherwise (including non-web schemes like `mailto:` and `tel:`). The reported URL is
+/// cut at its query/fragment, which can carry user data.
+struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
+    let source: PaywallLinkSource
+    let openedInApp: Bool
+    let success: Bool
+    let scheme: String?
+    let url: String?
+
+    var name: String { "paywall_link_open_attempted" }
+    var properties: [String: Any] {
+        var p: [String: Any] = ["source": source.rawValue, "openedInApp": openedInApp, "success": success]
+        if let scheme { p["scheme"] = scheme }
+        if let url { p["url"] = url }
+        return p
     }
 }
 

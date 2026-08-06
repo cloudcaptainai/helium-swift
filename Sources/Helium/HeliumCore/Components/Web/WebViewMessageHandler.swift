@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SafariServices
 import WebKit
 
 
@@ -114,10 +115,16 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             case "navigate":
                 guard let target = data["target"] as? String,
                       let url = URL(string: target) else {
+                    // Unopenable targets still count as a failed link open, so broken paywall
+                    // content shows up in the observability pipeline.
+                    HeliumObservabilityManager.shared.track(
+                        PaywallLinkOpenAttempted(source: .navigate, openedInApp: false, success: false, scheme: nil, url: nil),
+                        scope: self.delegateWrapper?.observabilityScope
+                    )
                     respond(["status": "error", "message": "Missing or invalid target"])
                     break
                 }
-                await UIApplication.shared.open(url)
+                self.openPaywallLink(url, source: .navigate)
                 respond(["status": "success"])
                 
             case "show-secondary-paywall":
@@ -151,6 +158,39 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
     
+    /// Opens a link from the paywall. A navigate-sourced link is shown in an in-app browser
+    /// presented over the paywall when `Helium.config.openPaywallLinksInApp` is enabled (the
+    /// default) and the URL is http/https; every other link opens externally.
+    @MainActor
+    func openPaywallLink(_ url: URL, source: PaywallLinkSource) {
+        let scope = delegateWrapper?.observabilityScope
+        let scheme = url.scheme?.lowercased()
+        let reportedURL = urlForObservability(url)
+        if source == .navigate,
+           Helium.config.openPaywallLinksInApp,
+           scheme == "http" || scheme == "https",
+           let presenter = UIWindowHelper.findTopMostViewController() {
+            let safariViewController = SFSafariViewController(url: url)
+            // As a page sheet the browser slides up over the paywall; SFSafariViewController's
+            // default full-screen presentation animates sideways like a navigation push instead.
+            safariViewController.modalPresentationStyle = .pageSheet
+            presenter.present(safariViewController, animated: true) {
+                let success = safariViewController.presentingViewController != nil
+                HeliumObservabilityManager.shared.track(
+                    PaywallLinkOpenAttempted(source: source, openedInApp: true, success: success, scheme: scheme, url: reportedURL),
+                    scope: scope
+                )
+            }
+        } else {
+            UIApplication.shared.open(url, options: [:]) { opened in
+                HeliumObservabilityManager.shared.track(
+                    PaywallLinkOpenAttempted(source: source, openedInApp: false, success: opened, scheme: scheme, url: reportedURL),
+                    scope: scope
+                )
+            }
+        }
+    }
+
     /// Converts Objective-C types from JavaScript bridge to native Swift types
     private func convertToSwiftTypes(_ value: Any) -> Any {
         // Handle NSArray -> Swift Array
@@ -205,19 +245,16 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         HeliumLogger.log(.trace, category: .ui, "WebView did commit navigation")
     }
     
-    private func shouldOpenExternally(url: URL) -> Bool {
-        // For now, open all urls externally.
-        return true;
-    }
-    
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         if navigationAction.navigationType == .linkActivated,
-           let url = navigationAction.request.url, shouldOpenExternally(url: url) {
-            UIApplication.shared.open(url);
+           let url = navigationAction.request.url {
+            Task { @MainActor in
+                self.openPaywallLink(url, source: .anchor)
+            }
             decisionHandler(.cancel)
         } else {
             decisionHandler(.allow)
