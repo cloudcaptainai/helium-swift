@@ -124,7 +124,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     respond(["status": "error", "message": "Missing or invalid target"])
                     break
                 }
-                self.openPaywallLink(url)
+                self.openPaywallLink(url, allowInApp: true)
                 respond(["status": "success"])
                 
             case "show-secondary-paywall":
@@ -158,15 +158,16 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
     
-    /// Opens a link tapped in the paywall. When `Helium.config.openPaywallLinksInApp` is enabled
-    /// (the default), http/https links are shown in an in-app browser presented over the paywall;
-    /// all other schemes (and any link when the in-app browser can't be presented) open externally.
+    /// Opens a link from the paywall. A link is shown in an in-app browser presented over the
+    /// paywall only when the caller allows it, `Helium.config.openPaywallLinksInApp` is enabled
+    /// (the default), and the URL is http/https; every other link opens externally.
     @MainActor
-    func openPaywallLink(_ url: URL) {
+    func openPaywallLink(_ url: URL, allowInApp: Bool) {
         let scope = delegateWrapper?.observabilityScope
         let scheme = url.scheme?.lowercased()
         let reportedURL = urlForObservability(url)
-        if Helium.config.openPaywallLinksInApp,
+        if allowInApp,
+           Helium.config.openPaywallLinksInApp,
            scheme == "http" || scheme == "https",
            let presenter = UIWindowHelper.findTopMostViewController() {
             let safariViewController = SFSafariViewController(url: url)
@@ -252,7 +253,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         if navigationAction.navigationType == .linkActivated,
            let url = navigationAction.request.url {
             Task { @MainActor in
-                self.openPaywallLink(url)
+                self.openPaywallLink(url, allowInApp: false)
             }
             decisionHandler(.cancel)
         } else {
