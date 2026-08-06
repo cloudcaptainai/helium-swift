@@ -132,7 +132,7 @@ final class WebCheckoutRedirectTests: XCTestCase {
         XCTAssertNil(Helium.config.checkoutCancelURL)
     }
 
-    func testEnable_redirectURLWithQuery_isAcceptedWithWarning() {
+    func testEnable_redirectURLWithQuery_isAccepted() {
         Helium.config.enableExternalWebCheckout(redirectURL: "myapp://checkout/return?src=app", paymentProcessors: .all)
         XCTAssertTrue(Helium.config.webCheckoutEnabled)
     }

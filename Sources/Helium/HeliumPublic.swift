@@ -430,11 +430,8 @@ public class Helium {
     /// This is not required, but encouraged for smoother post-purchase experience.
     ///
     /// Safe to call with unrelated URLs — returns `nil` if external web checkout is
-    /// disabled, the URL does not match a redirect URL configured via
-    /// ``HeliumConfig/enableExternalWebCheckout(redirectURL:paymentProcessors:)``,
-    /// or the checkout outcome can't be determined from the URL alone. In that last
-    /// case Helium still reconciles the purchase against entitlement state when the
-    /// app returns to the foreground.
+    /// disabled or the URL does not match a redirect URL configured via
+    /// ``HeliumConfig/enableExternalWebCheckout(redirectURL:paymentProcessors:)``.
     ///
     /// Call this from `.onOpenURL`, `SceneDelegate.scene(_:openURLContexts:)`, or
     /// `AppDelegate.application(_:open:options:)`.
@@ -751,15 +748,15 @@ public class HeliumConfig {
     /// will not show. Your fallback paywall/s, if provided, will show instead.
     ///
     /// You must provide a redirect URL so Helium knows where to send the user back after checkout,
-    /// whether it succeeded, was cancelled, or failed. The one URL covers all outcomes — the SDK
-    /// determines the outcome from query parameters the checkout flow appends, and otherwise
-    /// reconciles against entitlement state when the app returns to the foreground.
+    /// whether it succeeded, was cancelled, or failed. If a user returns to the app manually
+    /// without the redirect URL, then the SDK will look at the latest entitlement state to
+    /// determine if a purchase was made.
     ///
     /// Register the URL as a deep link (custom scheme or universal link) and forward it to
     /// ``Helium/handleURL(_:)`` from your URL handler.
     ///
     /// - Parameters:
-    ///   - redirectURL: The URL checkout redirects back to when the user is done, regardless of outcome.
+    ///   - redirectURL: The URL checkout redirects back to when the user is done.
     ///   - paymentProcessors: Which payment processors to enable. Paddle, Stripe, or both.
     public func enableExternalWebCheckout(
         redirectURL: String,
@@ -768,9 +765,6 @@ public class HeliumConfig {
         guard let parsed = URL(string: redirectURL), parsed.scheme != nil else {
             HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: invalid redirectURL. It must be a valid URL with a scheme (e.g. https://example.com or myapp://path).")
             return
-        }
-        if parsed.query != nil {
-            HeliumLogger.log(.warn, category: .core, "enableExternalWebCheckout: redirectURL contains query parameters. Checkout outcome detection relies on query parameters appended at redirect time, so prefer a query-free URL.")
         }
         setExternalWebCheckout(successURL: redirectURL, cancelURL: redirectURL, paymentProcessors: paymentProcessors)
     }
