@@ -159,19 +159,20 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     func openPaywallLink(_ url: URL) {
         let scope = delegateWrapper?.observabilityScope
         let scheme = url.scheme?.lowercased()
+        let reportedURL = urlForObservability(url)
         if Helium.config.openPaywallLinksInApp,
            scheme == "http" || scheme == "https",
            let presenter = UIWindowHelper.findTopMostViewController() {
             let safariViewController = SFSafariViewController(url: url)
             presenter.present(safariViewController, animated: true)
             HeliumObservabilityManager.shared.track(
-                PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: scheme),
+                PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: scheme, url: reportedURL),
                 scope: scope
             )
         } else {
             UIApplication.shared.open(url, options: [:]) { opened in
                 HeliumObservabilityManager.shared.track(
-                    PaywallLinkOpenAttempted(openedInApp: false, success: opened, scheme: scheme),
+                    PaywallLinkOpenAttempted(openedInApp: false, success: opened, scheme: scheme, url: reportedURL),
                     scope: scope
                 )
             }

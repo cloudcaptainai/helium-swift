@@ -722,7 +722,7 @@ public class HeliumConfig {
     public var paywallPreviewsAutoEnabledInDevBuilds: Bool = true
 
     /// Opens http/https links tapped in paywalls in an in-app browser (`SFSafariViewController`)
-    /// presented over the paywall, instead of leaving the app for the external browser.
+    /// presented over the paywall, instead of in an external browser.
     ///
     /// Links with other schemes (e.g. `mailto:`, `tel:`, custom app schemes) always open externally.
     ///

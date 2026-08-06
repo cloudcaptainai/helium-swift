@@ -14,6 +14,11 @@ func truncatedForObservability(_ s: String?, maxLength: Int = 500) -> String? {
     return String(s.prefix(maxLength)) + "…(truncated)"
 }
 
+/// Cuts a URL at its query/fragment, which can carry user data.
+func urlForObservability(_ url: URL) -> String {
+    String(url.absoluteString.prefix { $0 != "?" && $0 != "#" })
+}
+
 func msSince(_ start: Date) -> Int {
     Int(Date().timeIntervalSince(start) * 1000)
 }
@@ -224,17 +229,19 @@ struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
 
 /// A link tapped in paywall content was handed off to a browser — in-app
 /// (`SFSafariViewController`) when `openPaywallLinksInApp` is enabled for a web URL,
-/// external otherwise. Only the scheme is reported; full URLs stay out of the pipeline
-/// since their query strings can carry user data.
+/// external otherwise. The reported URL is cut at its query/fragment, which can carry
+/// user data.
 struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
     let openedInApp: Bool
     let success: Bool
     let scheme: String?
+    let url: String?
 
     var name: String { "paywall_link_open_attempted" }
     var properties: [String: Any] {
         var p: [String: Any] = ["openedInApp": openedInApp, "success": success]
         if let scheme { p["scheme"] = scheme }
+        if let url { p["url"] = url }
         return p
     }
 }

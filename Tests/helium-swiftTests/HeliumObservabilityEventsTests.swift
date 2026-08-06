@@ -21,21 +21,34 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
     // MARK: - PaywallLinkOpenAttempted
 
-    func testPaywallLinkOpenCarriesDestinationSuccessAndScheme() throws {
-        let event = PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: "https")
+    func testPaywallLinkOpenCarriesDestinationSuccessSchemeAndUrl() throws {
+        let event = PaywallLinkOpenAttempted(
+            openedInApp: true,
+            success: true,
+            scheme: "https",
+            url: "https://tryhelium.com/pricing"
+        )
 
         XCTAssertEqual(event.name, "paywall_link_open_attempted")
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
             "openedInApp": true,
             "success": true,
             "scheme": "https",
+            "url": "https://tryhelium.com/pricing",
         ]))
     }
 
-    func testPaywallLinkOpenWithoutASchemeOmitsTheKey() throws {
-        let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil)
+    func testPaywallLinkOpenWithoutASchemeOmitsTheOptionalKeys() throws {
+        let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil, url: nil)
 
         XCTAssertNil(try wireProperties(for: event)["scheme"])
+        XCTAssertNil(try wireProperties(for: event)["url"])
+    }
+
+    func testUrlForObservabilityCutsQueryAndFragment() throws {
+        let url = try XCTUnwrap(URL(string: "https://tryhelium.com/pricing?token=abc123#section"))
+
+        XCTAssertEqual(urlForObservability(url), "https://tryhelium.com/pricing")
     }
 
     // MARK: - FallbackPaywallsConfigured
