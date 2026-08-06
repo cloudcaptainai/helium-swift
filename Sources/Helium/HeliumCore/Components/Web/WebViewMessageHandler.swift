@@ -164,6 +164,9 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
            scheme == "http" || scheme == "https",
            let presenter = UIWindowHelper.findTopMostViewController() {
             let safariViewController = SFSafariViewController(url: url)
+            // As a page sheet the browser slides up over the paywall; SFSafariViewController's
+            // default full-screen presentation animates sideways like a navigation push instead.
+            safariViewController.modalPresentationStyle = .pageSheet
             presenter.present(safariViewController, animated: true)
             HeliumObservabilityManager.shared.track(
                 PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: scheme, url: reportedURL),
