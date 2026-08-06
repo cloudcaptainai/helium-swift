@@ -152,9 +152,9 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
     
-    /// Opens a link tapped in the paywall. When `Helium.config.openPaywallLinksInApp` is enabled,
-    /// http/https links are shown in an in-app browser presented over the paywall; all other
-    /// schemes (and any link when the in-app browser can't be presented) open externally.
+    /// Opens a link tapped in the paywall. When `Helium.config.openPaywallLinksInApp` is enabled
+    /// (the default), http/https links are shown in an in-app browser presented over the paywall;
+    /// all other schemes (and any link when the in-app browser can't be presented) open externally.
     @MainActor
     func openPaywallLink(_ url: URL) {
         let scope = delegateWrapper?.observabilityScope
