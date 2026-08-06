@@ -41,8 +41,10 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     func testPaywallLinkOpenWithoutASchemeOmitsTheOptionalKeys() throws {
         let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil, url: nil)
 
-        XCTAssertNil(try wireProperties(for: event)["scheme"])
-        XCTAssertNil(try wireProperties(for: event)["url"])
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "openedInApp": false,
+            "success": false,
+        ]))
     }
 
     func testUrlForObservabilityCutsQueryAndFragment() throws {

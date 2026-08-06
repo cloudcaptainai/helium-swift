@@ -115,6 +115,12 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             case "navigate":
                 guard let target = data["target"] as? String,
                       let url = URL(string: target) else {
+                    // Unopenable targets still count as a failed link open, so broken paywall
+                    // content shows up in the observability pipeline.
+                    HeliumObservabilityManager.shared.track(
+                        PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil, url: nil),
+                        scope: self.delegateWrapper?.observabilityScope
+                    )
                     respond(["status": "error", "message": "Missing or invalid target"])
                     break
                 }
@@ -167,11 +173,13 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             // As a page sheet the browser slides up over the paywall; SFSafariViewController's
             // default full-screen presentation animates sideways like a navigation push instead.
             safariViewController.modalPresentationStyle = .pageSheet
-            presenter.present(safariViewController, animated: true)
-            HeliumObservabilityManager.shared.track(
-                PaywallLinkOpenAttempted(openedInApp: true, success: true, scheme: scheme, url: reportedURL),
-                scope: scope
-            )
+            presenter.present(safariViewController, animated: true) {
+                let success = safariViewController.presentingViewController != nil
+                HeliumObservabilityManager.shared.track(
+                    PaywallLinkOpenAttempted(openedInApp: true, success: success, scheme: scheme, url: reportedURL),
+                    scope: scope
+                )
+            }
         } else {
             UIApplication.shared.open(url, options: [:]) { opened in
                 HeliumObservabilityManager.shared.track(
