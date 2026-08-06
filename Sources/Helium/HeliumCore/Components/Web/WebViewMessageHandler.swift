@@ -118,13 +118,13 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                     // Unopenable targets still count as a failed link open, so broken paywall
                     // content shows up in the observability pipeline.
                     HeliumObservabilityManager.shared.track(
-                        PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil, url: nil),
+                        PaywallLinkOpenAttempted(source: .navigate, openedInApp: false, success: false, scheme: nil, url: nil),
                         scope: self.delegateWrapper?.observabilityScope
                     )
                     respond(["status": "error", "message": "Missing or invalid target"])
                     break
                 }
-                self.openPaywallLink(url, allowInApp: true)
+                self.openPaywallLink(url, source: .navigate)
                 respond(["status": "success"])
                 
             case "show-secondary-paywall":
@@ -158,15 +158,15 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
     
-    /// Opens a link from the paywall. A link is shown in an in-app browser presented over the
-    /// paywall only when the caller allows it, `Helium.config.openPaywallLinksInApp` is enabled
-    /// (the default), and the URL is http/https; every other link opens externally.
+    /// Opens a link from the paywall. A navigate-sourced link is shown in an in-app browser
+    /// presented over the paywall when `Helium.config.openPaywallLinksInApp` is enabled (the
+    /// default) and the URL is http/https; every other link opens externally.
     @MainActor
-    func openPaywallLink(_ url: URL, allowInApp: Bool) {
+    func openPaywallLink(_ url: URL, source: PaywallLinkSource) {
         let scope = delegateWrapper?.observabilityScope
         let scheme = url.scheme?.lowercased()
         let reportedURL = urlForObservability(url)
-        if allowInApp,
+        if source == .navigate,
            Helium.config.openPaywallLinksInApp,
            scheme == "http" || scheme == "https",
            let presenter = UIWindowHelper.findTopMostViewController() {
@@ -177,14 +177,14 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             presenter.present(safariViewController, animated: true) {
                 let success = safariViewController.presentingViewController != nil
                 HeliumObservabilityManager.shared.track(
-                    PaywallLinkOpenAttempted(openedInApp: true, success: success, scheme: scheme, url: reportedURL),
+                    PaywallLinkOpenAttempted(source: source, openedInApp: true, success: success, scheme: scheme, url: reportedURL),
                     scope: scope
                 )
             }
         } else {
             UIApplication.shared.open(url, options: [:]) { opened in
                 HeliumObservabilityManager.shared.track(
-                    PaywallLinkOpenAttempted(openedInApp: false, success: opened, scheme: scheme, url: reportedURL),
+                    PaywallLinkOpenAttempted(source: source, openedInApp: false, success: opened, scheme: scheme, url: reportedURL),
                     scope: scope
                 )
             }
@@ -253,7 +253,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         if navigationAction.navigationType == .linkActivated,
            let url = navigationAction.request.url {
             Task { @MainActor in
-                self.openPaywallLink(url, allowInApp: false)
+                self.openPaywallLink(url, source: .anchor)
             }
             decisionHandler(.cancel)
         } else {

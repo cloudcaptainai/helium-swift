@@ -21,8 +21,9 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
     // MARK: - PaywallLinkOpenAttempted
 
-    func testPaywallLinkOpenCarriesDestinationSuccessSchemeAndUrl() throws {
+    func testPaywallLinkOpenCarriesSourceDestinationSuccessSchemeAndUrl() throws {
         let event = PaywallLinkOpenAttempted(
+            source: .navigate,
             openedInApp: true,
             success: true,
             scheme: "https",
@@ -31,6 +32,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
         XCTAssertEqual(event.name, "paywall_link_open_attempted")
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "source": "navigate",
             "openedInApp": true,
             "success": true,
             "scheme": "https",
@@ -39,9 +41,10 @@ final class HeliumObservabilityEventsTests: XCTestCase {
     }
 
     func testPaywallLinkOpenWithoutASchemeOmitsTheOptionalKeys() throws {
-        let event = PaywallLinkOpenAttempted(openedInApp: false, success: false, scheme: nil, url: nil)
+        let event = PaywallLinkOpenAttempted(source: .anchor, openedInApp: false, success: false, scheme: nil, url: nil)
 
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "source": "anchor",
             "openedInApp": false,
             "success": false,
         ]))

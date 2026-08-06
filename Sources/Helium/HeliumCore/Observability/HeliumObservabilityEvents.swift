@@ -227,12 +227,19 @@ struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     }
 }
 
-/// A link tapped in paywall content was handed off to an in-app browser
-/// (`SFSafariViewController`) or an external app — in-app when `openPaywallLinksInApp`
-/// is enabled (the default) for a web URL, external otherwise (including non-web schemes
-/// like `mailto:` and `tel:`). The reported URL is cut at its query/fragment, which can
-/// carry user data.
+/// How a paywall link was requested: the paywall's explicit navigate action, or a tapped
+/// HTML anchor. Only navigate links may open in-app.
+enum PaywallLinkSource: String {
+    case navigate, anchor
+}
+
+/// A link in paywall content was handed off to an in-app browser
+/// (`SFSafariViewController`) or an external app — in-app when the source is navigate,
+/// `openPaywallLinksInApp` is enabled (the default), and the URL is a web URL; external
+/// otherwise (including non-web schemes like `mailto:` and `tel:`). The reported URL is
+/// cut at its query/fragment, which can carry user data.
 struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
+    let source: PaywallLinkSource
     let openedInApp: Bool
     let success: Bool
     let scheme: String?
@@ -240,7 +247,7 @@ struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
 
     var name: String { "paywall_link_open_attempted" }
     var properties: [String: Any] {
-        var p: [String: Any] = ["openedInApp": openedInApp, "success": success]
+        var p: [String: Any] = ["source": source.rawValue, "openedInApp": openedInApp, "success": success]
         if let scheme { p["scheme"] = scheme }
         if let url { p["url"] = url }
         return p
