@@ -23,14 +23,6 @@ struct PaddlePrefetchAwaitTimeout: LocalizedError {
     }
 }
 
-struct PaddleCaliforniaBlocked: LocalizedError {
-    let postalCode: String
-
-    var errorDescription: String? {
-        return "Paddle prefetch blocked for California IP (postal \(postalCode))"
-    }
-}
-
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -387,17 +379,6 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
-    nonisolated static func californiaBlockedPostalCode(
-        in outcomes: [String: PaddlePrefetchOutcome]
-    ) -> String? {
-        for outcome in outcomes.values {
-            if case let .failed(error) = outcome, let ca = error as? PaddleCaliforniaBlocked {
-                return ca.postalCode
-            }
-        }
-        return nil
-    }
-
     // MARK: - Composite key helpers
 
     /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
@@ -486,29 +467,11 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
-                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
-                return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
-            }
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
-    }
-
-    /// Returns the postal code when the response's IP-geo is a US California
-    /// ZIP (90001–96162, contiguous; HI starts at 96701). Nil otherwise.
-    private nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
-        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
-              let data = parsed["data"] as? [String: Any],
-              (data["ip_geo_country_code"] as? String) == "US",
-              let postal = data["ip_geo_postal_code"] as? String,
-              let zip = Int(postal.prefix(5)),
-              (90001...96162).contains(zip) else {
-            return nil
-        }
-        return postal
     }
 }
