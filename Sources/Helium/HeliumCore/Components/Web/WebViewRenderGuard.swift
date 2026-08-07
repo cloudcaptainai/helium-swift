@@ -86,7 +86,12 @@ enum WebViewRenderGuard {
         (function() {
             try {
                 var b = document.body;
-                if (!b || b.childElementCount === 0) return 'blank';
+                if (!b) return 'blank';
+                for (var n = 0; n < b.childNodes.length; n++) {
+                    var node = b.childNodes[n];
+                    if (node.nodeType === Node.TEXT_NODE && (node.textContent || '').trim().length > 0) return 'content';
+                }
+                if (b.childElementCount === 0) return 'blank';
                 if (b.getBoundingClientRect().height < 10) return 'blank';
                 var els = b.querySelectorAll('*');
                 var limit = Math.min(els.length, 300);

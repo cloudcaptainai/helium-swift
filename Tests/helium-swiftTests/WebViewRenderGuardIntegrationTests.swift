@@ -9,6 +9,13 @@ import WebKit
 @MainActor
 final class WebViewRenderGuardIntegrationTests: XCTestCase {
 
+    override func setUp() async throws {
+        // WebKit page loads are unreliably slow under Thread Sanitizer (how CI runs
+        // this suite), timing out the didFinish waits. They run un-sanitized locally.
+        let tsanActive = dlsym(dlopen(nil, RTLD_LAZY), "__tsan_init") != nil
+        try XCTSkipIf(tsanActive, "Skipped under Thread Sanitizer: WebKit loads time out")
+    }
+
     private final class LoggingBridgeStub: NSObject, WKScriptMessageHandlerWithReply {
         var onMessage: ((Any) -> Void)?
         func userContentController(
@@ -50,11 +57,17 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
         return webView
     }
 
-    private func loadAndWaitForFinish(_ webView: WKWebView, html: String) async {
+    private enum LoadError: Error { case didFinishTimedOut }
+
+    /// Throws on timeout so a slow load fails here, not as a confusing
+    /// follow-on JS error in the assertion that assumed a loaded page.
+    private func loadAndWaitForFinish(_ webView: WKWebView, html: String) async throws {
         let finished = expectation(description: "didFinish")
         navDelegate.onFinish = { finished.fulfill() }
         webView.loadHTMLString(html, baseURL: nil)
-        await fulfillment(of: [finished], timeout: 10.0)
+        guard await XCTWaiter.fulfillment(of: [finished], timeout: 30.0) == .completed else {
+            throw LoadError.didFinishTimedOut
+        }
     }
 
     func testThrowDuringInitialExecutionReportsJsErrorWithToken() {
@@ -100,7 +113,7 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
 
     func testProbeReturnsBlankForCrashedEmptyDocument() async throws {
         let webView = makeWebView(loadToken: "probe-blank-tok")
-        await loadAndWaitForFinish(
+        try await loadAndWaitForFinish(
             webView,
             html: "<html><body><script>window.locale = {}; locale.some(function(l) { return true; });</script></body></html>"
         )
@@ -111,9 +124,20 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
 
     func testProbeReturnsContentForVisibleText() async throws {
         let webView = makeWebView(loadToken: "probe-content-tok")
-        await loadAndWaitForFinish(
+        try await loadAndWaitForFinish(
             webView,
             html: "<html><body><div>Start your free trial</div></body></html>"
+        )
+
+        let result = try await webView.evaluateJavaScript(WebViewRenderGuard.blankScreenProbeSource)
+        XCTAssertEqual(result as? String, "content")
+    }
+
+    func testProbeReturnsContentForDirectBodyText() async throws {
+        let webView = makeWebView(loadToken: "probe-body-text-tok")
+        try await loadAndWaitForFinish(
+            webView,
+            html: "<html><body>Paywall ready</body></html>"
         )
 
         let result = try await webView.evaluateJavaScript(WebViewRenderGuard.blankScreenProbeSource)
@@ -126,7 +150,7 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
         var reportedError = false
         bridge.onMessage = { _ in reportedError = true }
 
-        await loadAndWaitForFinish(
+        try await loadAndWaitForFinish(
             webView,
             html: "<html><body><div id='root'>Paywall</div><script>document.getElementById('root').textContent = 'Paywall ready';</script></body></html>"
         )

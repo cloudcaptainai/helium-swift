@@ -289,7 +289,7 @@ extension WebViewMessageHandler: WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         HeliumLogger.log(.error, category: .ui, "WebView content process terminated")
-        NotificationCenter.default.post(name: .webViewProcessTerminated, object: self)
+        NotificationCenter.default.post(name: .webViewProcessTerminated, object: webView)
     }
 
 }

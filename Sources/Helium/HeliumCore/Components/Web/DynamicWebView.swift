@@ -192,7 +192,7 @@ struct DynamicWebView: View {
           handlePaywallJSError(info)
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewProcessTerminated)) { res in
-          guard res.object as? WKNavigationDelegate === webView?.navigationDelegate else { return }
+          guard res.object as? WKWebView === webView else { return }
           HeliumObservabilityManager.shared.track(
               PaywallWebProcessTerminated(
                   loadAttempt: String(describing: fileLoadAttempt),
@@ -295,8 +295,14 @@ struct DynamicWebView: View {
                     delegateWrapper: actionsDelegate,
                     heliumViewController: presentationState.heliumViewController
                 )
-                // A newer load attempt superseded this one during preparation.
-                guard preparingToken == loadToken else { return }
+                // A newer load attempt superseded this one during preparation. Release this
+                // task's holder unless the newer attempt received the same pooled instance.
+                guard preparingToken == loadToken else {
+                    if let preparedWebView, preparedWebView !== webView {
+                        WebViewManager.shared.releaseHolderIfUnused(for: preparedWebView)
+                    }
+                    return
+                }
                 guard let preparedWebView else {
                     HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
                     webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
@@ -695,6 +701,12 @@ class WebViewManager {
         return webView
     }
     
+    /// Frees a holder claimed by a load attempt that was abandoned before presenting,
+    /// so the pooled webview can be handed out again.
+    fileprivate func releaseHolderIfUnused(for webView: WKWebView) {
+        preparedWebViewHolders.first { $0.preparedWebView === webView }?.heliumViewController = nil
+    }
+
     func preLoad(filePath: String) async {
         let startTime = Date()
         
