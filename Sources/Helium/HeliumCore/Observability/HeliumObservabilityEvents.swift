@@ -316,6 +316,51 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
     }
 }
 
+// MARK: - Paywall webview render
+
+enum PaywallJSErrorOutcome: String {
+    /// Screen confirmed blank; routed into the load ladder.
+    case fatalBlankScreen
+    /// Content was visible, or the error came too late to act on.
+    case benign
+    /// Probe failed; treated as content so a working paywall is never replaced.
+    case probeInconclusive
+}
+
+/// An uncaught error or unhandled rejection in a paywall bundle. Emitted for
+/// every report so broken bundles are queryable even when nothing went blank.
+struct PaywallJSErrorDetected: HeliumObservabilityEvent {
+    let source: String
+    let errorMessage: String?
+    let errorStack: String?
+    let loadAttempt: String
+    let outcome: PaywallJSErrorOutcome
+    let msSinceLoadStart: Int?
+
+    var name: String { "paywall_js_error_detected" }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "source": source,
+            "loadAttempt": loadAttempt,
+            "outcome": outcome.rawValue,
+        ]
+        if let m = truncatedForObservability(errorMessage) { p["errorMessage"] = m }
+        if let s = truncatedForObservability(errorStack, maxLength: 1000) { p["errorStack"] = s }
+        if let msSinceLoadStart { p["msSinceLoadStart"] = msSinceLoadStart }
+        return p
+    }
+}
+
+struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
+    let loadAttempt: String
+    let wasContentLoaded: Bool
+
+    var name: String { "paywall_web_process_terminated" }
+    var properties: [String: Any] {
+        ["loadAttempt": loadAttempt, "wasContentLoaded": wasContentLoaded]
+    }
+}
+
 /// Reports the fallback bundle an app ships. The event's presence in the stream is
 /// itself the "this app has fallbacks configured" signal, so it is only emitted when
 /// a bundle was found and parsed.
