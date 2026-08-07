@@ -33,6 +33,9 @@ struct DynamicWebView: View {
     let shouldEnableScroll: Bool
     
     @State private var isContentLoaded = false
+    @State private var contentLoadedAt: Date? = nil
+    @State private var jsCrashProbeActive = false
+    @State private var loadToken = UUID().uuidString
     @State private var webView: WKWebView? = nil
     @State private var showControlPanel = false
     @State private var viewLoadStartTime: Date?
@@ -161,6 +164,7 @@ struct DynamicWebView: View {
       .onReceive(NotificationCenter.default.publisher(for: .webViewContentLoaded)) { res in
           if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               isContentLoaded = true
+              contentLoadedAt = Date()
               if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
@@ -180,6 +184,24 @@ struct DynamicWebView: View {
               webViewLoadFail(reason: "Failed to render paywall.")
           }
       }
+      .onReceive(NotificationCenter.default.publisher(for: .webViewJSErrorDetected)) { res in
+          guard res.object as? WKNavigationDelegate === webView?.navigationDelegate,
+                let info = res.userInfo as? [String: Any],
+                info["loadToken"] as? String == loadToken
+          else { return }
+          handlePaywallJSError(info)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .webViewProcessTerminated)) { res in
+          guard res.object as? WKWebView === webView else { return }
+          HeliumObservabilityManager.shared.track(
+              PaywallWebProcessTerminated(
+                  loadAttempt: String(describing: fileLoadAttempt),
+                  wasContentLoaded: isContentLoaded
+              ),
+              scope: actionsDelegate.observabilityScope
+          )
+          webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
+      }
       .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
           guard let visible = notification.userInfo?["visible"] as? Bool else { return }
           withAnimation(.easeInOut(duration: 0.15)) { processingVisible = visible }
@@ -190,6 +212,7 @@ struct DynamicWebView: View {
         if webView != nil {
             return
         }
+        loadToken = UUID().uuidString
         HeliumLogger.log(.trace, category: .ui, "WebView loading html - \(fileLoadAttempt)")
         
         guard let filePathToLoad = useBackup ? backupFilePath : filePath else {
@@ -255,7 +278,14 @@ struct DynamicWebView: View {
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             )
-            
+
+            let errorHookScript = WKUserScript(
+                source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+
+            let preparingToken = loadToken
             Task {
                 // WebView creation timing
                 _ = Date()
@@ -265,6 +295,14 @@ struct DynamicWebView: View {
                     delegateWrapper: actionsDelegate,
                     heliumViewController: presentationState.heliumViewController
                 )
+                // A newer load attempt superseded this one during preparation. Release this
+                // task's holder unless the newer attempt received the same pooled instance.
+                guard preparingToken == loadToken else {
+                    if let preparedWebView, preparedWebView !== webView {
+                        WebViewManager.shared.releaseHolderIfUnused(for: preparedWebView)
+                    }
+                    return
+                }
                 guard let preparedWebView else {
                     HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
                     webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
@@ -274,6 +312,7 @@ struct DynamicWebView: View {
                 _ = Date()
                 preparedWebView.configuration.userContentController.removeAllUserScripts()
                 preparedWebView.configuration.userContentController.addUserScript(combinedScript)
+                preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
                 
                 // File loading timing
                 _ = Date()
@@ -310,19 +349,62 @@ struct DynamicWebView: View {
         }
     }
     
-    private func webViewLoadFail(reason: String) {
-        HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
-        switch fileLoadAttempt {
-        case .initialLoad:
-            advanceFileLoadAttempt(to: .secondLoad, useBackup: false)
+    private func handlePaywallJSError(_ info: [String: Any]) {
+        let trackOutcome = { (outcome: PaywallJSErrorOutcome) in
+            HeliumObservabilityManager.shared.track(
+                PaywallJSErrorDetected(
+                    source: info["source"] as? String ?? "unknown",
+                    errorMessage: info["message"] as? String,
+                    errorStack: info["stack"] as? String,
+                    loadAttempt: String(describing: fileLoadAttempt),
+                    outcome: outcome,
+                    msSinceLoadStart: viewLoadStartTime.map { msSince($0) }
+                ),
+                scope: actionsDelegate.observabilityScope
+            )
+        }
+
+        guard !jsCrashProbeActive,
+              WebViewRenderGuard.isWithinFatalWindow(
+                  isContentLoaded: isContentLoaded,
+                  contentLoadedAt: contentLoadedAt
+              )
+        else {
+            trackOutcome(.benign)
             return
-        case .secondLoad:
-            if backupFilePath != nil {
-                advanceFileLoadAttempt(to: .backupLoad, useBackup: true)
-                return
+        }
+
+        jsCrashProbeActive = true
+        let probedToken = loadToken
+        Task { @MainActor in
+            // Give a partially-broken page time to paint before judging it blank.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard probedToken == loadToken, let webView else { return }
+            let result = try? await webView.evaluateJavaScript(WebViewRenderGuard.blankScreenProbeSource)
+            guard probedToken == loadToken else { return }
+            switch result as? String {
+            case "blank":
+                trackOutcome(.fatalBlankScreen)
+                webViewLoadFail(reason: "JsRuntimeError", kind: .jsCrash)
+            case "content":
+                trackOutcome(.benign)
+                jsCrashProbeActive = false
+            default:
+                trackOutcome(.probeInconclusive)
+                jsCrashProbeActive = false
             }
-        default:
-            break
+        }
+    }
+
+    private func webViewLoadFail(reason: String, kind: WebViewFailKind = .navigation) {
+        HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
+        if let next = WebViewRenderGuard.nextLoadAttempt(
+            after: fileLoadAttempt,
+            kind: kind,
+            hasBackup: backupFilePath != nil
+        ) {
+            advanceFileLoadAttempt(to: next, useBackup: next == .backupLoad)
+            return
         }
         let trigger = triggerName ?? ""
         let paywallName = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallTemplateName ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)?.paywallTemplateName ?? "unknown"
@@ -356,6 +438,9 @@ struct DynamicWebView: View {
         Task { @MainActor in
             fileLoadAttempt = attempt
             webView = nil
+            jsCrashProbeActive = false
+            isContentLoaded = false
+            contentLoadedAt = nil
             // give time for SwiftUI to update otherwise any existing webview display might remain
             await Task.yield()
             loadWebView(useBackup: useBackup)
@@ -616,6 +701,12 @@ class WebViewManager {
         return webView
     }
     
+    /// Frees a holder claimed by a load attempt that was abandoned before presenting,
+    /// so the pooled webview can be handed out again.
+    fileprivate func releaseHolderIfUnused(for webView: WKWebView) {
+        preparedWebViewHolders.first { $0.preparedWebView === webView }?.heliumViewController = nil
+    }
+
     func preLoad(filePath: String) async {
         let startTime = Date()
         
