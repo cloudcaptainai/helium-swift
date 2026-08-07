@@ -135,6 +135,50 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(paddle.rawBody.count, 0)
     }
 
+    /// California buyers are no longer blocked: a BFF response whose IP-geo
+    /// postal sits in the CA ZIP range resolves `.ready` like any other buyer.
+    func testAwaitOutcome_returnsReady_whenBFFReportsCaliforniaPostal() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_ca").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                {
+                    "data": {
+                        "id": "che_ca",
+                        "transaction_id": "txn_ca",
+                        "status": "draft",
+                        "ip_geo_country_code": "US",
+                        "ip_geo_postal_code": "90210"
+                    }
+                }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ca"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .ready(_, let paddle) = outcome else {
+            XCTFail("California buyers must resolve .ready (no block); got \(outcome)")
+            return
+        }
+        XCTAssertEqual(paddle.checkoutId, "che_ca")
+        // The CA postal must survive into the bundle ctx bootstrap.
+        let map = try XCTUnwrap(
+            PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: ["pri_ca": outcome])
+        )
+        let data = try XCTUnwrap(
+            ((map["pri_ca"] as? [String: Any])?["paddleCheckoutResponse"] as? [String: Any])?["data"] as? [String: Any]
+        )
+        XCTAssertEqual(data["ip_geo_postal_code"] as? String, "90210")
+    }
+
     // MARK: - alreadyEntitled
 
     func testAwaitOutcome_returnsAlreadyEntitled_whenBanditReturns409Duplicate_andSkipsBFFCall() async throws {
