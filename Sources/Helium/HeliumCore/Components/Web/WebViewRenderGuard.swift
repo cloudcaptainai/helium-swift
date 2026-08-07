@@ -17,7 +17,7 @@ enum WebViewRenderGuard {
         switch current {
         case .initialLoad:
             // A JS crash is deterministic — retrying the same bundle would fail identically.
-            if kind == .jsCrash && hasBackup { return .backupLoad }
+            if kind == .jsCrash { return hasBackup ? .backupLoad : nil }
             return .secondLoad
         case .secondLoad:
             return hasBackup ? .backupLoad : nil

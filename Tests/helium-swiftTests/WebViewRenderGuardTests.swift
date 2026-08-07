@@ -31,10 +31,9 @@ final class WebViewRenderGuardTests: XCTestCase {
         )
     }
 
-    func testJsCrashWithoutBackupStillGetsOneRetry() {
-        XCTAssertEqual(
-            WebViewRenderGuard.nextLoadAttempt(after: .initialLoad, kind: .jsCrash, hasBackup: false),
-            .secondLoad
+    func testJsCrashWithoutBackupIsTerminal() {
+        XCTAssertNil(
+            WebViewRenderGuard.nextLoadAttempt(after: .initialLoad, kind: .jsCrash, hasBackup: false)
         )
         XCTAssertNil(
             WebViewRenderGuard.nextLoadAttempt(after: .secondLoad, kind: .jsCrash, hasBackup: false)
