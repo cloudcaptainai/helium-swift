@@ -10,8 +10,7 @@ import WebKit
 final class WebViewRenderGuardIntegrationTests: XCTestCase {
 
     override func setUp() async throws {
-        // WebKit page loads are unreliably slow under Thread Sanitizer (how CI runs
-        // this suite), timing out the didFinish waits. They run un-sanitized locally.
+        // WebKit page loads can exceed the didFinish timeout under Thread Sanitizer.
         let tsanActive = dlsym(dlopen(nil, RTLD_LAZY), "__tsan_init") != nil
         try XCTSkipIf(tsanActive, "Skipped under Thread Sanitizer: WebKit loads time out")
     }
