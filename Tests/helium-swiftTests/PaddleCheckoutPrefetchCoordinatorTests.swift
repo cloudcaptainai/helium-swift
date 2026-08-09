@@ -135,8 +135,6 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(paddle.rawBody.count, 0)
     }
 
-    /// California buyers are no longer blocked: a BFF response whose IP-geo
-    /// postal sits in the CA ZIP range resolves `.ready` like any other buyer.
     func testAwaitOutcome_returnsReady_whenBFFReportsCaliforniaPostal() async throws {
         MockURLProtocol.requestHandler = { request in
             let url = request.url!.absoluteString
@@ -169,7 +167,6 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             return
         }
         XCTAssertEqual(paddle.checkoutId, "che_ca")
-        // The CA postal must survive into the bundle ctx bootstrap.
         let map = try XCTUnwrap(
             PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: ["pri_ca": outcome])
         )
