@@ -30,6 +30,10 @@ enum WebViewRenderGuard {
     /// short window after it; later errors never replace a visible paywall.
     static let postLoadFatalWindow: TimeInterval = 5.0
 
+    /// A first blank probe can catch a healthy page moments before its first paint,
+    /// so a blank result must be confirmed by a second probe this much later.
+    static let blankConfirmationDelay: TimeInterval = 1.0
+
     static func isWithinFatalWindow(
         isContentLoaded: Bool,
         contentLoadedAt: Date?,

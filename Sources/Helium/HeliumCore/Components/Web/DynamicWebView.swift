@@ -378,22 +378,34 @@ struct DynamicWebView: View {
         let probedToken = loadToken
         Task { @MainActor in
             // Give a partially-broken page time to paint before judging it blank.
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard probedToken == loadToken, let webView else { return }
-            let result = try? await webView.evaluateJavaScript(WebViewRenderGuard.blankScreenProbeSource)
-            guard probedToken == loadToken else { return }
-            switch result as? String {
-            case "blank":
-                trackOutcome(.fatalBlankScreen)
-                webViewLoadFail(reason: "JsRuntimeError", kind: .jsCrash)
-            case "content":
-                trackOutcome(.benign)
+            guard let first = await probeResult(afterSeconds: 0.3, token: probedToken) else { return }
+            guard first == "blank" else {
+                trackOutcome(first == "content" ? .benign : .probeInconclusive)
                 jsCrashProbeActive = false
-            default:
-                trackOutcome(.probeInconclusive)
-                jsCrashProbeActive = false
+                return
             }
+            guard let second = await probeResult(
+                afterSeconds: WebViewRenderGuard.blankConfirmationDelay,
+                token: probedToken
+            ) else { return }
+            guard second == "blank" else {
+                trackOutcome(second == "content" ? .benign : .probeInconclusive)
+                jsCrashProbeActive = false
+                return
+            }
+            trackOutcome(.fatalBlankScreen)
+            webViewLoadFail(reason: "JsRuntimeError", kind: .jsCrash)
         }
+    }
+
+    /// nil means the load attempt changed while waiting — the result is meaningless.
+    @MainActor
+    private func probeResult(afterSeconds delay: TimeInterval, token: String) async -> String? {
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        guard token == loadToken, let webView else { return nil }
+        let result = try? await webView.evaluateJavaScript(WebViewRenderGuard.blankScreenProbeSource)
+        guard token == loadToken else { return nil }
+        return result as? String ?? "probe-failed"
     }
 
     private func webViewLoadFail(reason: String, kind: WebViewFailKind = .navigation) {
