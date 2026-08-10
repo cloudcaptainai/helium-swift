@@ -18,10 +18,17 @@ final class PaywallHapticsImpl: PaywallHaptics {
     private let player: HapticPlayer
     /// Re-read on every event so haptics resolve against whichever paywall is currently presented.
     private let enabledActions: () -> Set<ProductHapticAction>
+    private let throttle: HapticThrottle
 
-    init(player: HapticPlayer, enabledActions: @escaping () -> Set<ProductHapticAction>) {
+    /// Optional, not defaulted: a default argument is evaluated outside this type's isolation.
+    init(
+        player: HapticPlayer,
+        enabledActions: @escaping () -> Set<ProductHapticAction>,
+        throttle: HapticThrottle? = nil
+    ) {
         self.player = player
         self.enabledActions = enabledActions
+        self.throttle = throttle ?? HapticThrottle()
     }
 
     func onProductSelected() { playGated(.select) }
@@ -32,13 +39,14 @@ final class PaywallHapticsImpl: PaywallHaptics {
 
     func onCustomHaptic(_ value: String?) {
         guard let value, let haptic = customHaptic(for: value) else { return }
+        guard throttle.tryAcquire(.custom(value)) else { return }
         player.play(haptic)
     }
 
     private func playGated(_ action: ProductHapticAction) {
-        if enabledActions().contains(action) {
-            player.play(action.haptic)
-        }
+        guard enabledActions().contains(action) else { return }
+        guard throttle.tryAcquire(.product(action)) else { return }
+        player.play(action.haptic)
     }
 
     private func customHaptic(for value: String) -> HeliumHaptic? {
