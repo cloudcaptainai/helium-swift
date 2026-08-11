@@ -393,6 +393,16 @@ struct DynamicWebView: View {
                 jsCrashProbeActive = false
                 return
             }
+            // The probe delays can outlast the fatal window an edge-arriving error
+            // entered under; the promise that late errors never replace holds here too.
+            guard WebViewRenderGuard.isWithinFatalWindow(
+                isContentLoaded: isContentLoaded,
+                contentLoadedAt: contentLoadedAt
+            ) else {
+                trackOutcome(.benign)
+                jsCrashProbeActive = false
+                return
+            }
             trackOutcome(.fatalBlankScreen)
             webViewLoadFail(reason: "JsRuntimeError", kind: .jsCrash)
         }
