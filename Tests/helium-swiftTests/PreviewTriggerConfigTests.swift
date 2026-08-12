@@ -10,6 +10,8 @@ final class PreviewTriggerConfigTests: XCTestCase {
     private let donorBundleUrl = "https://cdn.example.com/bundles/bundle_donor123.html"
     private let donorWebCheckoutUrl = "https://checkout.example.com/donor-web-paywall"
     private let previewBundleUrl = "https://cdn.example.com/bundles/bundle_preview456.html"
+    private let secondTryTrigger = HeliumFetchedConfigManager.HELIUM_PREVIEW_SECOND_TRY_TRIGGER
+    private let secondTryBundleUrl = "https://cdn.example.com/bundles/bundle_secondtry789.html"
 
     override func setUp() {
         super.setUp()
@@ -49,7 +51,8 @@ final class PreviewTriggerConfigTests: XCTestCase {
         productIdsPaddleWeb: [String] = [],
         productIdsStripeWeb: [String] = [],
         webPaywallBundleUrl: String? = nil,
-        shouldEnableScroll: Bool? = nil
+        shouldEnableScroll: Bool? = nil,
+        secondTry: HeliumFetchedConfigManager.PreviewSecondTryBundle? = nil
     ) throws {
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
             bundleId: "preview456",
@@ -61,7 +64,24 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
-            shouldEnableScroll: shouldEnableScroll
+            shouldEnableScroll: shouldEnableScroll,
+            secondTry: secondTry
+        )
+    }
+
+    private func makeSecondTryBundle(
+        versionStatus: String = "published",
+        shouldEnableScroll: Bool? = nil
+    ) -> HeliumFetchedConfigManager.PreviewSecondTryBundle {
+        HeliumFetchedConfigManager.PreviewSecondTryBundle(
+            bundleId: "secondtry789",
+            bundleUrl: secondTryBundleUrl,
+            bundleHtml: "<html>second try</html>",
+            productIds: ["secondtry.product"],
+            productIdsStripe: ["secondtry_stripe:price_2"],
+            productIdsPaddle: [],
+            shouldEnableScroll: shouldEnableScroll,
+            versionStatus: versionStatus
         )
     }
 
@@ -261,6 +281,113 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(previewInfo?.webPaywallBundleUrl)
     }
 
+    // MARK: - Second try preview trigger
+
+    private var secondTryInfo: HeliumPaywallInfo? {
+        HeliumFetchedConfigManager.shared.fetchedConfig?.triggerToPaywalls[secondTryTrigger]
+    }
+
+    func testSecondTryInstallsItsOwnTriggerEntry() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+
+        XCTAssertEqual(secondTryInfo?.extractedBundleUrl, secondTryBundleUrl)
+        XCTAssertEqual(secondTryInfo?.productsOfferedIOS, ["secondtry.product"])
+        XCTAssertEqual(secondTryInfo?.productsOfferedStripe, ["secondtry_stripe:price_2"])
+        XCTAssertEqual(secondTryInfo?.webProductsOfferedPaddle, [])
+        XCTAssertNil(secondTryInfo?.webPaywallBundleUrl)
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?["secondtry789"],
+            "<html>second try</html>"
+        )
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.previewSecondTryState,
+            .armed(versionStatus: "published")
+        )
+    }
+
+    func testSecondTryStateArmsWithDraftStatus() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle(versionStatus: "draft"))
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.previewSecondTryState,
+            .armed(versionStatus: "draft")
+        )
+    }
+
+    func testPreviewWithoutSecondTryClearsStaleSecondTryEntry() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+        try setPreviewConfig()
+
+        XCTAssertNil(secondTryInfo)
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .notConfigured)
+    }
+
+    func testMarkLoadFailedTransitionsStateWithoutInstallingAnEntry() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig()
+        HeliumFetchedConfigManager.shared.markPreviewSecondTryLoadFailed()
+
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .loadFailed)
+        XCTAssertNil(secondTryInfo)
+    }
+
+    func testDonorSelectionSkipsStaleSecondTryEntry() throws {
+        // The second try trigger sorts before real triggers starting with letters > "h", so a
+        // stale entry would win alphabetical donor selection if it weren't excluded.
+        injectConfig(makeTestConfig(triggers: ["z_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+
+        XCTAssertEqual(previewInfo?.paywallTemplateName, "donor_paywall")
+        XCTAssertEqual(secondTryInfo?.paywallTemplateName, "donor_paywall")
+    }
+
+    func testFallbackPreviewClearsSecondTryEntry() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+        let fallbackConfig = makeTestConfig(
+            triggers: [HeliumFallbackViewManager.defaultFallbackTrigger: makeDonorPaywallInfo()],
+            bundles: ["donor123": "<html>fallback</html>"]
+        )
+        HeliumFallbackViewManager.shared.injectFallbackConfigForTesting(fallbackConfig)
+        defer { HeliumFallbackViewManager.reset() }
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+        XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
+
+        XCTAssertNil(secondTryInfo)
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .notConfigured)
+    }
+
+    func testJsonMirrorInstallsAndClearsSecondTryEntry() throws {
+        let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
+        let configJSON = try JSON(data: JSONEncoder().encode(config))
+        injectConfig(config, json: configJSON)
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle(shouldEnableScroll: false))
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(secondTryTrigger)?["baseStack"]["componentProps"]["bundleURL"].string,
+            secondTryBundleUrl
+        )
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getResolvedConfigJSONForTrigger(secondTryTrigger)?["baseStack"]["componentProps"]["shouldEnableScroll"].bool,
+            false
+        )
+
+        try setPreviewConfig()
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][secondTryTrigger],
+            JSON.null
+        )
+    }
+
     func testThrowsWhenNoConfigAvailable() {
         XCTAssertThrowsError(try setPreviewConfig()) { error in
             guard case HeliumControlPanelError.noConfigAvailable = error else {
@@ -367,6 +494,49 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(response.paywalls[0].versions[0].paddleProductIds)
         XCTAssertNil(response.paywalls[0].versions[0].shouldEnableScroll)
         XCTAssertFalse(response.paywalls[0].isWebPaywall)
+    }
+
+    func testDecodesSecondTryEntry() throws {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            {
+              "paywallUuid": "f3e96335-f7df-4f28-b439-9506d37c793e",
+              "paywallName": "Main Paywall",
+              "versions": [],
+              "secondTry": {
+                "paywallUuid": "aa11bb22-cc33-4444-9555-666677778888",
+                "paywallName": "Discount Offer",
+                "versionStatus": "published",
+                "bundleUrl": "https://bundles-staging.heliumpaywall.com/x/bundle_2nd.html",
+                "productIds": ["yearly_1999"],
+                "stripeProductIds": [],
+                "paddleProductIds": [],
+                "shouldEnableScroll": false
+              }
+            },
+            {
+              "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+              "paywallName": "No Second Try",
+              "versions": [],
+              "secondTry": null
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            HeliumControlPanelResponse.self,
+            from: Data(json.utf8)
+        )
+
+        let secondTry = response.paywalls[0].secondTry
+        XCTAssertEqual(secondTry?.paywallName, "Discount Offer")
+        XCTAssertEqual(secondTry?.versionStatus, "published")
+        XCTAssertEqual(secondTry?.bundleUrl, "https://bundles-staging.heliumpaywall.com/x/bundle_2nd.html")
+        XCTAssertEqual(secondTry?.productIds, ["yearly_1999"])
+        XCTAssertEqual(secondTry?.shouldEnableScroll, false)
+        XCTAssertNil(response.paywalls[1].secondTry)
     }
 
     func testDecodesWebPaywallEntry() throws {

@@ -29,7 +29,12 @@ final class DiagnosticContentMapperTests: XCTestCase {
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
-            + [content(for: nil), mapper.mapSecondTryInPreview(), previewFallbackContent()]
+            + [
+                content(for: nil),
+                mapper.mapSecondTryPreviewUnavailable(.notConfigured),
+                mapper.mapSecondTryPreviewUnavailable(.loadFailed),
+                previewFallbackContent(),
+            ]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -189,20 +194,41 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    /// Nothing is broken when a preview declines a second try, so the record is expected-category,
-    /// names the workflow remediation, and reassures that real users are unaffected.
-    func testSecondTryInPreviewAdvisesAWorkflowAndReassuresAboutRealUsers() {
-        let content = mapper.mapSecondTryInPreview()
+    /// Nothing is broken when a preview has no second try to present, so the record is
+    /// expected-category, names the dashboard remediation, and states what real users see.
+    func testSecondTryPreviewNotConfiguredAdvisesConfiguringAndStatesUserOutcome() {
+        let content = mapper.mapSecondTryPreviewUnavailable(.notConfigured)
 
         XCTAssertEqual(content.category, .expected)
-        XCTAssertEqual(content.title, "Second try flows can't be previewed")
-        XCTAssertTrue(content.body.contains("Add this paywall to a workflow"))
-        XCTAssertTrue(content.usersWillSee.contains("see its second try flow normally"))
+        XCTAssertEqual(content.title, "No second try flow to preview")
+        XCTAssertTrue(content.body.contains("no second try flow is configured"))
+        XCTAssertTrue(content.usersWillSee.contains("Users stay on this paywall"))
         XCTAssertEqual(
             content.cta,
-            .openUrl(label: "Open Workflows", url: "https://app.tryhelium.com/workflows")
+            .openUrl(label: "Open Paywalls", url: "https://app.tryhelium.com/paywalls")
         )
-        XCTAssertEqual(content.reasonCode, "secondTryNotSupportedInPreview")
+        XCTAssertEqual(content.reasonCode, "secondTryNotConfiguredInPreview")
+    }
+
+    /// A download failure is preview-local, so the record advises a retry and reassures that
+    /// real users are unaffected.
+    func testSecondTryPreviewLoadFailedAdvisesRetryAndReassuresAboutRealUsers() {
+        let content = mapper.mapSecondTryPreviewUnavailable(.loadFailed)
+
+        XCTAssertEqual(content.category, .expected)
+        XCTAssertEqual(content.title, "Second try flow couldn't be loaded")
+        XCTAssertTrue(content.body.contains("failed to download"))
+        XCTAssertTrue(content.usersWillSee.contains("see its second try flow normally"))
+        XCTAssertEqual(content.cta, .copyReport)
+        XCTAssertEqual(content.reasonCode, "secondTryPreviewLoadFailed")
+    }
+
+    /// The armed state reaches the mapper when a second try preview requests its own second try,
+    /// or when the armed entry is missing from the config; both must map to a coherent record.
+    func testSecondTryPreviewArmedMapsToNotConfiguredRecord() {
+        let content = mapper.mapSecondTryPreviewUnavailable(.armed(versionStatus: "published"))
+
+        XCTAssertEqual(content.reasonCode, "secondTryNotConfiguredInPreview")
     }
 
     /// The modal only presents when nothing rendered, so a forced fallback reaching it means the
