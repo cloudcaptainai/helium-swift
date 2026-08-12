@@ -214,7 +214,16 @@ class HeliumActionsDelegate: ObservableObject {
                 HeliumLogger.log(.info, category: .ui, "Previewing a second try flow that has never been published; real users will not see it until the paywall is published", metadata: ["trigger": trigger])
             }
             lastShownSecondTryTrigger = secondTryTrigger
-            HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: paywallSession.presentationContext)
+            // The presenting context belongs to the control panel, whose close handler re-enables
+            // the panel. The second try closing while the main preview is still on screen must not
+            // fire it, so only the config carries over.
+            let secondTryContext = PaywallPresentationContext(
+                config: paywallSession.presentationContext.config,
+                eventHandlers: nil,
+                onEntitled: nil,
+                onPaywallNotShown: nil
+            )
+            HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: secondTryContext)
             return
         }
 

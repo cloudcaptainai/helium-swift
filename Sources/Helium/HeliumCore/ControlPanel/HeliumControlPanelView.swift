@@ -389,7 +389,9 @@ struct HeliumControlPanelView: View {
             HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Second try paywall has no bundle URL", metadata: [
                 "secondTryPaywall": secondTry.paywallName,
             ])
-            return (nil, true)
+            // No bundle was ever built for this second try, so the retry advice of the
+            // load-failed diagnostic cannot resolve it; the dashboard remediation can.
+            return (nil, false)
         }
         do {
             let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: secondTryBundleUrl)
@@ -401,7 +403,7 @@ struct HeliumControlPanelView: View {
                 productIdsStripe: secondTry.stripeProductIds ?? [],
                 productIdsPaddle: secondTry.paddleProductIds ?? [],
                 shouldEnableScroll: secondTry.shouldEnableScroll,
-                versionStatus: secondTry.versionStatus
+                versionStatus: secondTry.versionStatus ?? "draft"
             ), false)
         } catch {
             HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Failed to load second try bundle for preview", metadata: [

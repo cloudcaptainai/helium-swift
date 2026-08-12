@@ -338,6 +338,18 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(secondTryInfo)
     }
 
+    func testMarkLoadFailedDoesNotClobberAnArmedSecondTry() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+        HeliumFetchedConfigManager.shared.markPreviewSecondTryLoadFailed()
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.previewSecondTryState,
+            .armed(versionStatus: "published")
+        )
+    }
+
     func testDonorSelectionSkipsStaleSecondTryEntry() throws {
         // The second try trigger sorts before real triggers starting with letters > "h", so a
         // stale entry would win alphabetical donor selection if it weren't excluded.
@@ -493,6 +505,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(response.paywalls[0].versions[0].webPaywallBundleUrl)
         XCTAssertNil(response.paywalls[0].versions[0].paddleProductIds)
         XCTAssertNil(response.paywalls[0].versions[0].shouldEnableScroll)
+        XCTAssertNil(response.paywalls[0].secondTry)
         XCTAssertFalse(response.paywalls[0].isWebPaywall)
     }
 

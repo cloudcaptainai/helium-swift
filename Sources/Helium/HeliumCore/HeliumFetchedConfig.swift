@@ -1060,9 +1060,14 @@ public class HeliumFetchedConfigManager {
     }
 
     /// Records that the previewed paywall has a second try flow whose bundle could not be
-    /// fetched, after the preview config was installed without one.
+    /// fetched, after the preview config was installed without one. Only upgrades the
+    /// not-configured state: a late call from an abandoned preview task must not clobber a
+    /// second try a newer preview has since armed.
     func markPreviewSecondTryLoadFailed() {
-        previewSecondTryState = .loadFailed
+        _previewSecondTryState.withValue { state in
+            guard case .notConfigured = state else { return }
+            state = .loadFailed
+        }
     }
 
     /// True when a bundled default fallback paywall is available to preview on this device.

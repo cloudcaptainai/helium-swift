@@ -24,7 +24,9 @@ struct HeliumPaywallPreviewSecondTry: Codable {
     let paywallName: String
     /// "published" when the second try paywall is live; "draft" when it has never been
     /// published, in which case real users do not see it until the paywall is published.
-    let versionStatus: String
+    /// Optional so a malformed entry can't fail decoding the whole preview list; an absent
+    /// status is treated as unpublished so a preview never claims live coverage it lacks.
+    let versionStatus: String?
     let bundleUrl: String?
     let productIds: [String]?
     let stripeProductIds: [String]?
