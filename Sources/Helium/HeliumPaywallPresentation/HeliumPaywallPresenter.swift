@@ -646,7 +646,7 @@ extension HeliumPaywallPresenter {
     private func fallbackViewFor(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         
         // A failed preview must surface its failure, never silently render a fallback in its place.
-        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+        if HeliumFetchedConfigManager.isPreviewTrigger(trigger) {
             return PaywallViewResult(viewAndSession: nil, fallbackReason: fallbackReason)
         }
 

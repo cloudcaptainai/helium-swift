@@ -212,6 +212,7 @@ public class HeliumFetchedConfigManager {
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
         shared.isFallbackPreviewArmed = false
+        shared.previewSecondTryState = .notConfigured
     }
 
     /// Inject config for testing purposes only. Accessible via @testable import.
@@ -237,6 +238,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     @HeliumAtomic private(set) var isFallbackPreviewArmed: Bool = false
+    @HeliumAtomic private(set) var previewSecondTryState: PreviewSecondTryState = .notConfigured
     
     func fetchConfig(
         endpoint: String,
@@ -1024,6 +1026,44 @@ public class HeliumFetchedConfigManager {
     // MARK: - Preview Control Panel
 
     static let HELIUM_PREVIEW_TRIGGER = "helium_preview_trigger"
+    /// Derived with the same `_second_try` suffix the actions delegate appends to a presenting
+    /// trigger, so a preview paywall's second try request resolves to this entry.
+    static let HELIUM_PREVIEW_SECOND_TRY_TRIGGER = HELIUM_PREVIEW_TRIGGER + "_second_try"
+
+    /// True for both synthetic control-panel triggers. Preview-only behaviors (no silent
+    /// fallback substitution, diagnostics always allowed, triple-tap returns to the panel)
+    /// apply to the second try preview the same as to the main one.
+    static func isPreviewTrigger(_ trigger: String?) -> Bool {
+        trigger == HELIUM_PREVIEW_TRIGGER || trigger == HELIUM_PREVIEW_SECOND_TRY_TRIGGER
+    }
+
+    /// Why a second try request from the current preview can present or not — set alongside the
+    /// preview trigger config so the diagnostic shown for an unpresentable second try can say
+    /// whether nothing is configured or this preview simply failed to load it.
+    enum PreviewSecondTryState: Equatable {
+        case notConfigured
+        case loadFailed
+        case armed(versionStatus: String)
+    }
+
+    /// The bundle and products for a preview's second try paywall, resolved by the control
+    /// panel before the preview presents.
+    struct PreviewSecondTryBundle {
+        let bundleId: String
+        let bundleUrl: String
+        let bundleHtml: String
+        let productIds: [String]
+        let productIdsStripe: [String]
+        let productIdsPaddle: [String]
+        let shouldEnableScroll: Bool?
+        let versionStatus: String
+    }
+
+    /// Records that the previewed paywall has a second try flow whose bundle could not be
+    /// fetched, after the preview config was installed without one.
+    func markPreviewSecondTryLoadFailed() {
+        previewSecondTryState = .loadFailed
+    }
 
     /// True when a bundled default fallback paywall is available to preview on this device.
     /// Requires the same resolvable bundle path presentation requires, so a default entry that
@@ -1044,12 +1084,16 @@ public class HeliumFetchedConfigManager {
         // the typed config and keep the JSON mirror agreeing that no entry exists.
         _fetchedConfig.withValue {
             $0?.triggerToPaywalls.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER)
+            $0?.triggerToPaywalls.removeValue(forKey: Self.HELIUM_PREVIEW_SECOND_TRY_TRIGGER)
         }
         _fetchedConfigJSON.withValue { json in
-            guard var triggers = json?["triggerToPaywalls"].dictionaryObject,
-                  triggers.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER) != nil else { return }
+            guard var triggers = json?["triggerToPaywalls"].dictionaryObject else { return }
+            let removedPreview = triggers.removeValue(forKey: Self.HELIUM_PREVIEW_TRIGGER) != nil
+            let removedSecondTry = triggers.removeValue(forKey: Self.HELIUM_PREVIEW_SECOND_TRY_TRIGGER) != nil
+            guard removedPreview || removedSecondTry else { return }
             json?["triggerToPaywalls"].dictionaryObject = triggers
         }
+        previewSecondTryState = .notConfigured
         isFallbackPreviewArmed = true
         return true
     }
@@ -1067,6 +1111,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
+        secondTry: PreviewSecondTryBundle? = nil
     ) throws {
         // Read-modify-write under the lock, so a fetch landing mid-update is not clobbered by the
         // write-back of a copy taken before it.
@@ -1085,7 +1130,8 @@ public class HeliumFetchedConfigManager {
                 productIdsPaddleWeb: productIdsPaddleWeb,
                 productIdsStripeWeb: productIdsStripeWeb,
                 webPaywallBundleUrl: webPaywallBundleUrl,
-                shouldEnableScroll: shouldEnableScroll
+                shouldEnableScroll: shouldEnableScroll,
+                secondTry: secondTry
             )
             stored = config
             return sourceTrigger
@@ -1097,10 +1143,12 @@ public class HeliumFetchedConfigManager {
                 configJSON,
                 clonedFrom: sourceTrigger,
                 bundleUrl: bundleUrl,
-                shouldEnableScroll: shouldEnableScroll
+                shouldEnableScroll: shouldEnableScroll,
+                secondTry: secondTry
             )
         }
 
+        previewSecondTryState = secondTry.map { .armed(versionStatus: $0.versionStatus) } ?? .notConfigured
         isFallbackPreviewArmed = false
     }
 
@@ -1117,15 +1165,72 @@ public class HeliumFetchedConfigManager {
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
-        shouldEnableScroll: Bool?
+        shouldEnableScroll: Bool?,
+        secondTry: PreviewSecondTryBundle?
     ) throws -> String {
         guard let sourceTrigger = config.triggerToPaywalls.keys
-            .filter({ $0 != HELIUM_PREVIEW_TRIGGER })
+            .filter({ !isPreviewTrigger($0) })
             .sorted()
             .first,
-              var previewPaywallInfo = config.triggerToPaywalls[sourceTrigger] else {
+              let donorPaywallInfo = config.triggerToPaywalls[sourceTrigger] else {
             throw HeliumControlPanelError.noSourceTrigger
         }
+
+        config.triggerToPaywalls[HELIUM_PREVIEW_TRIGGER] = try previewEntry(
+            clonedFrom: donorPaywallInfo,
+            bundleUrl: bundleUrl,
+            productIds: productIds,
+            productIdsStripe: productIdsStripe,
+            productIdsPaddle: productIdsPaddle,
+            productIdsPaddleWeb: productIdsPaddleWeb,
+            productIdsStripeWeb: productIdsStripeWeb,
+            webPaywallBundleUrl: webPaywallBundleUrl,
+            shouldEnableScroll: shouldEnableScroll
+        )
+
+        // A second try entry from an earlier preview must not survive into a preview of a
+        // paywall that has none.
+        if let secondTry {
+            config.triggerToPaywalls[HELIUM_PREVIEW_SECOND_TRY_TRIGGER] = try previewEntry(
+                clonedFrom: donorPaywallInfo,
+                bundleUrl: secondTry.bundleUrl,
+                productIds: secondTry.productIds,
+                productIdsStripe: secondTry.productIdsStripe,
+                productIdsPaddle: secondTry.productIdsPaddle,
+                productIdsPaddleWeb: [],
+                productIdsStripeWeb: [],
+                webPaywallBundleUrl: nil,
+                shouldEnableScroll: secondTry.shouldEnableScroll
+            )
+        } else {
+            config.triggerToPaywalls.removeValue(forKey: HELIUM_PREVIEW_SECOND_TRY_TRIGGER)
+        }
+
+        if config.bundles == nil {
+            config.bundles = [:]
+        }
+        config.bundles?[bundleId] = bundleHtml
+        if let secondTry {
+            config.bundles?[secondTry.bundleId] = secondTry.bundleHtml
+        }
+
+        return sourceTrigger
+    }
+
+    /// Clones a donor trigger's paywall info and overrides everything specific to the previewed
+    /// version, so nothing of the donor's own paywall leaks into the preview.
+    private static func previewEntry(
+        clonedFrom donorPaywallInfo: HeliumPaywallInfo,
+        bundleUrl: String,
+        productIds: [String],
+        productIdsStripe: [String],
+        productIdsPaddle: [String],
+        productIdsPaddleWeb: [String],
+        productIdsStripeWeb: [String],
+        webPaywallBundleUrl: String?,
+        shouldEnableScroll: Bool?
+    ) throws -> HeliumPaywallInfo {
+        var previewPaywallInfo = donorPaywallInfo
 
         // A paywall's bundle URL is resolved from this nested config before any other field, so a
         // donor URL left in place here would win over the preview's own.
@@ -1166,27 +1271,31 @@ public class HeliumFetchedConfigManager {
         // instead of the version the developer picked.
         previewPaywallInfo.forceShowFallback = nil
 
-        config.triggerToPaywalls[HELIUM_PREVIEW_TRIGGER] = previewPaywallInfo
-
-        if config.bundles == nil {
-            config.bundles = [:]
-        }
-        config.bundles?[bundleId] = bundleHtml
-
-        return sourceTrigger
+        return previewPaywallInfo
     }
 
     private static func withPreviewTrigger(
         _ configJSON: JSON,
         clonedFrom sourceTrigger: String,
         bundleUrl: String,
-        shouldEnableScroll: Bool?
+        shouldEnableScroll: Bool?,
+        secondTry: PreviewSecondTryBundle?
     ) -> JSON {
         var configJSON = configJSON
         var sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
         sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         sourceJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
         configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = sourceJSON
+
+        if let secondTry {
+            var secondTryJSON = configJSON["triggerToPaywalls"][sourceTrigger]
+            secondTryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(secondTry.bundleUrl)
+            secondTryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(secondTry.shouldEnableScroll ?? true)
+            configJSON["triggerToPaywalls"][HELIUM_PREVIEW_SECOND_TRY_TRIGGER] = secondTryJSON
+        } else if var triggers = configJSON["triggerToPaywalls"].dictionaryObject,
+                  triggers.removeValue(forKey: HELIUM_PREVIEW_SECOND_TRY_TRIGGER) != nil {
+            configJSON["triggerToPaywalls"].dictionaryObject = triggers
+        }
         return configJSON
     }
 }

@@ -337,7 +337,9 @@ struct HeliumControlPanelView: View {
         previewTask?.cancel()
         previewTask = Task {
             do {
+                async let secondTryTask = fetchSecondTryBundle(for: paywall)
                 let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: bundleUrl)
+                let secondTryResult = await secondTryTask
 
                 try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
                     bundleId: bundleId,
@@ -349,8 +351,12 @@ struct HeliumControlPanelView: View {
                     productIdsPaddleWeb: version.webPaddleProductIds ?? [],
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
                     webPaywallBundleUrl: version.webPaywallBundleUrl,
-                    shouldEnableScroll: version.shouldEnableScroll
+                    shouldEnableScroll: version.shouldEnableScroll,
+                    secondTry: secondTryResult.bundle
                 )
+                if secondTryResult.loadFailed {
+                    HeliumFetchedConfigManager.shared.markPreviewSecondTryLoadFailed()
+                }
 
                 guard !Task.isCancelled else {
                     await MainActor.run { activity = .idle }
@@ -367,6 +373,42 @@ struct HeliumControlPanelView: View {
                     paywallLoadError = "Failed to load paywall: \(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    /// Resolves a paywall's second try flow into a preview bundle. The second try must not block
+    /// or fail the main preview, so a download error only marks the load as failed — the preview
+    /// presents without a second try and the diagnostic explains why when one is requested.
+    private func fetchSecondTryBundle(
+        for paywall: HeliumPaywallPreviewEntry
+    ) async -> (bundle: HeliumFetchedConfigManager.PreviewSecondTryBundle?, loadFailed: Bool) {
+        guard let secondTry = paywall.secondTry else {
+            return (nil, false)
+        }
+        guard let secondTryBundleUrl = secondTry.bundleUrl else {
+            HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Second try paywall has no bundle URL", metadata: [
+                "secondTryPaywall": secondTry.paywallName,
+            ])
+            return (nil, true)
+        }
+        do {
+            let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: secondTryBundleUrl)
+            return (HeliumFetchedConfigManager.PreviewSecondTryBundle(
+                bundleId: bundleId,
+                bundleUrl: secondTryBundleUrl,
+                bundleHtml: html,
+                productIds: secondTry.productIds ?? [],
+                productIdsStripe: secondTry.stripeProductIds ?? [],
+                productIdsPaddle: secondTry.paddleProductIds ?? [],
+                shouldEnableScroll: secondTry.shouldEnableScroll,
+                versionStatus: secondTry.versionStatus
+            ), false)
+        } catch {
+            HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Failed to load second try bundle for preview", metadata: [
+                "secondTryPaywall": secondTry.paywallName,
+                "error": "\(error)",
+            ])
+            return (nil, true)
         }
     }
 

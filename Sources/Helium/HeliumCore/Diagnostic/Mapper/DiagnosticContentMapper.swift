@@ -113,22 +113,39 @@ struct DiagnosticContentMapper {
         }
     }
 
-    /// Maps a second try request coming from a triple-tap paywall preview, where second try flows
-    /// are disabled entirely. Not keyed by a `PaywallUnavailableReason`: the paywall itself rendered
-    /// fine, so no not-shown event carries this state — the presentation layer asks for it directly.
-    func mapSecondTryInPreview() -> DiagnosticContent {
-        DiagnosticContent(
-            category: .expected,
-            title: "Second try flows can't be previewed",
-            body: "This paywall asked Helium to open its second try paywall, but second try flows "
-                + "are not supported in paywall previews. Add this paywall to a workflow and "
-                + "trigger it from there to test its second try flow.",
-            usersWillSee: "This only applies to paywall previews. Users who reach this paywall "
-                + "through a workflow see its second try flow normally.",
-            usersWillSeeLink: nil,
-            cta: .openUrl(label: "Open Workflows", url: Url.workflows),
-            reasonCode: "secondTryNotSupportedInPreview"
-        )
+    /// Maps a second try request from a triple-tap paywall preview that has no second try to
+    /// present. Not keyed by a `PaywallUnavailableReason`: the paywall itself rendered fine, so
+    /// no not-shown event carries this state — the presentation layer asks for it directly.
+    func mapSecondTryPreviewUnavailable(
+        _ state: HeliumFetchedConfigManager.PreviewSecondTryState
+    ) -> DiagnosticContent {
+        switch state {
+        case .loadFailed:
+            return DiagnosticContent(
+                category: .expected,
+                title: "Second try flow couldn't be loaded",
+                body: "This paywall has a second try flow, but its bundle failed to download "
+                    + "when this preview was opened. Close the preview and open it again to retry.",
+                usersWillSee: "This only applies to paywall previews. Users who reach this paywall "
+                    + "through a workflow see its second try flow normally.",
+                usersWillSeeLink: nil,
+                cta: .copyReport,
+                reasonCode: "secondTryPreviewLoadFailed"
+            )
+        case .notConfigured, .armed:
+            return DiagnosticContent(
+                category: .expected,
+                title: "No second try flow to preview",
+                body: "This paywall asked Helium to open its second try paywall, but no second "
+                    + "try flow is configured for it. Configure one in the dashboard, then "
+                    + "reopen this preview to test it.",
+                usersWillSee: "Users stay on this paywall when it requests its second try, until "
+                    + "a second try flow is configured and the paywall is published.",
+                usersWillSeeLink: nil,
+                cta: .openUrl(label: "Open Paywalls", url: Url.paywalls),
+                reasonCode: "secondTryNotConfiguredInPreview"
+            )
+        }
     }
 
     // MARK: - EXPECTED
