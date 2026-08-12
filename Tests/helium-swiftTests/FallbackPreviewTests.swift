@@ -84,13 +84,13 @@ final class FallbackPreviewTests: XCTestCase {
 
         XCTAssertTrue(HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview())
         XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
-        XCTAssertTrue(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertTrue(HeliumControlPanelService.shared.isFallbackPreviewArmed)
     }
 
     func testSetFallbackPreviewTriggerReturnsFalseWithNoFallbackLoaded() {
         XCTAssertFalse(HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview())
         XCTAssertFalse(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
-        XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertFalse(HeliumControlPanelService.shared.isFallbackPreviewArmed)
     }
 
     /// A default entry can exist while missing the bundle URL presentation resolves its local
@@ -110,7 +110,7 @@ final class FallbackPreviewTests: XCTestCase {
         )?.localBundlePath)
         XCTAssertFalse(HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview())
         XCTAssertFalse(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
-        XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertFalse(HeliumControlPanelService.shared.isFallbackPreviewArmed)
     }
 
     // MARK: - Resolution
@@ -182,7 +182,7 @@ final class FallbackPreviewTests: XCTestCase {
 
         try installDashboardPreview()
 
-        XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertFalse(HeliumControlPanelService.shared.isFallbackPreviewArmed)
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
             ["preview.product"]
@@ -238,7 +238,7 @@ final class FallbackPreviewTests: XCTestCase {
         let freshConfig = makeTestConfig(triggers: ["a_trigger": makeTestPaywallInfo(paywallName: "fresh_paywall")])
         injectConfig(freshConfig, json: try JSON(data: JSONEncoder().encode(freshConfig)))
 
-        XCTAssertTrue(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertTrue(HeliumControlPanelService.shared.isFallbackPreviewArmed)
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.getProductIDsForTrigger(previewTrigger),
             ["fallback.product"]
@@ -254,7 +254,7 @@ final class FallbackPreviewTests: XCTestCase {
 
         HeliumFetchedConfigManager.reset()
 
-        XCTAssertFalse(HeliumFetchedConfigManager.shared.isFallbackPreviewArmed)
+        XCTAssertFalse(HeliumControlPanelService.shared.isFallbackPreviewArmed)
     }
 
     // MARK: - Wire format parity with Android

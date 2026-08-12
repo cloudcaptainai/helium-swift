@@ -171,13 +171,6 @@ class HeliumActionsDelegate: ObservableObject {
     
     func showSecondaryPaywall(uuid: String?) {
         if !isLoading {
-            if HeliumFetchedConfigManager.isPreviewTrigger(trigger) {
-                // A uuid lookup here could resolve to a real trigger and present a production
-                // paywall inside a preview, so previews only ever use the preview second try
-                // entry the control panel installed.
-                showSecondaryPaywallForPreview()
-                return
-            }
             // Re-use same presentation context as underlying paywall. Integrator can check
             // isSecondTry to distinguish events.
             let presentationContext = paywallSession.presentationContext
@@ -203,43 +196,6 @@ class HeliumActionsDelegate: ObservableObject {
         }
     }
     
-    private func showSecondaryPaywallForPreview() {
-        let secondTryTrigger = HeliumFetchedConfigManager.HELIUM_PREVIEW_SECOND_TRY_TRIGGER
-        let state = HeliumFetchedConfigManager.shared.previewSecondTryState
-
-        if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
-           case .armed(let versionStatus) = state,
-           Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
-            if versionStatus != "published" {
-                HeliumLogger.log(.info, category: .ui, "Previewing a second try flow that has never been published; real users will not see it until the paywall is published", metadata: ["trigger": trigger])
-            }
-            lastShownSecondTryTrigger = secondTryTrigger
-            // The presenting context belongs to the control panel, whose close handler re-enables
-            // the panel. The second try closing while the main preview is still on screen must not
-            // fire it, so only the config carries over.
-            let secondTryContext = PaywallPresentationContext(
-                config: paywallSession.presentationContext.config,
-                eventHandlers: nil,
-                onEntitled: nil,
-                onPaywallNotShown: nil
-            )
-            HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: secondTryContext)
-            return
-        }
-
-        // A second try preview requesting its own second try lands here too and gets the
-        // not-configured explanation rather than another level of nesting.
-        let content = DiagnosticContentMapper().mapSecondTryPreviewUnavailable(state)
-        HeliumLogger.log(.info, category: .ui, DiagnosticLogLineMapper().map(content), metadata: ["trigger": trigger])
-        Task { @MainActor in
-            HeliumPaywallDiagnosticView.presentIfNeeded(
-                trigger: trigger,
-                content: content,
-                fallbackShown: false
-            )
-        }
-    }
-
     func onCTAPress(contentComponentName: String) {
         if (!isLoading) {
             let event = PaywallButtonPressedEvent(

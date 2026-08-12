@@ -70,7 +70,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
     }
 
     private func makeSecondTryBundle(
-        versionStatus: String = "published",
         shouldEnableScroll: Bool? = nil
     ) -> HeliumFetchedConfigManager.PreviewSecondTryBundle {
         HeliumFetchedConfigManager.PreviewSecondTryBundle(
@@ -80,8 +79,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIds: ["secondtry.product"],
             productIdsStripe: ["secondtry_stripe:price_2"],
             productIdsPaddle: [],
-            shouldEnableScroll: shouldEnableScroll,
-            versionStatus: versionStatus
+            shouldEnableScroll: shouldEnableScroll
         )
     }
 
@@ -301,21 +299,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
             HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?["secondtry789"],
             "<html>second try</html>"
         )
-        XCTAssertEqual(
-            HeliumFetchedConfigManager.shared.previewSecondTryState,
-            .armed(versionStatus: "published")
-        )
-    }
-
-    func testSecondTryStateArmsWithDraftStatus() throws {
-        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
-
-        try setPreviewConfig(secondTry: makeSecondTryBundle(versionStatus: "draft"))
-
-        XCTAssertEqual(
-            HeliumFetchedConfigManager.shared.previewSecondTryState,
-            .armed(versionStatus: "draft")
-        )
     }
 
     func testPreviewWithoutSecondTryClearsStaleSecondTryEntry() throws {
@@ -325,29 +308,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
         try setPreviewConfig()
 
         XCTAssertNil(secondTryInfo)
-        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .notConfigured)
-    }
-
-    func testMarkLoadFailedTransitionsStateWithoutInstallingAnEntry() throws {
-        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
-
-        try setPreviewConfig()
-        HeliumFetchedConfigManager.shared.markPreviewSecondTryLoadFailed()
-
-        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .loadFailed)
-        XCTAssertNil(secondTryInfo)
-    }
-
-    func testMarkLoadFailedDoesNotClobberAnArmedSecondTry() throws {
-        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
-
-        try setPreviewConfig(secondTry: makeSecondTryBundle())
-        HeliumFetchedConfigManager.shared.markPreviewSecondTryLoadFailed()
-
-        XCTAssertEqual(
-            HeliumFetchedConfigManager.shared.previewSecondTryState,
-            .armed(versionStatus: "published")
-        )
     }
 
     func testDonorSelectionSkipsStaleSecondTryEntry() throws {
@@ -375,7 +335,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertTrue(HeliumFetchedConfigManager.shared.setFallbackPreviewTrigger())
 
         XCTAssertNil(secondTryInfo)
-        XCTAssertEqual(HeliumFetchedConfigManager.shared.previewSecondTryState, .notConfigured)
     }
 
     func testJsonMirrorInstallsAndClearsSecondTryEntry() throws {

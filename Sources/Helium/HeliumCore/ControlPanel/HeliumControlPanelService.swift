@@ -4,6 +4,11 @@ class HeliumControlPanelService {
     static let shared = HeliumControlPanelService()
     private init() {}
 
+    /// True while the preview trigger is armed to render the bundled default fallback instead
+    /// of a fetched-config entry. Set by the config manager's preview install paths; presentation
+    /// and product lookups consult it to route the preview trigger to the fallback manager.
+    @HeliumAtomic var isFallbackPreviewArmed: Bool = false
+
     var allowPaywallControlPanel: Bool {
         if HeliumFetchedConfigManager.shared.fetchedConfig?.enableProductionPaywallPreviews == true {
             return true

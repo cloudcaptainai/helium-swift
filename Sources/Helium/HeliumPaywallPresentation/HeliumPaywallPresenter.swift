@@ -561,7 +561,7 @@ extension HeliumPaywallPresenter {
         // forceShowFallback, and with it the same banner, diagnostic copy, and analytics
         // labeling as a trigger configured to force its fallback.
         if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER,
-           HeliumFetchedConfigManager.shared.isFallbackPreviewArmed {
+           HeliumControlPanelService.shared.isFallbackPreviewArmed {
             return fallbackBundleViewFor(trigger: trigger, fallbackReason: .forceShowFallback, presentationContext: presentationContext)
         }
 
