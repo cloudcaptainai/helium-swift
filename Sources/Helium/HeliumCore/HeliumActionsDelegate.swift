@@ -175,8 +175,11 @@ class HeliumActionsDelegate: ObservableObject {
             // isSecondTry to distinguish events.
             let presentationContext = paywallSession.presentationContext
             let secondTryTrigger = "\(trigger)_second_try"
-            // Try uuid lookup first
-            if let uuid, let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
+            // Try uuid lookup first. Previews skip it: the uuid can match the same paywall
+            // served under a live trigger, which would present a production entry — real
+            // experiment attribution and checkout — instead of the installed preview entry.
+            if let uuid, !HeliumFetchedConfigManager.isPreviewTrigger(trigger),
+               let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
