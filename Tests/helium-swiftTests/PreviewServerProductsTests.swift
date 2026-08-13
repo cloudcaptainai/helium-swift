@@ -125,6 +125,55 @@ final class PreviewServerProductsTests: XCTestCase {
         XCTAssertEqual(HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken, "live_existing")
     }
 
+    func testRefreshReplacesValuesAnEarlierPreviewMergeInstalled() {
+        injectBaseConfig(
+            stripeProducts: ["prod_live:price_live": makeServerPrice(formattedPrice: "$4.99", value: 4.99, title: "Live")]
+        )
+
+        HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
+            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99, title: "Before")],
+            paddleProducts: nil,
+            paddleClientToken: "first_token"
+        )
+
+        HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
+            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$14.99", value: 14.99, title: "After")],
+            paddleProducts: nil,
+            paddleClientToken: "second_token"
+        )
+
+        let map = HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()
+        XCTAssertEqual(map?[stripeKey]?.localizedTitle, "After")
+        XCTAssertEqual(map?[stripeKey]?.formattedPrice, "$14.99")
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getLocalizedPriceMap()[stripeKey]?.baseInfo.formattedPrice,
+            "$14.99"
+        )
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken, "second_token")
+
+        XCTAssertEqual(map?["prod_live:price_live"]?.localizedTitle, "Live")
+    }
+
+    func testNewConfigEndsPreviewOwnership() {
+        HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
+            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99, title: "Preview")],
+            paddleProducts: nil,
+            paddleClientToken: nil
+        )
+
+        injectBaseConfig(
+            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$4.99", value: 4.99, title: "Live")]
+        )
+
+        HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
+            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$19.99", value: 19.99, title: "Preview2")],
+            paddleProducts: nil,
+            paddleClientToken: nil
+        )
+
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[stripeKey]?.localizedTitle, "Live")
+    }
+
     func testMergeWithNoConfigDoesNotCrash() {
         HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
             stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99)],

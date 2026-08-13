@@ -211,6 +211,7 @@ public class HeliumFetchedConfigManager {
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
+        shared.previewInstalledProductKeys = []
         HeliumControlPanelService.shared.isFallbackPreviewArmed = false
     }
 
@@ -218,6 +219,7 @@ public class HeliumFetchedConfigManager {
     func injectConfigForTesting(_ config: HeliumFetchedConfig, json: JSON? = nil) {
         self.fetchedConfig = config
         self.fetchedConfigJSON = json
+        self.previewInstalledProductKeys = []
         self._downloadStatus = .downloadSuccess
     }
 
@@ -236,7 +238,8 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
-    
+    @HeliumAtomic private var previewInstalledProductKeys: Set<String> = []
+
     func fetchConfig(
         endpoint: String,
         apiKey: String,
@@ -345,6 +348,9 @@ public class HeliumFetchedConfigManager {
             self.fetchedConfig = newConfig
             self.fetchedConfigJSON = newConfigJSON
             triggersWithSkippedBundleAndReason = []
+            // A replaced config carries none of the preview's entries, so nothing of theirs
+            // is still owned — and its own values must not be treated as overwritable.
+            previewInstalledProductKeys = []
             
             if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
                 applyCustomerIdFromConfig(stripeCustomerId, provider: .stripe)
@@ -896,18 +902,24 @@ public class HeliumFetchedConfigManager {
         let token = paddleClientToken ?? ""
         guard !stripeProducts.isEmpty || !paddleProducts.isEmpty || !token.isEmpty else { return }
 
+        // Entries a previous preview merge installed are replaceable: only on-launch's
+        // values need protecting, and the panel's refresh exists to pick up edits.
+        let replaceable = previewInstalledProductKeys
+        var installed: Set<String> = []
+
         _fetchedConfig.withValue { stored in
             guard var config = stored else { return }
             if !stripeProducts.isEmpty {
-                config.stripeProducts = (config.stripeProducts ?? [:])
-                    .merging(stripeProducts) { existing, _ in existing }
+                config.stripeProducts = Self.applyPreviewValues(
+                    stripeProducts, to: config.stripeProducts, replaceable: replaceable, installed: &installed)
             }
             if !paddleProducts.isEmpty {
-                config.paddleProducts = (config.paddleProducts ?? [:])
-                    .merging(paddleProducts) { existing, _ in existing }
+                config.paddleProducts = Self.applyPreviewValues(
+                    paddleProducts, to: config.paddleProducts, replaceable: replaceable, installed: &installed)
             }
-            if !token.isEmpty, config.paddleClientToken?.isEmpty != false {
+            if !token.isEmpty, config.paddleClientToken?.isEmpty != false || replaceable.contains(Self.previewPaddleTokenKey) {
                 config.paddleClientToken = token
+                installed.insert(Self.previewPaddleTokenKey)
             }
             stored = config
         }
@@ -916,11 +928,34 @@ public class HeliumFetchedConfigManager {
         let previewPrices = stripeProducts
             .merging(paddleProducts) { current, _ in current }
             .mapValues { $0.toLocalizedPrice() }
-        guard !previewPrices.isEmpty else { return }
-        _localizedPriceMap.withValue { map in
-            map.merge(previewPrices) { existing, _ in existing }
+        if !previewPrices.isEmpty {
+            _localizedPriceMap.withValue { map in
+                map = Self.applyPreviewValues(previewPrices, to: map, replaceable: replaceable, installed: &installed)
+            }
         }
+
+        previewInstalledProductKeys = replaceable.union(installed)
     }
+
+    /// Writes preview values over gaps and over entries an earlier preview merge owns, leaving
+    /// everything else intact, and records which keys the preview now owns.
+    private static func applyPreviewValues<Value>(
+        _ preview: [String: Value],
+        to existing: [String: Value]?,
+        replaceable: Set<String>,
+        installed: inout Set<String>
+    ) -> [String: Value] {
+        var result = existing ?? [:]
+        for (key, value) in preview where result[key] == nil || replaceable.contains(key) {
+            result[key] = value
+            installed.insert(key)
+        }
+        return result
+    }
+
+    /// Sentinel for the Paddle client token, which is tracked alongside product keys but is not
+    /// itself a product. Colons make it unmatchable by a real "productId:priceId" key.
+    private static let previewPaddleTokenKey = "::preview-paddle-client-token::"
 
     func buildLocalizedPriceMap(_ productIds: [String]) async {
         if !productIds.isEmpty {
