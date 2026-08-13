@@ -337,7 +337,9 @@ struct HeliumControlPanelView: View {
         previewTask?.cancel()
         previewTask = Task {
             do {
+                async let secondTryTask = fetchSecondTryBundle(for: paywall)
                 let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: bundleUrl)
+                let secondTryBundle = await secondTryTask
 
                 try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
                     bundleId: bundleId,
@@ -349,7 +351,8 @@ struct HeliumControlPanelView: View {
                     productIdsPaddleWeb: version.webPaddleProductIds ?? [],
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
                     webPaywallBundleUrl: version.webPaywallBundleUrl,
-                    shouldEnableScroll: version.shouldEnableScroll
+                    shouldEnableScroll: version.shouldEnableScroll,
+                    secondTry: secondTryBundle
                 )
 
                 guard !Task.isCancelled else {
@@ -367,6 +370,35 @@ struct HeliumControlPanelView: View {
                     paywallLoadError = "Failed to load paywall: \(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    /// Resolves a paywall's second try flow into a preview bundle. The second try must not block
+    /// or fail the main preview, so a failure only logs — the preview presents without a second
+    /// try entry and a request for it surfaces the standard second-try-no-match diagnostic.
+    private func fetchSecondTryBundle(
+        for paywall: HeliumPaywallPreviewEntry
+    ) async -> HeliumFetchedConfigManager.PreviewSecondTryBundle? {
+        guard let secondTry = paywall.secondTry, let secondTryBundleUrl = secondTry.bundleUrl else {
+            return nil
+        }
+        do {
+            let (bundleId, html) = try await HeliumControlPanelService.shared.fetchSingleBundle(bundleURL: secondTryBundleUrl)
+            return HeliumFetchedConfigManager.PreviewSecondTryBundle(
+                bundleId: bundleId,
+                bundleUrl: secondTryBundleUrl,
+                bundleHtml: html,
+                productIds: secondTry.productIds ?? [],
+                productIdsStripe: secondTry.stripeProductIds ?? [],
+                productIdsPaddle: secondTry.paddleProductIds ?? [],
+                shouldEnableScroll: secondTry.shouldEnableScroll
+            )
+        } catch {
+            HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Failed to load second try bundle for preview", metadata: [
+                "secondTryPaywall": secondTry.paywallName,
+                "error": "\(error)",
+            ])
+            return nil
         }
     }
 
@@ -392,7 +424,13 @@ struct HeliumControlPanelView: View {
     private func previewPresentationContext() -> PaywallPresentationContext {
         PaywallPresentationContext(
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
-            eventHandlers: PaywallEventHandlers().onClose { _ in activity = .idle },
+            // A second try preview shares this context and closes back onto the main preview,
+            // so only the main preview trigger closing releases the lock.
+            eventHandlers: PaywallEventHandlers().onClose { event in
+                if event.triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+                    activity = .idle
+                }
+            },
             onEntitled: nil,
             onPaywallNotShown: { _ in activity = .idle }
         )

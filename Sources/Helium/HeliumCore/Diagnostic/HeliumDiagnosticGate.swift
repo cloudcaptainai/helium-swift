@@ -140,6 +140,6 @@ extension HeliumDiagnosticGate {
     }
 
     private static func isPreviewTrigger(_ trigger: String) -> Bool {
-        trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+        HeliumFetchedConfigManager.isPreviewTrigger(trigger)
     }
 }
