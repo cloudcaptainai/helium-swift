@@ -306,6 +306,12 @@ struct HeliumControlPanelView: View {
             // Fetch all products data
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
 
+            HeliumFetchedConfigManager.shared.mergePreviewServerProducts(
+                stripeProducts: response.stripeProducts,
+                paddleProducts: response.paddleProducts,
+                paddleClientToken: response.paddleClientToken
+            )
+
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {

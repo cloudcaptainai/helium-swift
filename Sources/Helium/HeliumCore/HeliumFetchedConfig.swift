@@ -884,6 +884,44 @@ public class HeliumFetchedConfigManager {
         return allFound
     }
     
+    /// Existing values win: they were resolved against a real customer, while the preview endpoint
+    /// has no user to check eligibility against and reports every intro offer as available.
+    func mergePreviewServerProducts(
+        stripeProducts: [String: ServerProductPrice]?,
+        paddleProducts: [String: ServerProductPrice]?,
+        paddleClientToken: String?
+    ) {
+        let stripeProducts = stripeProducts ?? [:]
+        let paddleProducts = paddleProducts ?? [:]
+        let token = paddleClientToken ?? ""
+        guard !stripeProducts.isEmpty || !paddleProducts.isEmpty || !token.isEmpty else { return }
+
+        _fetchedConfig.withValue { stored in
+            guard var config = stored else { return }
+            if !stripeProducts.isEmpty {
+                config.stripeProducts = (config.stripeProducts ?? [:])
+                    .merging(stripeProducts) { existing, _ in existing }
+            }
+            if !paddleProducts.isEmpty {
+                config.paddleProducts = (config.paddleProducts ?? [:])
+                    .merging(paddleProducts) { existing, _ in existing }
+            }
+            if !token.isEmpty, config.paddleClientToken?.isEmpty != false {
+                config.paddleClientToken = token
+            }
+            stored = config
+        }
+
+        // The rendered paywall reads prices from the localized map, not from the config.
+        let previewPrices = stripeProducts
+            .merging(paddleProducts) { current, _ in current }
+            .mapValues { $0.toLocalizedPrice() }
+        guard !previewPrices.isEmpty else { return }
+        _localizedPriceMap.withValue { map in
+            map.merge(previewPrices) { existing, _ in existing }
+        }
+    }
+
     func buildLocalizedPriceMap(_ productIds: [String]) async {
         if !productIds.isEmpty {
             let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
