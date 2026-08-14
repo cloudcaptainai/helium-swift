@@ -37,7 +37,7 @@ struct HeliumPaywallDiagnosticView: View {
     }
 
     private var isForPreview: Bool {
-        triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER
+        HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
     }
 
     var body: some View {
