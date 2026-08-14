@@ -180,6 +180,65 @@ final class PreviewServerProductsTests: XCTestCase {
         XCTAssertEqual(HeliumFetchedConfigManager.shared.paddleClientToken, "live_token")
     }
 
+    private func makeResponse(
+        stripe: [String: ServerProductPrice]? = nil,
+        paddleClientToken: String? = nil
+    ) -> HeliumControlPanelResponse {
+        HeliumControlPanelResponse(
+            productIds: [],
+            paywalls: [],
+            stripeProducts: stripe,
+            paddleProducts: nil,
+            paddleClientToken: paddleClientToken
+        )
+    }
+
+    func testCanceledRefreshDoesNotApplyItsProducts() async {
+        injectBaseConfig()
+        let response = makeResponse(
+            stripe: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99)],
+            paddleClientToken: "stale_token"
+        )
+
+        let task = Task { () -> Bool in
+            // Cancellation lands during this sleep, so the call below always sees it.
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return HeliumControlPanelService.shared.applyServerProducts(from: response)
+        }
+        task.cancel()
+        let applied = await task.value
+
+        XCTAssertFalse(applied)
+        XCTAssertNil(HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[stripeKey])
+        XCTAssertNil(HeliumFetchedConfigManager.shared.paddleClientToken)
+    }
+
+    func testOverlappingRefreshKeepsTheNewerResponse() async {
+        injectBaseConfig()
+        let stale = makeResponse(
+            stripe: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99, title: "Stale")],
+            paddleClientToken: "stale_token"
+        )
+        let fresh = makeResponse(
+            stripe: [stripeKey: makeServerPrice(formattedPrice: "$14.99", value: 14.99, title: "Fresh")],
+            paddleClientToken: "fresh_token"
+        )
+
+        let freshTask = Task { HeliumControlPanelService.shared.applyServerProducts(from: fresh) }
+        _ = await freshTask.value
+
+        // The canceled refresh resolves last; its products must not displace the newer ones.
+        let staleTask = Task { () -> Bool in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return HeliumControlPanelService.shared.applyServerProducts(from: stale)
+        }
+        staleTask.cancel()
+        _ = await staleTask.value
+
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[stripeKey]?.localizedTitle, "Fresh")
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.paddleClientToken, "fresh_token")
+    }
+
     func testPreviewWithNoConfigDoesNotCrash() {
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(
             stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99)],

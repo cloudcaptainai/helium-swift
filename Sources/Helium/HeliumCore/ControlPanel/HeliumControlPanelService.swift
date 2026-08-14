@@ -63,6 +63,21 @@ class HeliumControlPanelService {
         return (bundleId, html)
     }
 
+    /// Installs a preview response's server products, unless the calling task was canceled.
+    /// Refreshing cancels the in-flight fetch and starts another, and these products replace
+    /// rather than merge, so a response that arrived before its cancel would otherwise discard
+    /// the newer one's. Returns whether the products were installed.
+    @discardableResult
+    func applyServerProducts(from response: HeliumControlPanelResponse) -> Bool {
+        guard !Task.isCancelled else { return false }
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(
+            stripeProducts: response.stripeProducts,
+            paddleProducts: response.paddleProducts,
+            paddleClientToken: response.paddleClientToken
+        )
+        return true
+    }
+
     func fetchPreviewPaywalls() async throws -> HeliumControlPanelResponse {
         guard let apiKey = Helium.shared.controller?.apiKey else {
             throw HeliumControlPanelError.noApiKey

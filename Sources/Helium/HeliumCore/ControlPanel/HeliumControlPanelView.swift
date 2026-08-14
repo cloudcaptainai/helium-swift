@@ -306,15 +306,7 @@ struct HeliumControlPanelView: View {
             // Fetch all products data
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
 
-            // A refresh cancels the in-flight fetch and starts another. Without this, a
-            // response that arrived before the cancel would replace the newer one's products.
-            guard !Task.isCancelled else { return }
-
-            HeliumFetchedConfigManager.shared.setPreviewServerProducts(
-                stripeProducts: response.stripeProducts,
-                paddleProducts: response.paddleProducts,
-                paddleClientToken: response.paddleClientToken
-            )
+            guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
 
             state = .loaded(response)
         } catch {
