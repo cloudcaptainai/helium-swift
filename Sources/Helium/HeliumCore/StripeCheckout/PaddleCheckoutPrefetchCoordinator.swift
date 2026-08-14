@@ -299,10 +299,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         for key in [
             "id", "transaction_id", "status", "currency_code",
             "ip_geo_country_code", "ip_geo_postal_code",
-            // Paddle's California (AB 2863) consent gate. When true, the bundle
-            // must show the consent modal and send consent_given on /pay, or
-            // Paddle 400-blocks the charge. (Sandbox-only at time of writing —
-            // confirm exact key/type against a real response.)
+            // Paddle's California consent gate. When true, the bundle must show
+            // the consent modal and send consent_given on /pay, or Paddle blocks the charge.
             "consent_required",
             "created_at",
         ] {
