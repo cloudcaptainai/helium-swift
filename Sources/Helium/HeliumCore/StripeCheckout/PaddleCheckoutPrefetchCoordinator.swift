@@ -70,7 +70,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         guard let info = paywallSession.paywallInfoWithBackups,
               let webProducts = info.webProductsOfferedPaddle,
               !webProducts.isEmpty,
-              let clientToken = HeliumFetchedConfigManager.shared.fetchedConfig?.paddleClientToken,
+              let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
         }
