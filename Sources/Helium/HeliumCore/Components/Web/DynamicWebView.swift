@@ -279,11 +279,18 @@ struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
 
-            let errorHookScript = WKUserScript(
-                source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true
-            )
+            // The server-driven flag gates the whole JS-crash detection path here at
+            // its root: with no hook installed, nothing downstream can ever fire.
+            let errorHookScript: WKUserScript?
+            if HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) {
+                errorHookScript = WKUserScript(
+                    source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            } else {
+                errorHookScript = nil
+            }
 
             let preparingToken = loadToken
             Task {
@@ -312,7 +319,9 @@ struct DynamicWebView: View {
                 _ = Date()
                 preparedWebView.configuration.userContentController.removeAllUserScripts()
                 preparedWebView.configuration.userContentController.addUserScript(combinedScript)
-                preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
+                if let errorHookScript {
+                    preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
+                }
                 
                 // File loading timing
                 _ = Date()
