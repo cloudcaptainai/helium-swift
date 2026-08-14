@@ -5,10 +5,9 @@ import Foundation
 /// The server delivers flags in the on-launch response's `featureFlags` map. Every
 /// flag is off unless the server sends `true`.
 enum HeliumFeatureFlag: String, CaseIterable {
-    /// Gates JS-crash detection at its root: the error hook is only injected into
-    /// paywall bundles when enabled, so probes and fallback recovery can never fire
-    /// without it. WebContent-process-death handling is deliberately not gated —
-    /// that is a definitive OS signal, not a heuristic.
+    /// Gates every action the crash-detection paths can take on a paywall: error-hook
+    /// injection (and with it probes and fallback recovery) and the reload reaction to
+    /// WebContent-process death. Their telemetry stays unconditional.
     case jsCrashFallback
 }
 

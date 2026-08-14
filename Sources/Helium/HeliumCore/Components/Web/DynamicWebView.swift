@@ -200,6 +200,7 @@ struct DynamicWebView: View {
               ),
               scope: actionsDelegate.observabilityScope
           )
+          guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) else { return }
           webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
       }
       .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
