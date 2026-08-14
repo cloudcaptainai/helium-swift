@@ -279,8 +279,6 @@ struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
 
-            // The server-driven flag gates the whole JS-crash detection path here at
-            // its root: with no hook installed, nothing downstream can ever fire.
             let errorHookScript: WKUserScript?
             if HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) {
                 errorHookScript = WKUserScript(
