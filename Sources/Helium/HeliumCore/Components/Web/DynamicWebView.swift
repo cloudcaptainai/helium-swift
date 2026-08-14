@@ -350,13 +350,16 @@ struct DynamicWebView: View {
     }
     
     private func handlePaywallJSError(_ info: [String: Any]) {
+        // Captured now so a late outcome (an abandoned probe) still describes the
+        // attempt the error was reported against, not whatever the ladder advanced to.
+        let reportedAttempt = fileLoadAttempt
         let trackOutcome = { (outcome: PaywallJSErrorOutcome) in
             HeliumObservabilityManager.shared.track(
                 PaywallJSErrorDetected(
                     source: info["source"] as? String ?? "unknown",
                     errorMessage: info["message"] as? String,
                     errorStack: info["stack"] as? String,
-                    loadAttempt: String(describing: fileLoadAttempt),
+                    loadAttempt: String(describing: reportedAttempt),
                     outcome: outcome,
                     msSinceLoadStart: viewLoadStartTime.map { msSince($0) }
                 ),
