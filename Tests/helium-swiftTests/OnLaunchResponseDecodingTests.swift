@@ -56,4 +56,25 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
 
         XCTAssertNil(decoded.paywallDiagnosticModalAllowedInTestFlight)
     }
+
+    // ---------- featureFlags contract ----------
+
+    func testFeatureFlagsDecodeFromJSON() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "featureFlags": ["jsCrashFallback": true],
+        ])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertTrue(HeliumFeatureFlags.from(decoded.featureFlags).isEnabled(.jsCrashFallback))
+    }
+
+    func testFeatureFlagsAreNilWhenAbsent() throws {
+        let json = try makeOnLaunchJSON(extras: [:])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertNil(decoded.featureFlags)
+        XCTAssertFalse(HeliumFeatureFlags.from(decoded.featureFlags).isEnabled(.jsCrashFallback))
+    }
 }

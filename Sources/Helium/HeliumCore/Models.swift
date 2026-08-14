@@ -133,6 +133,9 @@ public struct HeliumFetchedConfig: Codable {
     var paddleCustomerId: String?
 
     var paddleClientToken: String?
+
+    /// Server-driven feature flags; see `HeliumFeatureFlag` for the declared keys.
+    var featureFlags: JSON?
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for
