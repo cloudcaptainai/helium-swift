@@ -56,7 +56,7 @@ enum WebViewRenderGuard {
                         reported++;
                         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.logging) {
                             window.webkit.messageHandlers.logging.postMessage({
-                                type: 'js-error',
+                                type: 'sdk-detected-js-error',
                                 source: source,
                                 message: String(message || '').slice(0, 500),
                                 stack: String(stack || '').slice(0, 2000),
@@ -96,7 +96,6 @@ enum WebViewRenderGuard {
                     if (node.nodeType === Node.TEXT_NODE && (node.textContent || '').trim().length > 0) return 'content';
                 }
                 if (b.childElementCount === 0) return 'blank';
-                if (b.getBoundingClientRect().height < 10) return 'blank';
                 var els = b.querySelectorAll('*');
                 var limit = Math.min(els.length, 300);
                 for (var i = 0; i < limit; i++) {

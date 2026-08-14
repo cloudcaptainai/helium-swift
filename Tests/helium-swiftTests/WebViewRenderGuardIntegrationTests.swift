@@ -75,7 +75,7 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
         let reported = expectation(description: "js-error reported")
         bridge.onMessage = { body in
             guard let dict = body as? [String: Any],
-                  dict["type"] as? String == "js-error" else { return }
+                  dict["type"] as? String == "sdk-detected-js-error" else { return }
             XCTAssertEqual(dict["loadToken"] as? String, "integration-tok")
             XCTAssertEqual(dict["source"] as? String, "error")
             // loadHTMLString(baseURL: nil) gives the page an opaque origin, so
@@ -98,7 +98,7 @@ final class WebViewRenderGuardIntegrationTests: XCTestCase {
         let reported = expectation(description: "unhandledrejection reported")
         bridge.onMessage = { body in
             guard let dict = body as? [String: Any],
-                  dict["type"] as? String == "js-error" else { return }
+                  dict["type"] as? String == "sdk-detected-js-error" else { return }
             XCTAssertEqual(dict["source"] as? String, "unhandledrejection")
             reported.fulfill()
         }

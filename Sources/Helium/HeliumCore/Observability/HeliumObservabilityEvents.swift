@@ -325,6 +325,8 @@ enum PaywallJSErrorOutcome: String {
     case benign
     /// Probe failed; treated as content so a working paywall is never replaced.
     case probeInconclusive
+    /// The probe was abandoned mid-flight — the load attempt changed underneath it.
+    case abandoned
 }
 
 /// An uncaught error or unhandled rejection in a paywall bundle. Emitted for

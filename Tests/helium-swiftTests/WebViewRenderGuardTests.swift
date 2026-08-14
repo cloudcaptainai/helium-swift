@@ -179,7 +179,7 @@ final class WebViewRenderGuardTests: XCTestCase {
     func testJsErrorMessagePostsNotificationWithUserInfo() {
         let handler = WebViewMessageHandler()
         let body: [String: Any] = [
-            "type": "js-error",
+            "type": "sdk-detected-js-error",
             "source": "error",
             "message": "boom",
             "stack": "TypeError: boom",

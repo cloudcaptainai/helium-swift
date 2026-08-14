@@ -378,7 +378,11 @@ struct DynamicWebView: View {
         let probedToken = loadToken
         Task { @MainActor in
             // Give a partially-broken page time to paint before judging it blank.
-            guard let first = await probeResult(afterSeconds: 0.3, token: probedToken) else { return }
+            guard let first = await probeResult(afterSeconds: 0.3, token: probedToken) else {
+                trackOutcome(.abandoned)
+                jsCrashProbeActive = false
+                return
+            }
             guard first == "blank" else {
                 trackOutcome(first == "content" ? .benign : .probeInconclusive)
                 jsCrashProbeActive = false
@@ -387,7 +391,11 @@ struct DynamicWebView: View {
             guard let second = await probeResult(
                 afterSeconds: WebViewRenderGuard.blankConfirmationDelay,
                 token: probedToken
-            ) else { return }
+            ) else {
+                trackOutcome(.abandoned)
+                jsCrashProbeActive = false
+                return
+            }
             guard second == "blank" else {
                 trackOutcome(second == "content" ? .benign : .probeInconclusive)
                 jsCrashProbeActive = false

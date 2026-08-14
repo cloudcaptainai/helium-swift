@@ -37,7 +37,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
         if message.name == "logging" {
             if let dict = message.body as? [String: Any],
-               dict["type"] as? String == "js-error" {
+               dict["type"] as? String == "sdk-detected-js-error" {
                 HeliumLogger.log(.warn, category: .ui, "Paywall JS error reported", metadata: [
                     "message": dict["message"] as? String ?? ""
                 ])
