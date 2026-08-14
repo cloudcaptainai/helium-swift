@@ -234,6 +234,11 @@ public class HeliumFetchedConfigManager {
     
     @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
+
+    /// Resolved on access from the current config so every set/reset path is covered.
+    func isFeatureEnabled(_ flag: HeliumFeatureFlag) -> Bool {
+        HeliumFeatureFlags.from(fetchedConfig?.featureFlags).isEnabled(flag)
+    }
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
     

@@ -200,6 +200,7 @@ struct DynamicWebView: View {
               ),
               scope: actionsDelegate.observabilityScope
           )
+          guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) else { return }
           webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
       }
       .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
@@ -279,11 +280,16 @@ struct DynamicWebView: View {
                 forMainFrameOnly: true
             )
 
-            let errorHookScript = WKUserScript(
-                source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true
-            )
+            let errorHookScript: WKUserScript?
+            if HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) {
+                errorHookScript = WKUserScript(
+                    source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            } else {
+                errorHookScript = nil
+            }
 
             let preparingToken = loadToken
             Task {
@@ -312,7 +318,9 @@ struct DynamicWebView: View {
                 _ = Date()
                 preparedWebView.configuration.userContentController.removeAllUserScripts()
                 preparedWebView.configuration.userContentController.addUserScript(combinedScript)
-                preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
+                if let errorHookScript {
+                    preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
+                }
                 
                 // File loading timing
                 _ = Date()
