@@ -378,9 +378,10 @@ struct DynamicWebView: View {
         let probedToken = loadToken
         Task { @MainActor in
             // Give a partially-broken page time to paint before judging it blank.
+            // A nil probe means the load attempt changed underneath us: the flag now
+            // belongs to the newer attempt (which resets it), so leave it alone.
             guard let first = await probeResult(afterSeconds: 0.3, token: probedToken) else {
                 trackOutcome(.abandoned)
-                jsCrashProbeActive = false
                 return
             }
             guard first == "blank" else {
@@ -393,7 +394,6 @@ struct DynamicWebView: View {
                 token: probedToken
             ) else {
                 trackOutcome(.abandoned)
-                jsCrashProbeActive = false
                 return
             }
             guard second == "blank" else {
