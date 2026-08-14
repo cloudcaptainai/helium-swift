@@ -462,6 +462,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 "currency_code": "USD",
                 "ip_geo_country_code": "US",
                 "ip_geo_postal_code": "94102",
+                "consent_required": true,
                 "customer": ["id": "ctm_x", "email": "u@e.com"],
                 "seller": ["name": "Helium"],
                 "items": [
@@ -616,6 +617,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["ip_geo_country_code"] as? String, "US")
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "94102")
         XCTAssertEqual(data["created_at"] as? String, "2026-05-07T02:53:11+00:00")
+        XCTAssertEqual(data["consent_required"] as? Bool, true)
 
         let customer = try XCTUnwrap(data["customer"] as? [String: Any])
         XCTAssertEqual(customer["email"] as? String, "u@e.com")
