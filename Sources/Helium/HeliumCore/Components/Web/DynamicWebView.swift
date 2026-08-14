@@ -486,8 +486,9 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
 
         @objc func handleTripleTap() {
             guard HeliumControlPanelService.shared.allowPaywallControlPanel else { return }
-            if trigger == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
-                // Just return to underlying control panel instead of stacking
+            if HeliumFetchedConfigManager.isPreviewTrigger(trigger) {
+                // Step back one layer instead of stacking another panel: the main preview returns
+                // to the control panel, a second try preview returns to the main preview.
                 HeliumPaywallPresenter.shared.hideUpsell()
                 return
             }

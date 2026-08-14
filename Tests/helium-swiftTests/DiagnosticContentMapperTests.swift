@@ -25,11 +25,11 @@ final class DiagnosticContentMapperTests: XCTestCase {
     }
 
     /// Every authored record: both skip reasons, every unavailable reason, the nil path, and the
-    /// preview-only records (second try, fallback preview).
+    /// preview-only fallback record.
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
-            + [content(for: nil), mapper.mapSecondTryInPreview(), previewFallbackContent()]
+            + [content(for: nil), previewFallbackContent()]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -189,21 +189,6 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    /// Nothing is broken when a preview declines a second try, so the record is expected-category,
-    /// names the workflow remediation, and reassures that real users are unaffected.
-    func testSecondTryInPreviewAdvisesAWorkflowAndReassuresAboutRealUsers() {
-        let content = mapper.mapSecondTryInPreview()
-
-        XCTAssertEqual(content.category, .expected)
-        XCTAssertEqual(content.title, "Second try flows can't be previewed")
-        XCTAssertTrue(content.body.contains("Add this paywall to a workflow"))
-        XCTAssertTrue(content.usersWillSee.contains("see its second try flow normally"))
-        XCTAssertEqual(
-            content.cta,
-            .openUrl(label: "Open Workflows", url: "https://app.tryhelium.com/workflows")
-        )
-        XCTAssertEqual(content.reasonCode, "secondTryNotSupportedInPreview")
-    }
 
     /// The modal only presents when nothing rendered, so a forced fallback reaching it means the
     /// fallback itself failed. The title and body state the cause — true in both the modal and the

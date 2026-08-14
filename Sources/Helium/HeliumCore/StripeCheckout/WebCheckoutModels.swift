@@ -12,11 +12,14 @@ public enum HeliumCheckoutRedirectType: String {
 enum WebCheckoutRedirect {
     /// Classifies an incoming URL forwarded via `Helium.shared.handleURL(_:)`.
     ///
-    /// When the configured success and cancel URLs have distinct paths, the match
-    /// alone is authoritative. When they're identical, query params appended by
-    /// our checkout flow disambiguate. Returns `nil` if the URL doesn't match, or
-    /// if success/cancel collide and query params aren't conclusive — those go to
-    /// the didBecomeActive observer, which reconciles against real entitlement state.
+    /// With a single configured redirect URL (the standard configuration), query
+    /// params appended by our checkout flow determine the outcome; a matching URL
+    /// with no query params at all means the user abandoned checkout, so it
+    /// classifies as cancel. Legacy configs with distinct success and cancel URLs
+    /// are matched by base URL alone, which is authoritative. Returns `nil` if the
+    /// URL doesn't match, or if query params are present but inconclusive — those
+    /// go to the didBecomeActive observer, which reconciles against real
+    /// entitlement state.
     static func classify(_ url: URL) -> HeliumCheckoutRedirectType? {
         let matchesSuccess = matchesBase(url, configured: Helium.config.checkoutSuccessURL)
         let matchesCancel = matchesBase(url, configured: Helium.config.checkoutCancelURL)
@@ -277,7 +280,7 @@ enum WebCheckoutError: LocalizedError {
         case .cannotPresentCheckout:
             return "Could not present the checkout view"
         case .checkoutURLsNotConfigured:
-            return "Checkout URLs not configured. Call Helium.config.enableExternalWebCheckout() before presenting a paywall."
+            return "Checkout redirect URL not configured. Call Helium.config.enableExternalWebCheckout(redirectURL:paymentProcessors:) before presenting a paywall."
         case .invalidBaseURLForComponents:
             return "Web paywall bundle URL could not be parsed into URLComponents."
         case .failedToCompressCtx:

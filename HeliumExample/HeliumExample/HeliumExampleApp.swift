@@ -34,7 +34,7 @@ struct HeliumExampleApp: App {
             AppConfig.apiKey
         }
         
-        Helium.config.enableExternalWebCheckout(successURL: "heliumexamplestripe://openapp", cancelURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
+        Helium.config.enableExternalWebCheckout(redirectURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
         
         Helium.shared.initialize(
             apiKey: apiKey

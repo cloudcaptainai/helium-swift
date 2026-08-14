@@ -10,10 +10,27 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let paywallName: String
     let isWeb: Bool?
     let versions: [HeliumPaywallPreviewVersion]
+    let secondTry: HeliumPaywallPreviewSecondTry?
     var id: String { paywallUuid }
 
     /// Web paywalls render in a browser, not in-app; previews open them there.
     var isWebPaywall: Bool { isWeb == true }
+}
+
+/// The resolved second try paywall served with a preview entry. Paywall-level, not per-version:
+/// every version of the entry shares the same second try link.
+struct HeliumPaywallPreviewSecondTry: Codable {
+    let paywallUuid: String
+    let paywallName: String
+    /// "published" when the second try paywall is live; "draft" when it has never been
+    /// published, in which case real users do not see it until the paywall is published.
+    /// Optional so a malformed entry can't fail decoding the whole preview list.
+    let versionStatus: String?
+    let bundleUrl: String?
+    let productIds: [String]?
+    let stripeProductIds: [String]?
+    let paddleProductIds: [String]?
+    let shouldEnableScroll: Bool?
 }
 
 struct HeliumPaywallPreviewVersion: Codable, Identifiable {
