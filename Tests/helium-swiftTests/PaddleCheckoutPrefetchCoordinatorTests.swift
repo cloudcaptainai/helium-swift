@@ -176,6 +176,61 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "90210")
     }
 
+    // MARK: - Consent kill-switch
+
+    func testAwaitOutcome_blocksConsentRequired_whenModalFlagOff() async throws {
+        HeliumFetchedConfigManager.reset() // caConsentModalEnabled defaults off
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_cr").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                { "data": { "id": "che_cr", "transaction_id": "txn_cr", "status": "draft", "consent_required": true } }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_cr"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_cr")
+
+        guard case .failed(let error) = outcome else {
+            XCTFail("consent-required buyer must be blocked when the modal flag is off; got \(outcome)")
+            return
+        }
+        XCTAssertTrue(error is PaddleCaliforniaConsentBlocked)
+    }
+
+    func testAwaitOutcome_doesNotBlock_whenConsentNotRequired() async throws {
+        HeliumFetchedConfigManager.reset()
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_nc").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                { "data": { "id": "che_nc", "transaction_id": "txn_nc", "status": "draft", "consent_required": false } }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_nc"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_nc")
+
+        guard case .ready = outcome else {
+            XCTFail("buyer without consent_required must resolve .ready; got \(outcome)")
+            return
+        }
+    }
+
     // MARK: - alreadyEntitled
 
     func testAwaitOutcome_returnsAlreadyEntitled_whenBanditReturns409Duplicate_andSkipsBFFCall() async throws {

@@ -23,6 +23,14 @@ struct PaddlePrefetchAwaitTimeout: LocalizedError {
     }
 }
 
+/// Prefetch failure returned when the consent kill-switch blocks a
+/// consent-required buyer (caConsentModalEnabled off).
+struct PaddleCaliforniaConsentBlocked: LocalizedError {
+    var errorDescription: String? {
+        return "Checkout blocked for a consent-required buyer (caConsentModalEnabled off)"
+    }
+}
+
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -293,6 +301,15 @@ final class PaddleCheckoutPrefetchCoordinator {
         return ["data": trimPaddleCheckoutData(rawData)]
     }
 
+    /// Paddle's California affirmative-consent flag from the checkout response.
+    private nonisolated static func consentRequired(in rawBody: Data) -> Bool {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any] else {
+            return false
+        }
+        return (data["consent_required"] as? Bool) == true
+    }
+
     private nonisolated static func trimPaddleCheckoutData(_ raw: [String: Any]) -> [String: Any] {
         var trimmed: [String: Any] = [:]
 
@@ -471,6 +488,13 @@ final class PaddleCheckoutPrefetchCoordinator {
                 iosBundleId: iosBundleId
             )
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
+            // Kill-switch: while the consent modal is disabled, block consent-required
+            // buyers before checkout. Keyed on Paddle's consent_required, not a ZIP heuristic.
+            if !HeliumFetchedConfigManager.shared.isFeatureEnabled(.caConsentModalEnabled),
+               Self.consentRequired(in: paddleResult.rawBody) {
+                HeliumLogger.log(.debug, category: .entitlements, "Blocking consent-required buyer: caConsentModalEnabled off")
+                return .failed(error: PaddleCaliforniaConsentBlocked())
+            }
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))

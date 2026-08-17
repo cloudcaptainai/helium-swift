@@ -9,6 +9,10 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// injection (and with it probes and fallback recovery) and the reload reaction to
     /// WebContent-process death. Their telemetry stays unconditional.
     case jsCrashFallback
+
+    /// On: consent-required buyers proceed to the checkout consent modal.
+    /// Off (default): the SDK blocks them before checkout.
+    case caConsentModalEnabled
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.
