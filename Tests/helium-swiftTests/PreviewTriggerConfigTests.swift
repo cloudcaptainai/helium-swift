@@ -131,24 +131,55 @@ final class PreviewTriggerConfigTests: XCTestCase {
     }
 
     func testPreviewUsesProvidedBundleUrlAndProducts() throws {
-        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+        // On-launch served Paddle to this device, so preview Paddle products are eligible.
+        var config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
+        config.paddleClientToken = "live_token"
+        injectConfig(config)
 
         try setPreviewConfig(
             productIds: ["preview.product"],
             productIdsStripe: ["preview_stripe:price_9"],
-            productIdsPaddle: [],
+            productIdsPaddle: ["preview_paddle:pri_9"],
             productIdsPaddleWeb: ["preview_paddle_web:pri_9"]
         )
 
         XCTAssertEqual(previewInfo?.extractedBundleUrl, previewBundleUrl)
         XCTAssertEqual(previewInfo?.productsOfferedIOS, ["preview.product"])
         XCTAssertEqual(previewInfo?.productsOfferedStripe, ["preview_stripe:price_9"])
-        XCTAssertEqual(previewInfo?.productsOfferedPaddle, [])
+        XCTAssertEqual(previewInfo?.productsOfferedPaddle, ["preview_paddle:pri_9"])
         XCTAssertEqual(previewInfo?.webProductsOfferedPaddle, ["preview_paddle_web:pri_9"])
         XCTAssertEqual(
             HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?["preview456"],
             "<html>preview</html>"
         )
+    }
+
+    /// On-launch drops every Paddle trigger for a device its request-IP compliance gate rejects.
+    /// A preview installed on such a device must not carry Paddle products, or the presenter
+    /// would offer an app2web checkout production never serves here. Native, Stripe, and the
+    /// web checkout URL (shared with web-Stripe) are untouched.
+    func testPreviewWithholdsPaddleProductsWhenOnLaunchServedNone() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+        let webCheckoutUrl = "https://bundles-staging.clickthrough.to/x/bundle_web.html"
+
+        try setPreviewConfig(
+            productIds: ["preview.product"],
+            productIdsStripe: ["preview_stripe:price_9"],
+            productIdsPaddle: ["preview_paddle:pri_9"],
+            productIdsPaddleWeb: ["preview_paddle_web:pri_9"],
+            productIdsStripeWeb: ["preview_stripe_web:price_9"],
+            webPaywallBundleUrl: webCheckoutUrl,
+            secondTry: makeSecondTryBundle()
+        )
+
+        XCTAssertEqual(previewInfo?.productsOfferedIOS, ["preview.product"])
+        XCTAssertEqual(previewInfo?.productsOfferedStripe, ["preview_stripe:price_9"])
+        XCTAssertEqual(previewInfo?.productsOfferedPaddle, [])
+        XCTAssertEqual(previewInfo?.webProductsOfferedPaddle, [])
+        XCTAssertEqual(previewInfo?.webProductsOfferedStripe, ["preview_stripe_web:price_9"])
+        XCTAssertEqual(previewInfo?.webPaywallBundleUrl, webCheckoutUrl)
+        XCTAssertEqual(secondTryInfo?.productsOfferedPaddle, [])
+        XCTAssertEqual(secondTryInfo?.productsOfferedStripe, ["secondtry_stripe:price_2"])
     }
 
     func testPreviewDoesNotInheritDonorScrollSetting() throws {
