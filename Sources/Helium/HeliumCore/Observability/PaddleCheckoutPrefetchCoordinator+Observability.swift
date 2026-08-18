@@ -78,7 +78,10 @@ extension PaddleCheckoutPrefetchCoordinator {
                     totalDurationMs: msSince(chainStartedAt),
                     ipGeoCountry: nil,
                     ipGeoRegion: nil,
-                    ipGeoPostal: nil
+                    ipGeoPostal: nil,
+                    californiaDetected: nil,
+                    caConsentModalEnabled: nil,
+                    consentRequired: nil
                 ),
                 scope: scope
             )
@@ -91,12 +94,15 @@ extension PaddleCheckoutPrefetchCoordinator {
         scope: PaywallObservabilityScope,
         startedAt: Date,
         chainStartedAt: Date,
-        result: PrefetchBffStep
+        result: PrefetchBffStep,
+        caConsentModalEnabled: Bool
     ) {
         let endpointCall: EndpointCallTelemetry
         let outcome: PaddlePrefetchOutcomeKind
         let errorClass: String?
         let ipGeo: (country: String?, region: String?, postal: String?)
+        let californiaDetected: Bool?
+        let consentRequired: String?
 
         switch result {
         case let .success(rawBody):
@@ -106,6 +112,8 @@ extension PaddleCheckoutPrefetchCoordinator {
             outcome = .ready
             errorClass = nil
             ipGeo = ipGeoFields(in: rawBody)
+            californiaDetected = PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: rawBody) != nil
+            consentRequired = consentRequiredField(in: rawBody)
         case let .caBlocked(rawBody):
             endpointCall = EndpointCallTelemetry(
                 durationMs: msSince(startedAt), success: true
@@ -113,6 +121,8 @@ extension PaddleCheckoutPrefetchCoordinator {
             outcome = .caBlocked
             errorClass = "PaddleCaliforniaBlocked"
             ipGeo = ipGeoFields(in: rawBody)
+            californiaDetected = PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: rawBody) != nil
+            consentRequired = consentRequiredField(in: rawBody)
         case let .failed(error):
             let decomposed = decomposeError(error)
             endpointCall = EndpointCallTelemetry(
@@ -125,6 +135,8 @@ extension PaddleCheckoutPrefetchCoordinator {
             outcome = .failed
             errorClass = decomposed.errorClass
             ipGeo = (nil, nil, nil)
+            californiaDetected = nil
+            consentRequired = nil
         }
 
         HeliumObservabilityManager.shared.track(
@@ -144,11 +156,24 @@ extension PaddleCheckoutPrefetchCoordinator {
                 totalDurationMs: msSince(chainStartedAt),
                 ipGeoCountry: ipGeo.country,
                 ipGeoRegion: ipGeo.region,
-                ipGeoPostal: ipGeo.postal
+                ipGeoPostal: ipGeo.postal,
+                californiaDetected: californiaDetected,
+                caConsentModalEnabled: caConsentModalEnabled,
+                consentRequired: consentRequired
             ),
             scope: scope
         )
     }
+}
+
+/// Paddle's consent_required as sent: "true"/"false", or nil when absent/non-bool.
+private func consentRequiredField(in rawBody: Data) -> String? {
+    guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+          let data = parsed["data"] as? [String: Any],
+          let consentRequired = data["consent_required"] as? Bool else {
+        return nil
+    }
+    return consentRequired ? "true" : "false"
 }
 
 private func ipGeoFields(in rawBody: Data) -> (country: String?, region: String?, postal: String?) {
