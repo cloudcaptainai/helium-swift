@@ -23,11 +23,11 @@ struct PaddlePrefetchAwaitTimeout: LocalizedError {
     }
 }
 
-/// Prefetch failure returned when the consent kill-switch blocks a
-/// consent-required buyer (caConsentModalEnabled off).
-struct PaddleCaliforniaConsentBlocked: LocalizedError {
+struct PaddleCaliforniaBlocked: LocalizedError {
+    let postalCode: String
+
     var errorDescription: String? {
-        return "Checkout blocked for a consent-required buyer (caConsentModalEnabled off)"
+        return "Paddle prefetch blocked for California IP (postal \(postalCode))"
     }
 }
 
@@ -301,15 +301,6 @@ final class PaddleCheckoutPrefetchCoordinator {
         return ["data": trimPaddleCheckoutData(rawData)]
     }
 
-    /// Paddle's California affirmative-consent flag from the checkout response.
-    private nonisolated static func consentRequired(in rawBody: Data) -> Bool {
-        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
-              let data = parsed["data"] as? [String: Any] else {
-            return false
-        }
-        return (data["consent_required"] as? Bool) == true
-    }
-
     private nonisolated static func trimPaddleCheckoutData(_ raw: [String: Any]) -> [String: Any] {
         var trimmed: [String: Any] = [:]
 
@@ -395,6 +386,17 @@ final class PaddleCheckoutPrefetchCoordinator {
         if case let .alreadyEntitled(code, message, _) = outcomes[tappedPriceId] ?? .notStarted,
            PaddleErrorCodes.isRestorable(code) {
             return (code, message)
+        }
+        return nil
+    }
+
+    nonisolated static func californiaBlockedPostalCode(
+        in outcomes: [String: PaddlePrefetchOutcome]
+    ) -> String? {
+        for outcome in outcomes.values {
+            if case let .failed(error) = outcome, let ca = error as? PaddleCaliforniaBlocked {
+                return ca.postalCode
+            }
         }
         return nil
     }
@@ -487,18 +489,32 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
-            // Kill-switch: while the consent modal is disabled, block consent-required
-            // buyers before checkout. Keyed on Paddle's consent_required, not a ZIP heuristic.
+            // While the consent modal is disabled, block California buyers by ip_geo
+            // ZIP before checkout. When the flag is on, they proceed to the modal.
             if !HeliumFetchedConfigManager.shared.isFeatureEnabled(.caConsentModalEnabled),
-               Self.consentRequired(in: paddleResult.rawBody) {
-                HeliumLogger.log(.debug, category: .entitlements, "Blocking consent-required buyer: caConsentModalEnabled off")
-                return .failed(error: PaddleCaliforniaConsentBlocked())
+               let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
+                return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))
             return .failed(error: error)
         }
+    }
+
+    /// Returns the postal code when the response's IP-geo is a US California
+    /// ZIP (90001–96162, contiguous; HI starts at 96701). Nil otherwise.
+    private nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any],
+              (data["ip_geo_country_code"] as? String) == "US",
+              let postal = data["ip_geo_postal_code"] as? String,
+              let zip = Int(postal.prefix(5)),
+              (90001...96162).contains(zip) else {
+            return nil
+        }
+        return postal
     }
 }

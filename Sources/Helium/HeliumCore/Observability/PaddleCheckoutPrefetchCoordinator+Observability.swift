@@ -10,6 +10,7 @@ extension PaddleCheckoutPrefetchCoordinator {
 
     enum PrefetchBffStep {
         case success(rawBody: Data)
+        case caBlocked(rawBody: Data)
         case failed(Error)
     }
 
@@ -104,6 +105,13 @@ extension PaddleCheckoutPrefetchCoordinator {
             )
             outcome = .ready
             errorClass = nil
+            ipGeo = ipGeoFields(in: rawBody)
+        case let .caBlocked(rawBody):
+            endpointCall = EndpointCallTelemetry(
+                durationMs: msSince(startedAt), success: true
+            )
+            outcome = .caBlocked
+            errorClass = "PaddleCaliforniaBlocked"
             ipGeo = ipGeoFields(in: rawBody)
         case let .failed(error):
             let decomposed = decomposeError(error)

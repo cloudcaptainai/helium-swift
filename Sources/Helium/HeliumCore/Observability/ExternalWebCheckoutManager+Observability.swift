@@ -56,13 +56,14 @@ extension ExternalWebCheckoutManager {
         shortCircuited: Bool,
         paywallSession: PaywallSession
     ) {
-        var ready = 0, alreadyEntitled = 0, failed = 0, timedOut = 0, notStarted = 0
+        var ready = 0, alreadyEntitled = 0, failed = 0, caBlocked = 0, timedOut = 0, notStarted = 0
         for outcome in outcomes.values {
             switch outcome {
             case .ready: ready += 1
             case .alreadyEntitled: alreadyEntitled += 1
             case .failed(let error):
-                if error is PaddlePrefetchAwaitTimeout { timedOut += 1 }
+                if error is PaddleCaliforniaBlocked { caBlocked += 1 }
+                else if error is PaddlePrefetchAwaitTimeout { timedOut += 1 }
                 else { failed += 1 }
             case .notStarted: notStarted += 1
             }
@@ -74,6 +75,7 @@ extension ExternalWebCheckoutManager {
                 readyCount: ready,
                 alreadyEntitledCount: alreadyEntitled,
                 failedCount: failed,
+                caBlockedCount: caBlocked,
                 timedOutCount: timedOut,
                 notStartedCount: notStarted,
                 shortCircuited: shortCircuited

@@ -36,6 +36,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         // static state to avoid flaky cross-test request capture.
         await coordinator.cancelAllAndAwait()
         MockURLProtocol.reset()
+        HeliumFetchedConfigManager.reset()
         Helium.lastApiKeyUsed = nil
         try await super.tearDown()
     }
@@ -135,7 +136,10 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(paddle.rawBody.count, 0)
     }
 
+    /// With the consent modal enabled, a CA-range ip_geo postal resolves
+    /// `.ready` and the postal survives into the bundle ctx bootstrap.
     func testAwaitOutcome_returnsReady_whenBFFReportsCaliforniaPostal() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["caConsentModalEnabled": true]))
         MockURLProtocol.requestHandler = { request in
             let url = request.url!.absoluteString
             if url.contains("/paddle/create-transaction-for-paywall") {
@@ -163,7 +167,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
 
         guard case .ready(_, let paddle) = outcome else {
-            XCTFail("California buyers must resolve .ready (no block); got \(outcome)")
+            XCTFail("California buyers must resolve .ready when the consent modal is enabled; got \(outcome)")
             return
         }
         XCTAssertEqual(paddle.checkoutId, "che_ca")
@@ -176,18 +180,18 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "90210")
     }
 
-    // MARK: - Consent kill-switch
+    // MARK: - California ip_geo block
 
-    func testAwaitOutcome_blocksConsentRequired_whenModalFlagOff() async throws {
-        HeliumFetchedConfigManager.reset() // caConsentModalEnabled defaults off
+    func testAwaitOutcome_blocksCaliforniaPostal_whenModalFlagOff() async throws {
+        // caConsentModalEnabled defaults off, so a CA ip_geo postal is blocked.
         MockURLProtocol.requestHandler = { request in
             let url = request.url!.absoluteString
             if url.contains("/paddle/create-transaction-for-paywall") {
                 let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-                return (response, self.banditSuccessBody(transactionId: "txn_cr").data(using: .utf8)!)
+                return (response, self.banditSuccessBody(transactionId: "txn_ca").data(using: .utf8)!)
             } else if url.contains("/transaction-checkout") {
                 let body = """
-                { "data": { "id": "che_cr", "transaction_id": "txn_cr", "status": "draft", "consent_required": true } }
+                { "data": { "id": "che_ca", "transaction_id": "txn_ca", "status": "draft", "ip_geo_country_code": "US", "ip_geo_postal_code": "90210" } }
                 """
                 let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
                 return (response, body.data(using: .utf8)!)
@@ -195,26 +199,27 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_cr"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_cr")
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ca"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
 
         guard case .failed(let error) = outcome else {
-            XCTFail("consent-required buyer must be blocked when the modal flag is off; got \(outcome)")
+            XCTFail("CA buyer must be blocked when the consent modal is off; got \(outcome)")
             return
         }
-        XCTAssertTrue(error is PaddleCaliforniaConsentBlocked)
+        let caError = try XCTUnwrap(error as? PaddleCaliforniaBlocked)
+        XCTAssertEqual(caError.postalCode, "90210")
     }
 
-    func testAwaitOutcome_doesNotBlock_whenConsentNotRequired() async throws {
-        HeliumFetchedConfigManager.reset()
+    func testAwaitOutcome_doesNotBlock_whenNonCaliforniaPostal_andFlagOff() async throws {
+        // Flag off, but a non-CA ip_geo postal is never blocked.
         MockURLProtocol.requestHandler = { request in
             let url = request.url!.absoluteString
             if url.contains("/paddle/create-transaction-for-paywall") {
                 let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-                return (response, self.banditSuccessBody(transactionId: "txn_nc").data(using: .utf8)!)
+                return (response, self.banditSuccessBody(transactionId: "txn_ny").data(using: .utf8)!)
             } else if url.contains("/transaction-checkout") {
                 let body = """
-                { "data": { "id": "che_nc", "transaction_id": "txn_nc", "status": "draft", "consent_required": false } }
+                { "data": { "id": "che_ny", "transaction_id": "txn_ny", "status": "draft", "ip_geo_country_code": "US", "ip_geo_postal_code": "10001" } }
                 """
                 let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
                 return (response, body.data(using: .utf8)!)
@@ -222,11 +227,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             throw NSError(domain: "test", code: 0)
         }
 
-        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_nc"], paddleClientToken: "test_xyz", iosBundleId: nil)
-        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_nc")
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ny"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ny")
 
         guard case .ready = outcome else {
-            XCTFail("buyer without consent_required must resolve .ready; got \(outcome)")
+            XCTFail("non-California buyer must resolve .ready; got \(outcome)")
             return
         }
     }

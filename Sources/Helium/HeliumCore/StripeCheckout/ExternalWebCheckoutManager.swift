@@ -141,6 +141,12 @@ public class ExternalWebCheckoutManager: NSObject {
                 return .preCheckResolved
             }
 
+            if let caPostal = PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: outcomes) {
+                HeliumLogger.log(.debug, category: .entitlements,
+                                 "\(provider.displayName) prefetch blocked for California IP (postal \(caPostal)) — failing checkout")
+                throw WebCheckoutError.californiaBuyerBlocked(postalCode: caPostal)
+            }
+
             // Every offered product must be in a renderable state.
             let notReadyOffered = allPriceIds.filter { priceId in
                 switch outcomes[priceId] ?? .notStarted {
