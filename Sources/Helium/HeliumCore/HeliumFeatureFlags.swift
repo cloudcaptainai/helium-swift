@@ -10,8 +10,8 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// WebContent-process death. Their telemetry stays unconditional.
     case jsCrashFallback
 
-    /// On: consent-required buyers proceed to the checkout consent modal.
-    /// Off (default): the SDK blocks them before checkout.
+    /// Gates the SDK's California ip_geo ZIP block only. Off (default) blocks a
+    /// CA-range postal; on lets the buyer reach the bundle's consent modal.
     case caConsentModalEnabled
 }
 
