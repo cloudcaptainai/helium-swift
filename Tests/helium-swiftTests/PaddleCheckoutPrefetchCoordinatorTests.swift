@@ -36,6 +36,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         // static state to avoid flaky cross-test request capture.
         await coordinator.cancelAllAndAwait()
         MockURLProtocol.reset()
+        HeliumFetchedConfigManager.reset()
         Helium.lastApiKeyUsed = nil
         try await super.tearDown()
     }
@@ -133,6 +134,106 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(paddle.checkoutId, "che_session_x")
         XCTAssertEqual(paddle.transactionId, "txn_for_pri_x")
         XCTAssertGreaterThan(paddle.rawBody.count, 0)
+    }
+
+    /// With the consent modal enabled, a CA-range ip_geo postal resolves
+    /// `.ready` and the postal survives into the bundle ctx bootstrap.
+    func testAwaitOutcome_returnsReady_whenBFFReportsCaliforniaPostal() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["caConsentModalEnabled": true]))
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_ca").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                {
+                    "data": {
+                        "id": "che_ca",
+                        "transaction_id": "txn_ca",
+                        "status": "draft",
+                        "ip_geo_country_code": "US",
+                        "ip_geo_postal_code": "90210"
+                    }
+                }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ca"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .ready(_, let paddle) = outcome else {
+            XCTFail("California buyers must resolve .ready when the consent modal is enabled; got \(outcome)")
+            return
+        }
+        XCTAssertEqual(paddle.checkoutId, "che_ca")
+        let map = try XCTUnwrap(
+            PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: ["pri_ca": outcome])
+        )
+        let data = try XCTUnwrap(
+            ((map["pri_ca"] as? [String: Any])?["paddleCheckoutResponse"] as? [String: Any])?["data"] as? [String: Any]
+        )
+        XCTAssertEqual(data["ip_geo_postal_code"] as? String, "90210")
+    }
+
+    // MARK: - California ip_geo block
+
+    func testAwaitOutcome_blocksCaliforniaPostal_whenModalFlagOff() async throws {
+        // caConsentModalEnabled defaults off, so a CA ip_geo postal is blocked.
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_ca").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                { "data": { "id": "che_ca", "transaction_id": "txn_ca", "status": "draft", "ip_geo_country_code": "US", "ip_geo_postal_code": "90210" } }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ca"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ca")
+
+        guard case .failed(let error) = outcome else {
+            XCTFail("CA buyer must be blocked when the consent modal is off; got \(outcome)")
+            return
+        }
+        let caError = try XCTUnwrap(error as? PaddleCaliforniaBlocked)
+        XCTAssertEqual(caError.postalCode, "90210")
+    }
+
+    func testAwaitOutcome_doesNotBlock_whenNonCaliforniaPostal_andFlagOff() async throws {
+        // Flag off, but a non-CA ip_geo postal is never blocked.
+        MockURLProtocol.requestHandler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, self.banditSuccessBody(transactionId: "txn_ny").data(using: .utf8)!)
+            } else if url.contains("/transaction-checkout") {
+                let body = """
+                { "data": { "id": "che_ny", "transaction_id": "txn_ny", "status": "draft", "ip_geo_country_code": "US", "ip_geo_postal_code": "10001" } }
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, body.data(using: .utf8)!)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_ny"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        let outcome = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_ny")
+
+        guard case .ready = outcome else {
+            XCTFail("non-California buyer must resolve .ready; got \(outcome)")
+            return
+        }
     }
 
     // MARK: - alreadyEntitled
@@ -421,6 +522,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 "currency_code": "USD",
                 "ip_geo_country_code": "US",
                 "ip_geo_postal_code": "94102",
+                "consent_required": true,
                 "customer": ["id": "ctm_x", "email": "u@e.com"],
                 "seller": ["name": "Helium"],
                 "items": [
@@ -575,6 +677,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(data["ip_geo_country_code"] as? String, "US")
         XCTAssertEqual(data["ip_geo_postal_code"] as? String, "94102")
         XCTAssertEqual(data["created_at"] as? String, "2026-05-07T02:53:11+00:00")
+        XCTAssertEqual(data["consent_required"] as? Bool, true)
 
         let customer = try XCTUnwrap(data["customer"] as? [String: Any])
         XCTAssertEqual(customer["email"] as? String, "u@e.com")

@@ -307,6 +307,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         for key in [
             "id", "transaction_id", "status", "currency_code",
             "ip_geo_country_code", "ip_geo_postal_code",
+            // Paddle's California affirmative-consent signal, passed through so
+            // the checkout can prompt for consent when it's required.
+            "consent_required",
             "created_at",
         ] {
             if let value = raw[key] { trimmed[key] = value }
@@ -480,27 +483,32 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
 
         let bffStart = Date()
+        // Read once so the block branch and the emitted flag state can't disagree.
+        let caModalEnabled = HeliumFetchedConfigManager.shared.isFeatureEnabled(.caConsentModalEnabled)
         do {
             let paddleResult = try await bffClient.createTransactionCheckout(
                 transactionId: banditResponse.transactionId,
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if let caPostal = californiaPostalCode(in: paddleResult.rawBody) {
-                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody))
+            // While the consent modal is disabled, block California buyers by ip_geo
+            // ZIP before checkout. When the flag is on, they proceed to the modal.
+            if !caModalEnabled,
+               let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody))
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error), caConsentModalEnabled: caModalEnabled)
             return .failed(error: error)
         }
     }
 
     /// Returns the postal code when the response's IP-geo is a US California
     /// ZIP (90001–96162, contiguous; HI starts at 96701). Nil otherwise.
-    private nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
+    nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
         guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
               let data = parsed["data"] as? [String: Any],
               (data["ip_geo_country_code"] as? String) == "US",

@@ -9,6 +9,10 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// injection (and with it probes and fallback recovery) and the reload reaction to
     /// WebContent-process death. Their telemetry stays unconditional.
     case jsCrashFallback
+
+    /// Gates the SDK's California ip_geo ZIP block only. Off (default) blocks a
+    /// CA-range postal; on lets the buyer reach the bundle's consent modal.
+    case caConsentModalEnabled
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.

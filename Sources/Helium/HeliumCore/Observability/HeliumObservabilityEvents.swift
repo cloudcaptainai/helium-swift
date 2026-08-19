@@ -136,6 +136,10 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
     let ipGeoCountry: String?
     let ipGeoRegion: String?
     let ipGeoPostal: String?
+    let californiaDetected: Bool?
+    let caConsentModalEnabled: Bool?
+    // "true"/"false" as Paddle sent it, or nil when Paddle omitted the field.
+    let consentRequired: String?
 
     var name: String { "paddle_prefetch_outcome_finalized" }
     var properties: [String: Any] {
@@ -148,6 +152,9 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
         if let ipGeoCountry { p["ipGeoCountry"] = ipGeoCountry }
         if let ipGeoRegion { p["ipGeoRegion"] = ipGeoRegion }
         if let ipGeoPostal { p["ipGeoPostal"] = ipGeoPostal }
+        if let californiaDetected { p["californiaDetected"] = californiaDetected }
+        if let caConsentModalEnabled { p["caConsentModalEnabled"] = caConsentModalEnabled }
+        if let consentRequired { p["consentRequired"] = consentRequired }
         return p
     }
 }
