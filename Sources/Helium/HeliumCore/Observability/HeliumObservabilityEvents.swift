@@ -242,8 +242,8 @@ enum PaywallLinkSource: String {
 
 /// A link in paywall content was handed off to an in-app browser
 /// (`SFSafariViewController`) or an external app — in-app when the source is navigate,
-/// `openPaywallLinksInApp` is enabled (the default), and the URL is a web URL; external
-/// otherwise (including non-web schemes like `mailto:` and `tel:`). The reported URL is
+/// `openPaywallLinksInApp` is enabled, and the URL is a web URL; external otherwise
+/// (including non-web schemes like `mailto:` and `tel:`). The reported URL is
 /// cut at its query/fragment, which can carry user data.
 struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
     let source: PaywallLinkSource

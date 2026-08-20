@@ -727,8 +727,8 @@ public class HeliumConfig {
     /// Links with other schemes (e.g. `mailto:`, `tel:`, custom app schemes) always open
     /// externally, as does direct HTML navigation in paywall content.
     ///
-    /// Defaults to `true`. Set to `false` to open navigate links in the external browser instead.
-    public var openPaywallLinksInApp: Bool = true
+    /// Defaults to `false`. Set to `true` to open navigate links in an in-app browser instead.
+    public var openPaywallLinksInApp: Bool = false
 
     // MARK: - External Web Checkout Configuration
 
