@@ -102,6 +102,12 @@ private struct SingleBundleFetchResult {
     let lastServerMessage: String?
 }
 
+struct PreviewServerProducts {
+    var stripe: [String: ServerProductPrice] = [:]
+    var paddle: [String: ServerProductPrice] = [:]
+    var paddleClientToken: String?
+}
+
 enum BundleFetchError: Error {
     case permanentFailure(PaywallUnavailableReason)
     case httpError(statusCode: Int, serverMessage: String?)
@@ -211,6 +217,7 @@ public class HeliumFetchedConfigManager {
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
+        shared.previewServerProducts = PreviewServerProducts()
         HeliumControlPanelService.shared.isFallbackPreviewArmed = false
     }
 
@@ -236,7 +243,8 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
-    
+    @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
+
     func fetchConfig(
         endpoint: String,
         apiKey: String,
@@ -884,6 +892,37 @@ public class HeliumFetchedConfigManager {
         return allFound
     }
     
+    /// Replaces the products served for paywall previews, held apart from the fetched config
+    /// so on-launch's values win regardless of which arrives first.
+    func setPreviewServerProducts(
+        stripeProducts: [String: ServerProductPrice]?,
+        paddleProducts: [String: ServerProductPrice]?,
+        paddleClientToken: String?
+    ) {
+        previewServerProducts = PreviewServerProducts(
+            stripe: stripeProducts ?? [:],
+            paddle: paddleProducts ?? [:],
+            paddleClientToken: paddleClientToken
+        )
+    }
+
+    /// Preview values fill only the keys `live` does not already carry.
+    private static func overlayingPreview<Value>(
+        on live: [String: Value]?,
+        _ preview: [String: Value]
+    ) -> [String: Value]? {
+        guard !preview.isEmpty else { return live }
+        return preview.merging(live ?? [:]) { _, liveValue in liveValue }
+    }
+
+    private var previewLocalizedPrices: [String: LocalizedPrice] {
+        let preview = previewServerProducts
+        guard !preview.stripe.isEmpty || !preview.paddle.isEmpty else { return [:] }
+        return preview.stripe
+            .merging(preview.paddle) { current, _ in current }
+            .mapValues { $0.toLocalizedPrice() }
+    }
+
     func buildLocalizedPriceMap(_ productIds: [String]) async {
         if !productIds.isEmpty {
             let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
@@ -903,16 +942,24 @@ public class HeliumFetchedConfigManager {
     // NOTE - be careful about removing the public declaration here because this is in use
     // by some sdk integrations.
     public func getLocalizedPriceMap() -> [String: LocalizedPrice] {
-        return localizedPriceMap
+        return Self.overlayingPreview(on: localizedPriceMap, previewLocalizedPrices) ?? [:]
     }
 
     // NOTE - be careful about removing the public declaration here because this is in use
     // by some sdk integrations.
     public func getStripeProductsPriceMap() -> [String: ServerProductPrice]? {
-        return fetchedConfig?.stripeProducts
+        return Self.overlayingPreview(on: fetchedConfig?.stripeProducts, previewServerProducts.stripe)
     }
     public func getPaddleProductsPriceMap() -> [String: ServerProductPrice]? {
-        return fetchedConfig?.paddleProducts
+        return Self.overlayingPreview(on: fetchedConfig?.paddleProducts, previewServerProducts.paddle)
+    }
+
+    /// On-launch's token wins; a preview's fills in when there is none.
+    var paddleClientToken: String? {
+        if let token = fetchedConfig?.paddleClientToken, !token.isEmpty {
+            return token
+        }
+        return previewServerProducts.paddleClientToken
     }
 
     /// When config fetch returns a customerId for a payment provider, persist it and
@@ -941,7 +988,7 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        return localizedPriceMap.filter { productIDs.contains($0.key) }
+        return getLocalizedPriceMap().filter { productIDs.contains($0.key) }
     }
     
     private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
