@@ -6,6 +6,9 @@ struct HeliumControlPanelResponse: Codable {
     let stripeProducts: [String: ServerProductPrice]?
     let paddleProducts: [String: ServerProductPrice]?
     let paddleClientToken: String?
+    /// Whether this device is not cleared for a real external checkout, so previews
+    /// should default to a simulated purchase. Optional: readers treat absent as true.
+    let forceExternalCheckoutSimulation: Bool?
 }
 
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {

@@ -349,6 +349,8 @@ struct HeliumControlPanelView: View {
         do {
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
 
+            previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
+
             // Fetch all products data
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
 
