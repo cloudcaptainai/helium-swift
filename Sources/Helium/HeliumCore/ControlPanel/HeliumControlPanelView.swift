@@ -9,6 +9,10 @@ struct HeliumControlPanelView: View {
     @State private var searchText: String = ""
     @State private var paywallLoadError: String? = nil
     @State private var pendingWebPreviewURL: URL? = nil
+    @State private var pendingConfiguration: HeliumPreviewConfigurationRequest? = nil
+    /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
+    /// presented on top of a sheet that is still on its way out.
+    @State private var queuedLaunch: (() -> Void)? = nil
 
     var body: some View {
         NavigationView {
@@ -68,6 +72,20 @@ struct HeliumControlPanelView: View {
             }
         } message: { _ in
             Text("Web paywalls open in your default browser for a display-only preview. Purchases won't work from this preview.")
+        }
+        .fullScreenCover(item: $pendingConfiguration, onDismiss: {
+            let launch = queuedLaunch
+            queuedLaunch = nil
+            launch?()
+        }) { request in
+            HeliumPreviewConfigurationView(
+                request: request,
+                onStart: { configuration in
+                    queuedLaunch = { start(request, configuration: configuration) }
+                    pendingConfiguration = nil
+                },
+                onCancel: { pendingConfiguration = nil }
+            )
         }
         .onAppear {
             fetchTask = Task { await fetchPaywalls() }
@@ -155,11 +173,11 @@ struct HeliumControlPanelView: View {
         if configured {
             card
                 .contentShape(Rectangle())
-                .onTapGesture { presentFallbackPreview() }
+                .onTapGesture { configureFallbackPreview() }
                 .opacity(activity == .idle ? 1.0 : 0.4)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityAction { presentFallbackPreview() }
+                .accessibilityAction { configureFallbackPreview() }
         } else {
             // Inert: the setup link inside the text must stay the only tap target.
             card
@@ -260,14 +278,14 @@ struct HeliumControlPanelView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard isEnabled else { return }
-                        selectVersion(version, paywall: paywall)
+                        configurePreview(for: version, paywall: paywall)
                     }
                     .opacity(isEnabled || isLoading ? 1.0 : 0.4)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(isEnabled ? .isButton : [])
                     .accessibilityAction {
                         guard isEnabled else { return }
-                        selectVersion(version, paywall: paywall)
+                        configurePreview(for: version, paywall: paywall)
                     }
                 }
             }
@@ -311,6 +329,33 @@ struct HeliumControlPanelView: View {
             if !Task.isCancelled {
                 state = .error(error.localizedDescription)
             }
+        }
+    }
+
+    private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
+        guard activity == .idle else { return }
+        pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
+    }
+
+    private func configureFallbackPreview() {
+        guard activity == .idle else { return }
+        pendingConfiguration = HeliumPreviewConfigurationRequest(target: .fallback)
+    }
+
+    /// Prototype: the chosen configuration is logged and then the existing preview path runs
+    /// unchanged. Simulated checkout and the CA modal override are not wired to the purchase flow.
+    private func start(_ request: HeliumPreviewConfigurationRequest, configuration: HeliumPreviewConfiguration) {
+        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Preview configuration selected", metadata: [
+            "paywall": request.paywallName,
+            "purchaseMode": configuration.purchaseMode.rawValue,
+            "showCaliforniaConsentModal": "\(configuration.showCaliforniaConsentModal)",
+        ])
+
+        switch request.target {
+        case .version(let version, let paywall):
+            selectVersion(version, paywall: paywall)
+        case .fallback:
+            presentFallbackPreview()
         }
     }
 
