@@ -136,6 +136,10 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
     let ipGeoCountry: String?
     let ipGeoRegion: String?
     let ipGeoPostal: String?
+    let californiaDetected: Bool?
+    let caConsentModalEnabled: Bool?
+    // "true"/"false" as Paddle sent it, or nil when Paddle omitted the field.
+    let consentRequired: String?
 
     var name: String { "paddle_prefetch_outcome_finalized" }
     var properties: [String: Any] {
@@ -148,6 +152,9 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
         if let ipGeoCountry { p["ipGeoCountry"] = ipGeoCountry }
         if let ipGeoRegion { p["ipGeoRegion"] = ipGeoRegion }
         if let ipGeoPostal { p["ipGeoPostal"] = ipGeoPostal }
+        if let californiaDetected { p["californiaDetected"] = californiaDetected }
+        if let caConsentModalEnabled { p["caConsentModalEnabled"] = caConsentModalEnabled }
+        if let consentRequired { p["consentRequired"] = consentRequired }
         return p
     }
 }
@@ -235,8 +242,8 @@ enum PaywallLinkSource: String {
 
 /// A link in paywall content was handed off to an in-app browser
 /// (`SFSafariViewController`) or an external app — in-app when the source is navigate,
-/// `openPaywallLinksInApp` is enabled (the default), and the URL is a web URL; external
-/// otherwise (including non-web schemes like `mailto:` and `tel:`). The reported URL is
+/// `openPaywallLinksInApp` is enabled, and the URL is a web URL; external otherwise
+/// (including non-web schemes like `mailto:` and `tel:`). The reported URL is
 /// cut at its query/fragment, which can carry user data.
 struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
     let source: PaywallLinkSource
@@ -313,6 +320,53 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p
+    }
+}
+
+// MARK: - Paywall webview render
+
+enum PaywallJSErrorOutcome: String {
+    /// Screen confirmed blank; routed into the load ladder.
+    case fatalBlankScreen
+    /// Content was visible, or the error came too late to act on.
+    case benign
+    /// Probe failed; treated as content so a working paywall is never replaced.
+    case probeInconclusive
+    /// The probe was abandoned mid-flight — the load attempt changed underneath it.
+    case abandoned
+}
+
+/// An uncaught error or unhandled rejection in a paywall bundle. Emitted for
+/// every report so broken bundles are queryable even when nothing went blank.
+struct PaywallJSErrorDetected: HeliumObservabilityEvent {
+    let source: String
+    let errorMessage: String?
+    let errorStack: String?
+    let loadAttempt: String
+    let outcome: PaywallJSErrorOutcome
+    let msSinceLoadStart: Int?
+
+    var name: String { "paywall_js_error_detected" }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "source": source,
+            "loadAttempt": loadAttempt,
+            "outcome": outcome.rawValue,
+        ]
+        if let m = truncatedForObservability(errorMessage) { p["errorMessage"] = m }
+        if let s = truncatedForObservability(errorStack, maxLength: 1000) { p["errorStack"] = s }
+        if let msSinceLoadStart { p["msSinceLoadStart"] = msSinceLoadStart }
+        return p
+    }
+}
+
+struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
+    let loadAttempt: String
+    let wasContentLoaded: Bool
+
+    var name: String { "paywall_web_process_terminated" }
+    var properties: [String: Any] {
+        ["loadAttempt": loadAttempt, "wasContentLoaded": wasContentLoaded]
     }
 }
 

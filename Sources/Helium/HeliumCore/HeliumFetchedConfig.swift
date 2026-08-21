@@ -1087,6 +1087,26 @@ public class HeliumFetchedConfigManager {
         }
         return true
     }
+    
+    // MARK: - Feature Flags
+    
+    /// Resolved on access from the current config so every set/reset path is covered.
+    func isFeatureEnabled(_ flag: HeliumFeatureFlag) -> Bool {
+        HeliumFeatureFlags.from(fetchedConfig?.featureFlags).isEnabled(flag)
+    }
+    
+    /// Set just the resolved feature-flags map for testing, preserving any
+    /// injected config. Accessible via @testable import; cleared by `reset()`.
+    func setFeatureFlagsForTesting(_ raw: JSON?) {
+        var config = fetchedConfig ?? HeliumFetchedConfig(
+            triggerToPaywalls: [:],
+            segmentBrowserWriteKey: "",
+            segmentAnalyticsEndpoint: "",
+            fetchedConfigID: UUID()
+        )
+        config.featureFlags = raw
+        self.fetchedConfig = config
+    }
 
     // MARK: - Preview Control Panel
 

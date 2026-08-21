@@ -146,4 +146,58 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "triggerPaywallUUIDs": [String: String](),
         ]))
     }
+
+    // MARK: - PaddlePrefetchOutcomeFinalized (CA ramp observability)
+
+    func testOutcomeFinalizedCarriesCaRampFieldsWhenFlagOnAndCaliforniaFlows() throws {
+        let event = PaddlePrefetchOutcomeFinalized(
+            priceId: "pri_x",
+            outcome: .ready,
+            errorClass: nil,
+            totalDurationMs: 42,
+            ipGeoCountry: "US",
+            ipGeoRegion: "CA",
+            ipGeoPostal: "90210",
+            californiaDetected: true,
+            caConsentModalEnabled: true,
+            consentRequired: "true"
+        )
+
+        XCTAssertEqual(event.name, "paddle_prefetch_outcome_finalized")
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "priceId": "pri_x",
+            "outcome": "ready",
+            "totalDurationMs": 42,
+            "ipGeoCountry": "US",
+            "ipGeoRegion": "CA",
+            "ipGeoPostal": "90210",
+            "californiaDetected": true,
+            "caConsentModalEnabled": true,
+            "consentRequired": "true",
+        ]))
+    }
+
+    func testOutcomeFinalizedOmitsCaRampFieldsWhenAbsent() throws {
+        // No rawBody (bandit-step / failed): the ramp keys drop rather than
+        // emitting misleading false/absent values.
+        let event = PaddlePrefetchOutcomeFinalized(
+            priceId: "pri_x",
+            outcome: .failed,
+            errorClass: "SomeError",
+            totalDurationMs: 7,
+            ipGeoCountry: nil,
+            ipGeoRegion: nil,
+            ipGeoPostal: nil,
+            californiaDetected: nil,
+            caConsentModalEnabled: nil,
+            consentRequired: nil
+        )
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "priceId": "pri_x",
+            "outcome": "failed",
+            "totalDurationMs": 7,
+            "errorClass": "SomeError",
+        ]))
+    }
 }

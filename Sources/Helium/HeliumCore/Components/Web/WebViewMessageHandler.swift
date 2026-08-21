@@ -36,6 +36,17 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
 
 
         if message.name == "logging" {
+            if let dict = message.body as? [String: Any],
+               dict["type"] as? String == "sdk-detected-js-error" {
+                HeliumLogger.log(.warn, category: .ui, "Paywall JS error reported", metadata: [
+                    "message": dict["message"] as? String ?? ""
+                ])
+                NotificationCenter.default.post(
+                    name: .webViewJSErrorDetected,
+                    object: self,
+                    userInfo: dict
+                )
+            }
             replyHandler(nil, nil)
             return
         }
@@ -159,8 +170,8 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     }
     
     /// Opens a link from the paywall. A navigate-sourced link is shown in an in-app browser
-    /// presented over the paywall when `Helium.config.openPaywallLinksInApp` is enabled (the
-    /// default) and the URL is http/https; every other link opens externally.
+    /// presented over the paywall when `Helium.config.openPaywallLinksInApp` is enabled and the
+    /// URL is http/https; every other link opens externally.
     @MainActor
     func openPaywallLink(_ url: URL, source: PaywallLinkSource) {
         let scope = delegateWrapper?.observabilityScope
@@ -275,11 +286,17 @@ extension WebViewMessageHandler: WKNavigationDelegate {
         HeliumLogger.log(.error, category: .ui, "WebView provisional navigation failed", metadata: ["error": error.localizedDescription])
         NotificationCenter.default.post(name: .webViewContentLoadFail, object: self)
     }
-    
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        HeliumLogger.log(.error, category: .ui, "WebView content process terminated")
+        NotificationCenter.default.post(name: .webViewProcessTerminated, object: webView)
+    }
+
 }
 
-// Add notification name
 extension Notification.Name {
    static let webViewContentLoaded = Notification.Name("webViewContentLoaded")
    static let webViewContentLoadFail = Notification.Name("webViewContentLoadFail")
+   static let webViewJSErrorDetected = Notification.Name("webViewJSErrorDetected")
+   static let webViewProcessTerminated = Notification.Name("webViewProcessTerminated")
 }
