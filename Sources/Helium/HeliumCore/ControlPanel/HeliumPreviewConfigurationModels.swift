@@ -17,9 +17,9 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .simulated:
-            return "Full checkout UI, no Paddle call. No transaction, no entitlement."
+            return "Full checkout UI, no real transaction, no entitlement."
         case .real:
-            return "Real Paddle purchase and entitlements, tagged helium_testing."
+            return "Real purchase and entitlements, tagged helium_testing."
         }
     }
 
@@ -30,80 +30,70 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Real Paddle checkout is only cleared for US buyers today.
+    /// Real external checkout is only cleared for US buyers today.
     var isUSOnly: Bool { self == .real }
 }
 
-/// A trait or user-attribute override entered for a preview run.
-struct HeliumPreviewKeyValue: Identifiable, Equatable {
-    let id = UUID()
-    var key: String = ""
-    var value: String = ""
-
-    var isComplete: Bool {
-        !key.trimmingCharacters(in: .whitespaces).isEmpty
-    }
+/// App2web options a preview run applies when it kicks out to the external checkout.
+struct HeliumPreviewConfiguration: Equatable {
+    var purchaseMode: HeliumPreviewPurchaseMode = .simulated
+    var showCaliforniaConsentModal: Bool = false
 }
 
-/// The language a preview renders in. `.device` leaves resolution to the paywall's own logic.
-enum HeliumPreviewLanguage: String, CaseIterable, Identifiable {
-    case device
-    case en
-    case es
-    case fr
-    case de
-    case pt_BR = "pt-BR"
-    case ja
+/// Session-scoped app2web preview settings, applied to every preview launch so a tester
+/// configures once instead of re-picking on each open. In-memory for the process lifetime.
+final class HeliumPreviewConfigurationStore: ObservableObject {
+    static let shared = HeliumPreviewConfigurationStore()
+    private init() {}
 
-    var id: String { rawValue }
+    /// When true, an app2web preview shows the configuration screen before presenting.
+    @Published var configureBeforeEachPreview = false
 
-    var displayName: String {
-        switch self {
-        case .device: return "Device default"
-        case .en: return "English"
-        case .es: return "Spanish"
-        case .fr: return "French"
-        case .de: return "German"
-        case .pt_BR: return "Portuguese (Brazil)"
-        case .ja: return "Japanese"
+    /// Purchase eligibility from `/preview-paywalls`. Starts true so an absent or
+    /// unparsed signal keeps previews on the simulated path.
+    @Published var forceExternalCheckoutSimulation = true
+
+    @Published var showCaliforniaConsentModal = false
+
+    @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
+
+    /// Defaults to the mode the device is eligible for until the tester picks one.
+    var purchaseMode: HeliumPreviewPurchaseMode {
+        get {
+            if forceExternalCheckoutSimulation { return .simulated }
+            return chosenPurchaseMode ?? .real
+        }
+        set { chosenPurchaseMode = newValue }
+    }
+
+    var configuration: HeliumPreviewConfiguration {
+        get {
+            HeliumPreviewConfiguration(
+                purchaseMode: purchaseMode,
+                showCaliforniaConsentModal: showCaliforniaConsentModal
+            )
+        }
+        set {
+            purchaseMode = newValue.purchaseMode
+            showCaliforniaConsentModal = newValue.showCaliforniaConsentModal
         }
     }
 
     var summary: String {
-        self == .device ? "Device default" : "\(displayName) (\(rawValue))"
-    }
-}
-
-/// Per-preview settings chosen before the paywall opens. Kept for the lifetime of the process so a
-/// tester who is iterating on one paywall does not re-pick the same options on every launch.
-struct HeliumPreviewConfiguration: Equatable {
-    var purchaseMode: HeliumPreviewPurchaseMode = .simulated
-    var showCaliforniaConsentModal: Bool = false
-    var traits: [HeliumPreviewKeyValue] = []
-    var userAttributes: [HeliumPreviewKeyValue] = []
-    var language: HeliumPreviewLanguage = .device
-
-    var traitsSummary: String { HeliumPreviewConfiguration.summarize(traits, noun: "override") }
-    var userAttributesSummary: String { HeliumPreviewConfiguration.summarize(userAttributes, noun: "attribute") }
-
-    private static func summarize(_ entries: [HeliumPreviewKeyValue], noun: String) -> String {
-        let count = entries.filter(\.isComplete).count
-        switch count {
-        case 0: return "None"
-        case 1: return "1 \(noun)"
-        default: return "\(count) \(noun)s"
+        var parts = [purchaseMode.title]
+        if showCaliforniaConsentModal {
+            parts.append("CA consent modal")
         }
+        return parts.joined(separator: " · ")
     }
-
-    static var lastUsed = HeliumPreviewConfiguration()
 }
 
-/// What the configuration sheet is being opened for, so the sheet can name it and the panel knows
-/// what to launch once the tester confirms.
+/// What the configuration screen is being opened for: editing the session settings from the
+/// previews list, or confirming them ahead of one paywall launch.
 struct HeliumPreviewConfigurationRequest: Identifiable {
     enum Target {
         case version(HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry)
-        case fallback
+        case settings
     }
 
     let target: Target
@@ -111,28 +101,53 @@ struct HeliumPreviewConfigurationRequest: Identifiable {
     var id: String {
         switch target {
         case .version(let version, _): return version.id
-        case .fallback: return "fallback"
+        case .settings: return "settings"
         }
     }
 
-    var paywallName: String {
+    var isSettings: Bool {
+        if case .settings = target { return true }
+        return false
+    }
+
+    var title: String {
         switch target {
         case .version(_, let paywall): return paywall.paywallName
-        case .fallback: return "Default Fallback Paywall"
+        case .settings: return "App2Web Previews"
         }
     }
 
     var versionLabel: String? {
         switch target {
         case .version(let version, _): return version.displayLabel
-        case .fallback: return nil
+        case .settings: return nil
         }
     }
 
-    var isWebPaywall: Bool {
+    /// The CA consent toggle only exists on Paddle checkouts, so it is hidden for a
+    /// Stripe-only paywall. The session settings screen always shows it.
+    var showsCompliance: Bool {
         switch target {
-        case .version(_, let paywall): return paywall.isWebPaywall
-        case .fallback: return false
+        case .version(let version, _): return version.hasApp2webPaddle
+        case .settings: return true
         }
+    }
+}
+
+extension HeliumPaywallPreviewVersion {
+    var hasApp2webPaddle: Bool {
+        webPaywallBundleUrl != nil && !(webPaddleProductIds ?? []).isEmpty
+    }
+
+    var hasApp2webStripe: Bool {
+        webPaywallBundleUrl != nil && !(webStripeProductIds ?? []).isEmpty
+    }
+
+    var isApp2webCapable: Bool { hasApp2webPaddle || hasApp2webStripe }
+}
+
+extension HeliumPaywallPreviewEntry {
+    var isApp2webCapable: Bool {
+        versions.contains { $0.isApp2webCapable }
     }
 }

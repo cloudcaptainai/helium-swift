@@ -2,8 +2,8 @@
 //  HeliumPreviewConfigurationView.swift
 //  Helium
 //
-//  Settings sheet shown before a paywall preview opens, so a tester picks the checkout behaviour
-//  they want before the paywall is on screen rather than discovering it mid-flow.
+//  App2web preview settings. Opened from the previews list to edit the session settings,
+//  or — when "configure before each preview" is on — ahead of an app2web paywall launch.
 //
 
 import SwiftUI
@@ -13,37 +13,31 @@ struct HeliumPreviewConfigurationView: View {
     let onStart: (HeliumPreviewConfiguration) -> Void
     let onCancel: () -> Void
 
-    @State private var configuration = HeliumPreviewConfiguration.lastUsed
+    @ObservedObject private var store = HeliumPreviewConfigurationStore.shared
+    @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
 
-    /// Prototype knob: flip to preview how the sheet reads for a tester outside the US, where real
-    /// Paddle checkout is unavailable.
-    private let simulatesNonUSDevice = false
-
-    private var realPurchaseUnavailable: Bool { simulatesNonUSDevice }
+    private var realPurchaseUnavailable: Bool { store.forceExternalCheckoutSimulation }
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                bannerStrip
+        VStack(spacing: 0) {
+            bannerStrip
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        title
-                        paywallPill
-                        purchaseSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    title
+                    paywallPill
+                    purchaseSection
+                    if request.showsCompliance {
                         complianceSection
-                        contextSection
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 18)
-                    .padding(.bottom, 20)
                 }
-
-                actionBar
+                .padding(.horizontal, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 20)
             }
-            .navigationBarHidden(true)
+
+            actionBar
         }
-        .navigationViewStyle(.stack)
     }
 
     /// Pinned under the scrolling settings.
@@ -86,7 +80,7 @@ struct HeliumPreviewConfigurationView: View {
     }
 
     private var title: some View {
-        Text(request.paywallName)
+        Text(request.title)
             .font(.title2.weight(.bold))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,9 +90,6 @@ struct HeliumPreviewConfigurationView: View {
         HStack(spacing: 8) {
             if let versionLabel = request.versionLabel {
                 pill(versionLabel)
-            }
-            if request.isWebPaywall {
-                pill("Web paywall")
             }
             pill("app2web")
         }
@@ -147,9 +138,6 @@ struct HeliumPreviewConfigurationView: View {
                         Text(mode.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.primary)
-                        if mode == .simulated {
-                            tag("DEFAULT")
-                        }
                         if mode.isUSOnly {
                             tag("US ONLY")
                         }
@@ -189,12 +177,19 @@ struct HeliumPreviewConfigurationView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("COMPLIANCE")
 
-            Toggle(isOn: $configuration.showCaliforniaConsentModal) {
-                Text("Show California consent modal")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $configuration.showCaliforniaConsentModal) {
+                    Text("Show California consent modal")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.primary)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                if request.isSettings {
+                    Text("Paddle checkouts only.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
-            .toggleStyle(SwitchToggleStyle(tint: .blue))
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -209,88 +204,21 @@ struct HeliumPreviewConfigurationView: View {
         .padding(.top, 22)
     }
 
-    // MARK: - Paywall context
-
-    private var contextSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("PAYWALL CONTEXT")
-
-            VStack(spacing: 0) {
-                NavigationLink {
-                    HeliumPreviewKeyValueEditor(
-                        title: "Paywall Traits",
-                        explanation: "Trait values the paywall renders with for this run. Anything you leave out keeps the value the paywall was published with.",
-                        keyPlaceholder: "Trait name",
-                        entries: $configuration.traits
-                    )
-                } label: {
-                    contextRow("Paywall traits", value: configuration.traitsSummary, icon: "square.stack.3d.up")
-                }
-
-                Divider().padding(.leading, 44)
-
-                NavigationLink {
-                    HeliumPreviewLanguageEditor(language: $configuration.language)
-                } label: {
-                    contextRow("Language", value: configuration.language.summary, icon: "globe")
-                }
-
-                Divider().padding(.leading, 44)
-
-                NavigationLink {
-                    HeliumPreviewKeyValueEditor(
-                        title: "User Attributes",
-                        explanation: "Custom user attributes for this run, so you can stand in as a targeted user without changing the account you are signed in as.",
-                        keyPlaceholder: "Attribute name",
-                        entries: $configuration.userAttributes
-                    )
-                } label: {
-                    contextRow("Custom user attributes", value: configuration.userAttributesSummary, icon: "person.crop.circle")
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color(.separator), lineWidth: 1)
-            )
-        }
-        .padding(.top, 22)
-    }
-
-    private func contextRow(_ title: String, value: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .frame(width: 20)
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.primary)
-            Spacer()
-            Text(value)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .contentShape(Rectangle())
-    }
-
     // MARK: - Actions
+
+    private var startActionLabel: String {
+        if request.isSettings {
+            return "Save Settings"
+        }
+        return configuration.purchaseMode == .real ? "Start Real Purchase Preview" : "Start Simulated Preview"
+    }
 
     private var startAction: some View {
         Button {
-            HeliumPreviewConfiguration.lastUsed = configuration
+            store.configuration = configuration
             onStart(configuration)
         } label: {
-            Text(configuration.purchaseMode == .real ? "Start Real Purchase Preview" : "Start Simulated Preview")
+            Text(startActionLabel)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)

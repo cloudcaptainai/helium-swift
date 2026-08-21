@@ -13,6 +13,7 @@ struct HeliumControlPanelView: View {
     /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
     /// presented on top of a sheet that is still on its way out.
     @State private var queuedLaunch: (() -> Void)? = nil
+    @ObservedObject private var previewSettings = HeliumPreviewConfigurationStore.shared
 
     var body: some View {
         NavigationView {
@@ -25,6 +26,7 @@ struct HeliumControlPanelView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         descriptionHeader
+                        app2webSettingsCard
                         fallbackPreviewCard
                         stateContent
                     }
@@ -80,8 +82,10 @@ struct HeliumControlPanelView: View {
         }) { request in
             HeliumPreviewConfigurationView(
                 request: request,
-                onStart: { configuration in
-                    queuedLaunch = { start(request, configuration: configuration) }
+                onStart: { _ in
+                    if case .version(let version, let paywall) = request.target {
+                        queuedLaunch = { selectVersion(version, paywall: paywall) }
+                    }
                     pendingConfiguration = nil
                 },
                 onCancel: { pendingConfiguration = nil }
@@ -144,6 +148,58 @@ struct HeliumControlPanelView: View {
         }
     }
 
+    /// Session settings for app2web previews, applied to every launch. Only offered once the
+    /// loaded list actually contains an app2web-capable paywall.
+    @ViewBuilder
+    private var app2webSettingsCard: some View {
+        if case .loaded(let response) = state, response.paywalls.contains(where: { $0.isApp2webCapable }) {
+            VStack(spacing: 0) {
+                Button {
+                    guard activity == .idle else { return }
+                    pendingConfiguration = HeliumPreviewConfigurationRequest(target: .settings)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.body)
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("App2Web Preview Settings")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundColor(.primary)
+                            Text(previewSettings.summary)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Divider().padding(.leading, 12)
+
+                Toggle(isOn: $previewSettings.configureBeforeEachPreview) {
+                    Text("Configure before each preview")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+            }
+            .background(Color(UIColor { traitCollection in
+                traitCollection.userInterfaceStyle == .dark ? .systemGroupedBackground : .white
+            }))
+            .cornerRadius(12)
+            .opacity(activity == .idle ? 1.0 : 0.4)
+        }
+    }
+
     @ViewBuilder
     private var fallbackPreviewCard: some View {
         let configured = HeliumFetchedConfigManager.shared.hasConfiguredFallbackPreview()
@@ -173,11 +229,11 @@ struct HeliumControlPanelView: View {
         if configured {
             card
                 .contentShape(Rectangle())
-                .onTapGesture { configureFallbackPreview() }
+                .onTapGesture { presentFallbackPreview() }
                 .opacity(activity == .idle ? 1.0 : 0.4)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityAction { configureFallbackPreview() }
+                .accessibilityAction { presentFallbackPreview() }
         } else {
             // Inert: the setup link inside the text must stay the only tap target.
             card
@@ -332,30 +388,14 @@ struct HeliumControlPanelView: View {
         }
     }
 
+    /// Non-app2web paywalls present directly; app2web paywalls stop at the configuration
+    /// screen first only when the tester has turned that step on.
     private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard activity == .idle else { return }
-        pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
-    }
-
-    private func configureFallbackPreview() {
-        guard activity == .idle else { return }
-        pendingConfiguration = HeliumPreviewConfigurationRequest(target: .fallback)
-    }
-
-    /// Prototype: the chosen configuration is logged and then the existing preview path runs
-    /// unchanged. Simulated checkout and the CA modal override are not wired to the purchase flow.
-    private func start(_ request: HeliumPreviewConfigurationRequest, configuration: HeliumPreviewConfiguration) {
-        HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Preview configuration selected", metadata: [
-            "paywall": request.paywallName,
-            "purchaseMode": configuration.purchaseMode.rawValue,
-            "showCaliforniaConsentModal": "\(configuration.showCaliforniaConsentModal)",
-        ])
-
-        switch request.target {
-        case .version(let version, let paywall):
+        if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
+            pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
+        } else {
             selectVersion(version, paywall: paywall)
-        case .fallback:
-            presentFallbackPreview()
         }
     }
 
