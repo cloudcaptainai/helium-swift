@@ -892,10 +892,8 @@ public class HeliumFetchedConfigManager {
         return allFound
     }
     
-    /// Replaces the products served for paywall previews. Held apart from the fetched config
-    /// rather than merged into it, so on-launch's values win regardless of which arrives first:
-    /// they are resolved against a real customer, while the preview endpoint has no user to
-    /// check eligibility against and reports every intro offer as available.
+    /// Replaces the products served for paywall previews, held apart from the fetched config
+    /// so on-launch's values win regardless of which arrives first.
     func setPreviewServerProducts(
         stripeProducts: [String: ServerProductPrice]?,
         paddleProducts: [String: ServerProductPrice]?,
@@ -956,8 +954,7 @@ public class HeliumFetchedConfigManager {
         return Self.overlayingPreview(on: fetchedConfig?.paddleProducts, previewServerProducts.paddle)
     }
 
-    /// The token Paddle checkout should use. A preview supplies one when the paywall being
-    /// previewed is not live, in which case on-launch carried no Paddle products and no token.
+    /// On-launch's token wins; a preview's fills in when there is none.
     var paddleClientToken: String? {
         if let token = fetchedConfig?.paddleClientToken, !token.isEmpty {
             return token
