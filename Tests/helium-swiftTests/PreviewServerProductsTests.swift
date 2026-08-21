@@ -51,39 +51,7 @@ final class PreviewServerProductsTests: XCTestCase {
         injectConfig(config)
     }
 
-    /// On-launch served Paddle products for a live paywall but no token: the case where a
-    /// preview of a not-yet-live paywall has to supply the token itself.
-    private func injectPaddleServedConfigWithoutToken() {
-        injectBaseConfig(
-            paddleProducts: [liveKey: makeServerPrice(formattedPrice: "$4.99", value: 4.99, title: "Live")],
-            paddleClientToken: nil
-        )
-    }
-
     func testPreviewProductsSurfaceThroughTheProductMaps() {
-        // On-launch served Paddle to this device, so preview Paddle is eligible too.
-        injectBaseConfig(paddleClientToken: "live_token_for_other_paywall")
-
-        HeliumFetchedConfigManager.shared.setPreviewServerProducts(
-            stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99)],
-            paddleProducts: [paddleKey: makeServerPrice(formattedPrice: "$19.99", value: 19.99)],
-            paddleClientToken: "preview_token"
-        )
-
-        XCTAssertNotNil(HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[stripeKey])
-        XCTAssertNotNil(HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()?[paddleKey])
-        XCTAssertEqual(HeliumFetchedConfigManager.shared.paddleClientToken, "live_token_for_other_paywall")
-
-        let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
-        XCTAssertEqual(priceMap[stripeKey]?.baseInfo.formattedPrice, "$9.99")
-        XCTAssertEqual(priceMap[paddleKey]?.baseInfo.formattedPrice, "$19.99")
-    }
-
-    /// On-launch drops every Paddle trigger for a device its request-IP compliance gate rejects.
-    /// The preview endpoint runs no such gate, so its Paddle set must defer to on-launch's
-    /// verdict, or a tester outside the served region would reach a checkout production never
-    /// offers them. Stripe carries no such gate and stays available.
-    func testPreviewPaddleIsWithheldWhenOnLaunchServedNone() {
         injectBaseConfig()
 
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(
@@ -92,28 +60,13 @@ final class PreviewServerProductsTests: XCTestCase {
             paddleClientToken: "preview_token"
         )
 
-        XCTAssertFalse(HeliumFetchedConfigManager.shared.isPaddleServedByOnLaunch)
         XCTAssertNotNil(HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[stripeKey])
-        XCTAssertNil(HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap())
-        XCTAssertNil(HeliumFetchedConfigManager.shared.paddleClientToken)
+        XCTAssertNotNil(HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()?[paddleKey])
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.paddleClientToken, "preview_token")
 
         let priceMap = HeliumFetchedConfigManager.shared.getLocalizedPriceMap()
         XCTAssertEqual(priceMap[stripeKey]?.baseInfo.formattedPrice, "$9.99")
-        XCTAssertNil(priceMap[paddleKey])
-    }
-
-    func testOnLaunchPaddleProductsAloneMakePreviewPaddleEligible() {
-        injectBaseConfig(paddleProducts: [liveKey: makeServerPrice(formattedPrice: "$4.99", value: 4.99, title: "Live")])
-
-        HeliumFetchedConfigManager.shared.setPreviewServerProducts(
-            stripeProducts: nil,
-            paddleProducts: [paddleKey: makeServerPrice(formattedPrice: "$19.99", value: 19.99)],
-            paddleClientToken: "preview_token"
-        )
-
-        XCTAssertTrue(HeliumFetchedConfigManager.shared.isPaddleServedByOnLaunch)
-        XCTAssertNotNil(HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap()?[paddleKey])
-        XCTAssertEqual(HeliumFetchedConfigManager.shared.paddleClientToken, "preview_token")
+        XCTAssertEqual(priceMap[paddleKey]?.baseInfo.formattedPrice, "$19.99")
     }
 
     func testPreviewNeverEntersTheFetchedConfig() {
@@ -177,7 +130,7 @@ final class PreviewServerProductsTests: XCTestCase {
     }
 
     func testRefreshReplacesEarlierPreviewValues() {
-        injectPaddleServedConfigWithoutToken()
+        injectBaseConfig()
 
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(
             stripeProducts: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99, title: "Before")],
@@ -199,7 +152,7 @@ final class PreviewServerProductsTests: XCTestCase {
     }
 
     func testMissingClientTokenIsSuppliedByThePreview() {
-        injectPaddleServedConfigWithoutToken()
+        injectBaseConfig(paddleClientToken: nil)
 
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(
             stripeProducts: nil,
@@ -241,7 +194,7 @@ final class PreviewServerProductsTests: XCTestCase {
     }
 
     func testCanceledRefreshDoesNotApplyItsProducts() async {
-        injectPaddleServedConfigWithoutToken()
+        injectBaseConfig()
         let response = makeResponse(
             stripe: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99)],
             paddleClientToken: "stale_token"
@@ -261,7 +214,7 @@ final class PreviewServerProductsTests: XCTestCase {
     }
 
     func testOverlappingRefreshKeepsTheNewerResponse() async {
-        injectPaddleServedConfigWithoutToken()
+        injectBaseConfig()
         let stale = makeResponse(
             stripe: [stripeKey: makeServerPrice(formattedPrice: "$9.99", value: 9.99, title: "Stale")],
             paddleClientToken: "stale_token"

@@ -908,17 +908,6 @@ public class HeliumFetchedConfigManager {
         )
     }
 
-    /// Whether on-launch served Paddle to this device. On-launch drops every Paddle trigger for
-    /// users its request-IP geo compliance gate rejects (and when Paddle credentials are unusable),
-    /// so an empty Paddle payload is the observable outcome of those filters. The preview endpoint
-    /// runs none of them, so its Paddle products are eligible here only when on-launch's are —
-    /// otherwise a preview would offer an app2web checkout production never serves this device.
-    var isPaddleServedByOnLaunch: Bool {
-        guard let config = fetchedConfig else { return false }
-        return !(config.paddleProducts ?? [:]).isEmpty
-            || !(config.paddleClientToken ?? "").isEmpty
-    }
-
     /// Preview values fill only the keys `live` does not already carry.
     private static func overlayingPreview<Value>(
         on live: [String: Value]?,
@@ -928,16 +917,11 @@ public class HeliumFetchedConfigManager {
         return preview.merging(live ?? [:]) { _, liveValue in liveValue }
     }
 
-    private var eligiblePreviewPaddleProducts: [String: ServerProductPrice] {
-        isPaddleServedByOnLaunch ? previewServerProducts.paddle : [:]
-    }
-
     private var previewLocalizedPrices: [String: LocalizedPrice] {
         let preview = previewServerProducts
-        let paddle = eligiblePreviewPaddleProducts
-        guard !preview.stripe.isEmpty || !paddle.isEmpty else { return [:] }
+        guard !preview.stripe.isEmpty || !preview.paddle.isEmpty else { return [:] }
         return preview.stripe
-            .merging(paddle) { current, _ in current }
+            .merging(preview.paddle) { current, _ in current }
             .mapValues { $0.toLocalizedPrice() }
     }
 
@@ -969,18 +953,16 @@ public class HeliumFetchedConfigManager {
         return Self.overlayingPreview(on: fetchedConfig?.stripeProducts, previewServerProducts.stripe)
     }
     public func getPaddleProductsPriceMap() -> [String: ServerProductPrice]? {
-        return Self.overlayingPreview(on: fetchedConfig?.paddleProducts, eligiblePreviewPaddleProducts)
+        return Self.overlayingPreview(on: fetchedConfig?.paddleProducts, previewServerProducts.paddle)
     }
 
-    /// The token Paddle checkout should use. A preview supplies one only when on-launch served
-    /// Paddle to this device but the paywall being previewed is not live, so on-launch carried
-    /// products yet no token for it. A device on-launch filtered out of Paddle gets no token from
-    /// a preview either, keeping the preview's checkout as unreachable as production's.
+    /// The token Paddle checkout should use. A preview supplies one when the paywall being
+    /// previewed is not live, in which case on-launch carried no Paddle products and no token.
     var paddleClientToken: String? {
         if let token = fetchedConfig?.paddleClientToken, !token.isEmpty {
             return token
         }
-        return isPaddleServedByOnLaunch ? previewServerProducts.paddleClientToken : nil
+        return previewServerProducts.paddleClientToken
     }
 
     /// When config fetch returns a customerId for a payment provider, persist it and
@@ -1243,19 +1225,13 @@ public class HeliumFetchedConfigManager {
             throw HeliumControlPanelError.noSourceTrigger
         }
 
-        // Paddle rides on on-launch's verdict for this device: an empty on-launch Paddle payload
-        // means its request-IP geo compliance (or credentials) filter dropped Paddle, and a
-        // preview must not reintroduce a checkout production would never serve here.
-        let paddleServed = !(config.paddleProducts ?? [:]).isEmpty
-            || !(config.paddleClientToken ?? "").isEmpty
-
         config.triggerToPaywalls[HELIUM_PREVIEW_TRIGGER] = try previewEntry(
             clonedFrom: donorPaywallInfo,
             bundleUrl: bundleUrl,
             productIds: productIds,
             productIdsStripe: productIdsStripe,
-            productIdsPaddle: paddleServed ? productIdsPaddle : [],
-            productIdsPaddleWeb: paddleServed ? productIdsPaddleWeb : [],
+            productIdsPaddle: productIdsPaddle,
+            productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll
@@ -1269,7 +1245,7 @@ public class HeliumFetchedConfigManager {
                 bundleUrl: secondTry.bundleUrl,
                 productIds: secondTry.productIds,
                 productIdsStripe: secondTry.productIdsStripe,
-                productIdsPaddle: paddleServed ? secondTry.productIdsPaddle : [],
+                productIdsPaddle: secondTry.productIdsPaddle,
                 productIdsPaddleWeb: [],
                 productIdsStripeWeb: [],
                 webPaywallBundleUrl: nil,
