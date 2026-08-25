@@ -15,7 +15,6 @@ struct HeliumPreviewConfigurationView: View {
 
     @ObservedObject private var store = HeliumPreviewConfigurationStore.shared
     @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
-    @State private var configureBeforeEachPreview = HeliumPreviewConfigurationStore.shared.configureBeforeEachPreview
 
     private var realPurchaseUnavailable: Bool { store.forceExternalCheckoutSimulation }
 
@@ -26,13 +25,10 @@ struct HeliumPreviewConfigurationView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     title
-                    paywallPill
+                    subheader
                     purchaseSection
                     if request.showsCompliance {
                         complianceSection
-                    }
-                    if request.isSettings {
-                        behaviorSection
                     }
                 }
                 .padding(.horizontal, 24)
@@ -50,12 +46,10 @@ struct HeliumPreviewConfigurationView: View {
             Divider()
             VStack(spacing: 0) {
                 startAction
-                cancelAction
-                footer
             }
             .padding(.horizontal, 24)
             .padding(.top, 14)
-            .padding(.bottom, 6)
+            .padding(.bottom, 10)
         }
         .background(Color(.systemBackground))
     }
@@ -90,14 +84,20 @@ struct HeliumPreviewConfigurationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var paywallPill: some View {
-        HStack(spacing: 8) {
-            if let versionLabel = request.versionLabel {
+    @ViewBuilder
+    private var subheader: some View {
+        if request.isSettings {
+            Text("Configure the paywall preview experience for your Paddle and Stripe app2web paywalls.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+        } else if let versionLabel = request.versionLabel {
+            HStack(spacing: 8) {
                 pill(versionLabel)
             }
-            pill("app2web")
+            .padding(.top, 10)
         }
-        .padding(.top, 10)
     }
 
     private func pill(_ text: String) -> some View {
@@ -152,7 +152,7 @@ struct HeliumPreviewConfigurationView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                     if isDisabled {
-                        Label("Region outside the US. Use simulated, or a US VPN.", systemImage: "exclamationmark.triangle.fill")
+                        Label("Region outside the US. Use simulated or a US VPN.", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundColor(.orange)
                             .fixedSize(horizontal: false, vertical: true)
@@ -188,42 +188,10 @@ struct HeliumPreviewConfigurationView: View {
                         .foregroundColor(.primary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .blue))
-                if request.isSettings {
-                    Text("Paddle checkouts only.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color(.separator), lineWidth: 1)
-            )
-        }
-        .padding(.top, 22)
-    }
-
-    // MARK: - Behavior
-
-    private var behaviorSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("BEHAVIOR")
-
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle(isOn: $configureBeforeEachPreview) {
-                    Text("Configure before each preview")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.primary)
-                }
-                .toggleStyle(SwitchToggleStyle(tint: .blue))
-                Text("Show this screen before each app2web paywall preview.")
+                Text("Paddle checkouts only. Real purchases from California always show the modal.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -251,9 +219,6 @@ struct HeliumPreviewConfigurationView: View {
     private var startAction: some View {
         Button {
             store.configuration = configuration
-            if request.isSettings {
-                store.configureBeforeEachPreview = configureBeforeEachPreview
-            }
             onStart(configuration)
         } label: {
             Text(startActionLabel)
@@ -264,27 +229,6 @@ struct HeliumPreviewConfigurationView: View {
                 .foregroundColor(.white)
                 .cornerRadius(12)
         }
-    }
-
-    private var cancelAction: some View {
-        Button(action: onCancel) {
-            Text("Cancel")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-        }
-        .padding(.top, 4)
-    }
-
-    private var footer: some View {
-        Text("Non-production · helium_testing · \(HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)")
-            .font(.caption2.monospaced())
-            .foregroundColor(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 2)
     }
 
     // MARK: - Pieces

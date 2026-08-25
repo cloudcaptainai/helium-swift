@@ -32,9 +32,16 @@ struct HeliumControlPanelView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Paywall Previews")
+            .navigationTitle("Helium Paywall Previews")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search paywalls")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Helium Paywall Previews")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
                 }
@@ -156,7 +163,7 @@ struct HeliumControlPanelView: View {
         }
     }
 
-    /// The settings gear only appears once the loaded list actually contains an
+    /// The settings entry only appears once the loaded list actually contains an
     /// app2web-capable paywall.
     private var hasApp2webPaywalls: Bool {
         if case .loaded(let response) = state {

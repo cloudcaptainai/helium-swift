@@ -17,9 +17,9 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .simulated:
-            return "Full checkout UI, no real transaction, no entitlement."
+            return "Looks like the normal purchase flow but no transaction occurs and no entitlement granted."
         case .real:
-            return "Real purchase and entitlements, tagged helium_testing."
+            return "Complete real purchases. Your card is charged and entitlement granted."
         }
     }
 
