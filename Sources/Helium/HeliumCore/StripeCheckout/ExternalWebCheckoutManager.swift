@@ -315,12 +315,13 @@ public class ExternalWebCheckoutManager: NSObject {
 
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
-        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
-        ctx["environment"] = isPreviewRun ? "preview" : "production"
+        ctx["environment"] = AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        ctx["trigger"] = triggerName
 
+        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
         let previewConfiguration = isPreviewRun ? HeliumPreviewConfigurationStore.shared.configuration : nil
         if let previewConfiguration {
-            ctx["simulatePurchase"] = previewConfiguration.purchaseMode == .simulated
+            ctx["forceSimulatedFlow"] = previewConfiguration.purchaseMode == .simulated
         }
 
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)

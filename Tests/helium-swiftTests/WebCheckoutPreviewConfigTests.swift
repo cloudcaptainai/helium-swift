@@ -64,34 +64,38 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         return (components.queryItems ?? []).map { $0.name }
     }
 
-    // MARK: - Environment
+    // MARK: - Environment and trigger
 
-    func testProductionTrigger_setsProductionEnvironmentAndNoPreviewFields() throws {
+    func testProductionTrigger_setsEnvironmentAndTriggerAndNoPreviewFields() throws {
         let url = try buildURL(provider: .paddle, triggerName: "onboarding")
         let ctx = try decodedCtx(from: url)
 
-        XCTAssertEqual(ctx["environment"] as? String, "production")
-        XCTAssertNil(ctx["simulatePurchase"])
+        XCTAssertEqual(
+            ctx["environment"] as? String,
+            AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        )
+        XCTAssertEqual(ctx["trigger"] as? String, "onboarding")
+        XCTAssertNil(ctx["forceSimulatedFlow"])
         XCTAssertFalse(try queryNames(of: url).contains("helium_force_california"))
     }
 
-    func testPreviewTrigger_setsPreviewEnvironment() throws {
+    func testPreviewTrigger_setsTriggerInCtx() throws {
         let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
         let ctx = try decodedCtx(from: url)
 
-        XCTAssertEqual(ctx["environment"] as? String, "preview")
+        XCTAssertEqual(ctx["trigger"] as? String, HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
     }
 
     // MARK: - Purchase simulation
 
-    func testPreviewTrigger_simulatedModeSetsSimulatePurchaseTrue() throws {
+    func testPreviewTrigger_simulatedModeSetsForceSimulatedFlowTrue() throws {
         let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
         let ctx = try decodedCtx(from: url)
 
-        XCTAssertEqual(ctx["simulatePurchase"] as? Bool, true)
+        XCTAssertEqual(ctx["forceSimulatedFlow"] as? Bool, true)
     }
 
-    func testPreviewTrigger_realModeSetsSimulatePurchaseFalse() throws {
+    func testPreviewTrigger_realModeSetsForceSimulatedFlowFalse() throws {
         let store = HeliumPreviewConfigurationStore.shared
         store.forceExternalCheckoutSimulation = false
         store.purchaseMode = .real
@@ -99,7 +103,7 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
         let ctx = try decodedCtx(from: url)
 
-        XCTAssertEqual(ctx["simulatePurchase"] as? Bool, false)
+        XCTAssertEqual(ctx["forceSimulatedFlow"] as? Bool, false)
     }
 
     func testForceExternalCheckoutSimulation_overridesRealSelection() throws {
@@ -110,7 +114,7 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
         let ctx = try decodedCtx(from: url)
 
-        XCTAssertEqual(ctx["simulatePurchase"] as? Bool, true)
+        XCTAssertEqual(ctx["forceSimulatedFlow"] as? Bool, true)
     }
 
     // MARK: - California force flag
