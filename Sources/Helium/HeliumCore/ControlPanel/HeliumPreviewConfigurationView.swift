@@ -15,6 +15,7 @@ struct HeliumPreviewConfigurationView: View {
 
     @ObservedObject private var store = HeliumPreviewConfigurationStore.shared
     @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
+    @State private var configureBeforeEachPreview = HeliumPreviewConfigurationStore.shared.configureBeforeEachPreview
 
     private var realPurchaseUnavailable: Bool { store.forceExternalCheckoutSimulation }
 
@@ -29,6 +30,9 @@ struct HeliumPreviewConfigurationView: View {
                     purchaseSection
                     if request.showsCompliance {
                         complianceSection
+                    }
+                    if request.isSettings {
+                        behaviorSection
                     }
                 }
                 .padding(.horizontal, 24)
@@ -204,6 +208,37 @@ struct HeliumPreviewConfigurationView: View {
         .padding(.top, 22)
     }
 
+    // MARK: - Behavior
+
+    private var behaviorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("BEHAVIOR")
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $configureBeforeEachPreview) {
+                    Text("Configure before each preview")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.primary)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                Text("Show this screen before each app2web paywall preview.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(.separator), lineWidth: 1)
+            )
+        }
+        .padding(.top, 22)
+    }
+
     // MARK: - Actions
 
     private var startActionLabel: String {
@@ -216,6 +251,9 @@ struct HeliumPreviewConfigurationView: View {
     private var startAction: some View {
         Button {
             store.configuration = configuration
+            if request.isSettings {
+                store.configureBeforeEachPreview = configureBeforeEachPreview
+            }
             onStart(configuration)
         } label: {
             Text(startActionLabel)

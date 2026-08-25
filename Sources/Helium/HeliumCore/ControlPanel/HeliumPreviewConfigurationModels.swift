@@ -79,13 +79,6 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         }
     }
 
-    var summary: String {
-        var parts = [purchaseMode.title]
-        if showCaliforniaConsentModal {
-            parts.append("CA consent modal")
-        }
-        return parts.joined(separator: " · ")
-    }
 }
 
 /// What the configuration screen is being opened for: editing the session settings from the
