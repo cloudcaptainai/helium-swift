@@ -189,7 +189,8 @@ final class PreviewServerProductsTests: XCTestCase {
             paywalls: [],
             stripeProducts: stripe,
             paddleProducts: nil,
-            paddleClientToken: paddleClientToken
+            paddleClientToken: paddleClientToken,
+            forceExternalCheckoutSimulation: nil
         )
     }
 
