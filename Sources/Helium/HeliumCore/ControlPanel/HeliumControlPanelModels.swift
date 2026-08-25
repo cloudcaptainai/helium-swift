@@ -3,6 +3,9 @@ import Foundation
 struct HeliumControlPanelResponse: Codable {
     let productIds: [String]
     let paywalls: [HeliumPaywallPreviewEntry]
+    let stripeProducts: [String: ServerProductPrice]?
+    let paddleProducts: [String: ServerProductPrice]?
+    let paddleClientToken: String?
 }
 
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {

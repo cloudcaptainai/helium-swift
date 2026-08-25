@@ -352,6 +352,8 @@ struct HeliumControlPanelView: View {
             // Fetch all products data
             await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(response.productIds)
 
+            guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
+
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {
