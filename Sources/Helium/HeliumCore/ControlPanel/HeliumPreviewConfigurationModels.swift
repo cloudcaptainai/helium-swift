@@ -53,7 +53,16 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
     /// unparsed signal keeps previews on the simulated path.
     @Published var forceExternalCheckoutSimulation = true
 
-    @Published var showCaliforniaConsentModal = false
+    /// California eligibility from `/preview-paywalls`: the device may purchase for
+    /// real, but only through the consent modal, so the toggle is forced on.
+    @Published var forcePaddleCaConsentModal = false
+
+    @Published private var chosenShowCaliforniaConsentModal = false
+
+    var showCaliforniaConsentModal: Bool {
+        get { forcePaddleCaConsentModal || chosenShowCaliforniaConsentModal }
+        set { chosenShowCaliforniaConsentModal = newValue }
+    }
 
     @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
 

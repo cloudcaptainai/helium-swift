@@ -9,6 +9,9 @@ struct HeliumControlPanelResponse: Codable {
     /// Whether this device is not cleared for a real external checkout, so previews
     /// should default to a simulated purchase. Optional: readers treat absent as true.
     let forceExternalCheckoutSimulation: Bool?
+    /// A verified US-California device: real checkout is allowed, but showing the CA
+    /// consent modal is a hard precondition for a Paddle purchase. Absent reads false.
+    let forcePaddleCaConsentModal: Bool?
 }
 
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {

@@ -190,7 +190,8 @@ final class PreviewServerProductsTests: XCTestCase {
             stripeProducts: stripe,
             paddleProducts: nil,
             paddleClientToken: paddleClientToken,
-            forceExternalCheckoutSimulation: nil
+            forceExternalCheckoutSimulation: nil,
+            forcePaddleCaConsentModal: nil
         )
     }
 

@@ -188,6 +188,7 @@ struct HeliumPreviewConfigurationView: View {
                         .foregroundColor(.primary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .disabled(store.forcePaddleCaConsentModal)
                 Text("Paddle checkouts only. Real purchases from California always show the modal.")
                     .font(.caption)
                     .foregroundColor(.secondary)

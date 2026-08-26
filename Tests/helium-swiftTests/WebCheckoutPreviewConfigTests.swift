@@ -19,6 +19,7 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
     private func resetStore() {
         let store = HeliumPreviewConfigurationStore.shared
         store.forceExternalCheckoutSimulation = true
+        store.forcePaddleCaConsentModal = false
         store.showCaliforniaConsentModal = false
         store.configureBeforeEachPreview = false
         store.purchaseMode = .simulated
@@ -143,6 +144,16 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         XCTAssertFalse(try queryNames(of: url).contains("helium_force_california"))
     }
 
+    func testForcedCaConsentModal_appendsParamEvenWithToggleOff() throws {
+        let store = HeliumPreviewConfigurationStore.shared
+        store.showCaliforniaConsentModal = false
+        store.forcePaddleCaConsentModal = true
+
+        let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
+
+        XCTAssertTrue(try queryNames(of: url).contains("helium_force_california"))
+    }
+
     // MARK: - Response decoding
 
     func testDecodesForceExternalCheckoutSimulation() throws {
@@ -161,6 +172,16 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         let response = try JSONDecoder().decode(HeliumControlPanelResponse.self, from: Data(json.utf8))
 
         XCTAssertNil(response.forceExternalCheckoutSimulation)
+        XCTAssertNil(response.forcePaddleCaConsentModal)
+    }
+
+    func testDecodesForcePaddleCaConsentModal() throws {
+        let json = """
+        {"productIds": [], "paywalls": [], "forcePaddleCaConsentModal": true}
+        """
+        let response = try JSONDecoder().decode(HeliumControlPanelResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(response.forcePaddleCaConsentModal, true)
     }
 
     // MARK: - Helpers
