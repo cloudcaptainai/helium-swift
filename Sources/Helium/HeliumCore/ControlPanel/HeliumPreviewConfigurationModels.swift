@@ -25,7 +25,7 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
 
     var systemImageName: String {
         switch self {
-        case .simulated: return "testtube.2"
+        case .simulated: return "sparkles"
         case .real: return "creditcard"
         }
     }
