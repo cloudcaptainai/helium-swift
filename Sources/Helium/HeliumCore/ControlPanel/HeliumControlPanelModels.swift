@@ -17,7 +17,20 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     var id: String { paywallUuid }
 
     /// Web paywalls render in a browser, not in-app; previews open them there.
-    var isWebPaywall: Bool { isWeb == true }
+    var isWebPaywall: Bool {
+        if let isWeb { return isWeb }
+        return versions.contains { version in
+            guard let bundleUrl = version.bundleUrl, let host = URL(string: bundleUrl)?.host else {
+                return false
+            }
+            return Self.webPaywallBundleHosts.contains(host)
+        }
+    }
+
+    private static let webPaywallBundleHosts: Set<String> = [
+        "bundles.clickthrough.to",
+        "bundles-staging.clickthrough.to",
+    ]
 }
 
 /// The resolved second try paywall served with a preview entry. Paywall-level, not per-version:

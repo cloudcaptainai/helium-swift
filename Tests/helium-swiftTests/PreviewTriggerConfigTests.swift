@@ -426,6 +426,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(versions[0].shouldEnableScroll, false)
         XCTAssertNil(versions[1].webPaywallBundleUrl)
         XCTAssertNil(versions[1].shouldEnableScroll)
+        XCTAssertFalse(response.paywalls[0].isWebPaywall)
     }
 
     func testDecodesLegacyPreviewsResponseWithoutNewFields() throws {
@@ -556,5 +557,73 @@ final class PreviewTriggerConfigTests: XCTestCase {
             "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html"
         )
         XCTAssertFalse(response.paywalls[1].isWebPaywall)
+    }
+
+    func testRecognizesWebPaywallByBundleHostWhenIsWebIsMissing() throws {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            {
+              "paywallUuid": "0b7f5c1a-1111-4222-8333-444455556666",
+              "paywallName": "Web Checkout Paywall",
+              "versions": [
+                {
+                  "versionId": "9d8c7b6a-aaaa-4bbb-8ccc-dddeeefff000",
+                  "versionStatus": "published",
+                  "versionNumber": 3,
+                  "bundleUrl": "https://bundles.clickthrough.to/x/bundle_1778610753360.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "stripeProductIds": [],
+                  "paddleProductIds": ["pro_web:pri_web"],
+                  "lastSavedAt": null
+                }
+              ]
+            },
+            {
+              "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+              "paywallName": "Native Paywall",
+              "versions": [
+                {
+                  "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+                  "versionStatus": "published",
+                  "versionNumber": 1,
+                  "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_1.html",
+                  "previewUrl": null,
+                  "productIds": ["yearly_2999"],
+                  "stripeProductIds": [],
+                  "lastSavedAt": null
+                }
+              ]
+            },
+            {
+              "paywallUuid": "2d9e7f3c-8888-4999-aaaa-bbbbccccdddd",
+              "paywallName": "Server Says Native",
+              "isWeb": false,
+              "versions": [
+                {
+                  "versionId": "43b2e3a6-71f2-4b36-b5c8-d77f42c0a1b2",
+                  "versionStatus": "published",
+                  "versionNumber": 2,
+                  "bundleUrl": "https://bundles.clickthrough.to/x/bundle_2.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "stripeProductIds": [],
+                  "lastSavedAt": null
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            HeliumControlPanelResponse.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertTrue(response.paywalls[0].isWebPaywall)
+        XCTAssertFalse(response.paywalls[1].isWebPaywall)
+        XCTAssertFalse(response.paywalls[2].isWebPaywall)
     }
 }
