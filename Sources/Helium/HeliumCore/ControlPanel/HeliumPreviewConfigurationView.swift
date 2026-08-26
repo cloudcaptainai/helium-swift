@@ -189,10 +189,17 @@ struct HeliumPreviewConfigurationView: View {
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .blue))
                 .disabled(store.forcePaddleCaConsentModal)
-                Text("Paddle checkouts only. Real purchases from California always show the modal.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if store.forcePaddleCaConsentModal {
+                    Label("Your device is in California, so the consent modal always shows.", systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Paddle checkouts only. Real purchases from California always show the modal.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
