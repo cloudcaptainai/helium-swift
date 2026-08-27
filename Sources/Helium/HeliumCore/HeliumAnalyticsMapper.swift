@@ -225,6 +225,7 @@ extension PurchaseRestoredEvent {
     public func analyticsPayload() -> [String: Any] {
         var payload = productAnalyticsPayload()
         payload["restoreOrigin"] = restoreOrigin.rawValue
+        payload["paymentProcessor"] = paymentProcessor.rawValue
         return payload
     }
 }
@@ -253,7 +254,9 @@ extension PurchasePendingEvent {
     public var analyticsEventName: String { "subscriptionPending" }
 
     public func analyticsPayload() -> [String: Any] {
-        productAnalyticsPayload()
+        var payload = productAnalyticsPayload()
+        payload["paymentProcessor"] = paymentProcessor.rawValue
+        return payload
     }
 }
 

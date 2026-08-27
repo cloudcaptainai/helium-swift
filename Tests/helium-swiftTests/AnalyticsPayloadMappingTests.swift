@@ -313,11 +313,10 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     }
 
     func testPurchaseRestoredPayload() throws {
-        // The subscriptionRestored wire format does not carry paymentProcessor.
         try assertWirePayload(
             PurchaseRestoredEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
-                restoreOrigin: .restorePurchases, paymentProcessor: .appStore
+                restoreOrigin: .restorePurchases, paymentProcessor: .paddle
             ),
             equals: [
                 "type": "subscriptionRestored",
@@ -325,6 +324,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
                 "restoreOrigin": "restorePurchases",
+                "paymentProcessor": "paddle",
             ]
         )
     }
@@ -371,7 +371,6 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     }
 
     func testPurchasePendingPayload() throws {
-        // The subscriptionPending wire format does not carry paymentProcessor.
         try assertWirePayload(
             PurchasePendingEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore),
             equals: [
@@ -379,6 +378,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "paymentProcessor": "appStore",
             ]
         )
     }
