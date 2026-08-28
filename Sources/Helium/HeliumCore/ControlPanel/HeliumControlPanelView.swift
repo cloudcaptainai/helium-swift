@@ -67,7 +67,7 @@ struct HeliumControlPanelView: View {
                 }
             }
         }
-        .alert("Error", isPresented: Binding(
+        .alert("Preview Could Not Open", isPresented: Binding(
             get: { paywallLoadError != nil },
             set: { if !$0 { paywallLoadError = nil } }
         )) {
@@ -369,10 +369,8 @@ struct HeliumControlPanelView: View {
     /// screen first only when the tester has turned that step on.
     private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard activity == .idle else { return }
-        // Withhold the entire preview (not just the purchase step) when the checkout bundle is
-        // too old to honor the simulated flag; re-saving the paywall rebuilds it.
         if version.isApp2webCapable && !version.isApp2webBundleFresh {
-            paywallLoadError = "You can't preview this paywall yet — re-save it in your Helium dashboard, then reload."
+            paywallLoadError = "Your paywall needs an update. Re-save it in your Helium dashboard, then reload."
             return
         }
         if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
