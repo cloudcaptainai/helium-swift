@@ -91,7 +91,20 @@ class HeliumControlPanelService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
 
-        let body: [String: Any] = ["apiKey": apiKey, "platform": "ios"]
+        await AppStoreCountryHelper.shared.fetchStoreCountryCode()
+        var locale: [String: Any] = [:]
+        if let currentCountry = Locale.current.regionCode {
+            locale["currentCountry"] = currentCountry
+        }
+        if let storeCountryCode = AppStoreCountryHelper.shared.getStoreCountryCode() {
+            locale["storeCountryCode"] = storeCountryCode
+        }
+
+        let body: [String: Any] = [
+            "apiKey": apiKey,
+            "platform": "ios",
+            "userContext": ["locale": locale],
+        ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response): (Data, URLResponse)

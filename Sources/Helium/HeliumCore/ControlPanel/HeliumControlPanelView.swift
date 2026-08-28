@@ -9,6 +9,11 @@ struct HeliumControlPanelView: View {
     @State private var searchText: String = ""
     @State private var paywallLoadError: String? = nil
     @State private var pendingWebPreviewURL: URL? = nil
+    @State private var pendingConfiguration: HeliumPreviewConfigurationRequest? = nil
+    /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
+    /// presented on top of a sheet that is still on its way out.
+    @State private var queuedLaunch: (() -> Void)? = nil
+    private let previewSettings = HeliumPreviewConfigurationStore.shared
 
     var body: some View {
         NavigationView {
@@ -27,13 +32,29 @@ struct HeliumControlPanelView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Paywall Previews")
+            .navigationTitle("Helium Paywall Previews")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search paywalls")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Helium Paywall Previews")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    if hasApp2webPaywalls {
+                        Button {
+                            pendingConfiguration = HeliumPreviewConfigurationRequest(target: .settings)
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .disabled(activity != .idle)
+                        .accessibilityLabel("App2Web preview settings")
+                    }
                     Button {
                         state = .loading
                         activity = .idle
@@ -68,6 +89,22 @@ struct HeliumControlPanelView: View {
             }
         } message: { _ in
             Text("Web paywalls open in your default browser for a display-only preview. Purchases won't work from this preview.")
+        }
+        .fullScreenCover(item: $pendingConfiguration, onDismiss: {
+            let launch = queuedLaunch
+            queuedLaunch = nil
+            launch?()
+        }) { request in
+            HeliumPreviewConfigurationView(
+                request: request,
+                onStart: { _ in
+                    if case .version(let version, let paywall) = request.target {
+                        queuedLaunch = { selectVersion(version, paywall: paywall) }
+                    }
+                    pendingConfiguration = nil
+                },
+                onCancel: { pendingConfiguration = nil }
+            )
         }
         .onAppear {
             fetchTask = Task { await fetchPaywalls() }
@@ -124,6 +161,15 @@ struct HeliumControlPanelView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
         }
+    }
+
+    /// The settings entry only appears once the loaded list actually contains an
+    /// app2web-capable paywall.
+    private var hasApp2webPaywalls: Bool {
+        if case .loaded(let response) = state {
+            return response.paywalls.contains { $0.isApp2webCapable }
+        }
+        return false
     }
 
     @ViewBuilder
@@ -260,14 +306,14 @@ struct HeliumControlPanelView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard isEnabled else { return }
-                        selectVersion(version, paywall: paywall)
+                        configurePreview(for: version, paywall: paywall)
                     }
                     .opacity(isEnabled || isLoading ? 1.0 : 0.4)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(isEnabled ? .isButton : [])
                     .accessibilityAction {
                         guard isEnabled else { return }
-                        selectVersion(version, paywall: paywall)
+                        configurePreview(for: version, paywall: paywall)
                     }
                 }
             }
@@ -308,11 +354,25 @@ struct HeliumControlPanelView: View {
 
             guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
 
+            previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
+            previewSettings.forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
+
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {
                 state = .error(error.localizedDescription)
             }
+        }
+    }
+
+    /// Non-app2web paywalls present directly; app2web paywalls stop at the configuration
+    /// screen first only when the tester has turned that step on.
+    private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
+        guard activity == .idle else { return }
+        if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
+            pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
+        } else {
+            selectVersion(version, paywall: paywall)
         }
     }
 

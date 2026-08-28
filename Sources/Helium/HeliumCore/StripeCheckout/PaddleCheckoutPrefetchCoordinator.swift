@@ -110,6 +110,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
+        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId)
@@ -125,6 +126,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     discountId: discountId,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
+                    isPreviewRun: isPreviewRun,
                     banditClient: bandit,
                     bffClient: bff,
                     scope: scope
@@ -457,6 +459,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountId: String?,
         paddleClientToken: String,
         iosBundleId: String?,
+        isPreviewRun: Bool,
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient,
         scope: PaywallObservabilityScope
@@ -493,7 +496,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             )
             // While the consent modal is disabled, block California buyers by ip_geo
             // ZIP before checkout. When the flag is on, they proceed to the modal.
-            if !caModalEnabled,
+            // Previews always proceed so testers can exercise the modal and checkout.
+            if !caModalEnabled, !isPreviewRun,
                let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
