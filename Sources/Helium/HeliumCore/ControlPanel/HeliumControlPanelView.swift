@@ -354,6 +354,9 @@ struct HeliumControlPanelView: View {
 
             guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
 
+            previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
+            previewSettings.forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
+
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {

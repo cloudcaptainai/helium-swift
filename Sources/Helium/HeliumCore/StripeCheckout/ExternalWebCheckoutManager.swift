@@ -315,6 +315,15 @@ public class ExternalWebCheckoutManager: NSObject {
 
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
+        ctx["environment"] = AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        ctx["trigger"] = triggerName
+
+        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
+        let previewConfiguration = isPreviewRun ? HeliumPreviewConfigurationStore.shared.configuration : nil
+        if let previewConfiguration {
+            ctx["forceSimulatedFlow"] = previewConfiguration.purchaseMode == .simulated
+        }
+
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
@@ -339,6 +348,11 @@ public class ExternalWebCheckoutManager: NSObject {
         if !queryItems.contains(where: { $0.name == "helium_ios_bundle_id" }) {
             let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
             queryItems.append(URLQueryItem(name: "helium_ios_bundle_id", value: bundleId))
+        }
+        if let previewConfiguration,
+           previewConfiguration.showCaliforniaConsentModal,
+           provider.kind == .paddle {
+            queryItems.append(URLQueryItem(name: "helium_force_california", value: "true"))
         }
         // Cache-bust per open: a fragment-only change doesn't reload the page,
         // so if the bundle is already open from a prior tap it would render
