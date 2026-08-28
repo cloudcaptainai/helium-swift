@@ -369,6 +369,12 @@ struct HeliumControlPanelView: View {
     /// screen first only when the tester has turned that step on.
     private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard activity == .idle else { return }
+        // Withhold the entire preview (not just the purchase step) when the checkout bundle is
+        // too old to honor the simulated flag; re-saving the paywall rebuilds it.
+        if version.isApp2webCapable && !version.isApp2webBundleFresh {
+            paywallLoadError = "You can't preview this paywall yet — re-save it in your Helium dashboard, then reload."
+            return
+        }
         if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
             pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
         } else {
