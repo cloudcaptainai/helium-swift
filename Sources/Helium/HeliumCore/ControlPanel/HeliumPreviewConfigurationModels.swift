@@ -136,6 +136,13 @@ struct HeliumPreviewConfigurationRequest: Identifiable {
     }
 }
 
+/// App2web checkout bundles built before the simulated-purchase flow ignore the simulated flag
+/// and would charge a real card in a preview, so previews are gated on the bundle's build time
+/// (stamped in its filename) being at or after this cutoff, in epoch ms.
+enum HeliumPreviewBundleFreshness {
+    static let app2webCutoffMs: Int64 = 1787881704000
+}
+
 extension HeliumPaywallPreviewVersion {
     var hasApp2webPaddle: Bool {
         webPaywallBundleUrl != nil && !(webPaddleProductIds ?? []).isEmpty
@@ -146,6 +153,17 @@ extension HeliumPaywallPreviewVersion {
     }
 
     var isApp2webCapable: Bool { hasApp2webPaddle || hasApp2webStripe }
+
+    /// Reads the build time from the checkout bundle's `bundle_<ms>.html` filename; a missing or
+    /// unparseable stamp fails closed (treated as too old).
+    var isApp2webBundleFresh: Bool {
+        guard let webPaywallBundleUrl,
+              let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(webPaywallBundleUrl),
+              let builtAtMs = Int64(bundleId) else {
+            return false
+        }
+        return builtAtMs >= HeliumPreviewBundleFreshness.app2webCutoffMs
+    }
 }
 
 extension HeliumPaywallPreviewEntry {
