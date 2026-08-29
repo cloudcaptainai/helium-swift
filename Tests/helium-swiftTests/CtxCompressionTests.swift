@@ -182,6 +182,46 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertNotNil(parsed["analytics"])
     }
 
+    func testBuildEnrichedCheckoutURL_emitsCustomPaywallTraitsInCtx() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_traits"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "onboarding",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil,
+            presentationTraits: HeliumUserTraits(["plan": "gold", "trigger": "overridden"])
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        let traits = try XCTUnwrap(parsed["customPaywallTraits"] as? [String: Any],
+                                   "ctx must carry customPaywallTraits")
+        XCTAssertEqual(traits["plan"] as? String, "gold")
+        // Presentation traits win on key conflicts, including the default "trigger".
+        XCTAssertEqual(traits["trigger"] as? String, "overridden")
+    }
+
     func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {
         Helium.lastApiKeyUsed = "test_api_key_for_bundle_id"
         defer { Helium.lastApiKeyUsed = nil }

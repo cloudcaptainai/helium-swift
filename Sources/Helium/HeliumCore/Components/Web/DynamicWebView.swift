@@ -230,16 +230,17 @@ struct DynamicWebView: View {
             
             _ = Date()
             var mergedContext = contextJSON
-            // Always include "trigger" in customPaywallTraits (can be overridden by provided values though).
-            // customPaywallTraits are key/values that Helium customer can direct paywall editor to read.
-            var combinedTraits = HeliumUserTraits(["trigger": triggerName ?? ""])
-            combinedTraits.merge(HeliumIdentityManager.shared.getUserTraits())
             // Prefer the live environment traits so a paywall constructed off-screen still injects the latest
             // traits at display time; the frozen session value is the safety net (and covers the presented path,
             // which does not set the environment).
-            if let paywallTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits {
-                combinedTraits.merge(paywallTraits)
-            }
+            let presentationTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits
+            // Hand the resolved traits to the delegate so an external web checkout launched from this
+            // paywall sends the exact same customPaywallTraits it injected here.
+            actionsDelegate.setResolvedPaywallTraits(presentationTraits)
+            let combinedTraits = HeliumUserTraits.forPaywall(
+                triggerName: triggerName,
+                presentationTraits: presentationTraits
+            )
             let combinedTraitsData = try JSONEncoder().encode(combinedTraits)
             mergedContext["customPaywallTraits"] = try JSON(data: combinedTraitsData)
             

@@ -66,7 +66,11 @@ class ActionsDelegateWrapper: ObservableObject {
     func selectProduct(productId: String) {
         delegate.selectProduct(productId: productId)
     }
-    
+
+    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
+        delegate.setResolvedPaywallTraits(traits)
+    }
+
     func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         delegate.logRenderTime(timeTakenMS: timeTakenMS, isFallback: isFallback);
     }
@@ -104,6 +108,9 @@ class HeliumActionsDelegate: ObservableObject {
     private var selectedProductId: String
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
+
+    // The traits the webview actually injected; can differ from the frozen session value.
+    private var resolvedPaywallTraits: HeliumUserTraits?
     
     var dismissAction: (() -> Void)?
     
@@ -213,7 +220,11 @@ class HeliumActionsDelegate: ObservableObject {
     func selectProduct(productId: String) {
         selectedProductId = productId
     }
-    
+
+    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
+        resolvedPaywallTraits = traits
+    }
+
     func makePurchase() async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
@@ -227,7 +238,7 @@ class HeliumActionsDelegate: ObservableObject {
 
         isLoading = true
         defer { isLoading = false }
-        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession)
+        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, presentationTraits: resolvedPaywallTraits ?? paywallSession.presentationContext.customPaywallTraits)
     }
     
     @MainActor

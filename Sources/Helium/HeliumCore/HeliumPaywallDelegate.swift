@@ -64,7 +64,7 @@ class HeliumPaywallDelegateWrapper {
         return Helium.config.purchaseDelegate
     }
     
-    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> HeliumPaywallTransactionStatus {
+    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, presentationTraits: HeliumUserTraits? = nil) async -> HeliumPaywallTransactionStatus {
         let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
         } ?? false
@@ -85,7 +85,8 @@ class HeliumPaywallDelegateWrapper {
                     let outcome = try await StripeCheckoutManager.shared.startCheckoutFlow(
                         for: productKey,
                         triggerName: triggerName,
-                        paywallSession: paywallSession
+                        paywallSession: paywallSession,
+                        presentationTraits: presentationTraits
                     )
                     transactionStatus = outcome.transactionStatus
                 } catch {
@@ -96,7 +97,8 @@ class HeliumPaywallDelegateWrapper {
                     let outcome = try await PaddleCheckoutManager.shared.startCheckoutFlow(
                         for: productKey,
                         triggerName: triggerName,
-                        paywallSession: paywallSession
+                        paywallSession: paywallSession,
+                        presentationTraits: presentationTraits
                     )
                     transactionStatus = outcome.transactionStatus
                 } catch {

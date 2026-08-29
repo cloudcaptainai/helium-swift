@@ -171,6 +171,21 @@ extension HeliumUserTraits: Equatable {
     }
 }
 
+// MARK: - Paywall trait assembly
+extension HeliumUserTraits {
+    /// Assembles the `customPaywallTraits` for a paywall. Always carries "trigger", then
+    /// the identified user's traits, and finally `presentationTraits`, which win on key
+    /// conflicts. These are the keys a Helium customer can wire the paywall editor to read.
+    static func forPaywall(triggerName: String?, presentationTraits: HeliumUserTraits?) -> HeliumUserTraits {
+        var combined = HeliumUserTraits(["trigger": triggerName ?? ""])
+        combined.merge(HeliumIdentityManager.shared.getUserTraits())
+        if let presentationTraits {
+            combined.merge(presentationTraits)
+        }
+        return combined
+    }
+}
+
 // MARK: - Type-specific convenience constructors
 extension HeliumUserTraits {
     // Instead of having multiple init(_ traits:) with different types,
