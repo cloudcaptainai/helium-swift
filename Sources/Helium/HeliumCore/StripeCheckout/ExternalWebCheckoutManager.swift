@@ -325,10 +325,12 @@ public class ExternalWebCheckoutManager: NSObject {
 
         // Mirror the traits the in-app web bundle injects, so a paywall opened in the
         // external browser reads the same customPaywallTraits it would in-app.
-        ctx["customPaywallTraits"] = HeliumUserTraits.forPaywall(
-            triggerName: triggerName,
-            presentationTraits: presentationTraits
-        ).dictionaryRepresentation
+        if HeliumFetchedConfigManager.shared.isFeatureEnabled(.webCheckoutPaywallTraits) {
+            ctx["customPaywallTraits"] = HeliumUserTraits.forPaywall(
+                triggerName: triggerName,
+                presentationTraits: presentationTraits
+            ).dictionaryRepresentation
+        }
 
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
         let previewConfiguration = isPreviewRun ? HeliumPreviewConfigurationStore.shared.configuration : nil
