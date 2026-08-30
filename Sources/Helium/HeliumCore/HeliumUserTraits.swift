@@ -184,6 +184,11 @@ extension HeliumUserTraits {
         }
         return combined
     }
+
+    func jsonObject() throws -> [String: Any] {
+        let data = try JSONEncoder().encode(self)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
 }
 
 // MARK: - Type-specific convenience constructors

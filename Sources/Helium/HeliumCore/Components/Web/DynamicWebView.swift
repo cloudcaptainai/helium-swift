@@ -234,15 +234,14 @@ struct DynamicWebView: View {
             // traits at display time; the frozen session value is the safety net (and covers the presented path,
             // which does not set the environment).
             let presentationTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits
-            // Hand the resolved traits to the delegate so an external web checkout launched from this
-            // paywall sends the exact same customPaywallTraits it injected here.
-            actionsDelegate.setResolvedPaywallTraits(presentationTraits)
             let combinedTraits = HeliumUserTraits.forPaywall(
                 triggerName: triggerName,
                 presentationTraits: presentationTraits
             )
-            let combinedTraitsData = try JSONEncoder().encode(combinedTraits)
-            mergedContext["customPaywallTraits"] = try JSON(data: combinedTraitsData)
+            // Freeze the fully assembled display-time traits for the session so an external web
+            // checkout launched from this paywall sends the exact same customPaywallTraits.
+            actionsDelegate.setResolvedPaywallTraits(combinedTraits)
+            mergedContext["customPaywallTraits"] = JSON(try combinedTraits.jsonObject())
             
             // Get localized prices from HeliumFetchedConfigManager
             // Only fetch prices for products associated with this trigger

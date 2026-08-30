@@ -68,14 +68,14 @@ public class ExternalWebCheckoutManager: NSObject {
         for productKey: String,
         triggerName: String,
         paywallSession: PaywallSession,
-        presentationTraits: HeliumUserTraits? = nil
+        paywallTraits: HeliumUserTraits? = nil
     ) async throws -> WebCheckoutOutcome {
         return try await withFlowTelemetry(productKey: productKey, paywallSession: paywallSession) {
             try await self.runCheckoutFlow(
                 for: productKey,
                 triggerName: triggerName,
                 paywallSession: paywallSession,
-                presentationTraits: presentationTraits
+                paywallTraits: paywallTraits
             )
         }
     }
@@ -85,7 +85,7 @@ public class ExternalWebCheckoutManager: NSObject {
         for productKey: String,
         triggerName: String,
         paywallSession: PaywallSession,
-        presentationTraits: HeliumUserTraits?
+        paywallTraits: HeliumUserTraits?
     ) async throws -> WebCheckoutOutcome {
         guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
               let resolvedCancelURL = provider.getCheckoutCancelURL() else {
@@ -182,7 +182,7 @@ public class ExternalWebCheckoutManager: NSObject {
             stripeOfferTerms: buildStripeOfferTerms(paywallInfo: paywallSession.paywallInfoWithBackups),
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
-            presentationTraits: presentationTraits
+            paywallTraits: paywallTraits
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
@@ -284,7 +284,7 @@ public class ExternalWebCheckoutManager: NSObject {
         stripeOfferTerms: [String: Any]? = nil,
         paddleBootstraps: [String: Any]? = nil,
         paddleAlreadyEntitled: [String: Any]? = nil,
-        presentationTraits: HeliumUserTraits? = nil
+        paywallTraits: HeliumUserTraits? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.invalidBaseURLForComponents
@@ -323,13 +323,11 @@ public class ExternalWebCheckoutManager: NSObject {
         ctx["environment"] = AppReceiptsHelper.shared.environment.rawValue.uppercased()
         ctx["trigger"] = triggerName
 
-        // Mirror the traits the in-app web bundle injects, so a paywall opened in the
-        // external browser reads the same customPaywallTraits it would in-app.
-        if HeliumFetchedConfigManager.shared.isFeatureEnabled(.webCheckoutPaywallTraits) {
-            ctx["customPaywallTraits"] = HeliumUserTraits.forPaywall(
-                triggerName: triggerName,
-                presentationTraits: presentationTraits
-            ).dictionaryRepresentation
+        // Emit the exact traits the in-app paywall injected (frozen at display time), so a
+        // paywall opened in the external browser reads the same customPaywallTraits.
+        if HeliumFetchedConfigManager.shared.isFeatureEnabled(.webCheckoutPaywallTraits),
+           let paywallTraits {
+            ctx["customPaywallTraits"] = try paywallTraits.jsonObject()
         }
 
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)

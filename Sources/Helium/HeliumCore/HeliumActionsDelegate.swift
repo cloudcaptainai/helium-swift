@@ -109,7 +109,7 @@ class HeliumActionsDelegate: ObservableObject {
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
 
-    // The traits the webview actually injected; can differ from the frozen session value.
+    // The fully assembled traits the webview injected, frozen at display time.
     private var resolvedPaywallTraits: HeliumUserTraits?
     
     var dismissAction: (() -> Void)?
@@ -238,7 +238,11 @@ class HeliumActionsDelegate: ObservableObject {
 
         isLoading = true
         defer { isLoading = false }
-        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, presentationTraits: resolvedPaywallTraits ?? paywallSession.presentationContext.customPaywallTraits)
+        let paywallTraits = resolvedPaywallTraits ?? HeliumUserTraits.forPaywall(
+            triggerName: trigger,
+            presentationTraits: paywallSession.presentationContext.customPaywallTraits
+        )
+        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits)
     }
     
     @MainActor
