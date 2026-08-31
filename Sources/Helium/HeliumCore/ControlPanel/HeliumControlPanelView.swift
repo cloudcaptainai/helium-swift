@@ -418,6 +418,11 @@ struct HeliumControlPanelView: View {
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
                     webPaywallBundleUrl: version.webPaywallBundleUrl,
                     shouldEnableScroll: version.shouldEnableScroll,
+                    identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+                        paywallId: paywall.paywallId,
+                        paywallUuid: paywall.paywallUuid,
+                        templateName: paywall.paywallTemplateName ?? paywall.paywallName
+                    ),
                     secondTry: secondTryBundle
                 )
 
@@ -457,7 +462,12 @@ struct HeliumControlPanelView: View {
                 productIds: secondTry.productIds ?? [],
                 productIdsStripe: secondTry.stripeProductIds ?? [],
                 productIdsPaddle: secondTry.paddleProductIds ?? [],
-                shouldEnableScroll: secondTry.shouldEnableScroll
+                shouldEnableScroll: secondTry.shouldEnableScroll,
+                identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+                    paywallId: secondTry.paywallId,
+                    paywallUuid: secondTry.paywallUuid,
+                    templateName: secondTry.paywallTemplateName ?? secondTry.paywallName
+                )
             )
         } catch {
             HeliumLogger.log(.warn, category: .ui, "[HeliumControlPanel] Failed to load second try bundle for preview", metadata: [

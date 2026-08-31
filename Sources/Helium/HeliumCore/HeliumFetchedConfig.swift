@@ -1101,6 +1101,12 @@ public class HeliumFetchedConfigManager {
         trigger == HELIUM_PREVIEW_TRIGGER || trigger == HELIUM_PREVIEW_SECOND_TRY_TRIGGER
     }
 
+    struct PreviewPaywallIdentity {
+        let paywallId: Int?
+        let paywallUuid: String
+        let templateName: String
+    }
+
     /// The bundle and products for a preview's second try paywall, resolved by the control
     /// panel before the preview presents.
     struct PreviewSecondTryBundle {
@@ -1111,6 +1117,7 @@ public class HeliumFetchedConfigManager {
         let productIdsStripe: [String]
         let productIdsPaddle: [String]
         let shouldEnableScroll: Bool?
+        var identity: PreviewPaywallIdentity? = nil
     }
 
     /// True when a bundled default fallback paywall is available to preview on this device.
@@ -1158,6 +1165,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
+        identity: PreviewPaywallIdentity? = nil,
         secondTry: PreviewSecondTryBundle? = nil
     ) throws {
         // Read-modify-write under the lock, so a fetch landing mid-update is not clobbered by the
@@ -1178,6 +1186,7 @@ public class HeliumFetchedConfigManager {
                 productIdsStripeWeb: productIdsStripeWeb,
                 webPaywallBundleUrl: webPaywallBundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
+                identity: identity,
                 secondTry: secondTry
             )
             stored = config
@@ -1191,6 +1200,7 @@ public class HeliumFetchedConfigManager {
                 clonedFrom: sourceTrigger,
                 bundleUrl: bundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
+                identity: identity,
                 secondTry: secondTry
             )
         }
@@ -1212,6 +1222,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
+        identity: PreviewPaywallIdentity?,
         secondTry: PreviewSecondTryBundle?
     ) throws -> String {
         guard let sourceTrigger = config.triggerToPaywalls.keys
@@ -1231,7 +1242,8 @@ public class HeliumFetchedConfigManager {
             productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
-            shouldEnableScroll: shouldEnableScroll
+            shouldEnableScroll: shouldEnableScroll,
+            identity: identity
         )
 
         // A second try entry from an earlier preview must not survive into a preview of a
@@ -1246,7 +1258,8 @@ public class HeliumFetchedConfigManager {
                 productIdsPaddleWeb: [],
                 productIdsStripeWeb: [],
                 webPaywallBundleUrl: nil,
-                shouldEnableScroll: secondTry.shouldEnableScroll
+                shouldEnableScroll: secondTry.shouldEnableScroll,
+                identity: secondTry.identity
             )
         } else {
             config.triggerToPaywalls.removeValue(forKey: HELIUM_PREVIEW_SECOND_TRY_TRIGGER)
@@ -1274,9 +1287,16 @@ public class HeliumFetchedConfigManager {
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
-        shouldEnableScroll: Bool?
+        shouldEnableScroll: Bool?,
+        identity: PreviewPaywallIdentity?
     ) throws -> HeliumPaywallInfo {
         var previewPaywallInfo = donorPaywallInfo
+
+        if let identity {
+            previewPaywallInfo.paywallID = identity.paywallId ?? 0
+            previewPaywallInfo.paywallUUID = identity.paywallUuid
+            previewPaywallInfo.paywallTemplateName = identity.templateName
+        }
 
         // A paywall's bundle URL is resolved from this nested config before any other field, so a
         // donor URL left in place here would win over the preview's own.
@@ -1325,17 +1345,18 @@ public class HeliumFetchedConfigManager {
         clonedFrom sourceTrigger: String,
         bundleUrl: String,
         shouldEnableScroll: Bool?,
+        identity: PreviewPaywallIdentity?,
         secondTry: PreviewSecondTryBundle?
     ) -> JSON {
         var configJSON = configJSON
         let sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
         configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = previewEntryJSON(
-            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll
+            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll, identity: identity
         )
 
         if let secondTry {
             configJSON["triggerToPaywalls"][HELIUM_PREVIEW_SECOND_TRY_TRIGGER] = previewEntryJSON(
-                clonedFrom: sourceJSON, bundleUrl: secondTry.bundleUrl, shouldEnableScroll: secondTry.shouldEnableScroll
+                clonedFrom: sourceJSON, bundleUrl: secondTry.bundleUrl, shouldEnableScroll: secondTry.shouldEnableScroll, identity: secondTry.identity
             )
         } else if var triggers = configJSON["triggerToPaywalls"].dictionaryObject,
                   triggers.removeValue(forKey: HELIUM_PREVIEW_SECOND_TRY_TRIGGER) != nil {
@@ -1344,10 +1365,20 @@ public class HeliumFetchedConfigManager {
         return configJSON
     }
 
-    private static func previewEntryJSON(clonedFrom sourceJSON: JSON, bundleUrl: String, shouldEnableScroll: Bool?) -> JSON {
+    private static func previewEntryJSON(
+        clonedFrom sourceJSON: JSON,
+        bundleUrl: String,
+        shouldEnableScroll: Bool?,
+        identity: PreviewPaywallIdentity?
+    ) -> JSON {
         var entryJSON = sourceJSON
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
+        if let identity {
+            entryJSON["paywallID"] = JSON(identity.paywallId ?? 0)
+            entryJSON["paywallUUID"] = JSON(identity.paywallUuid)
+            entryJSON["paywallTemplateName"] = JSON(identity.templateName)
+        }
         return entryJSON
     }
 }
