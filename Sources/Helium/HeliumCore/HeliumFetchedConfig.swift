@@ -1200,7 +1200,6 @@ public class HeliumFetchedConfigManager {
                 clonedFrom: sourceTrigger,
                 bundleUrl: bundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
-                identity: identity,
                 secondTry: secondTry
             )
         }
@@ -1345,18 +1344,17 @@ public class HeliumFetchedConfigManager {
         clonedFrom sourceTrigger: String,
         bundleUrl: String,
         shouldEnableScroll: Bool?,
-        identity: PreviewPaywallIdentity?,
         secondTry: PreviewSecondTryBundle?
     ) -> JSON {
         var configJSON = configJSON
         let sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
         configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = previewEntryJSON(
-            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll, identity: identity
+            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll
         )
 
         if let secondTry {
             configJSON["triggerToPaywalls"][HELIUM_PREVIEW_SECOND_TRY_TRIGGER] = previewEntryJSON(
-                clonedFrom: sourceJSON, bundleUrl: secondTry.bundleUrl, shouldEnableScroll: secondTry.shouldEnableScroll, identity: secondTry.identity
+                clonedFrom: sourceJSON, bundleUrl: secondTry.bundleUrl, shouldEnableScroll: secondTry.shouldEnableScroll
             )
         } else if var triggers = configJSON["triggerToPaywalls"].dictionaryObject,
                   triggers.removeValue(forKey: HELIUM_PREVIEW_SECOND_TRY_TRIGGER) != nil {
@@ -1365,20 +1363,10 @@ public class HeliumFetchedConfigManager {
         return configJSON
     }
 
-    private static func previewEntryJSON(
-        clonedFrom sourceJSON: JSON,
-        bundleUrl: String,
-        shouldEnableScroll: Bool?,
-        identity: PreviewPaywallIdentity?
-    ) -> JSON {
+    private static func previewEntryJSON(clonedFrom sourceJSON: JSON, bundleUrl: String, shouldEnableScroll: Bool?) -> JSON {
         var entryJSON = sourceJSON
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
-        if let identity {
-            entryJSON["paywallID"] = JSON(identity.paywallId ?? 0)
-            entryJSON["paywallUUID"] = JSON(identity.paywallUuid)
-            entryJSON["paywallTemplateName"] = JSON(identity.templateName)
-        }
         return entryJSON
     }
 }

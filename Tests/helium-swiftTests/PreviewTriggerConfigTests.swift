@@ -218,23 +218,6 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(previewInfo?.paywallTemplateName, "donor_paywall")
     }
 
-    func testJsonMirrorCarriesPreviewedPaywallIdentity() throws {
-        let config = makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()])
-        let configJSON = try JSON(data: JSONEncoder().encode(config))
-        injectConfig(config, json: configJSON)
-
-        try setPreviewConfig(identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
-            paywallId: 42,
-            paywallUuid: "f3e96335-f7df-4f28-b439-9506d37c793e",
-            templateName: "Previewed Paywall"
-        ))
-
-        let entryJSON = HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger]
-        XCTAssertEqual(entryJSON?["paywallID"].int, 42)
-        XCTAssertEqual(entryJSON?["paywallUUID"].string, "f3e96335-f7df-4f28-b439-9506d37c793e")
-        XCTAssertEqual(entryJSON?["paywallTemplateName"].string, "Previewed Paywall")
-    }
-
     func testSecondTryCarriesItsOwnIdentity() throws {
         injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
 
