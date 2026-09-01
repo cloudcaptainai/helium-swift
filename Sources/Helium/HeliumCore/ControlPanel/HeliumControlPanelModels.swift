@@ -17,6 +17,8 @@ struct HeliumControlPanelResponse: Codable {
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let paywallUuid: String
     let paywallName: String
+    let paywallTemplateName: String?
+    let paywallId: Int?
     let isWeb: Bool?
     let versions: [HeliumPaywallPreviewVersion]
     let secondTry: HeliumPaywallPreviewSecondTry?
@@ -44,6 +46,8 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
 struct HeliumPaywallPreviewSecondTry: Codable {
     let paywallUuid: String
     let paywallName: String
+    let paywallTemplateName: String?
+    let paywallId: Int?
     /// "published" when the second try paywall is live; "draft" when it has never been
     /// published, in which case real users do not see it until the paywall is published.
     /// Optional so a malformed entry can't fail decoding the whole preview list.

@@ -52,6 +52,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
         productIdsStripeWeb: [String] = [],
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
+        identity: HeliumFetchedConfigManager.PreviewPaywallIdentity? = nil,
         secondTry: HeliumFetchedConfigManager.PreviewSecondTryBundle? = nil
     ) throws {
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
@@ -65,12 +66,14 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll,
+            identity: identity,
             secondTry: secondTry
         )
     }
 
     private func makeSecondTryBundle(
-        shouldEnableScroll: Bool? = nil
+        shouldEnableScroll: Bool? = nil,
+        identity: HeliumFetchedConfigManager.PreviewPaywallIdentity? = nil
     ) -> HeliumFetchedConfigManager.PreviewSecondTryBundle {
         HeliumFetchedConfigManager.PreviewSecondTryBundle(
             bundleId: "secondtry789",
@@ -79,7 +82,8 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIds: ["secondtry.product"],
             productIdsStripe: ["secondtry_stripe:price_2"],
             productIdsPaddle: [],
-            shouldEnableScroll: shouldEnableScroll
+            shouldEnableScroll: shouldEnableScroll,
+            identity: identity
         )
     }
 
@@ -177,6 +181,62 @@ final class PreviewTriggerConfigTests: XCTestCase {
         let donorBaseStack = donorResolved?["baseStack"] as? [String: Any]
         let donorProps = donorBaseStack?["componentProps"] as? [String: Any]
         XCTAssertEqual(donorProps?["shouldEnableScroll"] as? Bool, false)
+    }
+
+    func testPreviewCarriesPreviewedPaywallIdentity() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+            paywallId: 42,
+            paywallUuid: "f3e96335-f7df-4f28-b439-9506d37c793e",
+            templateName: "Previewed Paywall"
+        ))
+
+        XCTAssertEqual(previewInfo?.paywallID, 42)
+        XCTAssertEqual(previewInfo?.paywallUUID, "f3e96335-f7df-4f28-b439-9506d37c793e")
+        XCTAssertEqual(previewInfo?.paywallTemplateName, "Previewed Paywall")
+    }
+
+    func testPreviewIdentityWithoutIntIdUsesZero() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+            paywallId: nil,
+            paywallUuid: "f3e96335-f7df-4f28-b439-9506d37c793e",
+            templateName: "Previewed Paywall"
+        ))
+
+        XCTAssertEqual(previewInfo?.paywallID, 0)
+    }
+
+    func testPreviewWithoutIdentityKeepsDonorIdentity() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig()
+
+        XCTAssertEqual(previewInfo?.paywallID, 1)
+        XCTAssertEqual(previewInfo?.paywallTemplateName, "donor_paywall")
+    }
+
+    func testSecondTryCarriesItsOwnIdentity() throws {
+        injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
+
+        try setPreviewConfig(
+            identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+                paywallId: 42,
+                paywallUuid: "f3e96335-f7df-4f28-b439-9506d37c793e",
+                templateName: "Previewed Paywall"
+            ),
+            secondTry: makeSecondTryBundle(identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
+                paywallId: 7,
+                paywallUuid: "aa11bb22-cc33-4444-9555-666677778888",
+                templateName: "Previewed Second Try"
+            ))
+        )
+
+        XCTAssertEqual(secondTryInfo?.paywallID, 7)
+        XCTAssertEqual(secondTryInfo?.paywallUUID, "aa11bb22-cc33-4444-9555-666677778888")
+        XCTAssertEqual(secondTryInfo?.paywallTemplateName, "Previewed Second Try")
     }
 
     func testPreviewClearsForceShowFallback() throws {
@@ -467,6 +527,56 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(response.paywalls[0].versions[0].shouldEnableScroll)
         XCTAssertNil(response.paywalls[0].secondTry)
         XCTAssertFalse(response.paywalls[0].isWebPaywall)
+        XCTAssertNil(response.paywalls[0].paywallTemplateName)
+        XCTAssertNil(response.paywalls[0].paywallId)
+    }
+
+    func testDecodesPreviewedPaywallIdentityFields() throws {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            {
+              "paywallUuid": "f3e96335-f7df-4f28-b439-9506d37c793e",
+              "paywallName": "Premium",
+              "paywallTemplateName": "Premium",
+              "paywallId": 42,
+              "isWeb": false,
+              "versions": [],
+              "secondTry": {
+                "paywallUuid": "aa11bb22-cc33-4444-9555-666677778888",
+                "paywallName": "Premium Offer",
+                "paywallTemplateName": "Premium Offer",
+                "paywallId": 7,
+                "versionStatus": "published",
+                "bundleUrl": "https://bundles-staging.heliumpaywall.com/x/bundle_2nd.html",
+                "productIds": [],
+                "stripeProductIds": [],
+                "paddleProductIds": []
+              }
+            },
+            {
+              "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+              "paywallName": "Legacy",
+              "paywallTemplateName": "Legacy",
+              "paywallId": null,
+              "isWeb": false,
+              "versions": []
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            HeliumControlPanelResponse.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(response.paywalls[0].paywallTemplateName, "Premium")
+        XCTAssertEqual(response.paywalls[0].paywallId, 42)
+        XCTAssertEqual(response.paywalls[0].secondTry?.paywallTemplateName, "Premium Offer")
+        XCTAssertEqual(response.paywalls[0].secondTry?.paywallId, 7)
+        XCTAssertEqual(response.paywalls[1].paywallTemplateName, "Legacy")
+        XCTAssertNil(response.paywalls[1].paywallId)
     }
 
     func testDecodesSecondTryEntry() throws {
