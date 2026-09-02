@@ -275,6 +275,10 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(traits["isPro"] as? Bool, true)
         XCTAssertEqual(traits["trialCount"] as? Int, 3)
         XCTAssertEqual(traits["discountRatio"] as? Double, 0.25)
+        // `as? Int`/`as? Double` also accept a bool or the wrong numeric token, so pin the tokens.
+        XCTAssertTrue(isJSONNumber(traits["trialCount"]), "trialCount must be a number, not a bool")
+        XCTAssertFalse(isJSONFloatingPoint(traits["trialCount"]), "trialCount must stay an integer token")
+        XCTAssertTrue(isJSONFloatingPoint(traits["discountRatio"]), "discountRatio must stay a floating-point token")
     }
 
     func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {
@@ -410,6 +414,10 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(dict["discountRatio"] as? Double, 0.25)
         XCTAssertEqual(dict["tags"] as? [String], ["a", "b"])
         XCTAssertEqual((dict["nested"] as? [String: Any])?["k"] as? Int, 1)
+        // `as? Int`/`as? Double` also accept a bool or the wrong numeric token, so pin the tokens.
+        XCTAssertTrue(isJSONNumber(dict["trialCount"]), "trialCount must be a number, not a bool")
+        XCTAssertFalse(isJSONFloatingPoint(dict["trialCount"]), "trialCount must stay an integer token")
+        XCTAssertTrue(isJSONFloatingPoint(dict["discountRatio"]), "discountRatio must stay a floating-point token")
     }
 
     func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {
@@ -797,6 +805,20 @@ final class CtxCompressionTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// True iff the value is a JSON number (NSNumber) rather than a bool. `JSONSerialization`
+    /// maps JSON `true`/`false` → CFBoolean and numeric tokens → plain NSNumber, so this
+    /// separates a real number from a bool that would still satisfy `as? Int`/`as? Double`.
+    private func isJSONNumber(_ value: Any?) -> Bool {
+        guard let n = value as? NSNumber else { return false }
+        return CFGetTypeID(n) != CFBooleanGetTypeID()
+    }
+
+    /// True iff the value is a JSON floating-point token (objCType "d"), not an integer token.
+    private func isJSONFloatingPoint(_ value: Any?) -> Bool {
+        guard isJSONNumber(value), let n = value as? NSNumber else { return false }
+        return String(cString: n.objCType) == "d"
+    }
 
     private func base64URLDecode(_ encoded: String) -> Data? {
         var s = encoded.replacingOccurrences(of: "-", with: "+")
