@@ -14,18 +14,22 @@ actor HeliumEntitlementsManager {
     nonisolated let paddleEntitlementsSource = PaddleEntitlementsSource()
     nonisolated let stripeEntitlementsSource = StripeEntitlementsSource()
 
-    private var allThirdPartySources: [ThirdPartyEntitlementsSource] {
-        var sources: [ThirdPartyEntitlementsSource] = []
+    private var labeledThirdPartySources: [(label: EntitledProductSource, source: ThirdPartyEntitlementsSource)] {
+        var sources: [(EntitledProductSource, ThirdPartyEntitlementsSource)] = []
         if let thirdParty = Helium.config.thirdPartyEntitlementsSource {
-            sources.append(thirdParty)
+            sources.append((.thirdParty, thirdParty))
         }
         if paddleEntitlementsSource.isConfigured {
-            sources.append(paddleEntitlementsSource)
+            sources.append((.paddle, paddleEntitlementsSource))
         }
         if stripeEntitlementsSource.isConfigured {
-            sources.append(stripeEntitlementsSource)
+            sources.append((.stripe, stripeEntitlementsSource))
         }
         return sources
+    }
+
+    private var allThirdPartySources: [ThirdPartyEntitlementsSource] {
+        labeledThirdPartySources.map { $0.source }
     }
 
     private func allThirdPartyEntitledProductIds() async -> Set<String> {
@@ -297,6 +301,52 @@ actor HeliumEntitlementsManager {
         return result
     }
     
+    func entitledProductDetailsForPaywall(trigger: String) async -> [EntitledProductDetail] {
+        guard Helium.shared.paywallsLoaded() else { return [] }
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+            ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
+        let productIds = paywallInfo?.productIdsIncludingWebProductIds ?? []
+        guard !productIds.isEmpty else { return [] }
+
+        var details: [EntitledProductDetail] = []
+
+        if cache.lastTransactionsLoadedTime == nil {
+            for persisted in cache.persistedEntitlements
+            where persisted.appearsValid() && productIds.contains(persisted.productID) {
+                details.append(EntitledProductDetail(
+                    productId: persisted.productID,
+                    source: .appStore,
+                    expirationDate: persisted.expirationDate
+                ))
+            }
+        }
+        if details.isEmpty {
+            let entitlements = await getCachedEntitlements()
+            for transaction in entitlements where productIds.contains(transaction.productID) {
+                details.append(EntitledProductDetail(
+                    productId: transaction.productID,
+                    source: .appStore,
+                    expirationDate: transaction.expirationDate
+                ))
+            }
+        }
+
+        for (label, source) in labeledThirdPartySources {
+            let entitledIds = await source.purchasedHeliumProductIds()
+            for productId in productIds
+            where Self.thirdPartyIdsContain(productId: productId, in: entitledIds)
+                && !details.contains(where: { $0.productId == productId }) {
+                details.append(EntitledProductDetail(
+                    productId: productId,
+                    source: label,
+                    expirationDate: nil
+                ))
+            }
+        }
+
+        return details
+    }
+
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {
         for source in allThirdPartySources {
             if await source.hasAnyActiveSubscription() {

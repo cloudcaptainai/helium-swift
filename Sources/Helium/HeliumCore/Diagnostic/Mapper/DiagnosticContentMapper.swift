@@ -54,12 +54,15 @@ struct DiagnosticContentMapper {
 
     // MARK: - Entry points
 
-    /// Maps a skip — a paywall Helium deliberately chose not to show. Skip copy needs no runtime
-    /// context beyond the reason itself.
-    func mapSkip(_ reason: PaywallSkippedReason) -> DiagnosticContent {
+    /// Maps a skip — a paywall Helium deliberately chose not to show. The already-entitled skip
+    /// names the entitlements that caused it when they could be resolved.
+    func mapSkip(
+        _ reason: PaywallSkippedReason,
+        entitledProducts: [EntitledProductDetail] = []
+    ) -> DiagnosticContent {
         switch reason {
         case .targetingHoldout: return targetingHoldout()
-        case .alreadyEntitled: return alreadyEntitled()
+        case .alreadyEntitled: return alreadyEntitled(entitledProducts)
         }
     }
 
@@ -129,19 +132,39 @@ struct DiagnosticContentMapper {
         )
     }
 
-    private func alreadyEntitled() -> DiagnosticContent {
-        DiagnosticContent(
+    private func alreadyEntitled(_ entitledProducts: [EntitledProductDetail]) -> DiagnosticContent {
+        var body = "Paywall not shown because this user is already entitled to a product in this "
+            + "paywall. To show paywalls to entitled users anyway, set dontShowIfAlreadyEntitled "
+            + "to false."
+        if !entitledProducts.isEmpty {
+            let descriptions = entitledProducts.map(Self.describe)
+            body += " This user is entitled to: \(descriptions.joined(separator: "; "))."
+        }
+        return DiagnosticContent(
             category: .expected,
             title: "Already subscribed",
-            body: "Paywall not shown because this user is already entitled to a product in this "
-                + "paywall. To show paywalls to entitled users anyway, set dontShowIfAlreadyEntitled "
-                + "to false.",
+            body: body,
             usersWillSee: "Subscribed users see no paywall; users without the entitlement see it "
                 + "normally.",
             usersWillSeeLink: nil,
             cta: .openUrl(label: "Entitlement Docs", url: Url.entitlements),
             reasonCode: PaywallSkippedReason.alreadyEntitled.rawValue
         )
+    }
+
+    private static let expirationDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static func describe(_ product: EntitledProductDetail) -> String {
+        var qualifiers = [product.source.rawValue]
+        if let expirationDate = product.expirationDate {
+            qualifiers.append("expires \(expirationDateFormatter.string(from: expirationDate))")
+        }
+        return "\(product.productId) (\(qualifiers.joined(separator: ", ")))"
     }
 
     /// Suppressed from the modal, so only `body` is ever surfaced — in the log.
