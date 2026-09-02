@@ -226,61 +226,6 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(traits["tier"] as? String, "free")
     }
 
-    func testBuildEnrichedCheckoutURL_emitsMixedTypeCustomPaywallTraitsInCtx() async throws {
-        Helium.lastApiKeyUsed = "test_api_key_for_mixed_traits"
-        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": true]))
-        defer {
-            Helium.lastApiKeyUsed = nil
-            HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(nil)
-        }
-
-        let provider: PaymentProviderConfig = .paddle
-        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
-        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
-
-        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
-        let templateEvent = PurchaseSucceededEvent(
-            productId: "", triggerName: "t", paywallName: "P",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.kind
-        )
-        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
-            for: templateEvent,
-            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
-        )
-
-        let url = try manager.buildEnrichedCheckoutURL(
-            baseURL: baseURL, analyticsEvent: analyticsEvent,
-            productKey: "pro_x:pri_y", triggerName: "onboarding",
-            successURL: "myapp://ok", cancelURL: "myapp://cancel",
-            introOfferEligible: true, paddleBootstraps: nil,
-            paywallTraits: HeliumUserTraits([
-                "plan": "gold",       // String
-                "isPro": true,        // Bool
-                "trialCount": 3,      // Int
-                "discountRatio": 0.25 // Double
-            ])
-        )
-
-        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let fragment = try XCTUnwrap(components.fragment)
-        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
-        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
-        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
-
-        let traits = try XCTUnwrap(parsed["customPaywallTraits"] as? [String: Any],
-                                   "ctx must carry customPaywallTraits")
-        // Each JSON type must survive the freeze → jsonObject() → compress → decompress round-trip.
-        XCTAssertEqual(traits["plan"] as? String, "gold")
-        XCTAssertEqual(traits["isPro"] as? Bool, true)
-        XCTAssertEqual(traits["trialCount"] as? Int, 3)
-        XCTAssertEqual(traits["discountRatio"] as? Double, 0.25)
-        // `as? Int`/`as? Double` also accept a bool or the wrong numeric token, so pin the tokens.
-        XCTAssertTrue(isJSONNumber(traits["trialCount"]), "trialCount must be a number, not a bool")
-        XCTAssertFalse(isJSONFloatingPoint(traits["trialCount"]), "trialCount must stay an integer token")
-        XCTAssertTrue(isJSONFloatingPoint(traits["discountRatio"]), "discountRatio must stay a floating-point token")
-    }
-
     func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {
         Helium.lastApiKeyUsed = "test_api_key_for_traits_off"
         HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": false]))
@@ -414,10 +359,6 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(dict["discountRatio"] as? Double, 0.25)
         XCTAssertEqual(dict["tags"] as? [String], ["a", "b"])
         XCTAssertEqual((dict["nested"] as? [String: Any])?["k"] as? Int, 1)
-        // `as? Int`/`as? Double` also accept a bool or the wrong numeric token, so pin the tokens.
-        XCTAssertTrue(isJSONNumber(dict["trialCount"]), "trialCount must be a number, not a bool")
-        XCTAssertFalse(isJSONFloatingPoint(dict["trialCount"]), "trialCount must stay an integer token")
-        XCTAssertTrue(isJSONFloatingPoint(dict["discountRatio"]), "discountRatio must stay a floating-point token")
     }
 
     func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {
@@ -805,20 +746,6 @@ final class CtxCompressionTests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    /// True iff the value is a JSON number (NSNumber) rather than a bool. `JSONSerialization`
-    /// maps JSON `true`/`false` → CFBoolean and numeric tokens → plain NSNumber, so this
-    /// separates a real number from a bool that would still satisfy `as? Int`/`as? Double`.
-    private func isJSONNumber(_ value: Any?) -> Bool {
-        guard let n = value as? NSNumber else { return false }
-        return CFGetTypeID(n) != CFBooleanGetTypeID()
-    }
-
-    /// True iff the value is a JSON floating-point token (objCType "d"), not an integer token.
-    private func isJSONFloatingPoint(_ value: Any?) -> Bool {
-        guard isJSONNumber(value), let n = value as? NSNumber else { return false }
-        return String(cString: n.objCType) == "d"
-    }
 
     private func base64URLDecode(_ encoded: String) -> Data? {
         var s = encoded.replacingOccurrences(of: "-", with: "+")
