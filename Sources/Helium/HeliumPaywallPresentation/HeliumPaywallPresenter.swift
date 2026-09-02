@@ -43,7 +43,7 @@ class HeliumPaywallPresenter {
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
         if context.config.dontShowIfAlreadyEntitled {
-            let skipIt = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
+            let skipIt = await context.config.resolveIsEntitled(trigger: trigger)
             if skipIt == true {
                 handleAlreadyEntitledSkip(trigger: trigger, context: context)
                 return true
