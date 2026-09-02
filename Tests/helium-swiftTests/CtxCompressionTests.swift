@@ -226,6 +226,57 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(traits["tier"] as? String, "free")
     }
 
+    func testBuildEnrichedCheckoutURL_emitsMixedTypeCustomPaywallTraitsInCtx() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_mixed_traits"
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": true]))
+        defer {
+            Helium.lastApiKeyUsed = nil
+            HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(nil)
+        }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "onboarding",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil,
+            paywallTraits: HeliumUserTraits([
+                "plan": "gold",       // String
+                "isPro": true,        // Bool
+                "trialCount": 3,      // Int
+                "discountRatio": 0.25 // Double
+            ])
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        let traits = try XCTUnwrap(parsed["customPaywallTraits"] as? [String: Any],
+                                   "ctx must carry customPaywallTraits")
+        // Each JSON type must survive the freeze → jsonObject() → compress → decompress round-trip.
+        XCTAssertEqual(traits["plan"] as? String, "gold")
+        XCTAssertEqual(traits["isPro"] as? Bool, true)
+        XCTAssertEqual(traits["trialCount"] as? Int, 3)
+        XCTAssertEqual(traits["discountRatio"] as? Double, 0.25)
+    }
+
     func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {
         Helium.lastApiKeyUsed = "test_api_key_for_traits_off"
         HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": false]))
@@ -339,6 +390,26 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(dict["tier"] as? String, "free")       // carried from identity traits
         XCTAssertEqual(dict["plan"] as? String, "gold")       // presentation wins over identity
         XCTAssertEqual(dict["trigger"] as? String, "custom")  // presentation wins over the default trigger
+    }
+
+    func testJsonObject_preservesJSONValueTypes() throws {
+        let traits = HeliumUserTraits([
+            "plan": "gold",           // String
+            "isPro": true,            // Bool
+            "trialCount": 3,          // Int
+            "discountRatio": 0.25,    // Double
+            "tags": ["a", "b"],       // Array
+            "nested": ["k": 1]        // Dictionary
+        ])
+
+        let dict = try traits.jsonObject()
+
+        XCTAssertEqual(dict["plan"] as? String, "gold")
+        XCTAssertEqual(dict["isPro"] as? Bool, true)
+        XCTAssertEqual(dict["trialCount"] as? Int, 3)
+        XCTAssertEqual(dict["discountRatio"] as? Double, 0.25)
+        XCTAssertEqual(dict["tags"] as? [String], ["a", "b"])
+        XCTAssertEqual((dict["nested"] as? [String: Any])?["k"] as? Int, 1)
     }
 
     func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {

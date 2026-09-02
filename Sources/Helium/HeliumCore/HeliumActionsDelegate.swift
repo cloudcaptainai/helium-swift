@@ -238,10 +238,19 @@ class HeliumActionsDelegate: ObservableObject {
 
         isLoading = true
         defer { isLoading = false }
-        let paywallTraits = resolvedPaywallTraits ?? HeliumUserTraits.forPaywall(
-            triggerName: trigger,
-            presentationTraits: paywallSession.presentationContext.customPaywallTraits
-        )
+        let paywallTraits: HeliumUserTraits
+        if let resolvedPaywallTraits {
+            paywallTraits = resolvedPaywallTraits
+        } else {
+            HeliumObservabilityManager.shared.track(
+                PaywallTraitsFreezeMissingAtMakePurchase(productId: selectedProductId),
+                scope: paywallSession.observabilityScope
+            )
+            paywallTraits = HeliumUserTraits.forPaywall(
+                triggerName: trigger,
+                presentationTraits: paywallSession.presentationContext.customPaywallTraits
+            )
+        }
         return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits)
     }
     
