@@ -334,7 +334,7 @@ actor HeliumEntitlementsManager {
         for (label, source) in labeledThirdPartySources {
             let entitledIds = await source.purchasedHeliumProductIds()
             for productId in productIds
-            where Self.thirdPartyIdsContain(productId: productId, in: entitledIds)
+            where entitledIds.contains(productId)
                 && !details.contains(where: { $0.productId == productId }) {
                 details.append(EntitledProductDetail(
                     productId: productId,
