@@ -370,6 +370,19 @@ struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
     }
 }
 
+/// The paywall webview freezes the fully assembled traits at display time, and that
+/// always runs before a purchase can be triggered. A miss at purchase time therefore
+/// means that invariant broke, so the traits get reconstructed as a safety net (some
+/// traits over none) and this event flags the defect for investigation.
+struct PaywallTraitsFreezeMissingAtMakePurchase: HeliumObservabilityEvent {
+    let productId: String
+
+    var name: String { "paywall_traits_freeze_missing_at_make_purchase" }
+    var properties: [String: Any] {
+        ["productId": productId]
+    }
+}
+
 /// Reports the fallback bundle an app ships. The event's presence in the stream is
 /// itself the "this app has fallbacks configured" signal, so it is only emitted when
 /// a bundle was found and parsed.

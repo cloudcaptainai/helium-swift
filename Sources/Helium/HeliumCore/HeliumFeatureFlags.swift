@@ -13,6 +13,11 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// Gates the SDK's California ip_geo ZIP block only. Off (default) blocks a
     /// CA-range postal; on lets the buyer reach the bundle's consent modal.
     case caConsentModalEnabled
+
+    /// Gates emitting `customPaywallTraits` into the external web checkout ctx so a
+    /// browser-opened paywall reads the same traits it would in-app. Off (default)
+    /// omits the key while the web checkout bundle rolls out support for it.
+    case webCheckoutPaywallTraits
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.

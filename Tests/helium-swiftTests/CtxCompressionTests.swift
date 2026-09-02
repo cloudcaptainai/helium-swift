@@ -182,6 +182,185 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertNotNil(parsed["analytics"])
     }
 
+    func testBuildEnrichedCheckoutURL_emitsCustomPaywallTraitsInCtx() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_traits"
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": true]))
+        defer {
+            Helium.lastApiKeyUsed = nil
+            HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(nil)
+        }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "onboarding",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil,
+            paywallTraits: HeliumUserTraits(["plan": "gold", "trigger": "onboarding", "tier": "free"])
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        let traits = try XCTUnwrap(parsed["customPaywallTraits"] as? [String: Any],
+                                   "ctx must carry customPaywallTraits")
+        XCTAssertEqual(traits["plan"] as? String, "gold")
+        XCTAssertEqual(traits["trigger"] as? String, "onboarding")
+        XCTAssertEqual(traits["tier"] as? String, "free")
+    }
+
+    func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_traits_off"
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": false]))
+        defer {
+            Helium.lastApiKeyUsed = nil
+            HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(nil)
+        }
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "onboarding",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil,
+            paywallTraits: HeliumUserTraits(["plan": "gold"])
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+
+        XCTAssertNil(parsed["customPaywallTraits"],
+                     "ctx must omit customPaywallTraits when the flag is off")
+    }
+
+    func testBuildEnrichedCheckoutURL_freezesTraitsAgainstLaterIdentityChanges() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_traits_freeze"
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webCheckoutPaywallTraits": true]))
+        let originalUserTraits = HeliumIdentityManager.shared.getUserTraits()
+        defer {
+            Helium.lastApiKeyUsed = nil
+            HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(nil)
+            HeliumIdentityManager.shared.setCustomUserTraits(originalUserTraits)
+        }
+
+        // Assemble the snapshot with the identity traits in effect at display time.
+        HeliumIdentityManager.shared.setCustomUserTraits(HeliumUserTraits(["tier": "free"]))
+        let displaySnapshot = HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: HeliumUserTraits(["plan": "gold"])
+        )
+        // Identity changes before the user completes checkout.
+        HeliumIdentityManager.shared.setCustomUserTraits(HeliumUserTraits(["tier": "premium"]))
+
+        let provider: PaymentProviderConfig = .paddle
+        let entitlements = HeliumPaymentEntitlementsSource(provider: provider)
+        let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: entitlements)
+
+        let baseURL = URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "onboarding", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "onboarding", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: baseURL, analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_y", triggerName: "onboarding",
+            successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, paddleBootstraps: nil,
+            paywallTraits: displaySnapshot
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+        let traits = try XCTUnwrap(parsed["customPaywallTraits"] as? [String: Any])
+
+        // The ctx reflects the display-time snapshot, not the later identity change.
+        XCTAssertEqual(traits["tier"] as? String, "free")
+        XCTAssertEqual(traits["plan"] as? String, "gold")
+        XCTAssertEqual(traits["trigger"] as? String, "onboarding")
+    }
+
+    func testForPaywall_mergesTriggerIdentityAndPresentationWithPresentationWinning() throws {
+        let originalUserTraits = HeliumIdentityManager.shared.getUserTraits()
+        defer { HeliumIdentityManager.shared.setCustomUserTraits(originalUserTraits) }
+
+        HeliumIdentityManager.shared.setCustomUserTraits(
+            HeliumUserTraits(["tier": "free", "plan": "identity_plan"])
+        )
+
+        let combined = HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: HeliumUserTraits(["plan": "gold", "trigger": "custom"])
+        )
+        let dict = try combined.jsonObject()
+
+        XCTAssertEqual(dict["tier"] as? String, "free")       // carried from identity traits
+        XCTAssertEqual(dict["plan"] as? String, "gold")       // presentation wins over identity
+        XCTAssertEqual(dict["trigger"] as? String, "custom")  // presentation wins over the default trigger
+    }
+
+    func testJsonObject_preservesJSONValueTypes() throws {
+        let traits = HeliumUserTraits([
+            "plan": "gold",           // String
+            "isPro": true,            // Bool
+            "trialCount": 3,          // Int
+            "discountRatio": 0.25,    // Double
+            "tags": ["a", "b"],       // Array
+            "nested": ["k": 1]        // Dictionary
+        ])
+
+        let dict = try traits.jsonObject()
+
+        XCTAssertEqual(dict["plan"] as? String, "gold")
+        XCTAssertEqual(dict["isPro"] as? Bool, true)
+        XCTAssertEqual(dict["trialCount"] as? Int, 3)
+        XCTAssertEqual(dict["discountRatio"] as? Double, 0.25)
+        XCTAssertEqual(dict["tags"] as? [String], ["a", "b"])
+        XCTAssertEqual((dict["nested"] as? [String: Any])?["k"] as? Int, 1)
+    }
+
     func testBuildEnrichedCheckoutURL_appendsHeliumIosBundleIdQueryParam() async throws {
         Helium.lastApiKeyUsed = "test_api_key_for_bundle_id"
         defer { Helium.lastApiKeyUsed = nil }
