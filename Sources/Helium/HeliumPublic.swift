@@ -499,8 +499,8 @@ public struct PaywallPresentationConfig {
     ///   is not provided) and a `paywallSkipped` event is fired. Defaults to `false`, which is right for most paywalls:
     ///   user-initiated paywalls (e.g. "Upgrade to Premium") and onboarding paywalls should always show, and entitled users can
     ///   still use "Restore Purchases". Enable it only where a paying user must never see a paywall, such as one presented
-    ///   automatically on app open. If your app already tracks entitlement, keep it `false` and check `Helium.entitlements`
-    ///   (e.g. `hasEntitlementForPaywall(trigger:)`) before presenting instead.
+    ///   automatically on app open. If your app already tracks entitlement, keep it `false` and use your existing
+    ///   entitlement logic instead.
     ///   See https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements
     ///   - presentationStyle: Animation used to present the paywall. Defaults to `nil`, which lets your Helium dashboard
     ///   configuration decide (slide up if unconfigured). Setting this overrides the dashboard. Ignored for `HeliumPaywall`
