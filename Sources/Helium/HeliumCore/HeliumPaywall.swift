@@ -127,7 +127,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         .task(id: state) {
             // Handle state-specific async work
             if case .checkingEntitlement = state {
-                isEntitled = await config.resolveIsEntitled(trigger: trigger)
+                isEntitled = await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
                 // Check if task was cancelled (e.g. by loading budget timeout)
                 guard !Task.isCancelled else { return }
                 transitionState(allowLoadingState: !loadingBudgetExpired)

@@ -486,7 +486,6 @@ public struct PaywallPresentationConfig {
     var presentFromViewController: UIViewController?
     var customPaywallTraits: HeliumUserTraits?
     var dontShowIfAlreadyEntitled: Bool
-    var isEntitledOverride: (() async -> Bool)?
     var presentationStyle: HeliumPresentationStyle?
     var loadingBudget: TimeInterval?
 
@@ -504,14 +503,12 @@ public struct PaywallPresentationConfig {
         presentFromViewController: UIViewController? = nil,
         customPaywallTraits: HeliumUserTraits? = nil,
         dontShowIfAlreadyEntitled: Bool = false,
-        isEntitledOverride: (() async -> Bool)? = nil,
         presentationStyle: HeliumPresentationStyle? = nil,
         loadingBudget: TimeInterval? = nil
     ) {
         self.presentFromViewController = presentFromViewController
         self.customPaywallTraits = customPaywallTraits
         self.dontShowIfAlreadyEntitled = dontShowIfAlreadyEntitled
-        self.isEntitledOverride = isEntitledOverride
         self.presentationStyle = presentationStyle
         self.loadingBudget = loadingBudget
     }

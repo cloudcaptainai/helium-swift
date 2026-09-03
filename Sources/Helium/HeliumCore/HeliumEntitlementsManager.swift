@@ -718,12 +718,3 @@ actor HeliumEntitlementsManager {
     }
 }
 
-
-extension PaywallPresentationConfig {
-    func resolveIsEntitled(trigger: String) async -> Bool? {
-        if let isEntitledOverride {
-            return await isEntitledOverride()
-        }
-        return await Helium.entitlements.hasEntitlementForPaywall(trigger: trigger)
-    }
-}
