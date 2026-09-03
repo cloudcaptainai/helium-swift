@@ -301,14 +301,17 @@ actor HeliumEntitlementsManager {
         return result
     }
     
-    func entitledProductDetailsForPaywall(trigger: String) async -> [EntitledProductDetail] {
-        guard Helium.shared.paywallsLoaded() else { return [] }
+    func entitledProductDetails(trigger: String) async -> (matching: [EntitledProductDetail], other: [EntitledProductDetail]) {
+        let all = await allEntitledProductDetails()
+        guard Helium.shared.paywallsLoaded() else { return ([], all) }
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
             ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
         let productKeys = paywallInfo?.productIdsIncludingWebProductIds ?? []
-        guard !productKeys.isEmpty else { return [] }
+        guard !productKeys.isEmpty else { return ([], all) }
 
-        return await allEntitledProductDetails().filter { productKeys.contains($0.heliumProductKey) }
+        let matching = all.filter { productKeys.contains($0.heliumProductKey) }
+        let other = all.filter { !matching.contains($0) }
+        return (matching, other)
     }
 
     func allEntitledProductDetails() async -> [EntitledProductDetail] {

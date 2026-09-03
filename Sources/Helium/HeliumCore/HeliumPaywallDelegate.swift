@@ -366,9 +366,7 @@ class HeliumPaywallDelegateWrapper {
             return
         }
         Task {
-            let entitledProducts = await HeliumEntitlementsManager.shared.entitledProductDetailsForPaywall(trigger: trigger)
-            let otherEntitlements = await HeliumEntitlementsManager.shared.allEntitledProductDetails()
-                .filter { detail in !entitledProducts.contains(detail) }
+            let (entitledProducts, otherEntitlements) = await HeliumEntitlementsManager.shared.entitledProductDetails(trigger: trigger)
             self.emitSkipDiagnostic(trigger: trigger, skipReason: skipReason, entitledProducts: entitledProducts, otherEntitlements: otherEntitlements, logMetadata: logMetadata)
         }
     }
