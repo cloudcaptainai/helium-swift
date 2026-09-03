@@ -494,7 +494,14 @@ public struct PaywallPresentationConfig {
     ///   - presentFromViewController: View controller to present from. Defaults to current top view controller. Ignored for `HeliumPaywall` embedded view and the `.heliumPaywall` modifier.
     ///   - customPaywallTraits: Custom traits to send to the paywall. Note that user traits are automatically included as paywall traits, as is "trigger". If duplicate keys
     ///   exist, the value from customPaywallTraits will be used.
-    ///   - dontShowIfAlreadyEntitled: If `true`, skips showing the paywall when user is already entitled. Defaults to `false`.
+    ///   - dontShowIfAlreadyEntitled: If `true`, the paywall is skipped when the user already has an active entitlement for a
+    ///   product in the paywall: `onEntitled` is called with `.skipped` (or `onPaywallNotShown(.alreadyEntitled)` if `onEntitled`
+    ///   is not provided) and a `paywallSkipped` event is fired. Defaults to `false`, which is right for most paywalls:
+    ///   user-initiated paywalls (e.g. "Upgrade to Premium") and onboarding paywalls should always show, and entitled users can
+    ///   still use "Restore Purchases". Enable it only where a paying user must never see a paywall, such as one presented
+    ///   automatically on app open. If your app already tracks entitlement, keep it `false` and check `Helium.entitlements`
+    ///   (e.g. `hasEntitlementForPaywall(trigger:)`) before presenting instead.
+    ///   See https://docs.tryhelium.com/sdk/quickstart-ios#checking-subscription-status-%26-entitlements
     ///   - presentationStyle: Animation used to present the paywall. Defaults to `nil`, which lets your Helium dashboard
     ///   configuration decide (slide up if unconfigured). Setting this overrides the dashboard. Ignored for `HeliumPaywall`
     ///   embedded view and the `.heliumPaywall` modifier.
