@@ -58,11 +58,12 @@ struct DiagnosticContentMapper {
     /// names the entitlements that caused it when they could be resolved.
     func mapSkip(
         _ reason: PaywallSkippedReason,
-        entitledProducts: [EntitledProductDetail] = []
+        entitledProducts: [EntitledProductDetail] = [],
+        otherEntitlements: [EntitledProductDetail] = []
     ) -> DiagnosticContent {
         switch reason {
         case .targetingHoldout: return targetingHoldout()
-        case .alreadyEntitled: return alreadyEntitled(entitledProducts)
+        case .alreadyEntitled: return alreadyEntitled(entitledProducts, otherEntitlements)
         }
     }
 
@@ -132,13 +133,20 @@ struct DiagnosticContentMapper {
         )
     }
 
-    private func alreadyEntitled(_ entitledProducts: [EntitledProductDetail]) -> DiagnosticContent {
+    private func alreadyEntitled(
+        _ entitledProducts: [EntitledProductDetail],
+        _ otherEntitlements: [EntitledProductDetail]
+    ) -> DiagnosticContent {
         var body = "Paywall not shown because this user is already entitled to a product in this "
             + "paywall. To show paywalls to entitled users anyway, set dontShowIfAlreadyEntitled "
             + "to false."
         if !entitledProducts.isEmpty {
             let descriptions = entitledProducts.map(Self.describe)
             body += " This user is entitled to: \(descriptions.joined(separator: "; "))."
+        }
+        if !otherEntitlements.isEmpty {
+            let descriptions = otherEntitlements.map(Self.describe)
+            body += " Also entitled to: \(descriptions.joined(separator: "; "))."
         }
         return DiagnosticContent(
             category: .expected,

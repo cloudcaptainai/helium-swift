@@ -362,12 +362,14 @@ class HeliumPaywallDelegateWrapper {
         logMetadata: [String: String]
     ) {
         guard skipReason == .alreadyEntitled else {
-            emitSkipDiagnostic(trigger: trigger, skipReason: skipReason, entitledProducts: [], logMetadata: logMetadata)
+            emitSkipDiagnostic(trigger: trigger, skipReason: skipReason, entitledProducts: [], otherEntitlements: [], logMetadata: logMetadata)
             return
         }
         Task {
             let entitledProducts = await HeliumEntitlementsManager.shared.entitledProductDetailsForPaywall(trigger: trigger)
-            self.emitSkipDiagnostic(trigger: trigger, skipReason: skipReason, entitledProducts: entitledProducts, logMetadata: logMetadata)
+            let otherEntitlements = await HeliumEntitlementsManager.shared.allEntitledProductDetails()
+                .filter { detail in !entitledProducts.contains(detail) }
+            self.emitSkipDiagnostic(trigger: trigger, skipReason: skipReason, entitledProducts: entitledProducts, otherEntitlements: otherEntitlements, logMetadata: logMetadata)
         }
     }
 
@@ -375,6 +377,7 @@ class HeliumPaywallDelegateWrapper {
         trigger: String,
         skipReason: PaywallSkippedReason,
         entitledProducts: [EntitledProductDetail],
+        otherEntitlements: [EntitledProductDetail],
         logMetadata: [String: String]
     ) {
         var metadata = logMetadata
@@ -383,7 +386,7 @@ class HeliumPaywallDelegateWrapper {
                 .map { $0.heliumProductKey }
                 .joined(separator: ",")
         }
-        let content = Self.diagnosticContentMapper.mapSkip(skipReason, entitledProducts: entitledProducts)
+        let content = Self.diagnosticContentMapper.mapSkip(skipReason, entitledProducts: entitledProducts, otherEntitlements: otherEntitlements)
         HeliumLogger.log(
             .warn,
             category: .ui,

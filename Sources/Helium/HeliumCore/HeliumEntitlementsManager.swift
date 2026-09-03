@@ -308,11 +308,14 @@ actor HeliumEntitlementsManager {
         let productKeys = paywallInfo?.productIdsIncludingWebProductIds ?? []
         guard !productKeys.isEmpty else { return [] }
 
+        return await allEntitledProductDetails().filter { productKeys.contains($0.heliumProductKey) }
+    }
+
+    func allEntitledProductDetails() async -> [EntitledProductDetail] {
         var entitledProducts: [EntitledProductDetail] = []
 
         if cache.lastTransactionsLoadedTime == nil {
-            for persisted in cache.persistedEntitlements
-            where persisted.appearsValid() && productKeys.contains(persisted.productID) {
+            for persisted in cache.persistedEntitlements where persisted.appearsValid() {
                 entitledProducts.append(EntitledProductDetail(
                     heliumProductKey: persisted.productID,
                     source: .appStore,
@@ -322,7 +325,7 @@ actor HeliumEntitlementsManager {
         }
         if entitledProducts.isEmpty {
             let entitlements = await getCachedEntitlements()
-            for transaction in entitlements where productKeys.contains(transaction.productID) {
+            for transaction in entitlements {
                 entitledProducts.append(EntitledProductDetail(
                     heliumProductKey: transaction.productID,
                     source: .appStore,
@@ -333,9 +336,8 @@ actor HeliumEntitlementsManager {
 
         for (label, source) in labeledThirdPartySources {
             let entitledIds = await source.purchasedHeliumProductIds()
-            for productKey in productKeys
-            where entitledIds.contains(productKey)
-                && !entitledProducts.contains(where: { $0.heliumProductKey == productKey }) {
+            for productKey in entitledIds
+            where !entitledProducts.contains(where: { $0.heliumProductKey == productKey }) {
                 entitledProducts.append(EntitledProductDetail(
                     heliumProductKey: productKey,
                     source: label,
