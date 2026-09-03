@@ -164,7 +164,7 @@ struct DiagnosticContentMapper {
         if let expirationDate = product.expirationDate {
             qualifiers.append("expires \(expirationDateFormatter.string(from: expirationDate))")
         }
-        return "\(product.productId) (\(qualifiers.joined(separator: ", ")))"
+        return "\(product.heliumProductKey) (\(qualifiers.joined(separator: ", ")))"
     }
 
     /// Suppressed from the modal, so only `body` is ever surfaced — in the log.

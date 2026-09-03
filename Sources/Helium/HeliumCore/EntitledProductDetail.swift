@@ -13,7 +13,7 @@ enum EntitledProductSource: String {
 }
 
 struct EntitledProductDetail: Equatable {
-    let productId: String
+    let heliumProductKey: String
     let source: EntitledProductSource
     let expirationDate: Date?
 }

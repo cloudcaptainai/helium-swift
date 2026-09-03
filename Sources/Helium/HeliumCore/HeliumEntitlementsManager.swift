@@ -305,26 +305,26 @@ actor HeliumEntitlementsManager {
         guard Helium.shared.paywallsLoaded() else { return [] }
         let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
             ?? HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger)
-        let productIds = paywallInfo?.productIdsIncludingWebProductIds ?? []
-        guard !productIds.isEmpty else { return [] }
+        let productKeys = paywallInfo?.productIdsIncludingWebProductIds ?? []
+        guard !productKeys.isEmpty else { return [] }
 
-        var details: [EntitledProductDetail] = []
+        var entitledProducts: [EntitledProductDetail] = []
 
         if cache.lastTransactionsLoadedTime == nil {
             for persisted in cache.persistedEntitlements
-            where persisted.appearsValid() && productIds.contains(persisted.productID) {
-                details.append(EntitledProductDetail(
-                    productId: persisted.productID,
+            where persisted.appearsValid() && productKeys.contains(persisted.productID) {
+                entitledProducts.append(EntitledProductDetail(
+                    heliumProductKey: persisted.productID,
                     source: .appStore,
                     expirationDate: persisted.expirationDate
                 ))
             }
         }
-        if details.isEmpty {
+        if entitledProducts.isEmpty {
             let entitlements = await getCachedEntitlements()
-            for transaction in entitlements where productIds.contains(transaction.productID) {
-                details.append(EntitledProductDetail(
-                    productId: transaction.productID,
+            for transaction in entitlements where productKeys.contains(transaction.productID) {
+                entitledProducts.append(EntitledProductDetail(
+                    heliumProductKey: transaction.productID,
                     source: .appStore,
                     expirationDate: transaction.expirationDate
                 ))
@@ -333,18 +333,18 @@ actor HeliumEntitlementsManager {
 
         for (label, source) in labeledThirdPartySources {
             let entitledIds = await source.purchasedHeliumProductIds()
-            for productId in productIds
-            where entitledIds.contains(productId)
-                && !details.contains(where: { $0.productId == productId }) {
-                details.append(EntitledProductDetail(
-                    productId: productId,
+            for productKey in productKeys
+            where entitledIds.contains(productKey)
+                && !entitledProducts.contains(where: { $0.heliumProductKey == productKey }) {
+                entitledProducts.append(EntitledProductDetail(
+                    heliumProductKey: productKey,
                     source: label,
                     expirationDate: nil
                 ))
             }
         }
 
-        return details
+        return entitledProducts
     }
 
     func hasAnyActiveSubscription(includeNonRenewing: Bool) async -> Bool {

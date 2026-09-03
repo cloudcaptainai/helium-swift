@@ -380,7 +380,7 @@ class HeliumPaywallDelegateWrapper {
         var metadata = logMetadata
         if !entitledProducts.isEmpty {
             metadata["entitledProducts"] = entitledProducts
-                .map { $0.productId }
+                .map { $0.heliumProductKey }
                 .joined(separator: ",")
         }
         let content = Self.diagnosticContentMapper.mapSkip(skipReason, entitledProducts: entitledProducts)
