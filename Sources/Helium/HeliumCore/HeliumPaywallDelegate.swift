@@ -65,15 +65,30 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, paywallTraits: HeliumUserTraits? = nil) async -> HeliumPaywallTransactionStatus {
-        let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
-            await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
-        } ?? false
-        
+        let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
+
+        let entitlementCheckStart = Date()
+        let entitlementCheckOutcome = await withTimeoutOrNil(milliseconds: 500) {
+            await HeliumEntitlementsManager.shared.hasPersonallyPurchasedWithTelemetry(productId: productKey)
+        }
+        let hadEntitlementBeforePurchase = entitlementCheckOutcome?.result ?? false
+        HeliumObservabilityManager.shared.track(
+            PrePurchaseEntitlementCheck(
+                productId: productKey,
+                paymentProcessor: paymentProcessor.rawValue,
+                durationMs: msSince(entitlementCheckStart),
+                timedOut: entitlementCheckOutcome == nil,
+                result: hadEntitlementBeforePurchase,
+                cacheState: entitlementCheckOutcome?.telemetry.cacheState.rawValue,
+                cacheAgeMs: entitlementCheckOutcome?.telemetry.cacheAgeMs,
+                prewarmed: await HeliumEntitlementsManager.shared.wasPrewarmed(sessionId: paywallSession.sessionId)
+            ),
+            scope: paywallSession.observabilityScope
+        )
+
         StoreKit1Listener.ensureListening()
 
         let transactionStatus: HeliumPaywallTransactionStatus
-
-        let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
 
         if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: productKey) {
             transactionStatus = simulated
@@ -287,7 +302,14 @@ class HeliumPaywallDelegateWrapper {
             metadata["fallback"] = "true"
         }
         HeliumLogger.log(.info, category: .events, "Helium event - \(event.eventName)", metadata: metadata)
-        
+
+        if event is PaywallOpenEvent {
+            let prewarmSessionId = overridePaywallSessionId ?? paywallSession?.sessionId
+            Task {
+                await HeliumEntitlementsManager.shared.prewarmForPurchase(sessionId: prewarmSessionId)
+            }
+        }
+
         if let openFailEvent = event as? PaywallOpenFailedEvent {
             logPaywallUnavailable(
                 trigger: openFailEvent.triggerName,

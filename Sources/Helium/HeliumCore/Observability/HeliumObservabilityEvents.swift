@@ -84,6 +84,37 @@ struct EndpointCallTelemetry {
     }
 }
 
+// MARK: - Purchase flow
+
+/// Timing and cache state for the pre-purchase already-entitled check. `timedOut` matters
+/// most: it forces a default result that can mis-attribute a conversion.
+struct PrePurchaseEntitlementCheck: HeliumObservabilityEvent {
+    let productId: String
+    let paymentProcessor: String
+    let durationMs: Int
+    let timedOut: Bool
+    let result: Bool
+    /// nil when the check timed out before reporting.
+    let cacheState: String?
+    let cacheAgeMs: Int?
+    let prewarmed: Bool
+
+    var name: String { "pre_purchase_entitlement_check" }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "productId": productId,
+            "paymentProcessor": paymentProcessor,
+            "durationMs": durationMs,
+            "timedOut": timedOut,
+            "result": result,
+            "prewarmed": prewarmed,
+        ]
+        if let cacheState { p["cacheState"] = cacheState }
+        if let cacheAgeMs { p["cacheAgeMs"] = cacheAgeMs }
+        return p
+    }
+}
+
 // MARK: - Paddle prefetch
 
 struct PaddlePrefetchStarted: HeliumObservabilityEvent {

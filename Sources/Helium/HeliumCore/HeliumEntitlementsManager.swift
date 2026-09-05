@@ -7,6 +7,16 @@
 
 import StoreKit
 
+/// Observability-only detail about how a pre-purchase entitlement check was serviced.
+/// Never affects the entitlement decision.
+struct EntitlementCheckTelemetry {
+    enum CacheState: String {
+        case cold, warm, staleReloaded
+    }
+    let cacheState: CacheState
+    let cacheAgeMs: Int?
+}
+
 actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
@@ -79,6 +89,8 @@ actor HeliumEntitlementsManager {
 
     private let entitlementsFileName = "helium_entitlements.json"
     private var cache = EntitlementsCache()
+
+    private var prewarmedSessionIds: Set<String> = []
     private var updateListenerTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var configDownloadObserver: NSObjectProtocol?
@@ -249,6 +261,23 @@ actor HeliumEntitlementsManager {
     private func getCachedEntitlements() async -> [Transaction] {
         await loadEntitlementsIfNeeded()
         return cache.transactions
+    }
+
+    /// Warms the entitlements cache on paywall open so the pre-purchase check is an in-memory
+    /// read at buy time instead of a StoreKit load on the critical path. No-op when fresh.
+    func prewarmForPurchase(sessionId: String?) async {
+        if let sessionId {
+            if prewarmedSessionIds.count > 200 {
+                prewarmedSessionIds.removeAll(keepingCapacity: true)
+            }
+            prewarmedSessionIds.insert(sessionId)
+        }
+        await loadEntitlementsIfNeeded()
+    }
+
+    func wasPrewarmed(sessionId: String?) -> Bool {
+        guard let sessionId else { return false }
+        return prewarmedSessionIds.contains(sessionId)
     }
     
     // MARK: - Public Methods
@@ -470,7 +499,24 @@ actor HeliumEntitlementsManager {
     /// Note: This checks the exact productId only, not subscription group membership.
     /// Note: StoreKit-only — does not consult third-party payment sources (Stripe, Paddle).
     /// For web-checkout entitlement checks, use the provider's `entitlementsSource` directly.
-    func hasPersonallyPurchased(productId: String) async -> Bool {
+    /// Telemetry is captured before the read so it reflects the cache state the decision was based on.
+    func hasPersonallyPurchasedWithTelemetry(
+        productId: String
+    ) async -> (result: Bool, telemetry: EntitlementCheckTelemetry) {
+        let cacheState: EntitlementCheckTelemetry.CacheState
+        let cacheAgeMs: Int?
+        if let lastLoaded = cache.lastTransactionsLoadedTime {
+            cacheAgeMs = Int(Date().timeIntervalSince(lastLoaded) * 1000)
+            cacheState = cache.needsTransactionsSync(resetInterval: cacheResetInterval) ? .staleReloaded : .warm
+        } else {
+            cacheAgeMs = nil
+            cacheState = .cold
+        }
+        let result = await hasPersonallyPurchased(productId: productId)
+        return (result, EntitlementCheckTelemetry(cacheState: cacheState, cacheAgeMs: cacheAgeMs))
+    }
+
+    private func hasPersonallyPurchased(productId: String) async -> Bool {
         // If transactions haven't loaded yet, use persisted data immediately for faster response
         if cache.lastTransactionsLoadedTime == nil {
             if cache.persistedEntitlements.contains(where: { $0.productID == productId && $0.appearsValid() && $0.isPersonalPurchase }) {
