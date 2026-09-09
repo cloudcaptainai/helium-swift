@@ -14,6 +14,7 @@ public class HeliumPaywallPresentationState: ObservableObject {
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
     var isOpen: Bool = false // only used by .embedded and .triggered
+    var isInline: Bool { viewType != .presented }
     
     private let useAppearanceToSetIsOpen: Bool
     init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {

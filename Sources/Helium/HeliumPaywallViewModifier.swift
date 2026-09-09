@@ -14,6 +14,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
     let trigger: String
     let config: PaywallPresentationConfig
     let eventHandlers: PaywallEventHandlers?
+    let onEntitled: ((PaywallEntitledEvent) -> Void)?
     let loadingView: (() -> LoadingView)?
     let fallbackView: (PaywallNotShownReason) -> FallbackView
     
@@ -33,6 +34,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
                 trigger: trigger,
                 config: config,
                 eventHandlers: eventHandlers,
+                onEntitled: onEntitled,
                 loadingView: loadingView,
                 whenPaywallNotShown: fallbackView
             )
@@ -41,6 +43,7 @@ struct DynamicPaywallModifier<LoadingView: View, FallbackView: View>: ViewModifi
                 trigger: trigger,
                 config: config,
                 eventHandlers: eventHandlers,
+                onEntitled: onEntitled,
                 whenPaywallNotShown: fallbackView
             )
         }
@@ -55,6 +58,7 @@ public extension View {
           trigger: String,
           config: PaywallPresentationConfig = PaywallPresentationConfig(),
           eventHandlers: PaywallEventHandlers? = nil,
+          onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
           @ViewBuilder loadingView: @escaping () -> LoadingView,
           @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> PaywallNotShownView
       ) -> some View {
@@ -63,6 +67,7 @@ public extension View {
                trigger: trigger,
                config: config,
                eventHandlers: eventHandlers,
+               onEntitled: onEntitled,
                loadingView: loadingView,
                fallbackView: fallbackView
            ))
@@ -74,6 +79,7 @@ public extension View {
            trigger: String,
            config: PaywallPresentationConfig = PaywallPresentationConfig(),
            eventHandlers: PaywallEventHandlers? = nil,
+           onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
            @ViewBuilder fallbackView: @escaping (PaywallNotShownReason) -> PaywallNotShownView
        ) -> some View {
            self.modifier(DynamicPaywallModifier(
@@ -81,6 +87,7 @@ public extension View {
                trigger: trigger,
                config: config,
                eventHandlers: eventHandlers,
+               onEntitled: onEntitled,
                loadingView: nil as (() -> EmptyView)?,
                fallbackView: fallbackView
            ))

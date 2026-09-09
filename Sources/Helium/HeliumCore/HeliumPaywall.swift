@@ -43,11 +43,14 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     ///   - trigger: The trigger name to display a paywall for
     ///   - config: Additional configuration options
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
-    ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting
+    ///   - onEntitled: Called with the entitling event on purchase, restore, or an already-entitled purchase, regardless of `.heliumDismissBehavior`.
+    ///    With `config.dontShowIfAlreadyEntitled`, called with `.skipped` in place of `whenPaywallNotShown(.alreadyEntitled)`.
+    ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting/already-entitled
     public init(
         trigger: String,
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
+        onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
         @ViewBuilder whenPaywallNotShown: @escaping (PaywallNotShownReason) -> PaywallNotShownView
     ) {
         self.trigger = trigger
@@ -58,7 +61,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitled: nil,
+            onEntitled: onEntitled,
             onPaywallNotShown: nil
         )
         
@@ -71,12 +74,15 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     ///   - trigger: The trigger name to display a paywall for
     ///   - config: Additional configuration options
     ///   - eventHandlers: Optional event handlers for paywall lifecycle events
+    ///   - onEntitled: Called with the entitling event on purchase, restore, or an already-entitled purchase, regardless of `.heliumDismissBehavior`.
+    ///    With `config.dontShowIfAlreadyEntitled`, called with `.skipped` in place of `whenPaywallNotShown(.alreadyEntitled)`.
     ///   - loadingView: Custom view to show while paywall is loading
     ///   - whenPaywallNotShown: View to show when paywall is unavailable or skipped due to targeting/already-entitled
     public init<LoadingView: View>(
         trigger: String,
         config: PaywallPresentationConfig = PaywallPresentationConfig(),
         eventHandlers: PaywallEventHandlers? = nil,
+        onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
         @ViewBuilder loadingView: @escaping () -> LoadingView,
         @ViewBuilder whenPaywallNotShown: @escaping (PaywallNotShownReason) -> PaywallNotShownView
     ) {
@@ -88,7 +94,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         self.presentationContext = PaywallPresentationContext(
             config: config,
             eventHandlers: eventHandlers,
-            onEntitled: nil,
+            onEntitled: onEntitled,
             onPaywallNotShown: nil
         )
         
@@ -105,11 +111,19 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     .environment(\.heliumLoadTimeTakenMS, resolvedLoadTimeTakenMS)
                     .environment(\.heliumDynamicPaywallTraits, config.customPaywallTraits)
             case .noShow(let reason):
-                paywallNotShownView(reason)
-                    .onAppear {
-                        onPaywallUnavailable(reason: reason)
-                    }
+                if reason == .alreadyEntitled && handlesAlreadyEntitledSkip {
+                    EmptyView()
+                } else {
+                    paywallNotShownView(reason)
+                        .onAppear {
+                            onPaywallUnavailable(reason: reason)
+                        }
+                }
             }
+        }
+        .onChange(of: state) { newState in
+            guard case .noShow(.alreadyEntitled) = newState, handlesAlreadyEntitledSkip else { return }
+            HeliumPaywallPresenter.shared.handleAlreadyEntitledSkip(trigger: trigger, context: presentationContext)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
@@ -172,14 +186,15 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
         state = newState
     }
+
+    private var handlesAlreadyEntitledSkip: Bool {
+        presentationContext.onEntitled != nil
+    }
     
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {
         switch reason {
         case .alreadyEntitled:
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallSkippedEvent(triggerName: trigger, skipReason: .alreadyEntitled),
-                paywallSession: nil
-            )
+            HeliumPaywallPresenter.shared.handleAlreadyEntitledSkip(trigger: trigger, context: presentationContext)
         case .targetingHoldout:
             HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger)
         case .error(unavailableReason: let unavailableReason):

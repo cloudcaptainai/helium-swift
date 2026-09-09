@@ -40,6 +40,13 @@ class HeliumPaywallPresenter {
     func consumeEntitledEvent(forSessionId sessionId: String) -> PaywallEntitledEvent? {
         return _sessionsWithEntitlement.withValue { $0.removeValue(forKey: sessionId) }
     }
+
+    func dispatchEntitledEvent(forSessionId sessionId: String, presentationContext: PaywallPresentationContext) {
+        guard let entitledEvent = consumeEntitledEvent(forSessionId: sessionId) else { return }
+        Task { @MainActor in
+            presentationContext.onEntitled?(entitledEvent)
+        }
+    }
     
     private func paywallEntitlementsCheck(trigger: String, context: PaywallPresentationContext) async -> Bool {
         if context.config.dontShowIfAlreadyEntitled {
@@ -483,14 +490,7 @@ class HeliumPaywallPresenter {
 
     private func dispatchCloseEvent(paywallVC: HeliumViewController) {
         dispatchOpenOrCloseEvent(openEvent: false, paywallVC: paywallVC)
-
-        // Call onEntitled if this session had a successful purchase/restore
-        let sessionId = paywallVC.paywallSession.sessionId
-        if let entitledEvent = consumeEntitledEvent(forSessionId: sessionId) {
-            Task { @MainActor in
-                paywallVC.presentationContext.onEntitled?(entitledEvent)
-            }
-        }
+        dispatchEntitledEvent(forSessionId: paywallVC.paywallSession.sessionId, presentationContext: paywallVC.presentationContext)
     }
     
     private func dispatchOpenOrCloseEvent(openEvent: Bool, paywallVC: HeliumViewController) {

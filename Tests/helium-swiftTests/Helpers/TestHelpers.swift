@@ -100,7 +100,7 @@ class HeliumTestCase: XCTestCase {
     }
 
     /// Performs a quick RunLoop drain to flush pending MainActor tasks between tests.
-    private func drainMainActor() {
+    func drainMainActor() {
         let exp = XCTestExpectation(description: "MainActor drain")
         Task { @MainActor in
             Task { @MainActor in
@@ -213,22 +213,31 @@ func injectConfig(_ config: HeliumFetchedConfig, json: JSON? = nil) {
     HeliumFetchedConfigManager.shared.injectConfigForTesting(config, json: json)
 }
 
+func makeTestContext(
+    config: PaywallPresentationConfig = PaywallPresentationConfig(),
+    eventHandlers: PaywallEventHandlers? = nil,
+    onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
+    onPaywallNotShown: ((PaywallNotShownReason) -> Void)? = nil
+) -> PaywallPresentationContext {
+    PaywallPresentationContext(
+        config: config,
+        eventHandlers: eventHandlers,
+        onEntitled: onEntitled,
+        onPaywallNotShown: onPaywallNotShown
+    )
+}
+
 func makeTestSession(
     trigger: String = "test_trigger",
     eventHandlers: PaywallEventHandlers? = nil,
+    onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
     paywallInfo: HeliumPaywallInfo? = nil
 ) -> PaywallSession {
-    let context = PaywallPresentationContext(
-        config: PaywallPresentationConfig(),
-        eventHandlers: eventHandlers,
-        onEntitled: nil,
-        onPaywallNotShown: nil
-    )
     let info = paywallInfo ?? makeTestPaywallInfo(trigger: trigger)
     return PaywallSession(
         trigger: trigger,
         paywallInfo: info,
         fallbackType: .notFallback,
-        presentationContext: context
+        presentationContext: makeTestContext(eventHandlers: eventHandlers, onEntitled: onEntitled)
     )
 }
