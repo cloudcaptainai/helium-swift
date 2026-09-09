@@ -25,6 +25,13 @@ struct HeliumControlPanelResponse: Codable {
         }
         return candidates.count == 1 ? candidates.first : nil
     }
+
+    func linkedWebPaywall(for version: HeliumPaywallPreviewVersion) -> HeliumPaywallPreviewEntry? {
+        guard let webBundleUrl = version.webPaywallBundleUrl else { return nil }
+        return paywalls.first { candidate in
+            candidate.isWebPaywall && candidate.versions.contains { $0.bundleUrl == webBundleUrl }
+        }
+    }
 }
 
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {

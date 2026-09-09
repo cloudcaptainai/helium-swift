@@ -141,6 +141,11 @@ struct HeliumPreviewConfigurationRequest: Identifiable {
 /// (stamped in its filename) being at or after this cutoff, in epoch ms.
 enum HeliumPreviewBundleFreshness {
     static let app2webCutoffMs: Int64 = 1787881704000
+
+    static func staleBundleMessage(webPaywallName: String?) -> String {
+        let target = webPaywallName.map { "The linked web paywall \"\($0)\"" } ?? "The web paywall linked to this paywall"
+        return "\(target) needs an update. Re-save and publish it in your Helium dashboard, then reload."
+    }
 }
 
 extension HeliumPaywallPreviewVersion {

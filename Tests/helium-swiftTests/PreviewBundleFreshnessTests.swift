@@ -37,6 +37,17 @@ final class PreviewBundleFreshnessTests: XCTestCase {
         XCTAssertFalse(version.isApp2webBundleFresh)
     }
 
+    func testStaleBundleMessageQuotesWebPaywallName() {
+        XCTAssertEqual(
+            HeliumPreviewBundleFreshness.staleBundleMessage(webPaywallName: "Web Checkout Paywall"),
+            "The linked web paywall \"Web Checkout Paywall\" needs an update. Re-save and publish it in your Helium dashboard, then reload."
+        )
+        XCTAssertEqual(
+            HeliumPreviewBundleFreshness.staleBundleMessage(webPaywallName: nil),
+            "The web paywall linked to this paywall needs an update. Re-save and publish it in your Helium dashboard, then reload."
+        )
+    }
+
     func testStaleWhenTimestampUnparseable() throws {
         let version = try makeVersion(
             webPaywallBundleUrl: "https://bundles.t3.storage.dev/org/paywall/bundle_draft.html"

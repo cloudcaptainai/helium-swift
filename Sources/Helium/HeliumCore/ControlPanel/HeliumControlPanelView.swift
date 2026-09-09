@@ -365,7 +365,8 @@ struct HeliumControlPanelView: View {
             return
         }
         if version.isApp2webCapable && !version.isApp2webBundleFresh {
-            paywallLoadError = "Your paywall needs an update. Re-save it in your Helium dashboard, then reload."
+            let web = state.loadedResponse?.linkedWebPaywall(for: version)
+            paywallLoadError = HeliumPreviewBundleFreshness.staleBundleMessage(webPaywallName: web?.paywallName)
             return
         }
         if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
