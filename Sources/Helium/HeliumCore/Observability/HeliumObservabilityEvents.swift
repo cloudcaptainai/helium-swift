@@ -383,6 +383,13 @@ struct PaywallTraitsFreezeMissingAtMakePurchase: HeliumObservabilityEvent {
     }
 }
 
+/// Emitted when an embedded `HeliumPaywall` opens with `.manual` dismissal; its presence is the
+/// signal, as automatic opens emit nothing.
+struct EmbeddedPaywallManualDismissalEnabled: HeliumObservabilityEvent {
+    var name: String { "embedded_paywall_manual_dismissal_enabled" }
+    var properties: [String: Any] { [:] }
+}
+
 /// Reports the fallback bundle an app ships. The event's presence in the stream is
 /// itself the "this app has fallbacks configured" signal, so it is only emitted when
 /// a bundle was found and parsed.

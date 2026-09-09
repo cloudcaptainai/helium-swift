@@ -50,20 +50,23 @@ public struct DynamicBaseTemplateView: View {
             // Embedded-only: with manual dismissal, suppress SDK-initiated dismissal so the host removes
             // the view itself. Presented and triggered paywalls keep SDK-owned dismissal.
             let manualDismissal = dismissBehavior == .manual && presentationState.viewType == .embedded
-
-            actionsDelegate.setDismissAction {
+            let dismissUnlessManual: () -> Void = {
                 guard !manualDismissal else { return }
                 dismiss()
             }
+
+            actionsDelegate.setDismissAction(dismissUnlessManual)
             if presentationState.viewType != .presented {
-                if !manualDismissal {
-                    InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId) {
-                        dismiss()
-                    }
-                }
+                InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId, dismissUnlessManual)
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
                     actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
+                    if manualDismissal {
+                        HeliumObservabilityManager.shared.track(
+                            EmbeddedPaywallManualDismissalEnabled(),
+                            scope: actionsDelegate.paywallSession.observabilityScope
+                        )
+                    }
                 }
             }
         }
