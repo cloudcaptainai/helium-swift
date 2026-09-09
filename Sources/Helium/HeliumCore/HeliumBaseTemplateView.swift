@@ -8,6 +8,7 @@ enum TemplateError: Error {
 public struct DynamicBaseTemplateView: View {
     
     @Environment(\.dismiss) var dismiss
+    @Environment(\.heliumDismissBehavior) var dismissBehavior
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.heliumLoadTimeTakenMS) var loadTimeTakenMS: UInt64?
     @StateObject private var actionsDelegate: HeliumActionsDelegate
@@ -46,16 +47,26 @@ public struct DynamicBaseTemplateView: View {
     public var body: some View {
         paywallContent
         .onAppear {
-            actionsDelegate.setDismissAction {
+            // Embedded-only: with manual dismissal, suppress SDK-initiated dismissal so the host removes
+            // the view itself. Presented and triggered paywalls keep SDK-owned dismissal.
+            let manualDismissal = dismissBehavior == .manual && presentationState.viewType == .embedded
+            let dismissUnlessManual: () -> Void = {
+                guard !manualDismissal else { return }
                 dismiss()
             }
+
+            actionsDelegate.setDismissAction(dismissUnlessManual)
             if presentationState.viewType != .presented {
-                InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId) {
-                    dismiss()
-                }
+                InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId, dismissUnlessManual)
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
                     actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
+                    if manualDismissal {
+                        HeliumObservabilityManager.shared.track(
+                            EmbeddedPaywallManualDismissalEnabled(),
+                            scope: actionsDelegate.paywallSession.observabilityScope
+                        )
+                    }
                 }
             }
         }

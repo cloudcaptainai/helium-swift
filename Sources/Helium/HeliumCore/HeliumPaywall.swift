@@ -315,3 +315,37 @@ extension EnvironmentValues {
         set { self[HeliumDynamicPaywallTraitsKey.self] = newValue }
     }
 }
+
+/// Controls who dismisses an embedded ``HeliumPaywall``.
+public enum HeliumPaywallDismissBehavior {
+    /// The SDK dismisses the paywall upon purchase, restore, and user-initiated close.
+    case automatic
+
+    /// You dismiss the paywall yourself. On purchase, restore, and user-initiated close the SDK emits the
+    /// corresponding events but leaves the view in place — its close button is a no-op until you remove
+    /// the view. Embedded `HeliumPaywall` only; ignored for presented and `.heliumPaywall`-triggered
+    /// paywalls.
+    case manual
+}
+
+public extension View {
+    /// Sets how an embedded ``HeliumPaywall`` in this view tree is dismissed; see
+    /// ``HeliumPaywallDismissBehavior`` for what each case does. Defaults to `.automatic`.
+    ///
+    /// - Note: This value is read when the paywall first appears; changing it on an already-visible
+    ///   paywall is not honored.
+    func heliumDismissBehavior(_ behavior: HeliumPaywallDismissBehavior) -> some View {
+        environment(\.heliumDismissBehavior, behavior)
+    }
+}
+
+private struct HeliumDismissBehaviorKey: EnvironmentKey {
+    static let defaultValue: HeliumPaywallDismissBehavior = .automatic
+}
+
+extension EnvironmentValues {
+    var heliumDismissBehavior: HeliumPaywallDismissBehavior {
+        get { self[HeliumDismissBehaviorKey.self] }
+        set { self[HeliumDismissBehaviorKey.self] = newValue }
+    }
+}
