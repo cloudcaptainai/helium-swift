@@ -77,7 +77,6 @@ struct ContentView: View {
                         config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled),
                         onEntitled: { event in
                             print("[Helium Example] embedded onEntitled: \(event)")
-                            showEmbeddedPaywall = false
                         }
                     ) { reason in
                         Text("no show embedded! \(reason.description)")
