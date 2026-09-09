@@ -47,22 +47,16 @@ public struct DynamicBaseTemplateView: View {
     public var body: some View {
         paywallContent
         .onAppear {
-            // Host-owned dismissal applies only to the embedded view; the SDK still owns presented and
-            // triggered paywalls. When enabled, every SDK-initiated dismiss (purchase, restore, close
-            // button, external web checkout) is suppressed here so the host can remove the view itself.
-            //
-            // The behavior is read once, when the paywall appears. Flipping `.heliumDismissBehavior(_:)`
-            // on an already-mounted paywall is intentionally not honored — dismissal is wired imperatively
-            // into the actions delegate here rather than tracked reactively. This is fine for the intended
-            // static usage; a future dismissal-signal refactor would make it live without an API change.
-            let hostOwnsDismissal = dismissBehavior == .hostOwned && presentationState.viewType == .embedded
+            // Embedded-only: with manual dismissal, suppress SDK-initiated dismissal so the host removes
+            // the view itself. Presented and triggered paywalls keep SDK-owned dismissal.
+            let manualDismissal = dismissBehavior == .manual && presentationState.viewType == .embedded
 
             actionsDelegate.setDismissAction {
-                guard !hostOwnsDismissal else { return }
+                guard !manualDismissal else { return }
                 dismiss()
             }
             if presentationState.viewType != .presented {
-                if !hostOwnsDismissal {
+                if !manualDismissal {
                     InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId) {
                         dismiss()
                     }
