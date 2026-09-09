@@ -16,13 +16,14 @@ struct HeliumControlPanelResponse: Codable {
     func linkedInAppPaywall(for webPaywall: HeliumPaywallPreviewEntry) -> HeliumPaywallPreviewEntry? {
         let webBundleUrls = Set(webPaywall.versions.compactMap(\.bundleUrl))
         guard !webBundleUrls.isEmpty else { return nil }
-        return paywalls.first { candidate in
+        let candidates = paywalls.filter { candidate in
             !candidate.isWebPaywall
                 && candidate.versions.contains { version in
                     version.isApp2webCapable
                         && (version.webPaywallBundleUrl.map(webBundleUrls.contains) ?? false)
                 }
         }
+        return candidates.count == 1 ? candidates.first : nil
     }
 }
 
