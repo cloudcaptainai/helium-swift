@@ -51,12 +51,19 @@ public struct DynamicBaseTemplateView: View {
             // the view itself. Presented and triggered paywalls keep SDK-owned dismissal.
             let manualDismissal = dismissBehavior == .manual && presentationState.viewType == .embedded
             let dismissUnlessManual: () -> Void = {
+                if presentationState.isInline {
+                    let session = actionsDelegate.paywallSession
+                    HeliumPaywallPresenter.shared.dispatchEntitledEvent(
+                        forSessionId: session.sessionId,
+                        presentationContext: session.presentationContext
+                    )
+                }
                 guard !manualDismissal else { return }
                 dismiss()
             }
 
             actionsDelegate.setDismissAction(dismissUnlessManual)
-            if presentationState.viewType != .presented {
+            if presentationState.isInline {
                 InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId, dismissUnlessManual)
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
@@ -71,7 +78,7 @@ public struct DynamicBaseTemplateView: View {
             }
         }
         .onDisappear {
-            if presentationState.viewType != .presented {
+            if presentationState.isInline {
                 InlinePaywallDismissRegistry.unregister(sessionId: actionsDelegate.paywallSession.sessionId)
                 if presentationState.isOpen {
                     presentationState.isOpen = false

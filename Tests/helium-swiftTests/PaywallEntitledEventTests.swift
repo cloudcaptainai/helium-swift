@@ -49,7 +49,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     // MARK: - fireEvent marks the session with the matching event
 
     func testFireEventMarksSessionForPurchaseSucceeded() {
-        let session = makeTestSession(trigger: "t")
+        let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
             storeKitTransactionId: "txn_1", storeKitOriginalTransactionId: nil
@@ -66,7 +66,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     }
 
     func testFireEventMarksSessionForPurchaseRestored() {
-        let session = makeTestSession(trigger: "t")
+        let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseRestoredEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
             restoreOrigin: .duringPurchase, paymentProcessor: .appStore
@@ -82,7 +82,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     }
 
     func testFireEventMarksSessionForPurchaseAlreadyEntitled() {
-        let session = makeTestSession(trigger: "t")
+        let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseAlreadyEntitledEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
@@ -97,10 +97,22 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     }
 
     func testFireEventDoesNotMarkSessionForNonEntitlingEvent() {
-        let session = makeTestSession(trigger: "t")
+        let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseFailedEvent(productId: "com.test.product", triggerName: "t", paywallName: "p", paymentProcessor: .appStore)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseFailedEvent.self).count == 1 }
+
+        XCTAssertNil(HeliumPaywallPresenter.shared.consumeEntitledEvent(forSessionId: session.sessionId))
+    }
+
+    func testFireEventDoesNotMarkSessionWithoutOnEntitled() {
+        let session = makeTestSession(trigger: "t")
+        let event = PurchaseSucceededEvent(
+            productId: "com.test.product", triggerName: "t", paywallName: "p",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+        )
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
+        waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
 
         XCTAssertNil(HeliumPaywallPresenter.shared.consumeEntitledEvent(forSessionId: session.sessionId))
     }
@@ -110,9 +122,8 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     func testAlreadyEntitledSkipCallsOnEntitledWithSkippedEvent() {
         var received: PaywallEntitledEvent?
         var notShownReason: PaywallNotShownReason?
-        let context = PaywallPresentationContext(
+        let context = makeTestContext(
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: true),
-            eventHandlers: nil,
             onEntitled: { received = $0 },
             onPaywallNotShown: { notShownReason = $0 }
         )
@@ -135,10 +146,8 @@ final class PaywallEntitledEventTests: HeliumTestCase {
 
     func testAlreadyEntitledSkipWithoutOnEntitledCallsOnPaywallNotShown() {
         var notShownReason: PaywallNotShownReason?
-        let context = PaywallPresentationContext(
+        let context = makeTestContext(
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: true),
-            eventHandlers: nil,
-            onEntitled: nil,
             onPaywallNotShown: { notShownReason = $0 }
         )
 
@@ -146,6 +155,49 @@ final class PaywallEntitledEventTests: HeliumTestCase {
         waitForEventDispatch { notShownReason != nil }
 
         XCTAssertEqual(notShownReason, .alreadyEntitled)
+    }
+
+    func testDispatchEntitledEventCallsOnEntitledOnceAndConsumes() {
+        let purchased = PurchaseSucceededEvent(
+            productId: "com.test.product", triggerName: "t", paywallName: "p",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+        )
+        let sessionId = UUID().uuidString
+        var received: [PaywallEntitledEvent] = []
+        let context = makeTestContext(onEntitled: { received.append($0) })
+        HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: .purchased(purchased))
+
+        HeliumPaywallPresenter.shared.dispatchEntitledEvent(forSessionId: sessionId, presentationContext: context)
+        waitForEventDispatch { !received.isEmpty }
+        HeliumPaywallPresenter.shared.dispatchEntitledEvent(forSessionId: sessionId, presentationContext: context)
+        drainMainActor()
+
+        XCTAssertEqual(received.count, 1)
+        XCTAssertEqual(received.first?.productId, "com.test.product")
+        XCTAssertNil(HeliumPaywallPresenter.shared.consumeEntitledEvent(forSessionId: sessionId))
+    }
+
+    func testDispatchEntitledEventWithoutHandlerStillConsumesMark() {
+        let purchased = PurchaseSucceededEvent(
+            productId: "com.test.product", triggerName: "t", paywallName: "p",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+        )
+        let sessionId = UUID().uuidString
+        HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: .purchased(purchased))
+
+        HeliumPaywallPresenter.shared.dispatchEntitledEvent(forSessionId: sessionId, presentationContext: .empty)
+
+        XCTAssertNil(HeliumPaywallPresenter.shared.consumeEntitledEvent(forSessionId: sessionId))
+    }
+
+    func testDispatchEntitledEventWithoutMarkDoesNotCallOnEntitled() {
+        var received: PaywallEntitledEvent?
+        let context = makeTestContext(onEntitled: { received = $0 })
+
+        HeliumPaywallPresenter.shared.dispatchEntitledEvent(forSessionId: UUID().uuidString, presentationContext: context)
+        drainMainActor()
+
+        XCTAssertNil(received)
     }
 
     // MARK: - Accessors

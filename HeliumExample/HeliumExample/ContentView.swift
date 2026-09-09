@@ -73,7 +73,11 @@ struct ContentView: View {
                 .accessibilityIdentifier("showPaywallEmbedded")
                 .fullScreenCover(isPresented: $showEmbeddedPaywall) {
                     HeliumPaywall(
-                        trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled)
+                        trigger: trigger,
+                        config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: dontShowIfAlreadyEntitled),
+                        onEntitled: { event in
+                            print("[Helium Example] embedded onEntitled: \(event)")
+                        }
                     ) { reason in
                         Text("no show embedded! \(reason.description)")
                     }
