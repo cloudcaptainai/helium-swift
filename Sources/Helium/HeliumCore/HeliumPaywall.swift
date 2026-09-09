@@ -317,7 +317,7 @@ extension EnvironmentValues {
 }
 
 /// Controls who dismisses an embedded ``HeliumPaywall`` after an SDK-initiated close.
-public enum HeliumPaywallDismissBehavior {
+public enum HeliumPaywallDismissBehavior: Equatable {
     /// The SDK dismisses the paywall itself on purchase, restore, and the close button. Default.
     case automatic
 
