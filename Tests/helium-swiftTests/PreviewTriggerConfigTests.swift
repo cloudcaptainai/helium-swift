@@ -736,4 +736,268 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertFalse(response.paywalls[1].isWebPaywall)
         XCTAssertFalse(response.paywalls[2].isWebPaywall)
     }
+
+    private static let webCheckoutPaywallJSON = """
+    {
+      "paywallUuid": "0b7f5c1a-1111-4222-8333-444455556666",
+      "paywallName": "Web Checkout Paywall",
+      "isWeb": true,
+      "versions": [
+        {
+          "versionId": "9d8c7b6a-aaaa-4bbb-8ccc-dddeeefff000",
+          "versionStatus": "published",
+          "versionNumber": 3,
+          "bundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+          "previewUrl": null,
+          "productIds": [],
+          "lastSavedAt": null
+        }
+      ]
+    }
+    """
+
+    private func makeWebPaywallResponse(alongside otherPaywallsJSON: String) throws -> HeliumControlPanelResponse {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            \(Self.webCheckoutPaywallJSON),
+            \(otherPaywallsJSON)
+          ]
+        }
+        """
+        return try JSONDecoder().decode(HeliumControlPanelResponse.self, from: Data(json.utf8))
+    }
+
+    func testLinkedInAppPaywallReturnsEntryWhoseVersionLinksToWebBundle() throws {
+        let response = try makeWebPaywallResponse(alongside: """
+        {
+          "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+          "paywallName": "Unrelated Native Paywall",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+              "versionStatus": "published",
+              "versionNumber": 1,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_1.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaywallBundleUrl": null,
+              "lastSavedAt": null
+            }
+          ]
+        },
+        {
+          "paywallUuid": "2d9e7f3c-8888-4999-aaaa-bbbbccccdddd",
+          "paywallName": "Linked Native Paywall",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "43b2e3a6-71f2-4b36-b5c8-d77f42c0a1b2",
+              "versionStatus": "published",
+              "versionNumber": 2,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_2.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaddleProductIds": ["pro_web:pri_web"],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "lastSavedAt": null
+            }
+          ]
+        }
+        """)
+
+        let linked = response.linkedInAppPaywall(for: response.paywalls[0])
+        XCTAssertEqual(linked?.paywallName, "Linked Native Paywall")
+    }
+
+    func testLinkedInAppPaywallReturnsNilWhenNothingLinksToIt() throws {
+        let response = try makeWebPaywallResponse(alongside: """
+        {
+          "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+          "paywallName": "Native Paywall",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+              "versionStatus": "published",
+              "versionNumber": 1,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_1.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaddleProductIds": ["pro_web:pri_web"],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_other.html",
+              "lastSavedAt": null
+            }
+          ]
+        }
+        """)
+
+        XCTAssertNil(response.linkedInAppPaywall(for: response.paywalls[0]))
+    }
+
+    func testLinkedInAppPaywallNeverReturnsAWebEntry() throws {
+        let response = try makeWebPaywallResponse(alongside: """
+        {
+          "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+          "paywallName": "Sibling Web Paywall",
+          "isWeb": true,
+          "versions": [
+            {
+              "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+              "versionStatus": "published",
+              "versionNumber": 1,
+              "bundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_sibling.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaddleProductIds": ["pro_web:pri_web"],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "lastSavedAt": null
+            }
+          ]
+        }
+        """)
+
+        XCTAssertNil(response.linkedInAppPaywall(for: response.paywalls[0]))
+    }
+
+    func testLinkedInAppPaywallSkipsLinkedEntryWithoutWebProducts() throws {
+        let response = try makeWebPaywallResponse(alongside: """
+        {
+          "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+          "paywallName": "Linked But Not App2Web",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+              "versionStatus": "published",
+              "versionNumber": 1,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_1.html",
+              "previewUrl": null,
+              "productIds": ["yearly_2999"],
+              "webPaddleProductIds": [],
+              "webStripeProductIds": [],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "lastSavedAt": null
+            }
+          ]
+        }
+        """)
+
+        XCTAssertNil(response.linkedInAppPaywall(for: response.paywalls[0]))
+    }
+
+    func testLinkedInAppPaywallReturnsNilWhenSeveralPaywallsLinkToIt() throws {
+        let response = try makeWebPaywallResponse(alongside: """
+        {
+          "paywallUuid": "1c8d6e2b-7777-4888-9999-000011112222",
+          "paywallName": "Onboarding Paywall",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "32a1d295-60e1-425a-a4f7-c566e31a9f9c",
+              "versionStatus": "published",
+              "versionNumber": 1,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_1.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaddleProductIds": ["pro_web:pri_web"],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "lastSavedAt": null
+            }
+          ]
+        },
+        {
+          "paywallUuid": "2d9e7f3c-8888-4999-aaaa-bbbbccccdddd",
+          "paywallName": "Settings Paywall",
+          "isWeb": false,
+          "versions": [
+            {
+              "versionId": "43b2e3a6-71f2-4b36-b5c8-d77f42c0a1b2",
+              "versionStatus": "published",
+              "versionNumber": 2,
+              "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_2.html",
+              "previewUrl": null,
+              "productIds": [],
+              "webPaddleProductIds": ["pro_web:pri_web"],
+              "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+              "lastSavedAt": null
+            }
+          ]
+        }
+        """)
+
+        XCTAssertNil(response.linkedInAppPaywall(for: response.paywalls[0]))
+    }
+
+    func testLinkedInAppPaywallMatchesAnyVersionOfTheWebPaywall() throws {
+        let json = """
+        {
+          "productIds": [],
+          "paywalls": [
+            {
+              "paywallUuid": "0b7f5c1a-1111-4222-8333-444455556666",
+              "paywallName": "Web Checkout Paywall",
+              "isWeb": true,
+              "versions": [
+                {
+                  "versionId": "9d8c7b6a-aaaa-4bbb-8ccc-dddeeefff001",
+                  "versionStatus": "draft",
+                  "versionNumber": 4,
+                  "bundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778700000000.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "lastSavedAt": null
+                },
+                {
+                  "versionId": "9d8c7b6a-aaaa-4bbb-8ccc-dddeeefff000",
+                  "versionStatus": "published",
+                  "versionNumber": 3,
+                  "bundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "lastSavedAt": null
+                }
+              ]
+            },
+            {
+              "paywallUuid": "2d9e7f3c-8888-4999-aaaa-bbbbccccdddd",
+              "paywallName": "Linked Native Paywall",
+              "isWeb": false,
+              "versions": [
+                {
+                  "versionId": "43b2e3a6-71f2-4b36-b5c8-d77f42c0a1b2",
+                  "versionStatus": "published",
+                  "versionNumber": 2,
+                  "bundleUrl": "https://bundles.heliumpaywall.com/x/bundle_2.html",
+                  "previewUrl": null,
+                  "productIds": [],
+                  "webPaddleProductIds": ["pro_web:pri_web"],
+                  "webPaywallBundleUrl": "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html",
+                  "lastSavedAt": null
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(HeliumControlPanelResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(response.linkedInAppPaywall(for: response.paywalls[0])?.paywallName, "Linked Native Paywall")
+    }
+
+    func testDirectPreviewBlockedMessageQuotesLinkedPaywallName() {
+        let named = HeliumPaywallPreviewEntry.directPreviewBlockedMessage(linkedPaywallName: "Premium")
+        XCTAssertEqual(
+            named,
+            "Web paywalls can't be previewed directly. Open \"Premium\" instead; its purchase action kicks out to this web paywall so you can test the full App2Web flow."
+        )
+
+        let generic = HeliumPaywallPreviewEntry.directPreviewBlockedMessage(linkedPaywallName: nil)
+        XCTAssertEqual(
+            generic,
+            "Web paywalls can't be previewed directly. Open the in-app paywall linked to it instead; its purchase action kicks out to this web paywall so you can test the full App2Web flow."
+        )
+    }
 }

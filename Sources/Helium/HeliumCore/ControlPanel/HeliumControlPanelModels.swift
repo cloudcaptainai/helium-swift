@@ -12,6 +12,19 @@ struct HeliumControlPanelResponse: Codable {
     /// A verified US-California device: real checkout is allowed, but showing the CA
     /// consent modal is a hard precondition for a Paddle purchase. Absent reads false.
     let forcePaddleCaConsentModal: Bool?
+
+    func linkedInAppPaywall(for webPaywall: HeliumPaywallPreviewEntry) -> HeliumPaywallPreviewEntry? {
+        let webBundleUrls = Set(webPaywall.versions.compactMap(\.bundleUrl))
+        guard !webBundleUrls.isEmpty else { return nil }
+        let candidates = paywalls.filter { candidate in
+            !candidate.isWebPaywall
+                && candidate.versions.contains { version in
+                    version.isApp2webCapable
+                        && (version.webPaywallBundleUrl.map(webBundleUrls.contains) ?? false)
+                }
+        }
+        return candidates.count == 1 ? candidates.first : nil
+    }
 }
 
 struct HeliumPaywallPreviewEntry: Codable, Identifiable {
@@ -24,7 +37,7 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let secondTry: HeliumPaywallPreviewSecondTry?
     var id: String { paywallUuid }
 
-    /// Web paywalls render in a browser, not in-app; previews open them there.
+    /// Web paywalls render in a browser, not in-app.
     var isWebPaywall: Bool {
         if let isWeb { return isWeb }
         return versions.contains { version in
@@ -39,6 +52,11 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
         "bundles.clickthrough.to",
         "bundles-staging.clickthrough.to",
     ]
+
+    static func directPreviewBlockedMessage(linkedPaywallName: String?) -> String {
+        let target = linkedPaywallName.map { "\"\($0)\"" } ?? "the in-app paywall linked to it"
+        return "Web paywalls can't be previewed directly. Open \(target) instead; its purchase action kicks out to this web paywall so you can test the full App2Web flow."
+    }
 }
 
 /// The resolved second try paywall served with a preview entry. Paywall-level, not per-version:
@@ -96,6 +114,11 @@ enum HeliumControlPanelState {
     var isLoading: Bool {
         if case .loading = self { return true }
         return false
+    }
+
+    var loadedResponse: HeliumControlPanelResponse? {
+        if case .loaded(let response) = self { return response }
+        return nil
     }
 }
 

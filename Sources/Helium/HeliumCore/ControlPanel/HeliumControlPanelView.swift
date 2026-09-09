@@ -8,7 +8,7 @@ struct HeliumControlPanelView: View {
     @State private var previewTask: Task<Void, Never>?
     @State private var searchText: String = ""
     @State private var paywallLoadError: String? = nil
-    @State private var pendingWebPreviewURL: URL? = nil
+    @State private var webPreviewNotice: String? = nil
     @State private var pendingConfiguration: HeliumPreviewConfigurationRequest? = nil
     /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
     /// presented on top of a sheet that is still on its way out.
@@ -75,20 +75,13 @@ struct HeliumControlPanelView: View {
         } message: {
             Text(paywallLoadError ?? "")
         }
-        .alert("Open Web Paywall?", isPresented: Binding(
-            get: { pendingWebPreviewURL != nil },
-            set: { if !$0 { pendingWebPreviewURL = nil } }
-        ), presenting: pendingWebPreviewURL) { url in
-            Button("Cancel", role: .cancel) { }
-            Button("Open in Browser") {
-                UIApplication.shared.open(url, options: [:]) { opened in
-                    if !opened {
-                        paywallLoadError = "Failed to open web preview."
-                    }
-                }
-            }
-        } message: { _ in
-            Text("Web paywalls open in your default browser for a display-only preview. Purchases won't work from this preview.")
+        .alert("Web Paywall", isPresented: Binding(
+            get: { webPreviewNotice != nil },
+            set: { if !$0 { webPreviewNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(webPreviewNotice ?? "")
         }
         .fullScreenCover(item: $pendingConfiguration, onDismiss: {
             let launch = queuedLaunch
@@ -166,10 +159,7 @@ struct HeliumControlPanelView: View {
     /// The settings entry only appears once the loaded list actually contains an
     /// app2web-capable paywall.
     private var hasApp2webPaywalls: Bool {
-        if case .loaded(let response) = state {
-            return response.paywalls.contains { $0.isApp2webCapable }
-        }
-        return false
+        state.loadedResponse?.paywalls.contains(where: { $0.isApp2webCapable }) ?? false
     }
 
     @ViewBuilder
@@ -296,7 +286,7 @@ struct HeliumControlPanelView: View {
                         if isLoading {
                             ProgressView()
                         } else if version.bundleUrl != nil {
-                            Image(systemName: paywall.isWebPaywall ? "safari" : "magnifyingglass")
+                            Image(systemName: paywall.isWebPaywall ? "info.circle" : "magnifyingglass")
                                 .font(.subheadline)
                                 .foregroundColor(.accentColor)
                         }
@@ -365,10 +355,15 @@ struct HeliumControlPanelView: View {
         }
     }
 
-    /// Non-app2web paywalls present directly; app2web paywalls stop at the configuration
-    /// screen first only when the tester has turned that step on.
+    /// Web paywalls only raise a notice. Non-app2web paywalls present directly; app2web
+    /// paywalls stop at the configuration screen first only when the tester has turned that step on.
     private func configurePreview(for version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard activity == .idle else { return }
+        if paywall.isWebPaywall {
+            let linked = state.loadedResponse?.linkedInAppPaywall(for: paywall)
+            webPreviewNotice = HeliumPaywallPreviewEntry.directPreviewBlockedMessage(linkedPaywallName: linked?.paywallName)
+            return
+        }
         if version.isApp2webCapable && !version.isApp2webBundleFresh {
             paywallLoadError = "Your paywall needs an update. Re-save it in your Helium dashboard, then reload."
             return
@@ -383,19 +378,6 @@ struct HeliumControlPanelView: View {
     private func selectVersion(_ version: HeliumPaywallPreviewVersion, paywall: HeliumPaywallPreviewEntry) {
         guard activity == .idle else { return }
         guard let bundleUrl = version.bundleUrl else { return }
-
-        // Web paywalls aren't renderable in-app — preview them in the browser
-        // after the user confirms, since payments won't work from a preview.
-        if paywall.isWebPaywall {
-            guard HeliumFetchedConfigManager.shared.isValidURL(bundleUrl),
-                  let url = URL(string: bundleUrl) else {
-                paywallLoadError = "Invalid web paywall URL."
-                return
-            }
-            HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected web paywall: \(paywall.paywallName) version: \(version.versionId)")
-            pendingWebPreviewURL = url
-            return
-        }
 
         activity = .loadingVersion(id: version.id)
         HeliumLogger.log(.debug, category: .ui, "[HeliumControlPanel] Selected paywall: \(paywall.paywallName) version: \(version.versionId)")
