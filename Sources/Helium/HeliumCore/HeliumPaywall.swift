@@ -315,3 +315,41 @@ extension EnvironmentValues {
         set { self[HeliumDynamicPaywallTraitsKey.self] = newValue }
     }
 }
+
+/// Controls who dismisses an embedded ``HeliumPaywall`` after an SDK-initiated close.
+public enum HeliumPaywallDismissBehavior {
+    /// The SDK dismisses the paywall itself on purchase, restore, and the close button. Default.
+    case automatic
+
+    /// The host owns dismissal. On purchase, restore, and the close button the SDK still emits the
+    /// corresponding events, but leaves the view in place for you to remove yourself. Applies only to
+    /// the embedded `HeliumPaywall` view; ignored for presented and `.heliumPaywall`-triggered paywalls.
+    case hostOwned
+}
+
+public extension View {
+    /// Sets how an embedded ``HeliumPaywall`` in this view tree is dismissed. Defaults to `.automatic`.
+    ///
+    /// Use `.hostOwned` when the paywall lives in navigation you control (e.g. a step in a
+    /// `NavigationStack`) and you don't want the SDK removing it out from under you. Observe purchase,
+    /// restore, and close through ``PaywallEventHandlers`` and remove the view yourself in response.
+    ///
+    /// - Important: With `.hostOwned` the paywall's close button becomes a no-op unless you dismiss the
+    ///   view yourself from the `onDismissed` handler.
+    func heliumDismissBehavior(_ behavior: HeliumPaywallDismissBehavior) -> some View {
+        environment(\.heliumDismissBehavior, behavior)
+    }
+}
+
+// Set by the public `.heliumDismissBehavior(_:)` modifier and read by the embedded paywall's base
+// template to decide whether the SDK or the host owns dismissal.
+private struct HeliumDismissBehaviorKey: EnvironmentKey {
+    static let defaultValue: HeliumPaywallDismissBehavior = .automatic
+}
+
+extension EnvironmentValues {
+    var heliumDismissBehavior: HeliumPaywallDismissBehavior {
+        get { self[HeliumDismissBehaviorKey.self] }
+        set { self[HeliumDismissBehaviorKey.self] = newValue }
+    }
+}

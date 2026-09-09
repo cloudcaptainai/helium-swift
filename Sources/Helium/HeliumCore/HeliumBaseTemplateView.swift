@@ -8,6 +8,7 @@ enum TemplateError: Error {
 public struct DynamicBaseTemplateView: View {
     
     @Environment(\.dismiss) var dismiss
+    @Environment(\.heliumDismissBehavior) var dismissBehavior
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.heliumLoadTimeTakenMS) var loadTimeTakenMS: UInt64?
     @StateObject private var actionsDelegate: HeliumActionsDelegate
@@ -46,12 +47,20 @@ public struct DynamicBaseTemplateView: View {
     public var body: some View {
         paywallContent
         .onAppear {
+            // Host-owned dismissal applies only to the embedded view; the SDK still owns presented and
+            // triggered paywalls. When enabled, every SDK-initiated dismiss (purchase, restore, close
+            // button, external web checkout) is suppressed here so the host can remove the view itself.
+            let hostOwnsDismissal = dismissBehavior == .hostOwned && presentationState.viewType == .embedded
+
             actionsDelegate.setDismissAction {
+                guard !hostOwnsDismissal else { return }
                 dismiss()
             }
             if presentationState.viewType != .presented {
-                InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId) {
-                    dismiss()
+                if !hostOwnsDismissal {
+                    InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId) {
+                        dismiss()
+                    }
                 }
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
