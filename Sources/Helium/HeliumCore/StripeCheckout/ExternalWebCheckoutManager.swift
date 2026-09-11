@@ -618,7 +618,7 @@ public class ExternalWebCheckoutManager: NSObject {
                     scope: observation.paywallSession.observabilityScope
                 )
                 activeCheckoutObservations.removeAll()
-                Helium.shared.hideAllPaywalls()
+                HeliumPaywallPresenter.shared.hideAllUpsells()
                 InlinePaywallDismissRegistry.dismissAll()
                 return true
             }
@@ -657,7 +657,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 scope: restored.observation.paywallSession.observabilityScope
             )
             activeCheckoutObservations.removeAll()
-            Helium.shared.hideAllPaywalls()
+            HeliumPaywallPresenter.shared.hideAllUpsells()
             InlinePaywallDismissRegistry.dismissAll()
             return true
         }
