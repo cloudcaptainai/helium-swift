@@ -303,6 +303,12 @@ public class HeliumSdkConfig {
     public func setWrapperSdkInfo(sdk: String, version: String) {
         self.wrapperSdk = sdk
         self.wrapperSdkVersion = version
+        trackSdkApiCall(.setWrapperSdkInfo, ["wrapperSdk": sdk, "wrapperSdkVersion": version])
+    }
+
+    var wrapperSdkInfo: (sdk: String, version: String)? {
+        guard let wrapperSdk, let wrapperSdkVersion else { return nil }
+        return (wrapperSdk, wrapperSdkVersion)
     }
     
     /// Called during Helium.initialize() to set initialization config

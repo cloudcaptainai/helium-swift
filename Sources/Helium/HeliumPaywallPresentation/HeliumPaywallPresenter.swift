@@ -21,6 +21,12 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+
+    var presentedPaywallCount: Int { paywallsDisplayed.count }
+
+    var topPresentedObservabilityScope: PaywallObservabilityScope? {
+        paywallsDisplayed.last?.paywallSession.observabilityScope
+    }
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     func isSecondTryPaywall(trigger: String) -> Bool {

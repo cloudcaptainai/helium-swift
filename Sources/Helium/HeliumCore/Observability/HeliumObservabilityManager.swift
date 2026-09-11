@@ -39,9 +39,18 @@ class HeliumObservabilityManager {
     ) {
         let eventName = event.name
         let eventProps = event.properties
+        let tags = event.tags
+        let isMainThread = Thread.isMainThread
+        let msSinceInitialize = SdkApiCallTracker.shared.msSinceInitialize
         queue.async { [weak self] in
             guard let self else { return }
-            let enriched = enrich(eventProps: eventProps, scope: scope)
+            let enriched = enrich(
+                eventProps: eventProps,
+                tags: tags,
+                scope: scope,
+                isMainThread: isMainThread,
+                msSinceInitialize: msSinceInitialize
+            )
             let send: (Analytics) -> Void = { analytics in
                 analytics.track(name: eventName, properties: enriched)
             }
@@ -55,10 +64,20 @@ class HeliumObservabilityManager {
 
     func enrich(
         eventProps: [String: Any],
-        scope: PaywallObservabilityScope?
+        tags: Set<HeliumObservabilityTag> = [],
+        scope: PaywallObservabilityScope?,
+        isMainThread: Bool = Thread.isMainThread,
+        msSinceInitialize: Int? = nil
     ) -> [String: Any] {
         var p = eventProps
+        p["tags"] = tags.map(\.rawValue).sorted()
+        p["isMainThread"] = isMainThread
+        if let msSinceInitialize { p["msSinceInitialize"] = msSinceInitialize }
         p["sdkVersion"] = BuildConstants.version
+        if let wrapper = HeliumSdkConfig.shared.wrapperSdkInfo {
+            p["wrapperSdk"] = wrapper.sdk
+            p["wrapperSdkVersion"] = wrapper.version
+        }
         p["heliumPersistentId"] = HeliumIdentityManager.shared.getHeliumPersistentId()
         p["userId"] = HeliumIdentityManager.shared.getResolvedUserId()
         p["hasCustomUserId"] = HeliumIdentityManager.shared.hasCustomUserId()
