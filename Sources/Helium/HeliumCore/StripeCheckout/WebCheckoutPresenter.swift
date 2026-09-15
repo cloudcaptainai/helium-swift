@@ -11,7 +11,7 @@ enum WebCheckoutPresenter {
     /// in-app styles, which close without the app ever backgrounding.
     static func present(
         _ url: URL,
-        style: WebCheckoutPresentationStyle,
+        style: WebCheckoutBrowserStyle,
         onBrowserDismissed: @escaping @MainActor () -> Void
     ) async -> Bool {
         switch style {

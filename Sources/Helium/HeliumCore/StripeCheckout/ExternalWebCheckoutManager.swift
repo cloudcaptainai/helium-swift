@@ -403,15 +403,15 @@ public class ExternalWebCheckoutManager: NSObject {
         )
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
-        let presentationStyle = resolvedPresentationStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: presentationStyle) { [weak self] in
+        let browserStyle = resolvedBrowserStyle(for: paywallSession)
+        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] in
             self?.onInAppBrowserDismissed()
         }
         HeliumObservabilityManager.shared.track(
             WebCheckoutBrowserOpenAttempted(
                 provider: provider.providerSlug,
                 success: opened,
-                presentationStyle: presentationStyle.rawValue
+                browserStyle: browserStyle.rawValue
             ),
             scope: paywallSession.observabilityScope
         )
@@ -419,15 +419,15 @@ public class ExternalWebCheckoutManager: NSObject {
             activeCheckoutObservations.removeValue(forKey: paywallSession.sessionId)
             throw WebCheckoutError.failedToOpenEnrichedURL
         }
-        isShowingInAppBrowser = presentationStyle != .externalBrowser
+        isShowingInAppBrowser = browserStyle != .externalBrowser
         startForegroundObserver()
         return .opened
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
     /// an app update.
-    private func resolvedPresentationStyle(for paywallSession: PaywallSession) -> WebCheckoutPresentationStyle {
-        paywallSession.paywallInfoWithBackups?.webCheckoutPresentationStyle ?? .externalBrowser
+    private func resolvedBrowserStyle(for paywallSession: PaywallSession) -> WebCheckoutBrowserStyle {
+        paywallSession.paywallInfoWithBackups?.webCheckoutBrowserStyle ?? .externalBrowser
     }
 
     /// Stops observing for purchase completion if the session matches.
@@ -591,7 +591,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 retries: delays.count,
                 msSinceOpen: oldestOpenedAt.map { msSince($0) },
                 fromSuccessRedirect: fromSuccessRedirect,
-                presentationStyle: resolvedPresentationStyle(for: newestObservation.paywallSession).rawValue
+                browserStyle: resolvedBrowserStyle(for: newestObservation.paywallSession).rawValue
             ),
             scope: newestObservation.paywallSession.observabilityScope
         )
@@ -661,7 +661,7 @@ public class ExternalWebCheckoutManager: NSObject {
                         retryAttempt: retryAttempt,
                         msSinceOpen: msSince(observation.addedAt),
                         wasRestore: false,
-                        presentationStyle: resolvedPresentationStyle(for: observation.paywallSession).rawValue
+                        browserStyle: resolvedBrowserStyle(for: observation.paywallSession).rawValue
                     ),
                     scope: observation.paywallSession.observabilityScope
                 )
@@ -701,7 +701,7 @@ public class ExternalWebCheckoutManager: NSObject {
                     retryAttempt: retryAttempt,
                     msSinceOpen: msSince(restored.observation.addedAt),
                     wasRestore: true,
-                    presentationStyle: resolvedPresentationStyle(for: restored.observation.paywallSession).rawValue
+                    browserStyle: resolvedBrowserStyle(for: restored.observation.paywallSession).rawValue
                 ),
                 scope: restored.observation.paywallSession.observabilityScope
             )
@@ -732,7 +732,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 redirectKind: redirectKind.rawValue,
                 msSinceOpen: msSince(newest.addedAt),
                 observationCount: activeCheckoutObservations.count,
-                presentationStyle: resolvedPresentationStyle(for: newest.paywallSession).rawValue
+                browserStyle: resolvedBrowserStyle(for: newest.paywallSession).rawValue
             ),
             scope: newest.paywallSession.observabilityScope
         )
