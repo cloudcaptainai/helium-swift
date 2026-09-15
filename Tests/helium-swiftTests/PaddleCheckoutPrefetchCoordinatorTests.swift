@@ -536,12 +536,12 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                         "recurring_totals": ["subtotal": 4.99, "total": 4.99],
                         "product": ["id": "pro_x", "name": "Plan", "description": "A plan"],
                         "price_id": "pri_x",
-                        "tax_rate": 0,
+                        "tax_rate": 0.08,
                     ]
                 ],
                 "recurring_totals": [
-                    "total": 4.99,
-                    "subtotal": 4.99, "discount": 0, "credit": 0, "tax": 0, "balance": 4.99,
+                    "total": 4.85,
+                    "subtotal": 4.99, "discount": 0.5, "credit": 0, "tax": 0.36, "balance": 4.85,
                 ],
                 "totals": [
                     "total": 0,
@@ -697,11 +697,18 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let unitPrice = try XCTUnwrap((item["price"] as? [String: Any])?["unit_price"] as? [String: Any])
         XCTAssertEqual(unitPrice["amount"] as? String, "499")
         XCTAssertEqual(unitPrice["currency_code"] as? String, "USD")
+        XCTAssertEqual(item["tax_rate"] as? Double, 0.08)
 
         let recurring = try XCTUnwrap(data["recurring_totals"] as? [String: Any])
-        XCTAssertEqual(recurring["total"] as? Double, 4.99)
+        XCTAssertEqual(recurring["total"] as? Double, 4.85)
+        XCTAssertEqual(recurring["subtotal"] as? Double, 4.99)
+        XCTAssertEqual(recurring["discount"] as? Double, 0.5)
+        XCTAssertEqual(recurring["tax"] as? Double, 0.36)
         let totals = try XCTUnwrap(data["totals"] as? [String: Any])
         XCTAssertEqual(totals["total"] as? Double, 0)
+        XCTAssertEqual(totals["subtotal"] as? Double, 0)
+        XCTAssertEqual(totals["discount"] as? Double, 0)
+        XCTAssertEqual(totals["tax"] as? Double, 0)
 
         let discount = try XCTUnwrap(data["discount"] as? [String: Any])
         XCTAssertEqual(discount["id"] as? String, "disc_x")
@@ -741,10 +748,17 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             XCTAssertNil(data[key], "Field `\(key)` should be dropped by the trim")
         }
 
+        for key in ["totals", "recurring_totals"] {
+            let block = try XCTUnwrap(data[key] as? [String: Any])
+            XCTAssertEqual(Set(block.keys), ["total", "subtotal", "discount", "tax"],
+                           "\(key) should carry only the price breakdown, not credit/balance")
+        }
+
         let item = try XCTUnwrap((data["items"] as? [[String: Any]])?.first)
-        for key in ["id", "quantity", "totals", "recurring_totals", "product", "price_id", "tax_rate"] {
+        for key in ["id", "quantity", "totals", "recurring_totals", "product", "price_id"] {
             XCTAssertNil(item[key], "items[].\(key) should be dropped by the trim")
         }
+        XCTAssertEqual(Set(item.keys), ["billing_cycle", "trial_period", "price", "tax_rate"])
         let price = try XCTUnwrap(item["price"] as? [String: Any])
         XCTAssertEqual(Set(price.keys), ["unit_price"], "items[].price should only contain unit_price")
 

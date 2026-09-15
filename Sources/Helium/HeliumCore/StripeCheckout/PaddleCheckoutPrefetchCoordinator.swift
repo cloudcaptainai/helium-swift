@@ -333,9 +333,12 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
 
         for key in ["recurring_totals", "totals"] {
-            if let dict = raw[key] as? [String: Any], let total = dict["total"] {
-                trimmed[key] = ["total": total]
+            guard let dict = raw[key] as? [String: Any] else { continue }
+            var breakdown: [String: Any] = [:]
+            for field in ["total", "subtotal", "discount", "tax"] {
+                if let value = dict[field] { breakdown[field] = value }
             }
+            if !breakdown.isEmpty { trimmed[key] = breakdown }
         }
 
         if let discount = raw["discount"] {
@@ -360,6 +363,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let price = item["price"] as? [String: Any], let unit = price["unit_price"] {
             out["price"] = ["unit_price": unit]
         }
+        // Paired with recurring_totals.subtotal so the checkout can derive the
+        // tax-inclusive, undiscounted renewal price shown on the Apple Pay sheet.
+        if let taxRate = item["tax_rate"] { out["tax_rate"] = taxRate }
         return out
     }
 
