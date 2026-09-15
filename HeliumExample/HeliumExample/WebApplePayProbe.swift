@@ -189,7 +189,10 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
             secureContext: (window.isSecureContext === true),
             hasApplePaySession: (typeof window.ApplePaySession !== 'undefined'),
             applePayCanMakePayments: null,
-            applePaySupportsV3: null
+            applePaySupportsV3: null,
+            merchantId: 'merchant.__PK__.stripe',
+            activeCard: 'pending',
+            paymentCredentialStatus: 'pending'
           };
           try {
             if (window.ApplePaySession) {
@@ -199,6 +202,30 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
           } catch(e) { diag.applePaySessionError = String(e); }
 
           function assign(base, extra){ for (var k in extra){ base[k]=extra[k]; } return base; }
+
+          function collectRawApplePay(){
+            if (!window.ApplePaySession) {
+              diag.activeCard = 'no-ApplePaySession';
+              diag.paymentCredentialStatus = 'no-ApplePaySession';
+              return Promise.resolve();
+            }
+            var jobs = [];
+            try {
+              jobs.push(Promise.resolve(window.ApplePaySession.canMakePaymentsWithActiveCard(diag.merchantId))
+                .then(function(v){ diag.activeCard = String(v); })
+                .catch(function(e){ diag.activeCard = 'error: ' + String(e); }));
+            } catch(e) { diag.activeCard = 'throw: ' + String(e); }
+            try {
+              if (window.ApplePaySession.applePayCapabilities) {
+                jobs.push(Promise.resolve(window.ApplePaySession.applePayCapabilities(diag.merchantId))
+                  .then(function(c){ diag.paymentCredentialStatus = String(c && c.paymentCredentialStatus); })
+                  .catch(function(e){ diag.paymentCredentialStatus = 'error: ' + String(e); }));
+              } else {
+                diag.paymentCredentialStatus = 'unsupported';
+              }
+            } catch(e) { diag.paymentCredentialStatus = 'throw: ' + String(e); }
+            return Promise.all(jobs);
+          }
 
           function runStripe(){
             var tStripeLoaded = now();
@@ -232,14 +259,16 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
             });
           }
 
-          if (typeof Stripe !== 'undefined') { runStripe(); }
-          else {
-            var tries = 0;
-            var iv = setInterval(function(){
-              if (typeof Stripe !== 'undefined'){ clearInterval(iv); runStripe(); }
-              else if (++tries > 100){ clearInterval(iv); post(assign(diag, { stage:'stripe-load-timeout', error:'Stripe.js did not load', totalMs: now()-t0 })); }
-            }, 50);
-          }
+          collectRawApplePay().then(function(){
+            if (typeof Stripe !== 'undefined') { runStripe(); }
+            else {
+              var tries = 0;
+              var iv = setInterval(function(){
+                if (typeof Stripe !== 'undefined'){ clearInterval(iv); runStripe(); }
+                else if (++tries > 100){ clearInterval(iv); post(assign(diag, { stage:'stripe-load-timeout', error:'Stripe.js did not load', totalMs: now()-t0 })); }
+              }, 50);
+            }
+          });
         })();
         </script>
         </body>

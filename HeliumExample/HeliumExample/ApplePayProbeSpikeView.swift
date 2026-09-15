@@ -113,6 +113,12 @@ struct ApplePayProbeSpikeView: View {
             if let cap = r.payload["applePayCanMakePayments"] as? Bool {
                 row("ApplePaySession.canMakePayments()", boolText(cap))
             }
+            if let activeCard = r.payload["activeCard"] as? String {
+                row("canMakePaymentsWithActiveCard()", activeCard)
+            }
+            if let status = r.payload["paymentCredentialStatus"] as? String {
+                row("applePayCapabilities()", status)
+            }
             row("Stripe applePay ready", boolText(r.applePayReady))
             if let load = r.payload["stripeLoadMs"] as? Double {
                 row("Stripe.js load", String(format: "%.0f ms", load))
