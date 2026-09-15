@@ -5,11 +5,10 @@ import SafariServices
 @MainActor
 enum WebCheckoutPresenter {
 
-    /// Weak so a browser the user already closed leaves nothing to dismiss.
     private static weak var presentedBrowser: WebCheckoutSafariViewController?
 
-    /// Returns whether the browser was actually shown. `onBrowserDismissed` fires only for
-    /// the in-app styles, when the browser goes away without the app ever backgrounding.
+    /// Returns whether the browser was shown. `onBrowserDismissed` fires only for the
+    /// in-app styles, which close without the app ever backgrounding.
     static func present(
         _ url: URL,
         style: WebCheckoutPresentationStyle,
@@ -31,8 +30,7 @@ enum WebCheckoutPresenter {
         }
     }
 
-    /// Closes an in-app browser this presenter put up. No-op for the external browser flow,
-    /// which has nothing of ours on screen, and for a browser already gone.
+    /// No-op for the external browser flow, which has nothing of ours on screen.
     static func dismissInAppBrowser() {
         presentedBrowser?.dismissWithoutReporting()
         presentedBrowser = nil
@@ -47,12 +45,11 @@ enum WebCheckoutPresenter {
     }
 }
 
-/// Hosts an `SFSafariViewController` as a child so the SDK owns the transition and learns
-/// when the browser goes away.
+/// Hosts an `SFSafariViewController` as a child so its dismissal can be observed.
 ///
-/// Presented on its own, `SFSafariViewController` installs a transitioning delegate that
-/// animates sideways like a navigation push and overrides `modalTransitionStyle`; as a
-/// child, the container's transition governs instead.
+/// Presented on its own it installs a transitioning delegate that animates sideways like
+/// a navigation push and overrides `modalTransitionStyle`; as a child, the container's
+/// transition governs instead.
 @MainActor
 final class WebCheckoutSafariViewController: UIViewController, @preconcurrency SFSafariViewControllerDelegate {
 
@@ -89,17 +86,15 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         safariViewController.didMove(toParent: self)
     }
 
-    /// Closes without reporting back. The caller already knows checkout is over, and the
-    /// report costs an entitlement refresh against the server.
+    /// For a caller that already knows checkout is over, since each report costs an
+    /// entitlement refresh.
     func dismissWithoutReporting() {
         reportsDismissal = false
         dismiss(animated: true)
     }
 
-    /// Catches every way the user can leave the browser — the dismiss button, a sheet
-    /// swiped down, and the cascading dismissal when the paywall beneath is hidden. A
-    /// swipe never reaches `safariViewControllerDidFinish`, so keying off the button alone
-    /// would miss the most likely manual exit.
+    /// A swiped-down sheet never reaches `safariViewControllerDidFinish`, so dismissal is
+    /// observed here instead.
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed && reportsDismissal {
@@ -107,8 +102,8 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         }
     }
 
-    /// Done only dismisses itself when `SFSafariViewController` is the presented controller;
-    /// as a child it reports here and the container has to go.
+    /// The dismiss button only closes `SFSafariViewController` itself when it is the
+    /// presented controller; as a child it reports here and the container has to go.
     func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
         dismiss(animated: true)
     }

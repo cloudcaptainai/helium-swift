@@ -3,11 +3,9 @@ import Foundation
 /// How an External Web Checkout URL is presented, sent by the server per paywall.
 ///
 /// Raw values are the wire vocabulary, so they are fixed once a dashboard emits them.
-/// Only `.externalBrowser` hands the user to their default browser as the external
-/// purchase link entitlement expects; the Safari styles keep checkout inside the app
-/// and are experimental.
+/// Only `.externalBrowser` hands the user off to their default browser as the external
+/// purchase link entitlement expects; the Safari styles keep checkout inside the app.
 public enum WebCheckoutPresentationStyle: String, Codable, Sendable {
-    /// Hands off to the user's default browser.
     case externalBrowser
     /// `SFSafariViewController` as a page sheet over the paywall.
     case safariSheet
@@ -17,8 +15,7 @@ public enum WebCheckoutPresentationStyle: String, Codable, Sendable {
 
 extension KeyedDecodingContainer {
     /// A style this SDK version does not recognize is treated as unset rather than throwing,
-    /// which would fail the entire paywall decode over one unknown string. Unset resolves to
-    /// the external browser flow.
+    /// which would fail the entire paywall decode over one unknown string.
     func decodeIfPresent(
         _ type: WebCheckoutPresentationStyle.Type,
         forKey key: Key

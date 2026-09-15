@@ -422,10 +422,9 @@ public class ExternalWebCheckoutManager: NSObject {
         return .opened
     }
 
-    /// An in-app browser closing is the only "the user is done with checkout" signal the
-    /// in-app styles get: the app never backgrounds, so the foreground observer that covers
-    /// the external browser flow never fires. A dismissal that followed a purchase we already
-    /// handled finds no observations left and falls straight through.
+    /// The in-app equivalent of returning to the app: no backgrounding happens, so the
+    /// foreground observer never fires and the browser closing is the only signal that
+    /// checkout ended.
     @MainActor
     private func onInAppBrowserDismissed() {
         guard !activeCheckoutObservations.isEmpty else { return }
@@ -438,8 +437,7 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
-    /// an app update. Absent — a fallback paywall, or a config fetch that never landed —
-    /// means the external browser flow.
+    /// an app update.
     private func resolvedPresentationStyle(for paywallSession: PaywallSession) -> WebCheckoutPresentationStyle {
         paywallSession.paywallInfoWithBackups?.webCheckoutPresentationStyle ?? .externalBrowser
     }
@@ -746,9 +744,7 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         case .cancel, .paymentFailure:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — observations kept in case user resumes checkout")
-            // An external browser stays open in its own app and the user is already back
-            // here, but an in-app browser is still covering the paywall with a page the
-            // user just cancelled out of, so it has to be closed for them.
+            // An in-app browser is still covering the paywall with the cancelled page.
             WebCheckoutPresenter.dismissInAppBrowser()
             armForegroundObserverAfterBackground()
         }
