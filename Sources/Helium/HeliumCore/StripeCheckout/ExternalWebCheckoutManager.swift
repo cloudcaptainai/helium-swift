@@ -382,7 +382,7 @@ public class ExternalWebCheckoutManager: NSObject {
         return url
     }
 
-    /// Opens the enriched checkout URL in external browser and starts observing
+    /// Opens the enriched checkout URL in the configured browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
     /// Returns `.preCheckResolved` if cached entitlements already include `productKey`;
     /// otherwise `.opened`.
@@ -402,9 +402,14 @@ public class ExternalWebCheckoutManager: NSObject {
         )
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
-        let opened = await UIApplication.shared.open(url)
+        let presentationStyle = resolvedPresentationStyle(for: paywallSession)
+        let opened = await WebCheckoutPresenter.present(url, style: presentationStyle)
         HeliumObservabilityManager.shared.track(
-            WebCheckoutBrowserOpenAttempted(provider: provider.providerSlug, success: opened),
+            WebCheckoutBrowserOpenAttempted(
+                provider: provider.providerSlug,
+                success: opened,
+                presentationStyle: presentationStyle.rawValue
+            ),
             scope: paywallSession.observabilityScope
         )
         guard opened else {
@@ -413,6 +418,13 @@ public class ExternalWebCheckoutManager: NSObject {
         }
         startForegroundObserver()
         return .opened
+    }
+
+    /// Server-controlled only, so checkout presentation can be changed or reverted without
+    /// an app update. Absent — a fallback paywall, or a config fetch that never landed —
+    /// means the external browser flow.
+    private func resolvedPresentationStyle(for paywallSession: PaywallSession) -> WebCheckoutPresentationStyle {
+        paywallSession.paywallInfoWithBackups?.webCheckoutPresentationStyle ?? .externalBrowser
     }
 
     /// Stops observing for purchase completion if the session matches.
@@ -544,7 +556,8 @@ public class ExternalWebCheckoutManager: NSObject {
                 provider: provider.providerSlug,
                 retries: delays.count,
                 msSinceOpen: oldestOpenedAt.map { msSince($0) },
-                fromSuccessRedirect: fromSuccessRedirect
+                fromSuccessRedirect: fromSuccessRedirect,
+                presentationStyle: resolvedPresentationStyle(for: newestObservation.paywallSession).rawValue
             ),
             scope: newestObservation.paywallSession.observabilityScope
         )
@@ -613,7 +626,8 @@ public class ExternalWebCheckoutManager: NSObject {
                         source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
                         retryAttempt: retryAttempt,
                         msSinceOpen: msSince(observation.addedAt),
-                        wasRestore: false
+                        wasRestore: false,
+                        presentationStyle: resolvedPresentationStyle(for: observation.paywallSession).rawValue
                     ),
                     scope: observation.paywallSession.observabilityScope
                 )
@@ -652,7 +666,8 @@ public class ExternalWebCheckoutManager: NSObject {
                     source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
                     retryAttempt: retryAttempt,
                     msSinceOpen: msSince(restored.observation.addedAt),
-                    wasRestore: true
+                    wasRestore: true,
+                    presentationStyle: resolvedPresentationStyle(for: restored.observation.paywallSession).rawValue
                 ),
                 scope: restored.observation.paywallSession.observabilityScope
             )
@@ -682,7 +697,8 @@ public class ExternalWebCheckoutManager: NSObject {
                 provider: provider.providerSlug,
                 redirectKind: redirectKind.rawValue,
                 msSinceOpen: msSince(newest.addedAt),
-                observationCount: activeCheckoutObservations.count
+                observationCount: activeCheckoutObservations.count,
+                presentationStyle: resolvedPresentationStyle(for: newest.paywallSession).rawValue
             ),
             scope: newest.paywallSession.observabilityScope
         )
