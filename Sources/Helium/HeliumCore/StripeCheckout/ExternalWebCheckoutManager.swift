@@ -422,20 +422,6 @@ public class ExternalWebCheckoutManager: NSObject {
         return .opened
     }
 
-    /// The in-app equivalent of returning to the app: no backgrounding happens, so the
-    /// foreground observer never fires and the browser closing is the only signal that
-    /// checkout ended.
-    @MainActor
-    private func onInAppBrowserDismissed() {
-        guard !activeCheckoutObservations.isEmpty else { return }
-        HeliumLogger.log(.debug, category: .entitlements, "In-app \(provider.displayName) browser dismissed — checking for new entitlements...")
-        foregroundCheckTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.foregroundCheckTask = nil }
-            _ = await checkForNewPurchaseWithRetry()
-        }
-    }
-
     /// Server-controlled only, so checkout presentation can be changed or reverted without
     /// an app update.
     private func resolvedPresentationStyle(for paywallSession: PaywallSession) -> WebCheckoutPresentationStyle {
@@ -533,8 +519,22 @@ public class ExternalWebCheckoutManager: NSObject {
         guard !activeCheckoutObservations.isEmpty else { return }
         guard foregroundObserver != nil else { return }
         stopForegroundObserver()
+        checkForPurchaseAfterReturn(reason: "Returned to foreground")
+    }
 
-        HeliumLogger.log(.debug, category: .entitlements, "Checking for new \(provider.displayName) entitlements...")
+    /// An in-app browser never backgrounds the app, so its closing is the only signal that
+    /// checkout ended.
+    @MainActor
+    private func onInAppBrowserDismissed() {
+        checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
+    }
+
+    /// Both ways a user comes back from checkout: the app returning to the foreground, and
+    /// an in-app browser closing.
+    private func checkForPurchaseAfterReturn(reason: String) {
+        guard !activeCheckoutObservations.isEmpty else { return }
+
+        HeliumLogger.log(.debug, category: .entitlements, "\(reason) — checking for new \(provider.displayName) entitlements...")
 
         foregroundCheckTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -543,7 +543,8 @@ public class ExternalWebCheckoutManager: NSObject {
             let purchaseDetected = await checkForNewPurchaseWithRetry()
             if Task.isCancelled { return }
 
-            // All retries exhausted — resume observing for next foreground return
+            // Retries exhausted, so watch for the next return. A no-op unless an
+            // observation is on the external browser.
             if !purchaseDetected && !activeCheckoutObservations.isEmpty {
                 startForegroundObserver()
             }
