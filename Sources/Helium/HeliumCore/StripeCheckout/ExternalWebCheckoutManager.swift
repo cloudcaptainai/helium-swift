@@ -403,7 +403,9 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let presentationStyle = resolvedPresentationStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: presentationStyle)
+        let opened = await WebCheckoutPresenter.present(url, style: presentationStyle) { [weak self] in
+            self?.onInAppBrowserDismissed()
+        }
         HeliumObservabilityManager.shared.track(
             WebCheckoutBrowserOpenAttempted(
                 provider: provider.providerSlug,
@@ -418,6 +420,21 @@ public class ExternalWebCheckoutManager: NSObject {
         }
         startForegroundObserver()
         return .opened
+    }
+
+    /// An in-app browser closing is the only "the user is done with checkout" signal the
+    /// in-app styles get: the app never backgrounds, so the foreground observer that covers
+    /// the external browser flow never fires. A dismissal that followed a purchase we already
+    /// handled finds no observations left and falls straight through.
+    @MainActor
+    private func onInAppBrowserDismissed() {
+        guard !activeCheckoutObservations.isEmpty else { return }
+        HeliumLogger.log(.debug, category: .entitlements, "In-app \(provider.displayName) browser dismissed — checking for new entitlements...")
+        foregroundCheckTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.foregroundCheckTask = nil }
+            _ = await checkForNewPurchaseWithRetry()
+        }
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without

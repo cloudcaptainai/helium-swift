@@ -5,21 +5,25 @@ import SafariServices
 @MainActor
 enum WebCheckoutPresenter {
 
-    /// Returns whether the browser was actually shown.
-    static func present(_ url: URL, style: WebCheckoutPresentationStyle) async -> Bool {
+    /// Returns whether the browser was actually shown. `onBrowserDismissed` fires only for
+    /// the in-app styles, when the browser goes away without the app ever backgrounding.
+    static func present(
+        _ url: URL,
+        style: WebCheckoutPresentationStyle,
+        onBrowserDismissed: @escaping @MainActor () -> Void
+    ) async -> Bool {
         switch style {
         case .externalBrowser:
             return await UIApplication.shared.open(url)
 
-        case .safariSheet:
+        case .safariSheet, .safariFullScreen:
             guard let presenter = UIWindowHelper.findTopMostViewController() else { return false }
-            let safariViewController = SFSafariViewController(url: url)
-            safariViewController.modalPresentationStyle = .pageSheet
-            return await presentModally(safariViewController, from: presenter)
-
-        case .safariFullScreen:
-            guard let presenter = UIWindowHelper.findTopMostViewController() else { return false }
-            return await presentModally(FullScreenSafariViewController(url: url), from: presenter)
+            let browser = WebCheckoutSafariViewController(
+                url: url,
+                fullScreen: style == .safariFullScreen,
+                onDismiss: onBrowserDismissed
+            )
+            return await presentModally(browser, from: presenter)
         }
     }
 
@@ -32,20 +36,28 @@ enum WebCheckoutPresenter {
     }
 }
 
-/// Hosts an `SFSafariViewController` as a child so it can cover the screen with a vertical
-/// slide. Presented on its own, `SFSafariViewController` installs a transitioning delegate
-/// that animates sideways like a navigation push and overrides `modalTransitionStyle`;
-/// as a child, the container's transition governs instead.
+/// Hosts an `SFSafariViewController` as a child so the SDK owns the transition and learns
+/// when the browser goes away.
+///
+/// Presented on its own, `SFSafariViewController` installs a transitioning delegate that
+/// animates sideways like a navigation push and overrides `modalTransitionStyle`; as a
+/// child, the container's transition governs instead.
 @MainActor
-final class FullScreenSafariViewController: UIViewController, SFSafariViewControllerDelegate {
+final class WebCheckoutSafariViewController: UIViewController, SFSafariViewControllerDelegate {
 
     private let safariViewController: SFSafariViewController
+    private let onDismiss: @MainActor () -> Void
 
-    init(url: URL) {
+    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor () -> Void) {
         safariViewController = SFSafariViewController(url: url)
+        self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
-        modalPresentationStyle = .fullScreen
-        modalTransitionStyle = .coverVertical
+        if fullScreen {
+            modalPresentationStyle = .fullScreen
+            modalTransitionStyle = .coverVertical
+        } else {
+            modalPresentationStyle = .pageSheet
+        }
         safariViewController.delegate = self
     }
 
@@ -63,6 +75,17 @@ final class FullScreenSafariViewController: UIViewController, SFSafariViewContro
         safariViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(safariViewController.view)
         safariViewController.didMove(toParent: self)
+    }
+
+    /// Catches every way the browser can leave — the dismiss button, a sheet swiped down,
+    /// and the cascading dismissal when the paywall beneath is hidden. A swipe never
+    /// reaches `safariViewControllerDidFinish`, so keying off the button alone would miss
+    /// the most likely manual exit.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed {
+            onDismiss()
+        }
     }
 
     /// Done only dismisses itself when `SFSafariViewController` is the presented controller;
