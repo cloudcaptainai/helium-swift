@@ -6,7 +6,7 @@ import Foundation
 /// Only `.externalBrowser` hands the user to their default browser as the external
 /// purchase link entitlement expects; the Safari styles keep checkout inside the app
 /// and are experimental.
-public enum WebCheckoutPresentationStyle: String, Sendable, CaseIterable {
+public enum WebCheckoutPresentationStyle: String, Codable, Sendable {
     /// Hands off to the user's default browser.
     case externalBrowser
     /// `SFSafariViewController` as a page sheet over the paywall.

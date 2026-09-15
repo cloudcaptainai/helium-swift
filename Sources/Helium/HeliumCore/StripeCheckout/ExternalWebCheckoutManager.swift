@@ -746,6 +746,10 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         case .cancel, .paymentFailure:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — observations kept in case user resumes checkout")
+            // An external browser stays open in its own app and the user is already back
+            // here, but an in-app browser is still covering the paywall with a page the
+            // user just cancelled out of, so it has to be closed for them.
+            WebCheckoutPresenter.dismissInAppBrowser()
             armForegroundObserverAfterBackground()
         }
     }
