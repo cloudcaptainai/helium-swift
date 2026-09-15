@@ -764,10 +764,22 @@ public class ExternalWebCheckoutManager: NSObject {
                 armForegroundObserverAfterBackground()
             }
         case .cancel, .paymentFailure:
-            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — observations kept in case user resumes checkout")
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — external browser observations kept in case user resumes checkout")
             // An in-app browser is still covering the paywall with the cancelled page.
             closeInAppBrowser()
-            armForegroundObserverAfterBackground()
+            // Only an external browser leaves a tab the user can go back and finish in. An
+            // in-app checkout is over once its browser closes, and an observation kept past
+            // that would let an entitlement arriving from anywhere else land as a purchase
+            // on this abandoned session.
+            let abandoned = activeCheckoutObservations.values
+                .filter { resolvedBrowserStyle(for: $0.paywallSession) != .externalBrowser }
+                .map(\.paywallSession)
+            for paywallSession in abandoned {
+                stopObserving(paywallSession: paywallSession)
+            }
+            if !activeCheckoutObservations.isEmpty {
+                armForegroundObserverAfterBackground()
+            }
         }
     }
 
