@@ -518,11 +518,12 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Closing it ourselves suppresses the dismissal report, so the flag has to be cleared
-    /// alongside. The guard is ownership: every redirect reaches both providers' managers,
-    /// and the presenter holds one browser between them.
+    /// alongside.
+    ///
+    /// The presenter holds one browser for the whole SDK, and a redirect means that checkout
+    /// concluded, so the manager handling it closes the browser whether or not it opened it.
     @MainActor
     private func closeInAppBrowser() {
-        guard isShowingInAppBrowser else { return }
         isShowingInAppBrowser = false
         WebCheckoutPresenter.dismissInAppBrowser()
     }
