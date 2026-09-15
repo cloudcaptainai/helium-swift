@@ -462,8 +462,18 @@ public class ExternalWebCheckoutManager: NSObject {
 
     // MARK: - Foreground Observer
 
+    /// An in-app browser reports its own dismissal, so returning to the foreground with one
+    /// still open says nothing about checkout and would refresh entitlements for nothing.
+    /// The external browser has no such signal and depends entirely on this.
+    private var hasExternalBrowserObservation: Bool {
+        activeCheckoutObservations.values.contains {
+            resolvedPresentationStyle(for: $0.paywallSession) == .externalBrowser
+        }
+    }
+
     private func startForegroundObserver() {
         stopForegroundObserver()
+        guard hasExternalBrowserObservation else { return }
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil,
@@ -489,6 +499,7 @@ public class ExternalWebCheckoutManager: NSObject {
     @MainActor
     private func armForegroundObserverAfterBackground() {
         stopPendingBackgroundObserver()
+        guard hasExternalBrowserObservation else { return }
         // If the app is already backgrounded (e.g. user backgrounded while we
         // were awaiting the post-redirect purchase check), didEnterBackground
         // won't fire again until they go foreground first — which is exactly
@@ -727,6 +738,8 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
+            // The processing overlay shows on the paywall, which an in-app browser covers.
+            WebCheckoutPresenter.dismissInAppBrowser()
             NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
             // Cap the spinner — a slow network call could leave app in unusable state.
             let overlayTimeoutTask = Task { @MainActor in
