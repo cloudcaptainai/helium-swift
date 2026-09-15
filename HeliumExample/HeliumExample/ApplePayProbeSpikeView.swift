@@ -156,18 +156,34 @@ struct ApplePayProbeSpikeView: View {
     private var comparisonSection: some View {
         if let r = result {
             Section("Comparison") {
-                let webCard = r.applePayReady
+                let webCard = webActiveCard(r)
                 let nativeCard = native.hasCreditCard || native.hasDebitCard
-                row("web says ready", boolText(webCard))
+                row("web says has card", webCard.map(boolText) ?? "unavailable")
                 row("native says has card", boolText(nativeCard))
-                if webCard != nativeCard {
-                    Text("⚠️ Signals DISAGREE — the web/native nuance is real on this device.")
-                        .font(.footnote).foregroundStyle(.orange)
+                row("Stripe ready (device-level)", boolText(r.applePayReady))
+                if let webCard {
+                    if webCard != nativeCard {
+                        Text("⚠️ Card-aware signals DISAGREE, the web/native nuance is real on this device.")
+                            .font(.footnote).foregroundStyle(.orange)
+                    } else {
+                        Text("Card-aware signals agree on this device.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 } else {
-                    Text("Signals agree on this device.")
+                    Text("No card-aware web answer on this device, comparison inconclusive.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    /// `canMakePaymentsWithActiveCard()` as a tri-state: nil when the API
+    /// errored, was unsupported or never resolved.
+    private func webActiveCard(_ r: ProbeResult) -> Bool? {
+        switch r.payload["activeCard"] as? String {
+        case "true": return true
+        case "false": return false
+        default: return nil
         }
     }
 
