@@ -14,6 +14,7 @@ class WebApplePayAvailability {
 
     @HeliumAtomic private var cachedReadiness: WebApplePayReadiness = .unknown
     @HeliumAtomic private var lastProbeTime: Date?
+    @HeliumAtomic private var probedOrigin: URL?
     @HeliumAtomic private var probeInFlight: Bool = false
 
     private init() {}
@@ -37,12 +38,13 @@ class WebApplePayAvailability {
 
         Task { @MainActor in
             let outcome = await WebApplePayProbe(origin: origin).run()
-            apply(outcome)
+            apply(outcome, origin: origin)
         }
     }
 
-    func apply(_ outcome: WebApplePayProbe.Outcome) {
+    func apply(_ outcome: WebApplePayProbe.Outcome, origin: URL? = nil) {
         cachedReadiness = outcome.readiness
+        probedOrigin = origin
         // An unknown outcome measured nothing, so it does not hold off the next probe.
         lastProbeTime = outcome.readiness == .unknown ? nil : Date()
         probeInFlight = false
@@ -73,7 +75,17 @@ class WebApplePayAvailability {
 
     func isCacheFresh() -> Bool {
         guard let lastProbe = lastProbeTime else { return false }
+        // Readiness is measured against a merchant identifier derived from the origin, so an
+        // answer measured elsewhere says nothing about the origin checkout now hands off to.
+        if let probedOrigin, probedOrigin != probeOrigin() { return false }
         return Date().timeIntervalSince(lastProbe) < cacheDuration
+    }
+
+    func reset() {
+        cachedReadiness = .unknown
+        lastProbeTime = nil
+        probedOrigin = nil
+        probeInFlight = false
     }
 
     /// The browser evaluates Apple Pay against the origin serving checkout, and the merchant
@@ -84,9 +96,14 @@ class WebApplePayAvailability {
         return URL(string: PaddleBFFClient.sourcePageOrigin(for: clientToken))
     }
 
-    func setReadinessForTesting(_ readiness: WebApplePayReadiness, probedAt: Date? = Date()) {
+    func setReadinessForTesting(
+        _ readiness: WebApplePayReadiness,
+        probedAt: Date? = Date(),
+        origin: URL? = nil
+    ) {
         cachedReadiness = readiness
         lastProbeTime = probedAt
+        probedOrigin = origin
         probeInFlight = false
     }
 

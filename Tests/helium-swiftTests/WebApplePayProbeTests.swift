@@ -176,6 +176,35 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertFalse(WebApplePayAvailability.shared.isCacheFresh())
     }
 
+    func testAnAnswerMeasuredAtAnotherOriginIsNotReused() {
+        let availability = WebApplePayAvailability.shared
+        injectConfig(makeWebCheckoutConfig(hasPaddleProducts: true, paddleClientToken: "test_abc123"))
+
+        availability.setReadinessForTesting(
+            .notReady,
+            probedAt: Date(),
+            origin: URL(string: prodOrigin)!
+        )
+        XCTAssertFalse(availability.isCacheFresh())
+
+        availability.setReadinessForTesting(
+            .notReady,
+            probedAt: Date(),
+            origin: URL(string: sandboxOrigin)!
+        )
+        XCTAssertTrue(availability.isCacheFresh())
+    }
+
+    func testResetDropsAMeasuredAnswer() {
+        let availability = WebApplePayAvailability.shared
+        availability.setReadinessForTesting(.notReady, probedAt: Date())
+
+        availability.reset()
+
+        XCTAssertEqual(availability.readiness(), .unknown)
+        XCTAssertFalse(availability.isCacheFresh())
+    }
+
     // MARK: - Routing
 
     func testPaddlePaywallIsSkippedWhenTheBrowserCannotPayWithApplePay() {

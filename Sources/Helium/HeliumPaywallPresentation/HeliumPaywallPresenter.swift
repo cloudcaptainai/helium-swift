@@ -600,6 +600,11 @@ extension HeliumPaywallPresenter {
             // Paddle checkout offers Apple Pay only; a browser that cannot pay with it leaves
             // the user with a dead button, so the in-app purchase paywall is shown instead.
             // Only a confident notReady routes; unknown keeps web checkout.
+            if hasPaddleProducts {
+                // Picks up a Wallet change, an expired answer or one the launch probe failed to
+                // measure. It never blocks, so this presentation still uses the cached value.
+                WebApplePayAvailability.shared.refreshIfNeeded()
+            }
             if hasPaddleProducts, WebApplePayAvailability.shared.readiness() == .notReady {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webApplePayNotReady, presentationContext: presentationContext)
             }

@@ -302,6 +302,8 @@ public class Helium {
             // Clear fetched configuration from memory
             HeliumFetchedConfigManager.reset()
             
+            WebApplePayAvailability.shared.reset()
+            
             // Completely reset all fallback configurations
             HeliumFallbackViewManager.reset()
             
