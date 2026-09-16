@@ -197,6 +197,17 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertEqual(nextLaunch.readiness(), .notReady)
     }
 
+    func testALaunchAfterAFailedProbeDoesNotWaitAgain() throws {
+        configureWebCheckout(hasPaddleProducts: true)
+        let defaults = try makeIsolatedDefaults()
+        makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .unknown(.timedOut), timedOut: true))
+
+        let nextLaunch = makeAvailability(defaults: defaults)
+
+        XCTAssertFalse(nextLaunch.needsMeasurementBeforeLaunch())
+        XCTAssertNil(nextLaunch.persistedReadinessForTesting())
+    }
+
     func testALaunchThatWouldNotProbeAtAllDoesNotWait() throws {
         configureWebCheckout(hasPaddleProducts: true)
         Helium.config.enableWebApplePayReadiness = false

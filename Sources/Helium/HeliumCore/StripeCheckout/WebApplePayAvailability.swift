@@ -16,6 +16,7 @@ class WebApplePayAvailability {
     static let shared = WebApplePayAvailability()
 
     private static let persistedReadinessKey = "heliumWebApplePayReadiness"
+    private static let hasProbedKey = "heliumWebApplePayProbed"
 
     /// The browser evaluates Apple Pay against the origin serving checkout, and the merchant
     /// identifier is derived from that hostname, so the probe loads the origin web checkout
@@ -28,6 +29,7 @@ class WebApplePayAvailability {
     @HeliumAtomic private var persistedReadiness: WebApplePayReadiness?
     @HeliumAtomic private var probeInFlight: Bool = false
     @HeliumAtomic private var probeAttempted: Bool = false
+    @HeliumAtomic private var probedOnAPreviousLaunch: Bool = false
 
     init(storage: HeliumStorage = .shared) {
         self.storage = storage
@@ -44,9 +46,11 @@ class WebApplePayAvailability {
         return cachedReadiness
     }
 
-    /// Whether this launch has no measurement to report and should wait for one.
+    /// Whether this launch should wait for a measurement before reporting readiness. Only a
+    /// launch that has never probed waits, so a probe that keeps failing costs its timeout
+    /// once rather than on every launch.
     func needsMeasurementBeforeLaunch() -> Bool {
-        persistedReadiness == nil && shouldProbe() && Self.probeOrigin != nil
+        !probedOnAPreviousLaunch && shouldProbe() && Self.probeOrigin != nil
     }
 
     /// Starts the one refresh this launch gets. Returns immediately; the result lands in the
@@ -99,6 +103,7 @@ class WebApplePayAvailability {
         let servedFromCache = persistedReadiness
         cachedReadiness = outcome.readiness
         probeInFlight = false
+        recordProbed()
         // An unknown outcome measured nothing, so the persisted value stays as it is rather
         // than being replaced by an absent measurement.
         if !outcome.readiness.isUnknown {
@@ -144,6 +149,7 @@ class WebApplePayAvailability {
     // MARK: - Persistence
 
     private func loadPersistedReadiness() {
+        probedOnAPreviousLaunch = storage.bool(forKey: Self.hasProbedKey)
         guard let raw = storage.string(forKey: Self.persistedReadinessKey) else { return }
         let readiness: WebApplePayReadiness
         switch raw {
@@ -153,6 +159,12 @@ class WebApplePayAvailability {
         }
         persistedReadiness = readiness
         cachedReadiness = readiness
+    }
+
+    private func recordProbed() {
+        guard !probedOnAPreviousLaunch else { return }
+        probedOnAPreviousLaunch = true
+        storage.set(true, forKey: Self.hasProbedKey)
     }
 
     private func persist(_ readiness: WebApplePayReadiness) {
@@ -167,6 +179,7 @@ class WebApplePayAvailability {
         persistedReadiness = nil
         probeInFlight = false
         probeAttempted = probed
+        probedOnAPreviousLaunch = false
     }
 
     func setProbeInFlightForTesting(_ inFlight: Bool) {
