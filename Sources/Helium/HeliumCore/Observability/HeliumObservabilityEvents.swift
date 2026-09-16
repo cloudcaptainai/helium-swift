@@ -335,6 +335,10 @@ struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
     let timedOut: Bool
     let failureReason: String?
     let deviceCanMakePayments: Bool
+    /// Readiness served from the persisted cache while this probe ran, if any, and whether
+    /// it matched what the probe then measured.
+    let servedFromCache: String?
+    let cacheWasCorrect: Bool?
 
     var name: String { "web_apple_pay_probe_completed" }
     var properties: [String: Any] {
@@ -343,8 +347,11 @@ struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
             "durationMs": durationMs,
             "timedOut": timedOut,
             "deviceCanMakePayments": deviceCanMakePayments,
+            "cacheHit": servedFromCache != nil,
         ]
         if let reason = truncatedForObservability(failureReason) { p["failureReason"] = reason }
+        if let servedFromCache { p["servedFromCache"] = servedFromCache }
+        if let cacheWasCorrect { p["cacheWasCorrect"] = cacheWasCorrect }
         return p
     }
 }

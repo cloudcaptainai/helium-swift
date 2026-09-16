@@ -122,11 +122,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 transitionState(allowLoadingState: true)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: WebApplePayAvailability.readinessResolved)) { _ in
-            if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
-                transitionState(allowLoadingState: true)
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .heliumEmbeddedPaywallRenderFail)) { notification in
             guard case .ready(let paywallViewAndSession) = state,
                   let notificationSessionId = notification.userInfo?["sessionId"] as? String,
@@ -294,7 +289,6 @@ private func shouldShowLoadingState(for trigger: String, config: PaywallPresenta
     (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
     
     return heliumDownloadsIncoming
-        || HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: trigger)
 }
 
 // MARK: - Load Time Environment Key

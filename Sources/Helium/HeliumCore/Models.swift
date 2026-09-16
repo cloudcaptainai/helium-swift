@@ -272,7 +272,6 @@ public enum PaywallUnavailableReason: String, Codable, CaseIterable {
     case noProductsIOS
     case webCheckoutNoCustomUserId
     case webCheckoutNotEnabled
-    case webApplePayNotReady
 }
 
 /// Reason a paywall was not shown.

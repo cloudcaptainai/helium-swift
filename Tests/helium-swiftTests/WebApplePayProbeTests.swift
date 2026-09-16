@@ -11,11 +11,13 @@ final class WebApplePayProbeTests: XCTestCase {
         super.setUp()
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium()
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
+        Helium.config.enableWebApplePayReadiness = true
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
     }
 
     override func tearDown() {
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
+        Helium.config.enableWebApplePayReadiness = false
         Helium.resetHelium()
         super.tearDown()
     }
@@ -146,152 +148,79 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
     }
 
-    func testAMeasuredAnswerIsCachedAndAnUnknownOneIsNot() {
-        let availability = WebApplePayAvailability.shared
+    func testAMeasuredAnswerIsRememberedAndAnUnknownOneIsNot() throws {
+        let availability = makeAvailability()
 
-        availability.apply(WebApplePayProbe.Outcome(
-            readiness: .notReady,
-            durationMs: 120,
-            timedOut: false,
-            failureReason: nil
-        ))
+        availability.apply(makeOutcome(readiness: .notReady))
         XCTAssertEqual(availability.readiness(), .notReady)
-        XCTAssertTrue(availability.isCacheFresh())
+        XCTAssertEqual(availability.persistedReadinessForTesting(), .notReady)
 
-        availability.apply(WebApplePayProbe.Outcome(
-            readiness: .unknown(.timedOut),
-            durationMs: 2_000,
-            timedOut: true,
-            failureReason: "timeout"
-        ))
+        availability.apply(makeOutcome(readiness: .unknown(.timedOut), timedOut: true))
         XCTAssertEqual(availability.readiness(), .unknown(.timedOut))
-        XCTAssertFalse(availability.isCacheFresh())
+        XCTAssertEqual(availability.persistedReadinessForTesting(), .notReady)
     }
 
-    func testAMeasuredAnswerStaysCachedUntilItsIntervalElapses() {
-        let availability = WebApplePayAvailability.shared
-        let interval = availability.cacheDurationForTesting()
+    func testAMeasuredAnswerIsServedImmediatelyOnTheNextLaunch() throws {
+        let defaults = try makeIsolatedDefaults()
+        makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .notReady))
 
-        availability.setReadinessForTesting(.ready, probedAt: Date())
-        XCTAssertTrue(availability.isCacheFresh())
+        let nextLaunch = makeAvailability(defaults: defaults)
 
-        availability.setReadinessForTesting(.ready, probedAt: Date(timeIntervalSinceNow: -interval - 1))
-        XCTAssertFalse(availability.isCacheFresh())
+        XCTAssertEqual(nextLaunch.readiness(), .notReady)
+        XCTAssertEqual(nextLaunch.persistedReadinessForTesting(), .notReady)
     }
 
-    func testAnUnknownAnswerDoesNotHoldOffTheNextProbe() {
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.timedOut), probedAt: nil)
-
-        XCTAssertFalse(WebApplePayAvailability.shared.isCacheFresh())
-    }
-
-    func testAnAnswerMeasuredAtAnotherOriginIsNotReused() {
-        let availability = WebApplePayAvailability.shared
+    func testAnAnswerMeasuredAtAnotherOriginIsNotReused() throws {
+        let availability = makeAvailability()
         injectConfig(makeWebCheckoutConfig(hasPaddleProducts: true, paddleClientToken: "test_abc123"))
 
-        availability.setReadinessForTesting(
-            .notReady,
-            probedAt: Date(),
-            origin: URL(string: prodOrigin)!
-        )
-        XCTAssertFalse(availability.isCacheFresh())
+        availability.setReadinessForTesting(.notReady, origin: URL(string: prodOrigin)!)
+        XCTAssertFalse(availability.measurementMatchesCurrentOrigin())
+        XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
 
-        availability.setReadinessForTesting(
-            .notReady,
-            probedAt: Date(),
-            origin: URL(string: sandboxOrigin)!
-        )
-        XCTAssertTrue(availability.isCacheFresh())
+        availability.setReadinessForTesting(.notReady, origin: URL(string: sandboxOrigin)!)
+        XCTAssertTrue(availability.measurementMatchesCurrentOrigin())
+        XCTAssertEqual(availability.readiness(), .notReady)
     }
 
-    func testResetDropsAMeasuredAnswer() {
-        let availability = WebApplePayAvailability.shared
-        availability.setReadinessForTesting(.notReady, probedAt: Date())
+    func testResetDropsAMeasuredAnswer() throws {
+        let availability = makeAvailability()
+        availability.apply(makeOutcome(readiness: .notReady))
 
         availability.reset()
 
         XCTAssertTrue(availability.readiness().isUnknown)
-        XCTAssertFalse(availability.isCacheFresh())
+        XCTAssertNil(availability.persistedReadinessForTesting())
+    }
+
+    // MARK: - Opting in
+
+    func testAnAppThatHasNotOptedInIsNeverProbedAndIsReportedReady() {
+        Helium.config.enableWebApplePayReadiness = false
+        configureWebCheckout(hasPaddleProducts: true)
+        WebApplePayAvailability.shared.setReadinessForTesting(.notReady, probed: false)
+
+        XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
+        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .ready)
+    }
+
+    func testOnlyOneRefreshRunsPerLaunch() {
+        configureWebCheckout(hasPaddleProducts: true)
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready, probed: true)
+
+        XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
     }
 
     // MARK: - Routing
 
-    func testPaddlePaywallIsSkippedUnlessApplePayWasMeasuredAsReady() {
+    func testReadinessDoesNotDecideWhichPaywallIsShown() {
         for readiness in [WebApplePayReadiness.notReady, .unknown(.timedOut), .unknown(.noApplePayAPI)] {
             XCTAssertEqual(
                 paddleTriggerResult(readiness: readiness).fallbackReason,
-                .webApplePayNotReady,
+                paddleTriggerResult(readiness: .ready).fallbackReason,
                 "readiness: \(readiness)"
             )
         }
-    }
-
-    func testPaddlePaywallIsKeptWhenApplePayIsReady() {
-        XCTAssertNotEqual(
-            paddleTriggerResult(readiness: .ready).fallbackReason,
-            .webApplePayNotReady
-        )
-    }
-
-    func testPaywallWithoutPaddleProductsIgnoresApplePayReadiness() {
-        XCTAssertNotEqual(
-            paddleTriggerResult(hasPaddleProducts: false, readiness: .unknown(.notMeasured)).fallbackReason,
-            .webApplePayNotReady
-        )
-    }
-
-    // MARK: - Loading budget
-
-    func testPaywallWaitsOnAProbeThatIsStillMeasuring() {
-        configureWebCheckout(hasPaddleProducts: true)
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
-        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
-
-        XCTAssertTrue(WebApplePayAvailability.shared.isMeasuring())
-        XCTAssertTrue(HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"))
-    }
-
-    func testPaywallStopsWaitingOnceTheProbeAnswers() {
-        configureWebCheckout(hasPaddleProducts: true)
-        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
-
-        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown(.timedOut)] {
-            WebApplePayAvailability.shared.apply(WebApplePayProbe.Outcome(
-                readiness: readiness,
-                durationMs: 300,
-                timedOut: false,
-                failureReason: nil
-            ))
-
-            XCTAssertFalse(WebApplePayAvailability.shared.isMeasuring(), "readiness: \(readiness)")
-            XCTAssertFalse(
-                HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"),
-                "readiness: \(readiness)"
-            )
-        }
-    }
-
-    func testPaywallWithoutPaddleProductsNeverWaitsOnAProbe() {
-        configureWebCheckout(hasPaddleProducts: false)
-        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
-
-        XCTAssertFalse(HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"))
-    }
-
-    func testAnAnsweredProbeTellsWaitingPaywallsToResolve() {
-        let resolved = expectation(
-            forNotification: WebApplePayAvailability.readinessResolved,
-            object: nil
-        )
-
-        WebApplePayAvailability.shared.apply(WebApplePayProbe.Outcome(
-            readiness: .ready,
-            durationMs: 300,
-            timedOut: false,
-            failureReason: nil
-        ))
-
-        wait(for: [resolved], timeout: 2)
     }
 
     // MARK: - Readiness reported to the server
@@ -306,17 +235,13 @@ final class WebApplePayProbeTests: XCTestCase {
         }
     }
 
-    // MARK: - Diagnostics
+    func testOnLaunchReportsReadyForAnAppThatHasNotOptedIn() {
+        Helium.config.enableWebApplePayReadiness = false
+        WebApplePayAvailability.shared.setReadinessForTesting(.notReady)
 
-    func testDiagnosticExplainsTheSkippedWebCheckoutAsExpectedBehavior() {
-        let content = DiagnosticContentMapper().mapUnavailable(
-            .webApplePayNotReady,
-            context: DiagnosticContext(trigger: "web_trigger")
-        )
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
 
-        XCTAssertEqual(content.category, .expected)
-        XCTAssertEqual(content.reasonCode, PaywallUnavailableReason.webApplePayNotReady.rawValue)
-        XCTAssertTrue(content.usersWillSee.contains("in-app purchase paywall"))
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "ready")
     }
 
     // MARK: - Telemetry
@@ -327,7 +252,9 @@ final class WebApplePayProbeTests: XCTestCase {
             durationMs: 480,
             timedOut: false,
             failureReason: nil,
-            deviceCanMakePayments: true
+            deviceCanMakePayments: true,
+            servedFromCache: nil,
+            cacheWasCorrect: nil
         )
 
         XCTAssertEqual(event.name, "web_apple_pay_probe_completed")
@@ -336,6 +263,29 @@ final class WebApplePayProbeTests: XCTestCase {
             "durationMs": 480,
             "timedOut": false,
             "deviceCanMakePayments": true,
+            "cacheHit": false,
+        ]))
+    }
+
+    func testProbeEventSaysWhetherTheCachedAnswerWasStillCorrect() throws {
+        let event = WebApplePayProbeCompleted(
+            readiness: .notReady,
+            durationMs: 480,
+            timedOut: false,
+            failureReason: nil,
+            deviceCanMakePayments: true,
+            servedFromCache: "ready",
+            cacheWasCorrect: false
+        )
+
+        XCTAssertEqual(NSDictionary(dictionary: event.properties), NSDictionary(dictionary: [
+            "readiness": "notReady",
+            "durationMs": 480,
+            "timedOut": false,
+            "deviceCanMakePayments": true,
+            "cacheHit": true,
+            "servedFromCache": "ready",
+            "cacheWasCorrect": false,
         ]))
     }
 
@@ -345,7 +295,9 @@ final class WebApplePayProbeTests: XCTestCase {
             durationMs: 2_000,
             timedOut: true,
             failureReason: "timeout",
-            deviceCanMakePayments: true
+            deviceCanMakePayments: true,
+            servedFromCache: nil,
+            cacheWasCorrect: nil
         )
 
         XCTAssertEqual(NSDictionary(dictionary: event.properties), NSDictionary(dictionary: [
@@ -353,6 +305,7 @@ final class WebApplePayProbeTests: XCTestCase {
             "durationMs": 2_000,
             "timedOut": true,
             "deviceCanMakePayments": true,
+            "cacheHit": false,
             "failureReason": "timeout",
         ]))
     }
@@ -374,16 +327,36 @@ final class WebApplePayProbeTests: XCTestCase {
         injectConfig(makeWebCheckoutConfig(hasPaddleProducts: hasPaddleProducts))
     }
 
-    private func paddleTriggerResult(
-        hasPaddleProducts: Bool = true,
-        readiness: WebApplePayReadiness
-    ) -> PaywallViewResult {
-        configureWebCheckout(hasPaddleProducts: hasPaddleProducts)
+    private func paddleTriggerResult(readiness: WebApplePayReadiness) -> PaywallViewResult {
+        configureWebCheckout(hasPaddleProducts: true)
         WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 
         return HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: "web_trigger",
             presentationContext: PaywallPresentationContext.empty
+        )
+    }
+
+    private func makeAvailability(defaults: UserDefaults? = nil) -> WebApplePayAvailability {
+        let defaults = defaults ?? (try? makeIsolatedDefaults())
+        guard let defaults else { return WebApplePayAvailability() }
+        return WebApplePayAvailability(storage: HeliumStorage(defaults: defaults))
+    }
+
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        let suite = "com.tryhelium.tests.\(name).\(UUID().uuidString)"
+        return try XCTUnwrap(UserDefaults(suiteName: suite))
+    }
+
+    private func makeOutcome(
+        readiness: WebApplePayReadiness,
+        timedOut: Bool = false
+    ) -> WebApplePayProbe.Outcome {
+        WebApplePayProbe.Outcome(
+            readiness: readiness,
+            durationMs: 120,
+            timedOut: timedOut,
+            failureReason: timedOut ? "timeout" : nil
         )
     }
 

@@ -1,38 +1,55 @@
 import Foundation
 
 /// Tracks whether Apple Pay can actually be paid with in the browser that external web
-/// checkout hands off to, so a paywall can avoid offering a checkout that will show
-/// Apple Pay as unavailable.
+/// checkout hands off to, so the readiness reported on launch reflects the browser rather
+/// than the device.
 ///
-/// The answer is cached in memory and refreshed on a timer because a Wallet card can be
-/// added or removed while the app is running. Reads never block: callers get the last
-/// known value, which is `unknown` until the first probe answers.
+/// Reads never block. The last measurement is persisted and served immediately on the next
+/// launch, and a single refresh runs in the background per launch, so a value is stale for
+/// at most one launch. This mirrors how the store country code is cached.
+///
+/// Measuring costs up to the probe timeout of work at launch, so it only happens when the
+/// host app opts in with `Helium.config.enableWebApplePayReadiness`. Opted out, readiness is
+/// reported as ready and the probe never runs.
 class WebApplePayAvailability {
     static let shared = WebApplePayAvailability()
 
-    /// Posted when a probe finishes, so a paywall waiting on a measurement can resolve as
-    /// soon as the answer lands instead of at the end of its loading budget.
-    static let readinessResolved = Notification.Name("HeliumWebApplePayReadinessResolved")
+    private static let persistedReadinessKey = "heliumWebApplePayReadiness"
+    private static let persistedOriginKey = "heliumWebApplePayReadinessOrigin"
 
-    private let cacheDuration: TimeInterval = 30 * 60
+    private let storage: HeliumStorage
 
     @HeliumAtomic private var cachedReadiness: WebApplePayReadiness = .unknown(.notMeasured)
-    @HeliumAtomic private var lastProbeTime: Date?
+    @HeliumAtomic private var persistedReadiness: WebApplePayReadiness?
     @HeliumAtomic private var probedOrigin: URL?
     @HeliumAtomic private var probeInFlight: Bool = false
     @HeliumAtomic private var probeAttempted: Bool = false
 
-    private init() {}
+    init(storage: HeliumStorage = .shared) {
+        self.storage = storage
+        loadPersistedReadiness()
+    }
 
+    /// The value sent to targeting. Opted out, every user is reported ready so a server rule
+    /// keyed on readiness leaves their behavior unchanged.
     func readiness() -> WebApplePayReadiness {
+        guard Helium.config.enableWebApplePayReadiness else { return .ready }
+        guard measurementMatchesCurrentOrigin() else { return .unknown(.notMeasured) }
         if cachedReadiness == .unknown(.notMeasured), !ApplePayHelper.shared.canMakePayments() {
             return .unknown(.deviceCannotPay)
         }
         return cachedReadiness
     }
 
-    /// Starts a probe unless one is running or the cached answer is still fresh.
-    /// Returns immediately; the result lands in the cache when the probe completes.
+    /// Readiness is measured against a merchant identifier derived from the origin, so an
+    /// answer measured elsewhere says nothing about the origin checkout now hands off to.
+    func measurementMatchesCurrentOrigin() -> Bool {
+        guard let probedOrigin, let currentOrigin = probeOrigin() else { return true }
+        return probedOrigin == currentOrigin
+    }
+
+    /// Starts the one refresh this launch gets. Returns immediately; the result lands in the
+    /// cache and in storage when the probe completes.
     func refreshIfNeeded() {
         guard shouldProbe() else { return }
         guard let origin = probeOrigin() else { return }
@@ -52,14 +69,14 @@ class WebApplePayAvailability {
     }
 
     func apply(_ outcome: WebApplePayProbe.Outcome, origin: URL? = nil) {
+        let servedFromCache = persistedReadiness
         cachedReadiness = outcome.readiness
         probedOrigin = origin
-        // An unknown outcome measured nothing, so it does not hold off the next probe.
-        lastProbeTime = outcome.readiness.isUnknown ? nil : Date()
         probeInFlight = false
-
-        Task { @MainActor in
-            NotificationCenter.default.post(name: Self.readinessResolved, object: nil)
+        // An unknown outcome measured nothing, so the persisted value stays as it is rather
+        // than being replaced by an absent measurement.
+        if !outcome.readiness.isUnknown {
+            persist(outcome.readiness, origin: origin)
         }
 
         HeliumLogger.log(.debug, category: .core, "Web Apple Pay probe completed", metadata: [
@@ -72,7 +89,9 @@ class WebApplePayAvailability {
                 durationMs: outcome.durationMs,
                 timedOut: outcome.timedOut,
                 failureReason: outcome.failureReason,
-                deviceCanMakePayments: ApplePayHelper.shared.canMakePayments()
+                deviceCanMakePayments: ApplePayHelper.shared.canMakePayments(),
+                servedFromCache: servedFromCache?.rawValue,
+                cacheWasCorrect: servedFromCache.map { $0 == outcome.readiness }
             ),
             scope: nil
         )
@@ -81,52 +100,87 @@ class WebApplePayAvailability {
     /// A device that cannot do Apple Pay at all is left as `unknown` rather than
     /// reported as not ready, so the value only ever reflects a real measurement.
     func shouldProbe() -> Bool {
-        guard Helium.config.webCheckoutProcessors.contains(.paddle) else { return false }
+        guard Helium.config.enableWebApplePayReadiness else { return false }
+        guard !Helium.config.webCheckoutProcessors.isEmpty else { return false }
         guard ApplePayHelper.shared.canMakePayments() else { return false }
-        return !isCacheFresh()
-    }
-
-    /// True while an answer is still coming. A probe that already ran and measured nothing
-    /// is not worth waiting on again, so a caller with a loading budget stops waiting.
-    func isMeasuring() -> Bool {
-        if probeInFlight { return true }
-        return !probeAttempted && shouldProbe() && probeOrigin() != nil
-    }
-
-    func isCacheFresh() -> Bool {
-        guard let lastProbe = lastProbeTime else { return false }
-        // Readiness is measured against a merchant identifier derived from the origin, so an
-        // answer measured elsewhere says nothing about the origin checkout now hands off to.
-        if let probedOrigin, probedOrigin != probeOrigin() { return false }
-        return Date().timeIntervalSince(lastProbe) < cacheDuration
+        return !probeAttempted
     }
 
     func reset() {
         cachedReadiness = .unknown(.notMeasured)
-        lastProbeTime = nil
+        persistedReadiness = nil
         probedOrigin = nil
         probeInFlight = false
         probeAttempted = false
+        storage.remove(forKey: Self.persistedReadinessKey)
+        storage.remove(forKey: Self.persistedOriginKey)
     }
 
     /// The browser evaluates Apple Pay against the origin serving checkout, and the merchant
-    /// identifier is derived from that hostname, so the probe has to load the same origin
-    /// checkout is served from.
+    /// identifier is derived from that hostname, so the probe has to load the same origin the
+    /// web paywall bundle is served from. Paddle and Stripe checkout share it.
     func probeOrigin() -> URL? {
+        if let bundleOrigin = webPaywallBundleOrigin() {
+            return bundleOrigin
+        }
         guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken else { return nil }
         return URL(string: PaddleBFFClient.sourcePageOrigin(for: clientToken))
     }
 
+    private func webPaywallBundleOrigin() -> URL? {
+        guard let paywalls = HeliumFetchedConfigManager.shared.getConfig()?.triggerToPaywalls else {
+            return nil
+        }
+        for trigger in paywalls.keys.sorted() {
+            guard let bundleUrl = paywalls[trigger]?.webPaywallBundleUrl,
+                  var components = URLComponents(string: bundleUrl),
+                  components.scheme != nil,
+                  components.host != nil else {
+                continue
+            }
+            components.path = ""
+            components.query = nil
+            components.fragment = nil
+            if let origin = components.url {
+                return origin
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Persistence
+
+    private func loadPersistedReadiness() {
+        guard let raw = storage.string(forKey: Self.persistedReadinessKey) else { return }
+        let readiness: WebApplePayReadiness
+        switch raw {
+        case "ready": readiness = .ready
+        case "notReady": readiness = .notReady
+        default: return
+        }
+        persistedReadiness = readiness
+        cachedReadiness = readiness
+        probedOrigin = storage.string(forKey: Self.persistedOriginKey).flatMap(URL.init(string:))
+    }
+
+    private func persist(_ readiness: WebApplePayReadiness, origin: URL?) {
+        persistedReadiness = readiness
+        storage.set(readiness.rawValue, forKey: Self.persistedReadinessKey)
+        storage.set(origin?.absoluteString, forKey: Self.persistedOriginKey)
+    }
+
+    // MARK: - Testing
+
     func setReadinessForTesting(
         _ readiness: WebApplePayReadiness,
-        probedAt: Date? = Date(),
+        probed: Bool = true,
         origin: URL? = nil
     ) {
         cachedReadiness = readiness
-        lastProbeTime = probedAt
+        persistedReadiness = nil
         probedOrigin = origin
         probeInFlight = false
-        probeAttempted = probedAt != nil
+        probeAttempted = probed
     }
 
     func setProbeInFlightForTesting(_ inFlight: Bool) {
@@ -134,7 +188,7 @@ class WebApplePayAvailability {
         probeAttempted = probeAttempted || inFlight
     }
 
-    func cacheDurationForTesting() -> TimeInterval {
-        return cacheDuration
+    func persistedReadinessForTesting() -> WebApplePayReadiness? {
+        persistedReadiness
     }
 }

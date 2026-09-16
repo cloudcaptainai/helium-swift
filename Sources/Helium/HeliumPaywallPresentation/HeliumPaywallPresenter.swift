@@ -148,7 +148,7 @@ class HeliumPaywallPresenter {
         
         Task { @MainActor in
             // Check if paywall is ready
-            if Helium.shared.paywallsLoaded(), !waitsForWebApplePayReadiness(trigger: trigger) {
+            if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
@@ -160,7 +160,7 @@ class HeliumPaywallPresenter {
             let downloadStatus = Helium.shared.getDownloadStatus()
             let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
             // If loading state disabled for this trigger, show fallback immediately
-            if !useLoading || (!heliumDownloadsIncoming && !waitsForWebApplePayReadiness(trigger: trigger)) {
+            if !useLoading || !heliumDownloadsIncoming {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
@@ -187,12 +187,6 @@ class HeliumPaywallPresenter {
                 self,
                 selector: #selector(handleDownloadComplete(_:)),
                 name: configDownloadEventName,
-                object: nil
-            )
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(handleDownloadComplete(_:)),
-                name: WebApplePayAvailability.readinessResolved,
                 object: nil
             )
         }
@@ -245,39 +239,16 @@ class HeliumPaywallPresenter {
     
     @objc private func handleDownloadComplete(_ notification: Notification) {
         Task { @MainActor in
-            var stillWaiting = false
             // Update any loading paywalls
             for paywall in paywallsDisplayed where paywall.isLoading {
-                if waitsForWebApplePayReadiness(trigger: paywall.trigger) {
-                    stillWaiting = true
-                    continue
-                }
                 await updateLoadingPaywall(trigger: paywall.trigger)
             }
-            if !stillWaiting {
-                removeLoadingObservers()
-            }
+            removeLoadingObservers()
         }
     }
 
     private func removeLoadingObservers() {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
-        NotificationCenter.default.removeObserver(self, name: WebApplePayAvailability.readinessResolved, object: nil)
-    }
-
-    /// True when the trigger hands off to Apple Pay only web checkout and no probe has
-    /// answered yet, so the loading budget is spent waiting for a measurement rather than
-    /// sending a payable user to the in-app purchase paywall.
-    func waitsForWebApplePayReadiness(trigger: String) -> Bool {
-        guard Helium.shared.paywallsLoaded(),
-              let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger),
-              hasPaddleProducts(paywallInfo) else {
-            return false
-        }
-        let availability = WebApplePayAvailability.shared
-        guard availability.readiness() != .ready, availability.isMeasuring() else { return false }
-        availability.refreshIfNeeded()
-        return true
     }
 
     func hasPaddleProducts(_ paywallInfo: HeliumPaywallInfo) -> Bool {
@@ -634,17 +605,6 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
 
-            // Paddle checkout offers Apple Pay only, so a browser that cannot pay with it leaves
-            // the user with a dead button. Web checkout is offered only when a probe measured
-            // the browser as ready; an unmeasured browser goes to the in-app purchase paywall.
-            if hasPaddleProducts {
-                // Picks up a Wallet change, an expired answer or one the launch probe failed to
-                // measure. It never blocks, so this presentation still uses the cached value.
-                WebApplePayAvailability.shared.refreshIfNeeded()
-            }
-            if hasPaddleProducts, WebApplePayAvailability.shared.readiness() != .ready {
-                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webApplePayNotReady, presentationContext: presentationContext)
-            }
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {
