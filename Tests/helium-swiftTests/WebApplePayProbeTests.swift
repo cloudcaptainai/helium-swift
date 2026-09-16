@@ -207,16 +207,9 @@ final class WebApplePayProbeTests: XCTestCase {
 
     // MARK: - Routing
 
-    func testPaddlePaywallIsSkippedWhenTheBrowserCannotPayWithApplePay() {
-        XCTAssertEqual(
-            paddleTriggerResult(readiness: .notReady).fallbackReason,
-            .webApplePayNotReady
-        )
-    }
-
-    func testPaddlePaywallIsKeptWhenApplePayIsReadyOrUnmeasured() {
-        for readiness in [WebApplePayReadiness.ready, .unknown] {
-            XCTAssertNotEqual(
+    func testPaddlePaywallIsSkippedUnlessApplePayWasMeasuredAsReady() {
+        for readiness in [WebApplePayReadiness.notReady, .unknown] {
+            XCTAssertEqual(
                 paddleTriggerResult(readiness: readiness).fallbackReason,
                 .webApplePayNotReady,
                 "readiness: \(readiness)"
@@ -224,9 +217,16 @@ final class WebApplePayProbeTests: XCTestCase {
         }
     }
 
+    func testPaddlePaywallIsKeptWhenApplePayIsReady() {
+        XCTAssertNotEqual(
+            paddleTriggerResult(readiness: .ready).fallbackReason,
+            .webApplePayNotReady
+        )
+    }
+
     func testPaywallWithoutPaddleProductsIgnoresApplePayReadiness() {
         XCTAssertNotEqual(
-            paddleTriggerResult(hasPaddleProducts: false, readiness: .notReady).fallbackReason,
+            paddleTriggerResult(hasPaddleProducts: false, readiness: .unknown).fallbackReason,
             .webApplePayNotReady
         )
     }
