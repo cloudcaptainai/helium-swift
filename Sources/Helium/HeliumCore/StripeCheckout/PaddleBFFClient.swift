@@ -87,10 +87,14 @@ final class PaddleBFFClient {
             : Self.prodCheckoutBaseURL
     }
 
+    static func sourcePageOrigin(for clientToken: String) -> String {
+        return clientToken.hasPrefix("test_")
+            ? sandboxSourcePageOrigin
+            : prodSourcePageOrigin
+    }
+
     private func paddleSourcePage(for clientToken: String, iosBundleId: String?) -> String {
-        let origin = clientToken.hasPrefix("test_")
-            ? Self.sandboxSourcePageOrigin
-            : Self.prodSourcePageOrigin
+        let origin = Self.sourcePageOrigin(for: clientToken)
         guard let trimmed = iosBundleId?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else {
             return origin

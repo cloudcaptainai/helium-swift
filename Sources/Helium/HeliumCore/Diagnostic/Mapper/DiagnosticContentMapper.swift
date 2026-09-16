@@ -87,6 +87,8 @@ struct DiagnosticContentMapper {
             return webCheckoutNoCustomUserId(code)
         case .webCheckoutNotEnabled:
             return webCheckoutNotEnabled(code, context)
+        case .webApplePayNotReady:
+            return webApplePayNotReady(code)
 
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             return paywallsNotDownloaded(code)
@@ -303,6 +305,20 @@ struct DiagnosticContentMapper {
             title: "Web checkout isn't enabled",
             body: body,
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
+            cta: .openUrl(label: "View Docs", url: Url.quickstart),
+            reasonCode: code
+        )
+    }
+
+    private func webApplePayNotReady(_ code: String) -> DiagnosticContent {
+        DiagnosticContent(
+            category: .expected,
+            title: "This device can't pay with Apple Pay in the browser",
+            body: "Paddle checkout offers Apple Pay only, and this device's browser reported that it "
+                + "has no card it can pay with, so web checkout was skipped.",
+            usersWillSee: "These users see this trigger's in-app purchase paywall instead of web "
+                + "checkout. Everyone else sees the web paywall normally.",
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code

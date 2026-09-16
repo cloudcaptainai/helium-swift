@@ -596,6 +596,13 @@ extension HeliumPaywallPresenter {
             if paddleBroken || stripeBroken {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
+
+            // Paddle checkout offers Apple Pay only; a browser that cannot pay with it leaves
+            // the user with a dead button, so the in-app purchase paywall is shown instead.
+            // Only a confident notReady routes; unknown keeps web checkout.
+            if hasPaddleProducts, WebApplePayAvailability.shared.readiness() == .notReady {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webApplePayNotReady, presentationContext: presentationContext)
+            }
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {

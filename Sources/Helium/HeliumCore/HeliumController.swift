@@ -39,6 +39,9 @@ class HeliumController {
                     endpoint: fetchedConfig.segmentAnalyticsEndpoint,
                     overrideIfNewConfiguration: true
                 )
+
+                // Needs the fetched Paddle client token to know which origin to probe.
+                WebApplePayAvailability.shared.refreshIfNeeded()
                 
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     PaywallsDownloadSuccessEvent(
