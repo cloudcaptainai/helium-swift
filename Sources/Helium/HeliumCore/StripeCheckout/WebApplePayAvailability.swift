@@ -10,12 +10,17 @@ import Foundation
 class WebApplePayAvailability {
     static let shared = WebApplePayAvailability()
 
+    /// Posted when a probe finishes, so a paywall waiting on a measurement can resolve as
+    /// soon as the answer lands instead of at the end of its loading budget.
+    static let readinessResolved = Notification.Name("HeliumWebApplePayReadinessResolved")
+
     private let cacheDuration: TimeInterval = 30 * 60
 
     @HeliumAtomic private var cachedReadiness: WebApplePayReadiness = .unknown
     @HeliumAtomic private var lastProbeTime: Date?
     @HeliumAtomic private var probedOrigin: URL?
     @HeliumAtomic private var probeInFlight: Bool = false
+    @HeliumAtomic private var probeAttempted: Bool = false
 
     private init() {}
 
@@ -35,6 +40,7 @@ class WebApplePayAvailability {
             return true
         }
         guard claimed else { return }
+        probeAttempted = true
 
         Task { @MainActor in
             let outcome = await WebApplePayProbe(origin: origin).run()
@@ -48,6 +54,10 @@ class WebApplePayAvailability {
         // An unknown outcome measured nothing, so it does not hold off the next probe.
         lastProbeTime = outcome.readiness == .unknown ? nil : Date()
         probeInFlight = false
+
+        Task { @MainActor in
+            NotificationCenter.default.post(name: Self.readinessResolved, object: nil)
+        }
 
         HeliumLogger.log(.debug, category: .core, "Web Apple Pay probe completed", metadata: [
             "readiness": outcome.readiness.rawValue,
@@ -73,6 +83,13 @@ class WebApplePayAvailability {
         return !isCacheFresh()
     }
 
+    /// True while an answer is still coming. A probe that already ran and measured nothing
+    /// is not worth waiting on again, so a caller with a loading budget stops waiting.
+    func isMeasuring() -> Bool {
+        if probeInFlight { return true }
+        return !probeAttempted && shouldProbe() && probeOrigin() != nil
+    }
+
     func isCacheFresh() -> Bool {
         guard let lastProbe = lastProbeTime else { return false }
         // Readiness is measured against a merchant identifier derived from the origin, so an
@@ -86,6 +103,7 @@ class WebApplePayAvailability {
         lastProbeTime = nil
         probedOrigin = nil
         probeInFlight = false
+        probeAttempted = false
     }
 
     /// The browser evaluates Apple Pay against the origin serving checkout, and the merchant
@@ -105,6 +123,12 @@ class WebApplePayAvailability {
         lastProbeTime = probedAt
         probedOrigin = origin
         probeInFlight = false
+        probeAttempted = probedAt != nil
+    }
+
+    func setProbeInFlightForTesting(_ inFlight: Bool) {
+        probeInFlight = inFlight
+        probeAttempted = probeAttempted || inFlight
     }
 
     func cacheDurationForTesting() -> TimeInterval {

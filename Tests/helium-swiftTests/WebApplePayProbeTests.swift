@@ -231,6 +231,60 @@ final class WebApplePayProbeTests: XCTestCase {
         )
     }
 
+    // MARK: - Loading budget
+
+    func testPaywallWaitsOnAProbeThatIsStillMeasuring() {
+        configureWebCheckout(hasPaddleProducts: true)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown, probedAt: nil)
+        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
+
+        XCTAssertTrue(WebApplePayAvailability.shared.isMeasuring())
+        XCTAssertTrue(HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"))
+    }
+
+    func testPaywallStopsWaitingOnceTheProbeAnswers() {
+        configureWebCheckout(hasPaddleProducts: true)
+        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
+
+        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown] {
+            WebApplePayAvailability.shared.apply(WebApplePayProbe.Outcome(
+                readiness: readiness,
+                durationMs: 300,
+                timedOut: false,
+                failureReason: nil
+            ))
+
+            XCTAssertFalse(WebApplePayAvailability.shared.isMeasuring(), "readiness: \(readiness)")
+            XCTAssertFalse(
+                HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"),
+                "readiness: \(readiness)"
+            )
+        }
+    }
+
+    func testPaywallWithoutPaddleProductsNeverWaitsOnAProbe() {
+        configureWebCheckout(hasPaddleProducts: false)
+        WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
+
+        XCTAssertFalse(HeliumPaywallPresenter.shared.waitsForWebApplePayReadiness(trigger: "web_trigger"))
+    }
+
+    func testAnAnsweredProbeTellsWaitingPaywallsToResolve() {
+        let resolved = expectation(
+            forNotification: WebApplePayAvailability.readinessResolved,
+            object: nil
+        )
+
+        WebApplePayAvailability.shared.apply(WebApplePayProbe.Outcome(
+            readiness: .ready,
+            durationMs: 300,
+            timedOut: false,
+            failureReason: nil
+        ))
+
+        wait(for: [resolved], timeout: 2)
+    }
+
     // MARK: - Readiness reported to the server
 
     func testOnLaunchCarriesTheTriStateReadinessRatherThanABoolean() {
@@ -301,10 +355,7 @@ final class WebApplePayProbeTests: XCTestCase {
         return WebApplePayProbe(origin: URL(string: prodOrigin)!, timeout: timeout)
     }
 
-    private func paddleTriggerResult(
-        hasPaddleProducts: Bool = true,
-        readiness: WebApplePayReadiness
-    ) -> PaywallViewResult {
+    private func configureWebCheckout(hasPaddleProducts: Bool) {
         Helium.shared.markInitializedForTesting()
         Helium.config.enableExternalWebCheckout(
             redirectURL: "myapp://checkout/return",
@@ -312,6 +363,13 @@ final class WebApplePayProbeTests: XCTestCase {
         )
         Helium.config.allowWebCheckoutWithoutUserId = true
         injectConfig(makeWebCheckoutConfig(hasPaddleProducts: hasPaddleProducts))
+    }
+
+    private func paddleTriggerResult(
+        hasPaddleProducts: Bool = true,
+        readiness: WebApplePayReadiness
+    ) -> PaywallViewResult {
+        configureWebCheckout(hasPaddleProducts: hasPaddleProducts)
         WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 
         return HeliumPaywallPresenter.shared.upsellViewResultFor(

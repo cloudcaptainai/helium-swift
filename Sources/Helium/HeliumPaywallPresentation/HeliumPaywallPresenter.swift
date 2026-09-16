@@ -148,7 +148,7 @@ class HeliumPaywallPresenter {
         
         Task { @MainActor in
             // Check if paywall is ready
-            if Helium.shared.paywallsLoaded() {
+            if Helium.shared.paywallsLoaded(), !waitsForWebApplePayReadiness(trigger: trigger) {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
@@ -160,7 +160,7 @@ class HeliumPaywallPresenter {
             let downloadStatus = Helium.shared.getDownloadStatus()
             let heliumDownloadsIncoming = Helium.shared.isInitialized() && (downloadStatus == .notDownloadedYet || downloadStatus == .inProgress)
             // If loading state disabled for this trigger, show fallback immediately
-            if !useLoading || !heliumDownloadsIncoming {
+            if !useLoading || (!heliumDownloadsIncoming && !waitsForWebApplePayReadiness(trigger: trigger)) {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext)
                 return
             }
@@ -179,7 +179,7 @@ class HeliumPaywallPresenter {
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
                 await updateLoadingPaywall(trigger: trigger)
-                NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
+                removeLoadingObservers()
             }
             
             // Also listen for download completion
@@ -187,6 +187,12 @@ class HeliumPaywallPresenter {
                 self,
                 selector: #selector(handleDownloadComplete(_:)),
                 name: configDownloadEventName,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleDownloadComplete(_:)),
+                name: WebApplePayAvailability.readinessResolved,
                 object: nil
             )
         }
@@ -239,12 +245,44 @@ class HeliumPaywallPresenter {
     
     @objc private func handleDownloadComplete(_ notification: Notification) {
         Task { @MainActor in
+            var stillWaiting = false
             // Update any loading paywalls
             for paywall in paywallsDisplayed where paywall.isLoading {
+                if waitsForWebApplePayReadiness(trigger: paywall.trigger) {
+                    stillWaiting = true
+                    continue
+                }
                 await updateLoadingPaywall(trigger: paywall.trigger)
             }
+            if !stillWaiting {
+                removeLoadingObservers()
+            }
         }
+    }
+
+    private func removeLoadingObservers() {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
+        NotificationCenter.default.removeObserver(self, name: WebApplePayAvailability.readinessResolved, object: nil)
+    }
+
+    /// True when the trigger hands off to Apple Pay only web checkout and no probe has
+    /// answered yet, so the loading budget is spent waiting for a measurement rather than
+    /// sending a payable user to the in-app purchase paywall.
+    func waitsForWebApplePayReadiness(trigger: String) -> Bool {
+        guard Helium.shared.paywallsLoaded(),
+              let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger),
+              hasPaddleProducts(paywallInfo) else {
+            return false
+        }
+        let availability = WebApplePayAvailability.shared
+        guard availability.readiness() != .ready, availability.isMeasuring() else { return false }
+        availability.refreshIfNeeded()
+        return true
+    }
+
+    func hasPaddleProducts(_ paywallInfo: HeliumPaywallInfo) -> Bool {
+        return !(paywallInfo.productsOfferedPaddle ?? []).isEmpty
+            || !(paywallInfo.webProductsOfferedPaddle ?? []).isEmpty
     }
     
     func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
@@ -582,8 +620,7 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
-            let hasPaddleProducts = !(templatePaywallInfo.productsOfferedPaddle ?? []).isEmpty
-                || !(templatePaywallInfo.webProductsOfferedPaddle ?? []).isEmpty
+            let hasPaddleProducts = hasPaddleProducts(templatePaywallInfo)
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
                 || !(templatePaywallInfo.webProductsOfferedStripe ?? []).isEmpty
             let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
