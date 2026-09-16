@@ -149,6 +149,8 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testNoProbeRunsForAnAppThatDoesNotUseWebCheckout() {
+        Helium.config.disableExternalWebCheckout()
+
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
     }
 
