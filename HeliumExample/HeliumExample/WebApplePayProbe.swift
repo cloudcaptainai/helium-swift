@@ -5,7 +5,7 @@
 //  SPIKE (HEL-5834): probe whether Stripe.js `canMakePayment()` returns a
 //  truthful Apple Pay availability answer from a hidden WKWebView.
 //
-//  Finding: it works — but ONLY from an https document whose hostname is
+//  Finding: it works - but ONLY from an https document whose hostname is
 //  registered for Apple Pay with the Stripe account behind the publishable
 //  key. `file://` and `about:blank` are rejected by Apple Pay as "insecure
 //  documents", so a probe cannot ride Helium's file://-loaded bundle webview;
@@ -42,6 +42,7 @@ struct ProbeResult {
 
     var applePayReady: Bool { (payload["applePayReady"] as? Bool) ?? false }
     var hasApplePaySession: Bool { (payload["hasApplePaySession"] as? Bool) ?? false }
+    var merchantId: String { (payload["merchantId"] as? String) ?? "" }
     var secureContext: Bool { (payload["secureContext"] as? Bool) ?? false }
     var stage: String { (payload["stage"] as? String) ?? (timedOut ? "timeout" : "unknown") }
 }
@@ -190,7 +191,9 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
             hasApplePaySession: (typeof window.ApplePaySession !== 'undefined'),
             applePayCanMakePayments: null,
             applePaySupportsV3: null,
-            merchantId: 'merchant.__PK__.stripe',
+            // Stripe.js derives its Apple Pay merchant id from the page hostname;
+            // any other id makes canMakePaymentsWithActiveCard() answer false.
+            merchantId: 'merchant.' + window.location.hostname + '.stripe',
             activeCard: 'pending',
             paymentCredentialStatus: 'pending'
           };

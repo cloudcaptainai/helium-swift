@@ -3,9 +3,9 @@
 //  HeliumExample
 //
 //  SPIKE (HEL-5834): side-by-side comparison of
-//    (A) web Apple Pay eligibility  — Stripe.js `canMakePayment()` in a hidden
+//    (A) web Apple Pay eligibility  - Stripe.js `canMakePayment()` in a hidden
 //        WKWebView, from an https origin registered for Apple Pay
-//    (B) in-app Apple Pay eligibility — native PassKit, mirroring ApplePayHelper
+//    (B) in-app Apple Pay eligibility - native PassKit, mirroring ApplePayHelper
 //
 //  The point of (B) next to (A) is to sanity-check the premise: is the
 //  web-vs-native "nuance" actually large enough on real devices to move the
@@ -19,7 +19,7 @@ struct ApplePayProbeSpikeView: View {
 
     // Real Paddle publishable key (publishable = public, safe client-side).
     // Must pair with an https host registered for Apple Pay in Paddle's Stripe
-    // account — see httpsBaseURL below.
+    // account - see httpsBaseURL below.
     @State private var publishableKey: String = "pk_live_51HfRouK86Yke5s34QKy5C7D8Idlp8v3znnZJeojqlZKFCefPNDM3iPiT8jRi8fNS0vXLqp3B4SiPyXOyHpbOGKmI00xcRzEy1o"
     @State private var country: String = "US"
     @State private var currency: String = "usd"
@@ -115,6 +115,7 @@ struct ApplePayProbeSpikeView: View {
             }
             if let activeCard = r.payload["activeCard"] as? String {
                 row("canMakePaymentsWithActiveCard()", activeCard)
+                row("merchantId", r.merchantId)
             }
             if let status = r.payload["paymentCredentialStatus"] as? String {
                 row("applePayCapabilities()", status)
@@ -144,7 +145,7 @@ struct ApplePayProbeSpikeView: View {
     }
 
     private var nativeSection: some View {
-        Section("In-app native (PassKit — mirrors ApplePayHelper)") {
+        Section("In-app native (PassKit - mirrors ApplePayHelper)") {
             row("canMakePayments() [device]", boolText(native.canMakePayments))
             row("has credit card in Wallet", boolText(native.hasCreditCard))
             row("has debit card in Wallet", boolText(native.hasDebitCard))
@@ -160,7 +161,7 @@ struct ApplePayProbeSpikeView: View {
                 let nativeCard = native.hasCreditCard || native.hasDebitCard
                 row("web says has card", webCard.map(boolText) ?? "unavailable")
                 row("native says has card", boolText(nativeCard))
-                row("Stripe ready (device-level)", boolText(r.applePayReady))
+                row("Stripe applePay (card-aware)", boolText(r.applePayReady))
                 if let webCard {
                     if webCard != nativeCard {
                         Text("⚠️ Card-aware signals DISAGREE, the web/native nuance is real on this device.")
