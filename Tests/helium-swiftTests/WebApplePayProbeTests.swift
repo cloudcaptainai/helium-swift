@@ -5,7 +5,6 @@ import XCTest
 final class WebApplePayProbeTests: XCTestCase {
 
     private let prodOrigin = "https://bundles.clickthrough.to"
-    private let sandboxOrigin = "https://bundles-staging.clickthrough.to"
 
     override func setUp() {
         super.setUp()
@@ -28,21 +27,8 @@ final class WebApplePayProbeTests: XCTestCase {
 
     // MARK: - Probe origin
 
-    func testProbeOriginMatchesTheOriginCheckoutIsServedFrom() {
-        XCTAssertEqual(PaddleBFFClient.sourcePageOrigin(for: "live_abc123"), prodOrigin)
-        XCTAssertEqual(PaddleBFFClient.sourcePageOrigin(for: "test_abc123"), sandboxOrigin)
-    }
-
-    func testProbeHasNoOriginBeforeConfigArrives() {
-        XCTAssertNil(WebApplePayAvailability.shared.probeOrigin())
-    }
-
-    func testProbeUsesTheOriginThePaddleTokenPointsAt() {
-        injectConfig(makeWebCheckoutConfig(hasPaddleProducts: true, paddleClientToken: "live_abc123"))
-        XCTAssertEqual(WebApplePayAvailability.shared.probeOrigin()?.absoluteString, prodOrigin)
-
-        injectConfig(makeWebCheckoutConfig(hasPaddleProducts: true, paddleClientToken: "test_abc123"))
-        XCTAssertEqual(WebApplePayAvailability.shared.probeOrigin()?.absoluteString, sandboxOrigin)
+    func testProbeMeasuresTheOriginCheckoutIsServedFrom() {
+        XCTAssertEqual(WebApplePayAvailability.probeOrigin?.absoluteString, prodOrigin)
     }
 
     // MARK: - Probe
@@ -142,12 +128,6 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertTrue(WebApplePayAvailability.shared.readiness().isUnknown)
     }
 
-    func testRefreshIsANoOpWithoutAPaddleClientToken() {
-        WebApplePayAvailability.shared.refreshIfNeeded()
-
-        XCTAssertTrue(WebApplePayAvailability.shared.readiness().isUnknown)
-    }
-
     func testNoProbeRunsForAnAppThatDoesNotUseWebCheckout() {
         Helium.config.disableExternalWebCheckout()
 
@@ -176,29 +156,6 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertEqual(nextLaunch.persistedReadinessForTesting(), .notReady)
     }
 
-    func testAnAnswerMeasuredAtAnotherOriginIsNotReused() throws {
-        let availability = makeAvailability()
-        injectConfig(makeWebCheckoutConfig(hasPaddleProducts: true, paddleClientToken: "test_abc123"))
-
-        availability.setReadinessForTesting(.notReady, origin: URL(string: prodOrigin)!)
-        XCTAssertFalse(availability.measurementMatchesCurrentOrigin())
-        XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
-
-        availability.setReadinessForTesting(.notReady, origin: URL(string: sandboxOrigin)!)
-        XCTAssertTrue(availability.measurementMatchesCurrentOrigin())
-        XCTAssertEqual(availability.readiness(), .notReady)
-    }
-
-    func testResetDropsAMeasuredAnswer() throws {
-        let availability = makeAvailability()
-        availability.apply(makeOutcome(readiness: .notReady))
-
-        availability.reset()
-
-        XCTAssertTrue(availability.readiness().isUnknown)
-        XCTAssertNil(availability.persistedReadinessForTesting())
-    }
-
     func testADeviceThatCannotPayOutranksAMeasuredAnswer() throws {
         let availability = makeAvailability()
         availability.apply(makeOutcome(readiness: .ready))
@@ -207,21 +164,6 @@ final class WebApplePayProbeTests: XCTestCase {
         ApplePayHelper.shared.setCanMakePaymentsForTesting(false)
 
         XCTAssertEqual(availability.readiness(), .unknown(.deviceCannotPay))
-    }
-
-    func testAProbeThatStartedBeforeAResetDoesNotRestoreItsAnswer() throws {
-        let availability = makeAvailability()
-        let generationBeforeReset = availability.generationForTesting()
-
-        availability.reset()
-        availability.apply(
-            makeOutcome(readiness: .notReady),
-            origin: nil,
-            generation: generationBeforeReset
-        )
-
-        XCTAssertTrue(availability.readiness().isUnknown)
-        XCTAssertNil(availability.persistedReadinessForTesting())
     }
 
     // MARK: - Opting in
@@ -391,17 +333,12 @@ final class WebApplePayProbeTests: XCTestCase {
         )
     }
 
-    private func makeWebCheckoutConfig(
-        hasPaddleProducts: Bool,
-        paddleClientToken: String? = nil
-    ) -> HeliumFetchedConfig {
+    private func makeWebCheckoutConfig(hasPaddleProducts: Bool) -> HeliumFetchedConfig {
         var paywallInfo = makeTestPaywallInfo(trigger: "web_trigger")
         if hasPaddleProducts {
             paywallInfo.productsOfferedPaddle = ["paddle_product:pri_1"]
         }
 
-        var config = makeTestConfig(triggers: ["web_trigger": paywallInfo])
-        config.paddleClientToken = paddleClientToken
-        return config
+        return makeTestConfig(triggers: ["web_trigger": paywallInfo])
     }
 }

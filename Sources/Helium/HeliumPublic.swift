@@ -67,6 +67,7 @@ public class Helium {
         )
         self.controller = fetchController
         fetchController.logInitializeEvent()
+        WebApplePayAvailability.shared.refreshIfNeeded()
         fetchController.downloadConfig()
         
         Task {
@@ -301,8 +302,6 @@ public class Helium {
             
             // Clear fetched configuration from memory
             HeliumFetchedConfigManager.reset()
-            
-            WebApplePayAvailability.shared.reset()
             
             // Completely reset all fallback configurations
             HeliumFallbackViewManager.reset()
@@ -834,12 +833,16 @@ public class HeliumConfig {
     /// Defaults to `false`.
     public var allowWebCheckoutWithoutUserId: Bool = false
 
-    /// Measures whether the browser external web checkout hands off to can actually pay with
-    /// Apple Pay, and reports it to Helium so a workflow can target on it.
+    /// Measures whether Apple Pay reports a card it can pay with at the origin external web
+    /// checkout is served from, and reports it to Helium so a workflow can target on it.
     ///
-    /// The measurement runs off an offscreen web view at launch, costs up to two seconds of
-    /// background work on the first launch, and is then served from cache and refreshed once
-    /// per launch. Nothing about presentation waits on it.
+    /// The measurement is an optimization signal rather than a guarantee. It is taken in an
+    /// offscreen web view owned by the app, not in the browser the user is handed off to, and
+    /// the Wallet can change between the measurement and checkout.
+    ///
+    /// It runs at launch, costs up to two seconds of background work on the first launch, and
+    /// is then served from cache and refreshed once per launch. Nothing about presentation
+    /// waits on it.
     ///
     /// Defaults to `false`, in which case no measurement runs and every user is reported as
     /// Apple Pay ready.

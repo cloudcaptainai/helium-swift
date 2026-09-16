@@ -179,7 +179,7 @@ class HeliumPaywallPresenter {
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(loadingBudget * 1_000_000_000))
                 await updateLoadingPaywall(trigger: trigger)
-                removeLoadingObservers()
+                NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
             }
             
             // Also listen for download completion
@@ -243,17 +243,8 @@ class HeliumPaywallPresenter {
             for paywall in paywallsDisplayed where paywall.isLoading {
                 await updateLoadingPaywall(trigger: paywall.trigger)
             }
-            removeLoadingObservers()
         }
-    }
-
-    private func removeLoadingObservers() {
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
-    }
-
-    func hasPaddleProducts(_ paywallInfo: HeliumPaywallInfo) -> Bool {
-        return !(paywallInfo.productsOfferedPaddle ?? []).isEmpty
-            || !(paywallInfo.webProductsOfferedPaddle ?? []).isEmpty
     }
     
     func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
@@ -591,7 +582,8 @@ extension HeliumPaywallPresenter {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .noProductsIOS, presentationContext: presentationContext)
             }
             
-            let hasPaddleProducts = hasPaddleProducts(templatePaywallInfo)
+            let hasPaddleProducts = !(templatePaywallInfo.productsOfferedPaddle ?? []).isEmpty
+                || !(templatePaywallInfo.webProductsOfferedPaddle ?? []).isEmpty
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
                 || !(templatePaywallInfo.webProductsOfferedStripe ?? []).isEmpty
             let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
@@ -604,7 +596,6 @@ extension HeliumPaywallPresenter {
             if paddleBroken || stripeBroken {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
-
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {

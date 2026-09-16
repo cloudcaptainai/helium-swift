@@ -19,7 +19,7 @@ public struct PaddleTransactionCheckoutResult {
 
 final class PaddleBFFClient {
 
-    private static let prodSourcePageOrigin = "https://bundles.clickthrough.to"
+    static let prodSourcePageOrigin = "https://bundles.clickthrough.to"
     private static let sandboxSourcePageOrigin = "https://bundles-staging.clickthrough.to"
 
     private static let prodCheckoutBaseURL = "https://checkout-service.paddle.com"
@@ -87,14 +87,10 @@ final class PaddleBFFClient {
             : Self.prodCheckoutBaseURL
     }
 
-    static func sourcePageOrigin(for clientToken: String) -> String {
-        return clientToken.hasPrefix("test_")
-            ? sandboxSourcePageOrigin
-            : prodSourcePageOrigin
-    }
-
     private func paddleSourcePage(for clientToken: String, iosBundleId: String?) -> String {
-        let origin = Self.sourcePageOrigin(for: clientToken)
+        let origin = clientToken.hasPrefix("test_")
+            ? Self.sandboxSourcePageOrigin
+            : Self.prodSourcePageOrigin
         guard let trimmed = iosBundleId?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else {
             return origin
