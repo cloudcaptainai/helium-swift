@@ -11,11 +11,11 @@ final class WebApplePayProbeTests: XCTestCase {
         super.setUp()
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium()
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown, probedAt: nil)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
     }
 
     override func tearDown() {
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown, probedAt: nil)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
         Helium.resetHelium()
         super.tearDown()
     }
@@ -49,7 +49,7 @@ final class WebApplePayProbeTests: XCTestCase {
         // contract is asserted: a probe answers, and it answers in bounded time.
         XCTAssertLessThan(outcome.durationMs, 5_000)
         if outcome.timedOut {
-            XCTAssertEqual(outcome.readiness, .unknown)
+            XCTAssertEqual(outcome.readiness, .unknown(.timedOut))
         }
     }
 
@@ -57,7 +57,7 @@ final class WebApplePayProbeTests: XCTestCase {
     func testProbeReportsUnknownWhenItRunsOutOfTime() async throws {
         let outcome = await makeProbe(timeout: 0).run()
 
-        XCTAssertEqual(outcome.readiness, .unknown)
+        XCTAssertEqual(outcome.readiness, .unknown(.timedOut))
         XCTAssertTrue(outcome.timedOut)
         XCTAssertEqual(outcome.failureReason, "timeout")
     }
@@ -69,7 +69,7 @@ final class WebApplePayProbeTests: XCTestCase {
         probe.webView(WKWebView(), didFailProvisionalNavigation: nil, withError: URLError(.notConnectedToInternet))
         let result = await probe.run()
 
-        XCTAssertEqual(result.readiness, .unknown)
+        XCTAssertEqual(result.readiness, .unknown(.probeFailed))
         XCTAssertFalse(result.timedOut)
         XCTAssertEqual(result.failureReason?.hasPrefix("didFailProvisional: "), true)
     }
@@ -81,7 +81,7 @@ final class WebApplePayProbeTests: XCTestCase {
         probe.webViewWebContentProcessDidTerminate(WKWebView())
         let result = await probe.run()
 
-        XCTAssertEqual(result.readiness, .unknown)
+        XCTAssertEqual(result.readiness, .unknown(.probeFailed))
         XCTAssertEqual(result.failureReason, "webContentProcessTerminated")
     }
 
@@ -111,26 +111,35 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testAPageThatCannotAnswerIsUnknownRatherThanNotReady() {
         let reported = WebApplePayProbe.result(for: ["error": "noApplePaySession"])
-        XCTAssertEqual(reported.readiness, .unknown)
+        XCTAssertEqual(reported.readiness, .unknown(.noApplePayAPI))
         XCTAssertEqual(reported.failureReason, "noApplePaySession")
 
+        let rejected = WebApplePayProbe.result(for: ["error": "activeCardRejected: boom"])
+        XCTAssertEqual(rejected.readiness, .unknown(.apiError))
+
         let unreadable = WebApplePayProbe.result(for: ["activeCard": "yes"])
-        XCTAssertEqual(unreadable.readiness, .unknown)
+        XCTAssertEqual(unreadable.readiness, .unknown(.apiError))
         XCTAssertEqual(unreadable.failureReason, "malformedResult")
 
-        XCTAssertEqual(WebApplePayProbe.result(for: [:]).readiness, .unknown)
+        XCTAssertEqual(WebApplePayProbe.result(for: [:]).readiness, .unknown(.apiError))
+    }
+
+    func testAnUnknownReadinessNamesWhyItIsUnknown() {
+        XCTAssertEqual(WebApplePayReadiness.unknown(.timedOut).rawValue, "unknown:timedOut")
+        XCTAssertEqual(WebApplePayReadiness.ready.rawValue, "ready")
+        XCTAssertNotEqual(WebApplePayReadiness.unknown(.timedOut), .unknown(.probeFailed))
     }
 
     // MARK: - Availability cache
 
     func testReadinessIsUnknownUntilAProbeAnswers() {
-        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown)
+        XCTAssertTrue(WebApplePayAvailability.shared.readiness().isUnknown)
     }
 
     func testRefreshIsANoOpWithoutAPaddleClientToken() {
         WebApplePayAvailability.shared.refreshIfNeeded()
 
-        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown)
+        XCTAssertTrue(WebApplePayAvailability.shared.readiness().isUnknown)
     }
 
     func testNoProbeRunsForAnAppThatDoesNotUseWebCheckout() {
@@ -150,12 +159,12 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertTrue(availability.isCacheFresh())
 
         availability.apply(WebApplePayProbe.Outcome(
-            readiness: .unknown,
+            readiness: .unknown(.timedOut),
             durationMs: 2_000,
             timedOut: true,
             failureReason: "timeout"
         ))
-        XCTAssertEqual(availability.readiness(), .unknown)
+        XCTAssertEqual(availability.readiness(), .unknown(.timedOut))
         XCTAssertFalse(availability.isCacheFresh())
     }
 
@@ -171,7 +180,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAnUnknownAnswerDoesNotHoldOffTheNextProbe() {
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown, probedAt: nil)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.timedOut), probedAt: nil)
 
         XCTAssertFalse(WebApplePayAvailability.shared.isCacheFresh())
     }
@@ -201,14 +210,14 @@ final class WebApplePayProbeTests: XCTestCase {
 
         availability.reset()
 
-        XCTAssertEqual(availability.readiness(), .unknown)
+        XCTAssertTrue(availability.readiness().isUnknown)
         XCTAssertFalse(availability.isCacheFresh())
     }
 
     // MARK: - Routing
 
     func testPaddlePaywallIsSkippedUnlessApplePayWasMeasuredAsReady() {
-        for readiness in [WebApplePayReadiness.notReady, .unknown] {
+        for readiness in [WebApplePayReadiness.notReady, .unknown(.timedOut), .unknown(.noApplePayAPI)] {
             XCTAssertEqual(
                 paddleTriggerResult(readiness: readiness).fallbackReason,
                 .webApplePayNotReady,
@@ -226,7 +235,7 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testPaywallWithoutPaddleProductsIgnoresApplePayReadiness() {
         XCTAssertNotEqual(
-            paddleTriggerResult(hasPaddleProducts: false, readiness: .unknown).fallbackReason,
+            paddleTriggerResult(hasPaddleProducts: false, readiness: .unknown(.notMeasured)).fallbackReason,
             .webApplePayNotReady
         )
     }
@@ -235,7 +244,7 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testPaywallWaitsOnAProbeThatIsStillMeasuring() {
         configureWebCheckout(hasPaddleProducts: true)
-        WebApplePayAvailability.shared.setReadinessForTesting(.unknown, probedAt: nil)
+        WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probedAt: nil)
         WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
 
         XCTAssertTrue(WebApplePayAvailability.shared.isMeasuring())
@@ -246,7 +255,7 @@ final class WebApplePayProbeTests: XCTestCase {
         configureWebCheckout(hasPaddleProducts: true)
         WebApplePayAvailability.shared.setProbeInFlightForTesting(true)
 
-        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown] {
+        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown(.timedOut)] {
             WebApplePayAvailability.shared.apply(WebApplePayProbe.Outcome(
                 readiness: readiness,
                 durationMs: 300,
@@ -288,7 +297,7 @@ final class WebApplePayProbeTests: XCTestCase {
     // MARK: - Readiness reported to the server
 
     func testOnLaunchCarriesTheTriStateReadinessRatherThanABoolean() {
-        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown] {
+        for readiness in [WebApplePayReadiness.ready, .notReady, .unknown(.probeFailed)] {
             WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 
             let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
@@ -332,7 +341,7 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testProbeEventCarriesTheFailureReasonWhenItHasOne() throws {
         let event = WebApplePayProbeCompleted(
-            readiness: .unknown,
+            readiness: .unknown(.timedOut),
             durationMs: 2_000,
             timedOut: true,
             failureReason: "timeout",
@@ -340,7 +349,7 @@ final class WebApplePayProbeTests: XCTestCase {
         )
 
         XCTAssertEqual(NSDictionary(dictionary: event.properties), NSDictionary(dictionary: [
-            "readiness": "unknown",
+            "readiness": "unknown:timedOut",
             "durationMs": 2_000,
             "timedOut": true,
             "deviceCanMakePayments": true,

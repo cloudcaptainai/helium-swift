@@ -2,11 +2,40 @@ import Foundation
 import WebKit
 
 /// Whether Apple Pay can be paid with in the browser, as opposed to whether the device
-/// supports Apple Pay at all. `unknown` means no probe has answered yet.
-enum WebApplePayReadiness: String {
+/// supports Apple Pay at all. `unknown` carries why the browser was not measured, which
+/// separates a browser still being measured from one the probe could not reach.
+enum WebApplePayReadiness: Equatable {
     case ready
     case notReady
-    case unknown
+    case unknown(Reason)
+
+    enum Reason: String {
+        /// No probe has answered yet.
+        case notMeasured
+        /// The device cannot use Apple Pay at all, so the browser is never probed.
+        case deviceCannotPay
+        /// The browser exposes no Apple Pay web API, so it cannot pay with Apple Pay.
+        case noApplePayAPI
+        /// Apple Pay's web API rejected the merchant or returned something unreadable,
+        /// which is a checkout configuration problem rather than a fact about the user.
+        case apiError
+        /// The probe page never ran: navigation failed or the web content process died.
+        case probeFailed
+        case timedOut
+    }
+
+    var rawValue: String {
+        switch self {
+        case .ready: return "ready"
+        case .notReady: return "notReady"
+        case .unknown(let reason): return "unknown:\(reason.rawValue)"
+        }
+    }
+
+    var isUnknown: Bool {
+        if case .unknown = self { return true }
+        return false
+    }
 }
 
 /// Runs Apple Pay's web API inside an app-owned, offscreen `WKWebView` on the same https
@@ -63,7 +92,7 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
 
             Task { [weak self, timeout] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                self?.finish(readiness: .unknown, timedOut: true, failureReason: "timeout")
+                self?.finish(readiness: .unknown(.timedOut), timedOut: true, failureReason: "timeout")
             }
         }
     }
@@ -88,21 +117,23 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
         if let activeCard = payload["activeCard"] as? Bool {
             return (activeCard ? .ready : .notReady, nil)
         }
-        return (.unknown, payload["error"] as? String ?? "malformedResult")
+        let error = payload["error"] as? String ?? "malformedResult"
+        let reason: WebApplePayReadiness.Reason = error == "noApplePaySession" ? .noApplePayAPI : .apiError
+        return (.unknown(reason), error)
     }
 
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        finish(readiness: .unknown, failureReason: "didFail: \(error.localizedDescription)")
+        finish(readiness: .unknown(.probeFailed), failureReason: "didFail: \(error.localizedDescription)")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        finish(readiness: .unknown, failureReason: "didFailProvisional: \(error.localizedDescription)")
+        finish(readiness: .unknown(.probeFailed), failureReason: "didFailProvisional: \(error.localizedDescription)")
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        finish(readiness: .unknown, failureReason: "webContentProcessTerminated")
+        finish(readiness: .unknown(.probeFailed), failureReason: "webContentProcessTerminated")
     }
 
     // MARK: - Completion

@@ -16,7 +16,7 @@ class WebApplePayAvailability {
 
     private let cacheDuration: TimeInterval = 30 * 60
 
-    @HeliumAtomic private var cachedReadiness: WebApplePayReadiness = .unknown
+    @HeliumAtomic private var cachedReadiness: WebApplePayReadiness = .unknown(.notMeasured)
     @HeliumAtomic private var lastProbeTime: Date?
     @HeliumAtomic private var probedOrigin: URL?
     @HeliumAtomic private var probeInFlight: Bool = false
@@ -25,6 +25,9 @@ class WebApplePayAvailability {
     private init() {}
 
     func readiness() -> WebApplePayReadiness {
+        if cachedReadiness == .unknown(.notMeasured), !ApplePayHelper.shared.canMakePayments() {
+            return .unknown(.deviceCannotPay)
+        }
         return cachedReadiness
     }
 
@@ -52,7 +55,7 @@ class WebApplePayAvailability {
         cachedReadiness = outcome.readiness
         probedOrigin = origin
         // An unknown outcome measured nothing, so it does not hold off the next probe.
-        lastProbeTime = outcome.readiness == .unknown ? nil : Date()
+        lastProbeTime = outcome.readiness.isUnknown ? nil : Date()
         probeInFlight = false
 
         Task { @MainActor in
@@ -99,7 +102,7 @@ class WebApplePayAvailability {
     }
 
     func reset() {
-        cachedReadiness = .unknown
+        cachedReadiness = .unknown(.notMeasured)
         lastProbeTime = nil
         probedOrigin = nil
         probeInFlight = false
