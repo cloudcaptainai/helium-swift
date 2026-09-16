@@ -6,7 +6,8 @@ import Foundation
 ///
 /// Reads never block. The last measurement is persisted and served immediately on the next
 /// launch, and a single refresh runs in the background per launch, so a value is stale for
-/// at most one launch. This mirrors how the store country code is cached.
+/// at most one launch. This mirrors how the store country code is cached. A launch with
+/// nothing persisted has no measurement to report, so that one waits for the probe.
 ///
 /// Measuring costs up to the probe timeout of work at launch, so it only happens when the
 /// host app opts in with `Helium.config.enableWebApplePayReadiness`. Opted out, readiness is
@@ -43,13 +44,37 @@ class WebApplePayAvailability {
         return cachedReadiness
     }
 
+    /// Whether this launch has no measurement to report and should wait for one.
+    func needsMeasurementBeforeLaunch() -> Bool {
+        persistedReadiness == nil && shouldProbe() && Self.probeOrigin != nil
+    }
+
     /// Starts the one refresh this launch gets. Returns immediately; the result lands in the
     /// cache and in storage when the probe completes.
     func refreshIfNeeded() {
-        guard Helium.config.enableWebApplePayReadiness else { return }
+        guard let origin = claimProbe() else { return }
+
+        Task { @MainActor in
+            let outcome = await WebApplePayProbe(origin: origin).run()
+            apply(outcome)
+        }
+    }
+
+    /// Measures now and waits, bounded by the probe's own timeout, for a launch that would
+    /// otherwise report a readiness it never measured.
+    @MainActor
+    func refreshAndWait() async {
+        guard let origin = claimProbe() else { return }
+
+        apply(await WebApplePayProbe(origin: origin).run())
+    }
+
+    /// The origin to probe, claimed for this caller, or `nil` when no probe should run.
+    private func claimProbe() -> URL? {
+        guard Helium.config.enableWebApplePayReadiness else { return nil }
         guard let origin = Self.probeOrigin else {
             HeliumLogger.log(.warn, category: .core, "No origin to measure web Apple Pay readiness at")
-            return
+            return nil
         }
         guard shouldProbe() else {
             HeliumLogger.log(.debug, category: .core, "Skipping web Apple Pay probe", metadata: [
@@ -57,7 +82,7 @@ class WebApplePayAvailability {
                 "deviceCanMakePayments": String(ApplePayHelper.shared.canMakePayments()),
                 "alreadyProbed": String(probeAttempted),
             ])
-            return
+            return nil
         }
 
         let claimed = _probeInFlight.withValue { inFlight -> Bool in
@@ -65,13 +90,9 @@ class WebApplePayAvailability {
             inFlight = true
             return true
         }
-        guard claimed else { return }
+        guard claimed else { return nil }
         probeAttempted = true
-
-        Task { @MainActor in
-            let outcome = await WebApplePayProbe(origin: origin).run()
-            apply(outcome)
-        }
+        return origin
     }
 
     func apply(_ outcome: WebApplePayProbe.Outcome) {
@@ -96,10 +117,19 @@ class WebApplePayAvailability {
                 failureReason: outcome.failureReason,
                 deviceCanMakePayments: ApplePayHelper.shared.canMakePayments(),
                 servedFromCache: servedFromCache?.rawValue,
-                cacheWasCorrect: servedFromCache.map { $0 == outcome.readiness }
+                cacheWasCorrect: Self.cacheCorrectness(of: servedFromCache, against: outcome.readiness)
             ),
             scope: nil
         )
+    }
+
+    /// Unverified, rather than incorrect, when the probe itself measured nothing.
+    static func cacheCorrectness(
+        of servedFromCache: WebApplePayReadiness?,
+        against measured: WebApplePayReadiness
+    ) -> Bool? {
+        guard !measured.isUnknown else { return nil }
+        return servedFromCache.map { $0 == measured }
     }
 
     /// A device that cannot do Apple Pay at all is left as `unknown` rather than

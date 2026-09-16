@@ -67,8 +67,18 @@ public class Helium {
         )
         self.controller = fetchController
         fetchController.logInitializeEvent()
-        WebApplePayAvailability.shared.refreshIfNeeded()
-        fetchController.downloadConfig()
+        // Targeting can only use a readiness the config request actually carries, so a launch
+        // with nothing measured yet waits for the probe; every later launch sends the stored
+        // measurement straight away and re-measures behind the request.
+        if WebApplePayAvailability.shared.needsMeasurementBeforeLaunch() {
+            Task { @MainActor in
+                await WebApplePayAvailability.shared.refreshAndWait()
+                fetchController.downloadConfig()
+            }
+        } else {
+            WebApplePayAvailability.shared.refreshIfNeeded()
+            fetchController.downloadConfig()
+        }
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
@@ -840,9 +850,9 @@ public class HeliumConfig {
     /// offscreen web view owned by the app, not in the browser the user is handed off to, and
     /// the Wallet can change between the measurement and checkout.
     ///
-    /// It runs at launch, costs up to two seconds of background work on the first launch, and
-    /// is then served from cache and refreshed once per launch. Nothing about presentation
-    /// waits on it.
+    /// The first launch after install delays the config request by up to two seconds so the
+    /// measurement can be reported; later launches report the stored measurement immediately
+    /// and re-measure in the background. Nothing about presentation waits on it.
     ///
     /// Defaults to `false`, in which case no measurement runs and every user is reported as
     /// Apple Pay ready.

@@ -177,6 +177,38 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .ready)
     }
 
+    // MARK: - Measuring before the launch request
+
+    func testAFirstLaunchWithNothingStoredWaitsForAMeasurement() throws {
+        configureWebCheckout(hasPaddleProducts: true)
+        let availability = makeAvailability()
+
+        XCTAssertTrue(availability.needsMeasurementBeforeLaunch())
+    }
+
+    func testALaunchWithAStoredMeasurementDoesNotWait() throws {
+        configureWebCheckout(hasPaddleProducts: true)
+        let defaults = try makeIsolatedDefaults()
+        makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .notReady))
+
+        let nextLaunch = makeAvailability(defaults: defaults)
+
+        XCTAssertFalse(nextLaunch.needsMeasurementBeforeLaunch())
+        XCTAssertEqual(nextLaunch.readiness(), .notReady)
+    }
+
+    func testALaunchThatWouldNotProbeAtAllDoesNotWait() throws {
+        configureWebCheckout(hasPaddleProducts: true)
+        Helium.config.enableWebApplePayReadiness = false
+
+        XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
+
+        Helium.config.enableWebApplePayReadiness = true
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(false)
+
+        XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
+    }
+
     func testOnlyOneRefreshRunsPerLaunch() {
         configureWebCheckout(hasPaddleProducts: true)
         WebApplePayAvailability.shared.setReadinessForTesting(.ready, probed: true)
@@ -260,6 +292,13 @@ final class WebApplePayProbeTests: XCTestCase {
             "servedFromCache": "ready",
             "cacheWasCorrect": false,
         ]))
+    }
+
+    func testCacheCorrectnessIsUnverifiedWhenTheProbeMeasuredNothing() throws {
+        XCTAssertNil(WebApplePayAvailability.cacheCorrectness(of: .ready, against: .unknown(.timedOut)))
+        XCTAssertNil(WebApplePayAvailability.cacheCorrectness(of: nil, against: .ready))
+        XCTAssertEqual(WebApplePayAvailability.cacheCorrectness(of: .ready, against: .ready), true)
+        XCTAssertEqual(WebApplePayAvailability.cacheCorrectness(of: .ready, against: .notReady), false)
     }
 
     func testProbeEventCarriesTheFailureReasonWhenItHasOne() throws {
