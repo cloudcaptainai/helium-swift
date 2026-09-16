@@ -24,6 +24,7 @@ class WebApplePayAvailability {
     @HeliumAtomic private var probedOrigin: URL?
     @HeliumAtomic private var probeInFlight: Bool = false
     @HeliumAtomic private var probeAttempted: Bool = false
+    @HeliumAtomic private var generation: Int = 0
 
     init(storage: HeliumStorage = .shared) {
         self.storage = storage
@@ -34,10 +35,10 @@ class WebApplePayAvailability {
     /// keyed on readiness leaves their behavior unchanged.
     func readiness() -> WebApplePayReadiness {
         guard Helium.config.enableWebApplePayReadiness else { return .ready }
+        // Apple Pay being unavailable on the device outranks any browser measurement, including
+        // one taken before restrictions or an iCloud sign-out removed it.
+        guard ApplePayHelper.shared.canMakePayments() else { return .unknown(.deviceCannotPay) }
         guard measurementMatchesCurrentOrigin() else { return .unknown(.notMeasured) }
-        if cachedReadiness == .unknown(.notMeasured), !ApplePayHelper.shared.canMakePayments() {
-            return .unknown(.deviceCannotPay)
-        }
         return cachedReadiness
     }
 
@@ -61,14 +62,17 @@ class WebApplePayAvailability {
         }
         guard claimed else { return }
         probeAttempted = true
+        let startedAt = generation
 
         Task { @MainActor in
             let outcome = await WebApplePayProbe(origin: origin).run()
-            apply(outcome, origin: origin)
+            apply(outcome, origin: origin, generation: startedAt)
         }
     }
 
-    func apply(_ outcome: WebApplePayProbe.Outcome, origin: URL? = nil) {
+    func apply(_ outcome: WebApplePayProbe.Outcome, origin: URL? = nil, generation: Int? = nil) {
+        // A probe that started before a reset measured a state the caller has thrown away.
+        if let generation, generation != self.generation { return }
         let servedFromCache = persistedReadiness
         cachedReadiness = outcome.readiness
         probedOrigin = origin
@@ -112,6 +116,7 @@ class WebApplePayAvailability {
         probedOrigin = nil
         probeInFlight = false
         probeAttempted = false
+        generation += 1
         storage.remove(forKey: Self.persistedReadinessKey)
         storage.remove(forKey: Self.persistedOriginKey)
     }
@@ -186,6 +191,10 @@ class WebApplePayAvailability {
     func setProbeInFlightForTesting(_ inFlight: Bool) {
         probeInFlight = inFlight
         probeAttempted = probeAttempted || inFlight
+    }
+
+    func generationForTesting() -> Int {
+        generation
     }
 
     func persistedReadinessForTesting() -> WebApplePayReadiness? {

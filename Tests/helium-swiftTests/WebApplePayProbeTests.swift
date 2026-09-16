@@ -12,11 +12,13 @@ final class WebApplePayProbeTests: XCTestCase {
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
         Helium.resetHelium()
         Helium.config.enableWebApplePayReadiness = true
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(true)
         WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
     }
 
     override func tearDown() {
         WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
         Helium.config.enableWebApplePayReadiness = false
         Helium.resetHelium()
         super.tearDown()
@@ -145,6 +147,8 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testNoProbeRunsForAnAppThatDoesNotUseWebCheckout() {
+        Helium.config.disableExternalWebCheckout()
+
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
     }
 
@@ -188,6 +192,31 @@ final class WebApplePayProbeTests: XCTestCase {
         availability.apply(makeOutcome(readiness: .notReady))
 
         availability.reset()
+
+        XCTAssertTrue(availability.readiness().isUnknown)
+        XCTAssertNil(availability.persistedReadinessForTesting())
+    }
+
+    func testADeviceThatCannotPayOutranksAMeasuredAnswer() throws {
+        let availability = makeAvailability()
+        availability.apply(makeOutcome(readiness: .ready))
+        XCTAssertEqual(availability.readiness(), .ready)
+
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(false)
+
+        XCTAssertEqual(availability.readiness(), .unknown(.deviceCannotPay))
+    }
+
+    func testAProbeThatStartedBeforeAResetDoesNotRestoreItsAnswer() throws {
+        let availability = makeAvailability()
+        let generationBeforeReset = availability.generationForTesting()
+
+        availability.reset()
+        availability.apply(
+            makeOutcome(readiness: .notReady),
+            origin: nil,
+            generation: generationBeforeReset
+        )
 
         XCTAssertTrue(availability.readiness().isUnknown)
         XCTAssertNil(availability.persistedReadinessForTesting())

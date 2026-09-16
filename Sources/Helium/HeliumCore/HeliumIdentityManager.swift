@@ -354,6 +354,10 @@ public class ApplePayHelper {
         return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
     }
     
+    func setCanMakePaymentsForTesting(_ canMakePayments: Bool?) {
+        cachedCanMakePayments = canMakePayments
+    }
+
     @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
     public func setStripeApplePayAvailable(_ value: Bool) {
         isStripeApplePayAvailable = value
