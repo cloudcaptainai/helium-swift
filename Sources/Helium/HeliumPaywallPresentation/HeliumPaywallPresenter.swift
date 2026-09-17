@@ -246,6 +246,13 @@ class HeliumPaywallPresenter {
         }
         NotificationCenter.default.removeObserver(self, name: configDownloadEventName, object: nil)
     }
+
+    func hasAppToWebProducts(_ paywallInfo: HeliumPaywallInfo) -> Bool {
+        return !(paywallInfo.productsOfferedPaddle ?? []).isEmpty
+            || !(paywallInfo.webProductsOfferedPaddle ?? []).isEmpty
+            || !(paywallInfo.productsOfferedStripe ?? []).isEmpty
+            || !(paywallInfo.webProductsOfferedStripe ?? []).isEmpty
+    }
     
     func createDefaultLoadingView(backgroundConfig: BackgroundConfig? = nil) -> AnyView {
         // Use shimmer view to match the app open PR approach
@@ -586,7 +593,7 @@ extension HeliumPaywallPresenter {
                 || !(templatePaywallInfo.webProductsOfferedPaddle ?? []).isEmpty
             let hasStripeProducts = !(templatePaywallInfo.productsOfferedStripe ?? []).isEmpty
                 || !(templatePaywallInfo.webProductsOfferedStripe ?? []).isEmpty
-            let hasAppToWebProducts = hasPaddleProducts || hasStripeProducts
+            let hasAppToWebProducts = hasAppToWebProducts(templatePaywallInfo)
             if hasAppToWebProducts && !HeliumIdentityManager.shared.hasCustomUserId() && !Helium.config.allowWebCheckoutWithoutUserId {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNoCustomUserId, presentationContext: presentationContext)
             }

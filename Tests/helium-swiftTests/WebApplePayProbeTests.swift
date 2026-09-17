@@ -170,7 +170,7 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testAnAppThatHasNotOptedInIsNeverProbedAndIsReportedReady() {
         Helium.config.enableWebApplePayReadiness = false
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         WebApplePayAvailability.shared.setReadinessForTesting(.notReady, probed: false)
 
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
@@ -256,7 +256,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testOnlyOneRefreshRunsPerLaunch() {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         WebApplePayAvailability.shared.setReadinessForTesting(.ready, probed: true)
 
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
@@ -265,12 +265,14 @@ final class WebApplePayProbeTests: XCTestCase {
     // MARK: - Routing
 
     func testReadinessDoesNotDecideWhichPaywallIsShown() {
-        for readiness in [WebApplePayReadiness.notReady, .unknown(.timedOut), .unknown(.noApplePayAPI)] {
-            XCTAssertEqual(
-                paddleTriggerResult(readiness: readiness).fallbackReason,
-                paddleTriggerResult(readiness: .ready).fallbackReason,
-                "readiness: \(readiness)"
-            )
+        for processor in [WebProductProcessor.paddle, .stripe] {
+            for readiness in [WebApplePayReadiness.notReady, .unknown(.timedOut), .unknown(.noApplePayAPI)] {
+                XCTAssertEqual(
+                    webTriggerResult(processor: processor, readiness: readiness).fallbackReason,
+                    webTriggerResult(processor: processor, readiness: .ready).fallbackReason,
+                    "processor: \(processor), readiness: \(readiness)"
+                )
+            }
         }
     }
 
@@ -413,23 +415,31 @@ final class WebApplePayProbeTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private enum WebProductProcessor {
+        case paddle
+        case stripe
+    }
+
     @MainActor
     private func makeProbe(timeout: TimeInterval = 30) -> WebApplePayProbe {
         return WebApplePayProbe(origin: URL(string: prodOrigin)!, timeout: timeout)
     }
 
-    private func configureWebCheckout(hasPaddleProducts: Bool) {
+    private func configureWebCheckout(processor: WebProductProcessor?) {
         Helium.shared.markInitializedForTesting()
         Helium.config.enableExternalWebCheckout(
             redirectURL: "myapp://checkout/return",
             paymentProcessors: .all
         )
         Helium.config.allowWebCheckoutWithoutUserId = true
-        injectConfig(makeWebCheckoutConfig(hasPaddleProducts: hasPaddleProducts))
+        injectConfig(makeWebCheckoutConfig(processor: processor))
     }
 
-    private func paddleTriggerResult(readiness: WebApplePayReadiness) -> PaywallViewResult {
-        configureWebCheckout(hasPaddleProducts: true)
+    private func webTriggerResult(
+        processor: WebProductProcessor?,
+        readiness: WebApplePayReadiness
+    ) -> PaywallViewResult {
+        configureWebCheckout(processor: processor)
         WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 
         return HeliumPaywallPresenter.shared.upsellViewResultFor(
@@ -461,12 +471,16 @@ final class WebApplePayProbeTests: XCTestCase {
         )
     }
 
-    private func makeWebCheckoutConfig(hasPaddleProducts: Bool) -> HeliumFetchedConfig {
+    private func makeWebCheckoutConfig(processor: WebProductProcessor?) -> HeliumFetchedConfig {
         var paywallInfo = makeTestPaywallInfo(trigger: "web_trigger")
-        if hasPaddleProducts {
+        switch processor {
+        case .paddle:
             paywallInfo.productsOfferedPaddle = ["paddle_product:pri_1"]
+        case .stripe:
+            paywallInfo.productsOfferedStripe = ["stripe_product:price_1"]
+        case nil:
+            break
         }
-
         return makeTestConfig(triggers: ["web_trigger": paywallInfo])
     }
 }
