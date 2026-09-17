@@ -128,6 +128,9 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         if navigationAction.targetFrame == nil {
+            HeliumLogger.log(.debug, category: .entitlements, "In-app web view checkout opened a popup in place", metadata: [
+                "host": navigationAction.request.url?.host ?? "unknown"
+            ])
             webView.load(navigationAction.request)
         }
         return nil

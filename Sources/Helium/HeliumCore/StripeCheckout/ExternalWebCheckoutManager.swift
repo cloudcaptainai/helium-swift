@@ -771,6 +771,12 @@ public class ExternalWebCheckoutManager: NSObject {
             // in-app checkout is over once its browser closes, and an observation kept past
             // that would let an entitlement arriving from anywhere else land as a purchase
             // on this abandoned session.
+            //
+            // The SFSafariViewController styles are the imperfect case: their toolbar can
+            // hand the page off to the user's own browser, and that tab outlives the
+            // cancel. Dropping the observation means a purchase finished there reports
+            // nothing until the next entitlement read, which is preferred over every
+            // cancelled session staying able to claim an unrelated purchase.
             let abandoned = activeCheckoutObservations.values
                 .filter { resolvedBrowserStyle(for: $0.paywallSession) != .externalBrowser }
                 .map(\.paywallSession)
