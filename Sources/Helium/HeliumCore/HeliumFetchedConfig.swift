@@ -1007,6 +1007,16 @@ public class HeliumFetchedConfigManager {
     public func getPaywallInfoForTrigger(_ trigger: String) -> HeliumPaywallInfo? {
         return fetchedConfig?.triggerToPaywalls[trigger]
     }
+
+    /// Returns Bandit's explanation for why this trigger did not resolve, when supplied.
+    func getBanditReasonForTrigger(_ trigger: String) -> String? {
+        guard let reason = fetchedConfig?.triggerToPaywallReasons?[trigger]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !reason.isEmpty else {
+            return nil
+        }
+        return reason
+    }
     
     /// Extract experiment info for a specific trigger
     /// - Parameter trigger: The trigger name to extract experiment info for
