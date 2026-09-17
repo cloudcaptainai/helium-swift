@@ -220,6 +220,41 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
     }
 
+    func testALaunchGivesUpOnAProbeSlowerThanItsBudget() async throws {
+        let availability = makeAvailability()
+
+        let startedAt = Date()
+        await availability.awaitMeasurement(upTo: 0.1)
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2)
+        XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
+    }
+
+    func testAMeasurementThatLandsAfterTheBudgetIsStillStored() async throws {
+        configureWebCheckout(hasPaddleProducts: true)
+        let defaults = try makeIsolatedDefaults()
+        let availability = makeAvailability(defaults: defaults)
+
+        await availability.awaitMeasurement(upTo: 0.1)
+        availability.apply(makeOutcome(readiness: .notReady))
+
+        XCTAssertEqual(availability.persistedReadinessForTesting(), .notReady)
+        XCTAssertFalse(makeAvailability(defaults: defaults).needsMeasurementBeforeLaunch())
+    }
+
+    func testAWaitingLaunchResumesAsSoonAsTheMeasurementLands() async throws {
+        let availability = makeAvailability()
+
+        let startedAt = Date()
+        async let waited: Void = availability.awaitMeasurement(upTo: 30)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        availability.apply(makeOutcome(readiness: .ready))
+        await waited
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5)
+        XCTAssertEqual(availability.readiness(), .ready)
+    }
+
     func testOnlyOneRefreshRunsPerLaunch() {
         configureWebCheckout(hasPaddleProducts: true)
         WebApplePayAvailability.shared.setReadinessForTesting(.ready, probed: true)

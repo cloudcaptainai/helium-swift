@@ -67,7 +67,10 @@ final class WebApplePayProbe: NSObject, WKScriptMessageHandler, WKNavigationDele
     private var continuation: CheckedContinuation<Outcome, Never>?
     private var resolvedOutcome: Outcome?
 
-    init(origin: URL, timeout: TimeInterval = 2) {
+    /// The timeout bounds how long the probe itself lives, not how long anything waits on
+    /// it: WebKit can spend seconds launching its networking and content processes before
+    /// the page runs at all, so a short lifetime would report most cold launches as unknown.
+    init(origin: URL, timeout: TimeInterval = 15) {
         self.origin = origin
         self.timeout = timeout
     }

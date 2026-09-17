@@ -7,16 +7,21 @@ import Foundation
 /// Reads never block. The last measurement is persisted and served immediately on the next
 /// launch, and a single refresh runs in the background per launch, so a value is stale for
 /// at most one launch. This mirrors how the store country code is cached. A device that has
-/// never probed has nothing to report, so the config request waits for that one measurement.
+/// never probed has nothing to report, so the config request waits for that one measurement,
+/// bounded by the launch wait budget; a probe slower than the budget outlives it and stores
+/// its measurement for the next launch.
 ///
-/// Measuring costs up to the probe timeout of work at launch, so it only happens when the
-/// host app opts in with `Helium.config.enableWebApplePayReadiness`. Opted out, readiness is
-/// reported as ready and the probe never runs.
+/// Measuring costs up to the launch wait budget of work at launch, so it only happens when
+/// the host app opts in with `Helium.config.enableWebApplePayReadiness`. Opted out, readiness
+/// is reported as ready and the probe never runs.
 class WebApplePayAvailability {
     static let shared = WebApplePayAvailability()
 
     private static let persistedReadinessKey = "heliumWebApplePayReadiness"
     private static let hasProbedKey = "heliumWebApplePayProbed"
+
+    /// How long a launch is willing to wait on a first measurement.
+    static let launchWaitBudget: TimeInterval = 2
 
     /// The browser evaluates Apple Pay against the origin serving checkout, and the merchant
     /// identifier is derived from that hostname, so the probe loads the origin web checkout
@@ -30,6 +35,7 @@ class WebApplePayAvailability {
     @HeliumAtomic private var probeInFlight: Bool = false
     @HeliumAtomic private var probeAttempted: Bool = false
     @HeliumAtomic private var probedOnAPreviousLaunch: Bool = false
+    @HeliumAtomic private var measurementWaiters: [ObjectIdentifier: MeasurementWaiter] = [:]
 
     init(storage: HeliumStorage = .shared) {
         self.storage = storage
@@ -47,35 +53,67 @@ class WebApplePayAvailability {
     }
 
     /// Readies the value the launch request carries. A device that has never probed has
-    /// nothing to report, so it waits for a measurement, bounded by the probe's own timeout;
+    /// nothing to report, so it waits for a measurement, bounded by the launch wait budget;
     /// any later launch returns at once and measures behind the request. Waiting is keyed on
     /// having probed rather than on holding a measurement, so a probe that keeps failing
-    /// costs its timeout once rather than on every launch.
+    /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
-        guard needsMeasurementBeforeLaunch() else {
-            refreshIfNeeded()
-            return
-        }
-        await refreshAndWait()
+        let waitsForMeasurement = needsMeasurementBeforeLaunch()
+        let started = startProbe()
+        guard waitsForMeasurement, started else { return }
+        await awaitMeasurement(upTo: Self.launchWaitBudget)
     }
 
     func needsMeasurementBeforeLaunch() -> Bool {
         !probedOnAPreviousLaunch && shouldProbe() && Self.probeOrigin != nil
     }
 
-    /// Starts the one refresh this launch gets. Returns immediately; the result lands in the
-    /// cache and in storage when the probe completes.
-    func refreshIfNeeded() {
+    /// Starts the one refresh this launch gets, reporting whether it started. Returns
+    /// immediately; the result lands in the cache and in storage when the probe completes,
+    /// however long after the launch request that is.
+    @discardableResult
+    func startProbe() -> Bool {
+        guard let origin = claimProbe() else { return false }
+
         Task { @MainActor in
-            await refreshAndWait()
+            self.apply(await WebApplePayProbe(origin: origin).run())
+        }
+        return true
+    }
+
+    /// Waits for a measurement, giving up after the budget. Giving up leaves the probe
+    /// running rather than cancelling it, so a launch too slow to measure still pays for
+    /// the next one.
+    func awaitMeasurement(upTo budget: TimeInterval) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let waiter = MeasurementWaiter(continuation)
+            let key = ObjectIdentifier(waiter)
+            _measurementWaiters.withValue { $0[key] = waiter }
+
+            Task { [weak self, budget] in
+                try? await Task.sleep(nanoseconds: UInt64(budget * 1_000_000_000))
+                self?.resumeWaiter(key)
+            }
+
+            // A probe that answered before this waiter registered has nothing left to wait on.
+            if probeAttempted && !probeInFlight {
+                resumeWaiter(key)
+            }
         }
     }
 
-    @MainActor
-    func refreshAndWait() async {
-        guard let origin = claimProbe() else { return }
+    private func resumeWaiter(_ key: ObjectIdentifier) {
+        let waiter = _measurementWaiters.withValue { $0.removeValue(forKey: key) }
+        waiter?.resume()
+    }
 
-        apply(await WebApplePayProbe(origin: origin).run())
+    private func resumeMeasurementWaiters() {
+        let waiters = _measurementWaiters.withValue { waiters -> [MeasurementWaiter] in
+            let pending = Array(waiters.values)
+            waiters.removeAll()
+            return pending
+        }
+        waiters.forEach { $0.resume() }
     }
 
     /// The origin to probe, claimed for this caller, or `nil` when no probe should run.
@@ -109,6 +147,7 @@ class WebApplePayAvailability {
         cachedReadiness = outcome.readiness
         probeInFlight = false
         recordProbed()
+        resumeMeasurementWaiters()
         // An unknown outcome measured nothing, so the persisted value stays as it is rather
         // than being replaced by an absent measurement.
         if !outcome.readiness.isUnknown {
@@ -194,5 +233,20 @@ class WebApplePayAvailability {
 
     func persistedReadinessForTesting() -> WebApplePayReadiness? {
         persistedReadiness
+    }
+}
+
+/// A launch waiting on a measurement, resumed by whichever of the measurement and the
+/// wait budget arrives first.
+private final class MeasurementWaiter {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
     }
 }
