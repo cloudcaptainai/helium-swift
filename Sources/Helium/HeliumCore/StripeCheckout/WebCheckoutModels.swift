@@ -12,8 +12,7 @@ public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
     case safariSheet
     /// `SFSafariViewController` full screen.
     case safariFullScreen
-    /// A `WKWebView` the app owns, in a sheet. The only style whose page the SDK can see,
-    /// and the only one Apple Pay is not available in.
+    /// A `WKWebView` that opens full screen.
     case inAppWebView
 }
 
