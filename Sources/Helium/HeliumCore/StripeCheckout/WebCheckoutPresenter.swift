@@ -12,7 +12,7 @@ enum WebCheckoutPresenter {
     static func present(
         _ url: URL,
         style: WebCheckoutBrowserStyle,
-        onBrowserDismissed: @escaping @MainActor () -> Void
+        onBrowserDismissed: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void
     ) async -> Bool {
         switch style {
         case .externalBrowser:
@@ -47,15 +47,25 @@ enum WebCheckoutPresenter {
     }
 }
 
+/// Why an in-app browser closed, which decides what the checkout it was showing can still
+/// be waiting for.
+enum WebCheckoutBrowserDismissal {
+    /// The user closed it, or the page did. A purchase may have completed first.
+    case closed
+    /// The page never rendered, so nothing can have been bought in it.
+    case neverLoaded
+}
+
 /// Shared by every in-app browser: closing is the only signal that an in-app checkout
 /// ended, since the app never backgrounds.
 @MainActor
 class WebCheckoutBrowserViewController: UIViewController {
 
-    private let onDismiss: @MainActor () -> Void
+    private let onDismiss: @MainActor (WebCheckoutBrowserDismissal) -> Void
     private var reportsDismissal = true
+    private var dismissalReason: WebCheckoutBrowserDismissal = .closed
 
-    init(onDismiss: @escaping @MainActor () -> Void) {
+    init(onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
     }
@@ -70,11 +80,18 @@ class WebCheckoutBrowserViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    /// Still reports, so the manager learns the browser is gone, but says why: a checkout
+    /// whose page never arrived has nothing left to wait for.
+    func dismissAfterFailingToLoad() {
+        dismissalReason = .neverLoaded
+        dismiss(animated: true)
+    }
+
     /// Catches a swiped-down sheet, which reaches no dismiss-button callback of any kind.
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed && reportsDismissal {
-            onDismiss()
+            onDismiss(dismissalReason)
         }
     }
 }
@@ -92,7 +109,7 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
     private var coverLifted = false
     private static let coverTimeout: TimeInterval = 8
 
-    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor () -> Void) {
+    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         safariViewController = SFSafariViewController(url: url)
         super.init(onDismiss: onDismiss)
         if fullScreen {
@@ -159,7 +176,16 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
         }
     }
 
+    /// The cover is deliberately left up on failure so it masks Safari's error page through
+    /// the dismissal. Closing rather than leaving the page for the user to reload is what
+    /// makes dropping the observation safe: a reload we stopped watching could otherwise
+    /// complete a purchase nothing would detect.
     func safariViewController(_ controller: SFSafariViewController, didCompleteInitialLoad didLoadSuccessfully: Bool) {
+        guard didLoadSuccessfully else {
+            HeliumLogger.log(.debug, category: .entitlements, "In-app Safari checkout failed to load — closing")
+            dismissAfterFailingToLoad()
+            return
+        }
         liftCover()
     }
 

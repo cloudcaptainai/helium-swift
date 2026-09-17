@@ -404,8 +404,8 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] in
-            self?.onInAppBrowserDismissed()
+        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] reason in
+            self?.onInAppBrowserDismissed(reason, paywallSession: paywallSession)
         }
         HeliumObservabilityManager.shared.track(
             WebCheckoutBrowserOpenAttempted(
@@ -530,10 +530,19 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// An in-app browser never backgrounds the app, so its closing is the only signal that
     /// checkout ended.
+    ///
+    /// A browser whose page never rendered is the one case where nothing needs checking:
+    /// there was nothing to buy in, so the session is dropped rather than left able to
+    /// claim an entitlement that arrives from somewhere else later.
     @MainActor
-    private func onInAppBrowserDismissed() {
+    private func onInAppBrowserDismissed(_ reason: WebCheckoutBrowserDismissal, paywallSession: PaywallSession) {
         isShowingInAppBrowser = false
-        checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
+        switch reason {
+        case .neverLoaded:
+            stopObserving(paywallSession: paywallSession)
+        case .closed:
+            checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
+        }
     }
 
     /// Both ways a user comes back from checkout: the app returning to the foreground, and

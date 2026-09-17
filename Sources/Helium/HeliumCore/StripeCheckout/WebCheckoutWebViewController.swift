@@ -18,7 +18,7 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     /// vanishes too fast to mean anything.
     private static let spinnerDelay: TimeInterval = 0.25
 
-    init(url: URL, onDismiss: @escaping @MainActor () -> Void) {
+    init(url: URL, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         self.url = url
         super.init(onDismiss: onDismiss)
         modalPresentationStyle = .fullScreen
@@ -112,7 +112,7 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     private func closeIfNothingEverRendered() {
         guard !hasRenderedSomething else { return }
         HeliumLogger.log(.debug, category: .entitlements, "In-app web view checkout failed to load — closing")
-        dismiss(animated: true)
+        dismissAfterFailingToLoad()
     }
 
     // MARK: - WKUIDelegate
