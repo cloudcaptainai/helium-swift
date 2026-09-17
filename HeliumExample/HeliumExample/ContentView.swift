@@ -19,11 +19,26 @@ struct ContentView: View {
     @State private var errorMessage: String = ""
     @State private var trigger: String = AppConfig.triggerKey
     @State private var userId: String = Helium.identify.userId ?? "nil"
+    @State private var launchProbeStatus: String?
 
     var body: some View {
         NavigationStack {
             formContent
                 .navigationTitle("Helium Example App")
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let launchProbeStatus {
+                Text(launchProbeStatus)
+                    .font(.footnote.weight(.semibold))
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(.yellow)
+            }
+        }
+        .task {
+            guard ProbeLaunchBenchmark.isArmed else { return }
+            launchProbeStatus = "Launch probe running..."
+            launchProbeStatus = await ProbeLaunchBenchmark.runIfArmed()
         }
     }
 

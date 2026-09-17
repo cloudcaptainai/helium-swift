@@ -36,6 +36,8 @@ struct HeliumExampleApp: App {
         
         Helium.config.enableExternalWebCheckout(redirectURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
         
+        if ProbeLaunchBenchmark.shouldSkipInitialize { return }
+
         Helium.shared.initialize(
             apiKey: apiKey
         )

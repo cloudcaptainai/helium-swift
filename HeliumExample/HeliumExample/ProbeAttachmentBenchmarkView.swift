@@ -32,6 +32,70 @@ enum ProbeAttachment: String, CaseIterable {
     }
 }
 
+@MainActor
+private func benchmarkKeyWindow() -> UIWindow? {
+    UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first { $0.isKeyWindow }
+}
+
+/// Runs one probe automatically at app start for a number of armed launches,
+/// alternating modes, so the probe is the first thing to demand WebKit's
+/// processes. State lives in UserDefaults because every sample needs a force quit.
+enum ProbeLaunchBenchmark {
+    static let remainingKey = "probeBenchmark.remainingLaunches"
+    static let skipInitializeKey = "probeBenchmark.skipInitialize"
+    static let logKey = "probeBenchmark.launchLog"
+    private static let nextModeKey = "probeBenchmark.nextMode"
+
+    static var isArmed: Bool {
+        UserDefaults.standard.integer(forKey: remainingKey) > 0
+    }
+
+    static var shouldSkipInitialize: Bool {
+        isArmed && UserDefaults.standard.bool(forKey: skipInitializeKey)
+    }
+
+    @MainActor
+    static func runIfArmed() async -> String? {
+        let defaults = UserDefaults.standard
+        let remaining = defaults.integer(forKey: remainingKey)
+        guard remaining > 0, let origin = URL(string: benchmarkDefaultOrigin) else { return nil }
+
+        let mode = ProbeAttachment(rawValue: defaults.string(forKey: nextModeKey) ?? "") ?? .detached
+        let launchedAt = CACurrentMediaTime()
+
+        // Both modes start once a key window exists so they are timed from the same point.
+        for _ in 0..<40 where benchmarkKeyWindow() == nil {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let windowWaitMs = (CACurrentMediaTime() - launchedAt) * 1000
+
+        guard let result = await AttachmentBenchmarkProbe(attachment: mode).run(origin: origin) else {
+            return "Launch probe: no key window"
+        }
+
+        // Consumed only after finishing, so a force quit mid-probe retries the same mode.
+        defaults.set(remaining - 1, forKey: remainingKey)
+        defaults.set((mode == .detached ? ProbeAttachment.inWindow : .detached).rawValue, forKey: nextModeKey)
+
+        let line = String(
+            format: "%@\tinit=%@\t%.0f ms\t%@\twindowWait=%.0f ms",
+            mode.label,
+            defaults.bool(forKey: skipInitializeKey) ? "skipped" : "on",
+            result.milliseconds,
+            result.answer,
+            windowWaitMs
+        )
+        print("PROBE_LAUNCH_RESULT\t" + line)
+        let log = defaults.string(forKey: logKey) ?? ""
+        defaults.set(log.isEmpty ? line : log + "\n" + line, forKey: logKey)
+
+        return String(format: "Launch probe done: %@ %.0f ms, %d left. Force quit and relaunch.", mode.label, result.milliseconds, remaining - 1)
+    }
+}
+
 struct BenchmarkRun: Identifiable {
     let id = UUID()
     let index: Int
@@ -57,7 +121,7 @@ private final class AttachmentBenchmarkProbe: NSObject, WKScriptMessageHandler, 
     }
 
     func run(origin: URL) async -> (milliseconds: Double, answer: String)? {
-        let window = keyWindow()
+        let window = benchmarkKeyWindow()
         if attachment == .inWindow && window == nil { return nil }
 
         let controller = WKUserContentController()
@@ -126,13 +190,6 @@ private final class AttachmentBenchmarkProbe: NSObject, WKScriptMessageHandler, 
         continuation?.resume(returning: (elapsed, answer))
     }
 
-    private func keyWindow() -> UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }
-    }
-
     private static let html = """
     <!DOCTYPE html>
     <html>
@@ -161,6 +218,10 @@ struct ProbeAttachmentBenchmarkView: View {
     @State private var runs: [BenchmarkRun] = []
     @State private var isRunning = false
     @State private var copied = false
+    @State private var launchesToArm = 10
+    @AppStorage(ProbeLaunchBenchmark.remainingKey) private var remainingLaunches = 0
+    @AppStorage(ProbeLaunchBenchmark.skipInitializeKey) private var skipInitialize = false
+    @AppStorage(ProbeLaunchBenchmark.logKey) private var launchLog = ""
 
     var body: some View {
         Form {
@@ -175,6 +236,26 @@ struct ProbeAttachmentBenchmarkView: View {
                 Text("Cold numbers only come from the first run after a force quit. Use the single-run buttons for that, and the A/B loop for warm runs.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("At-launch benchmark (true cold)") {
+                Text("Arm it, then force quit and relaunch that many times. Each launch runs one probe from app start, alternating modes, and logs it here. Wait for the banner on the home screen before quitting.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Stepper("Launches: \(launchesToArm)", value: $launchesToArm, in: 2...20, step: 2)
+                Toggle("Skip Helium.initialize on those launches", isOn: $skipInitialize)
+                Button(remainingLaunches > 0 ? "Armed: \(remainingLaunches) launches left" : "Arm") {
+                    remainingLaunches = launchesToArm
+                }
+                if remainingLaunches > 0 {
+                    Button("Disarm") { remainingLaunches = 0 }
+                }
+                if !launchLog.isEmpty {
+                    Text(launchLog)
+                        .font(.caption.monospaced())
+                    Button("Copy launch log") { UIPasteboard.general.string = launchLog }
+                    Button("Clear launch log") { launchLog = "" }
+                }
             }
 
             Section("Run") {
