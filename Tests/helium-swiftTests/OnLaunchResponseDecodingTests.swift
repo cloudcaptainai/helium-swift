@@ -35,6 +35,32 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
         XCTAssertNil(decoded.paddleClientToken)
     }
 
+    // ---------- triggerToPaywallReasons contract ----------
+
+    func testTriggerToPaywallReasonsDecodeFromJSON() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "triggerToPaywallReasons": [
+                "checkout": "App-to-Web paywalls are not available in this region.",
+            ],
+        ])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertEqual(
+            decoded.triggerToPaywallReasons?["checkout"],
+            "App-to-Web paywalls are not available in this region."
+        )
+    }
+
+    /// Existing Bandit responses and fallback bundles omit the field and must keep decoding.
+    func testTriggerToPaywallReasonsAreNilWhenAbsent() throws {
+        let json = try makeOnLaunchJSON()
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertNil(decoded.triggerToPaywallReasons)
+    }
+
     // ---------- paywallDiagnosticModalAllowedInTestFlight contract ----------
 
     func testDiagnosticModalPermissionDecodesFromJSON() throws {

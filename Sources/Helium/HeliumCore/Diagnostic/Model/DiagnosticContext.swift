@@ -19,10 +19,19 @@ struct DiagnosticContext {
     /// Carried as the typed set; how (and whether) to render it is the mapper's decision.
     let webCheckoutProcessors: WebCheckoutProcessors
 
-    init(trigger: String, paywallId: String? = nil, webCheckoutProcessors: WebCheckoutProcessors = []) {
+    /// Bandit's optional explanation for why this trigger did not resolve to a paywall.
+    let banditReason: String?
+
+    init(
+        trigger: String,
+        paywallId: String? = nil,
+        webCheckoutProcessors: WebCheckoutProcessors = [],
+        banditReason: String? = nil
+    ) {
         self.trigger = trigger
         self.paywallId = paywallId
         self.webCheckoutProcessors = webCheckoutProcessors
+        self.banditReason = banditReason
     }
 
     /// Resolves the context from live SDK state. The paywall id is best-effort: an unresolvable
@@ -31,7 +40,8 @@ struct DiagnosticContext {
         DiagnosticContext(
             trigger: trigger,
             paywallId: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallUUID,
-            webCheckoutProcessors: Helium.config.webCheckoutProcessors
+            webCheckoutProcessors: Helium.config.webCheckoutProcessors,
+            banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger)
         )
     }
 }

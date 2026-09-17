@@ -257,6 +257,37 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertFalse(content.body.contains("Currently enabled"))
     }
 
+    func testTriggerWithoutPaywallIncludesBanditReasonWhenSupplied() {
+        let content = mapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(
+                trigger: trigger,
+                banditReason: "App-to-Web paywalls are not available in this region."
+            )
+        )
+
+        XCTAssertEqual(
+            content.banditReason,
+            "App-to-Web paywalls are not available in this region."
+        )
+        XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
+        XCTAssertTrue(content.body.contains("for this user"))
+        XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
+        XCTAssertFalse(content.body.contains("Verify the trigger is in a workflow"))
+    }
+
+    func testTriggerWithoutPaywallKeepsExistingContentWhenBanditReasonIsAbsent() {
+        let content = content(for: .triggerHasNoPaywall)
+
+        XCTAssertNil(content.banditReason)
+        XCTAssertEqual(content.title, "No paywall is connected to this trigger")
+        XCTAssertTrue(content.body.contains("Verify the trigger is in a workflow"))
+        XCTAssertEqual(
+            content.usersWillSee,
+            "Users hitting this trigger see nothing. Consider adding a fallback paywall."
+        )
+    }
+
     /// The remediation must name an API that exists — `Helium.identify.userId` is the public
     /// surface for setting a custom user ID.
     func testWebCheckoutUserIdCopyNamesTheIdentifyApi() {
