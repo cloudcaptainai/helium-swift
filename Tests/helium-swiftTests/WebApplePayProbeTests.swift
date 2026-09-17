@@ -231,7 +231,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAMeasurementThatLandsAfterTheBudgetIsStillStored() async throws {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         let defaults = try makeIsolatedDefaults()
         let availability = makeAvailability(defaults: defaults)
 
