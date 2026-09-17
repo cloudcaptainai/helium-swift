@@ -261,7 +261,9 @@ public class HeliumFetchedConfigManager {
             downloadStep = .config
 
             // Pre-fetching
-            await AppStoreCountryHelper.shared.fetchStoreCountryCode()
+            async let storeCountryCode: Void = AppStoreCountryHelper.shared.fetchStoreCountryCode()
+            async let webApplePayReadiness: Void = WebApplePayAvailability.shared.prepareForRequest()
+            _ = await (storeCountryCode, webApplePayReadiness)
             
             let params: [String: Any] = [
                 "apiKey": apiKey,

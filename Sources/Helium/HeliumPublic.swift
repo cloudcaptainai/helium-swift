@@ -67,18 +67,7 @@ public class Helium {
         )
         self.controller = fetchController
         fetchController.logInitializeEvent()
-        // Targeting can only use a readiness the config request actually carries, so a launch
-        // with nothing measured yet waits for the probe; every later launch sends the stored
-        // measurement straight away and re-measures behind the request.
-        if WebApplePayAvailability.shared.needsMeasurementBeforeLaunch() {
-            Task { @MainActor in
-                await WebApplePayAvailability.shared.refreshAndWait()
-                fetchController.downloadConfig()
-            }
-        } else {
-            WebApplePayAvailability.shared.refreshIfNeeded()
-            fetchController.downloadConfig()
-        }
+        fetchController.downloadConfig()
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()

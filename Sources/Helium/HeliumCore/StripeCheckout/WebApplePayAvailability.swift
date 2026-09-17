@@ -6,8 +6,8 @@ import Foundation
 ///
 /// Reads never block. The last measurement is persisted and served immediately on the next
 /// launch, and a single refresh runs in the background per launch, so a value is stale for
-/// at most one launch. This mirrors how the store country code is cached. A launch with
-/// nothing persisted has no measurement to report, so that one waits for the probe.
+/// at most one launch. This mirrors how the store country code is cached. A device that has
+/// never probed has nothing to report, so the config request waits for that one measurement.
 ///
 /// Measuring costs up to the probe timeout of work at launch, so it only happens when the
 /// host app opts in with `Helium.config.enableWebApplePayReadiness`. Opted out, readiness is
@@ -46,9 +46,19 @@ class WebApplePayAvailability {
         return cachedReadiness
     }
 
-    /// Whether this launch should wait for a measurement before reporting readiness. Only a
-    /// launch that has never probed waits, so a probe that keeps failing costs its timeout
-    /// once rather than on every launch.
+    /// Readies the value the launch request carries. A device that has never probed has
+    /// nothing to report, so it waits for a measurement, bounded by the probe's own timeout;
+    /// any later launch returns at once and measures behind the request. Waiting is keyed on
+    /// having probed rather than on holding a measurement, so a probe that keeps failing
+    /// costs its timeout once rather than on every launch.
+    func prepareForRequest() async {
+        guard needsMeasurementBeforeLaunch() else {
+            refreshIfNeeded()
+            return
+        }
+        await refreshAndWait()
+    }
+
     func needsMeasurementBeforeLaunch() -> Bool {
         !probedOnAPreviousLaunch && shouldProbe() && Self.probeOrigin != nil
     }
@@ -64,8 +74,6 @@ class WebApplePayAvailability {
         }
     }
 
-    /// Measures now and waits, bounded by the probe's own timeout, for a launch that would
-    /// otherwise report a readiness it never measured.
     @MainActor
     func refreshAndWait() async {
         guard let origin = claimProbe() else { return }
