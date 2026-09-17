@@ -56,7 +56,10 @@ private final class AttachmentBenchmarkProbe: NSObject, WKScriptMessageHandler, 
         self.timeout = timeout
     }
 
-    func run(origin: URL) async -> (milliseconds: Double, answer: String) {
+    func run(origin: URL) async -> (milliseconds: Double, answer: String)? {
+        let window = keyWindow()
+        if attachment == .inWindow && window == nil { return nil }
+
         let controller = WKUserContentController()
         controller.add(self, name: messageName)
 
@@ -71,7 +74,7 @@ private final class AttachmentBenchmarkProbe: NSObject, WKScriptMessageHandler, 
         webView.isUserInteractionEnabled = false
         webView.alpha = 0
         if attachment == .inWindow {
-            keyWindow()?.addSubview(webView)
+            window?.addSubview(webView)
         }
         self.webView = webView
 
@@ -236,8 +239,13 @@ struct ProbeAttachmentBenchmarkView: View {
         defer { isRunning = false }
 
         for iteration in 0..<count {
-            for attachment in modes {
-                let result = await AttachmentBenchmarkProbe(attachment: attachment).run(origin: url)
+            // Alternate the order so one mode does not always inherit the other's
+            // warmed WebKit state.
+            let ordered = iteration % 2 == 0 ? modes : modes.reversed()
+            for attachment in ordered {
+                guard let result = await AttachmentBenchmarkProbe(attachment: attachment).run(origin: url) else {
+                    continue
+                }
                 runs.append(
                     BenchmarkRun(
                         index: runs.count + 1,
