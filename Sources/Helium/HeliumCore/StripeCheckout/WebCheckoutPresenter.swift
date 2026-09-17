@@ -56,6 +56,9 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
     private let safariViewController: SFSafariViewController
     private let onDismiss: @MainActor () -> Void
     private var reportsDismissal = true
+    private let cover = UIView()
+    private var coverLifted = false
+    private static let coverTimeout: TimeInterval = 8
 
     init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor () -> Void) {
         safariViewController = SFSafariViewController(url: url)
@@ -84,6 +87,40 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         safariViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(safariViewController.view)
         safariViewController.didMove(toParent: self)
+
+        addCover()
+    }
+
+    /// `SFSafariViewController` paints white until the first byte arrives, with no API to
+    /// colour it, so it is covered until the page can paint itself. In place before the
+    /// presentation animation starts, so there is no frame where the white shows.
+    private func addCover() {
+        cover.backgroundColor = .systemBackground
+        cover.frame = view.bounds
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(cover)
+
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+        cover.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: cover.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: cover.centerYAnchor),
+        ])
+    }
+
+    /// Keyed to the load rather than a timer: the wait scales with the network, so a timer
+    /// that expires early uncovers the white it exists to hide. The cap is only so a dead
+    /// connection cannot strand the user on a blank panel.
+    private func liftCover() {
+        guard !coverLifted else { return }
+        coverLifted = true
+        UIView.animate(withDuration: 0.3) {
+            self.cover.alpha = 0
+        } completion: { _ in
+            self.cover.removeFromSuperview()
+        }
     }
 
     /// For a caller that already knows checkout is over, since each report costs an
@@ -100,6 +137,18 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         if isBeingDismissed && reportsDismissal {
             onDismiss()
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.coverTimeout * 1_000_000_000))
+            self?.liftCover()
+        }
+    }
+
+    func safariViewController(_ controller: SFSafariViewController, didCompleteInitialLoad didLoadSuccessfully: Bool) {
+        liftCover()
     }
 
     /// The dismiss button only closes `SFSafariViewController` itself when it is the
