@@ -52,7 +52,6 @@ struct HeliumPaywallDiagnosticView: View {
                         triggerPill
                     }
                     bodyText
-                    banditReasonCallout
                     usersCallout
                     primaryAction
                     secondaryAction
@@ -135,34 +134,6 @@ struct HeliumPaywallDiagnosticView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 20)
-    }
-
-    /// Bandit can optionally explain why this trigger did not resolve. Kept separate from the
-    /// authored diagnosis so an absent reason leaves the existing display unchanged.
-    @ViewBuilder
-    private var banditReasonCallout: some View {
-        if let reason = content.banditReason {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("BANDIT REASON")
-                    .font(.caption2.weight(.bold))
-                    .kerning(0.8)
-                    .foregroundColor(.secondary)
-                Text(reason)
-                    .font(.subheadline)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color(.separator), lineWidth: 1)
-            )
-            .padding(.top, 20)
-        }
     }
 
     /// The outcome this modal can honestly state, or nil when a rendered fallback paywall means the

@@ -257,7 +257,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertFalse(content.body.contains("Currently enabled"))
     }
 
-    func testTriggerWithoutPaywallIncludesBanditReasonWhenSupplied() {
+    func testTriggerWithoutPaywallUsesBanditReasonAsBodyWhenSupplied() {
         let content = mapper.mapUnavailable(
             .triggerHasNoPaywall,
             context: DiagnosticContext(
@@ -267,19 +267,18 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            content.banditReason,
+            content.body,
             "App-to-Web paywalls are not available in this region."
         )
         XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
-        XCTAssertTrue(content.body.contains("for this user"))
         XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
         XCTAssertFalse(content.body.contains("Verify the trigger is in a workflow"))
+        XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
     }
 
     func testTriggerWithoutPaywallKeepsExistingContentWhenBanditReasonIsAbsent() {
         let content = content(for: .triggerHasNoPaywall)
 
-        XCTAssertNil(content.banditReason)
         XCTAssertEqual(content.title, "No paywall is connected to this trigger")
         XCTAssertTrue(content.body.contains("Verify the trigger is in a workflow"))
         XCTAssertEqual(

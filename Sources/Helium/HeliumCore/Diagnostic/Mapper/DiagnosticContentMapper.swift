@@ -258,13 +258,12 @@ struct DiagnosticContentMapper {
             return DiagnosticContent(
                 category: .setup,
                 title: "No paywall was resolved for this trigger",
-                body: "Bandit did not resolve a paywall for the trigger \"\(context.trigger)\" for this user.",
+                body: banditReason,
                 usersWillSee: "This user sees no paywall. Other users may receive one depending on "
                     + "targeting and eligibility. Consider adding a fallback paywall.",
                 usersWillSeeLink: UsersWillSee.fallbackGuideLink,
                 cta: .openUrl(label: "Open Workflows", url: Url.workflows),
-                reasonCode: code,
-                banditReason: banditReason
+                reasonCode: code
             )
         }
 
