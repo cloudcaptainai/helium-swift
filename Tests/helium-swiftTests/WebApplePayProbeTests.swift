@@ -180,14 +180,14 @@ final class WebApplePayProbeTests: XCTestCase {
     // MARK: - Measuring before the launch request
 
     func testAFirstLaunchWithNothingStoredWaitsForAMeasurement() throws {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
 
         XCTAssertTrue(availability.needsMeasurementBeforeLaunch())
     }
 
     func testALaunchWithAStoredMeasurementDoesNotWait() throws {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         let defaults = try makeIsolatedDefaults()
         makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .notReady))
 
@@ -198,7 +198,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testALaunchAfterAFailedProbeDoesNotWaitAgain() throws {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         let defaults = try makeIsolatedDefaults()
         makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .unknown(.timedOut), timedOut: true))
 
@@ -209,7 +209,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testALaunchThatWouldNotProbeAtAllDoesNotWait() throws {
-        configureWebCheckout(hasPaddleProducts: true)
+        configureWebCheckout(processor: .paddle)
         Helium.config.enableWebApplePayReadiness = false
 
         XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
