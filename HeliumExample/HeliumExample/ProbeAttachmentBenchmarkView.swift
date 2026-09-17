@@ -72,8 +72,11 @@ enum ProbeLaunchBenchmark {
         }
         let windowWaitMs = (CACurrentMediaTime() - launchedAt) * 1000
 
-        guard let result = await AttachmentBenchmarkProbe(attachment: mode).run(origin: origin) else {
-            return "Launch probe: no key window"
+        // Skip the sample in either mode when no window showed up, so slow
+        // launches are not dropped from one arm only.
+        guard benchmarkKeyWindow() != nil,
+              let result = await AttachmentBenchmarkProbe(attachment: mode).run(origin: origin) else {
+            return "Launch probe: no key window, sample skipped"
         }
 
         // Consumed only after finishing, so a force quit mid-probe retries the same mode.
@@ -233,7 +236,7 @@ struct ProbeAttachmentBenchmarkView: View {
             }
 
             Section {
-                Text("Cold numbers only come from the first run after a force quit. Use the single-run buttons for that, and the A/B loop for warm runs.")
+                Text("These buttons only measure warm runs: Helium.initialize() creates web views at launch, so WebKit is already up by the time this screen opens. Use the at-launch benchmark above for cold numbers.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
