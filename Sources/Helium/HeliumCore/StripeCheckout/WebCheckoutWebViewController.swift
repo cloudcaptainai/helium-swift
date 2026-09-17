@@ -37,6 +37,9 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
         webView.isOpaque = false
         webView.backgroundColor = .systemBackground
         webView.scrollView.backgroundColor = .systemBackground
+        // Edge to edge, as the paywall renders: the page handles its own safe areas.
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.contentInset = .zero
 
         activityIndicator.hidesWhenStopped = true
 
