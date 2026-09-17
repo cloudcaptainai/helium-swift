@@ -304,6 +304,7 @@ final class WebApplePayProbeTests: XCTestCase {
             timedOut: false,
             failureReason: nil,
             deviceCanMakePayments: true,
+            launchWaitMs: nil,
             servedFromCache: nil,
             cacheWasCorrect: nil
         )
@@ -325,6 +326,7 @@ final class WebApplePayProbeTests: XCTestCase {
             timedOut: false,
             failureReason: nil,
             deviceCanMakePayments: true,
+            launchWaitMs: nil,
             servedFromCache: "ready",
             cacheWasCorrect: false
         )
@@ -354,6 +356,7 @@ final class WebApplePayProbeTests: XCTestCase {
             timedOut: true,
             failureReason: "timeout",
             deviceCanMakePayments: true,
+            launchWaitMs: nil,
             servedFromCache: nil,
             cacheWasCorrect: nil
         )
@@ -366,6 +369,46 @@ final class WebApplePayProbeTests: XCTestCase {
             "cacheHit": false,
             "failureReason": "timeout",
         ]))
+    }
+
+    func testProbeEventCarriesHowLongTheLaunchWasHeld() throws {
+        let event = WebApplePayProbeCompleted(
+            readiness: .ready,
+            durationMs: 3_400,
+            timedOut: false,
+            failureReason: nil,
+            deviceCanMakePayments: true,
+            launchWaitMs: 2_003,
+            servedFromCache: nil,
+            cacheWasCorrect: nil
+        )
+
+        XCTAssertEqual(NSDictionary(dictionary: event.properties), NSDictionary(dictionary: [
+            "readiness": "ready",
+            "durationMs": 3_400,
+            "timedOut": false,
+            "deviceCanMakePayments": true,
+            "cacheHit": false,
+            "launchWaitMs": 2_003,
+        ]))
+    }
+
+    func testALaunchThatWaitsRecordsHowLongItWasHeld() async throws {
+        let availability = makeAvailability()
+
+        await availability.awaitMeasurement(upTo: 0.1)
+
+        let heldMs = try XCTUnwrap(availability.launchWaitMsForTesting())
+        XCTAssertGreaterThanOrEqual(heldMs, 90)
+        XCTAssertLessThan(heldMs, 2_000)
+    }
+
+    func testALaunchThatDoesNotWaitRecordsNoHeldTime() throws {
+        let availability = makeAvailability()
+
+        availability.apply(makeOutcome(readiness: .ready))
+
+        XCTAssertNil(availability.launchWaitMsForTesting())
     }
 
     // MARK: - Helpers

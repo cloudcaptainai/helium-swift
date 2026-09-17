@@ -36,6 +36,7 @@ class WebApplePayAvailability {
     @HeliumAtomic private var probeAttempted: Bool = false
     @HeliumAtomic private var probedOnAPreviousLaunch: Bool = false
     @HeliumAtomic private var measurementWaiters: [ObjectIdentifier: MeasurementWaiter] = [:]
+    @HeliumAtomic private var launchWaitMs: Int?
 
     init(storage: HeliumStorage = .shared) {
         self.storage = storage
@@ -104,7 +105,7 @@ class WebApplePayAvailability {
 
     private func resumeWaiter(_ key: ObjectIdentifier) {
         let waiter = _measurementWaiters.withValue { $0.removeValue(forKey: key) }
-        waiter?.resume()
+        if let heldMs = waiter?.resume() { launchWaitMs = heldMs }
     }
 
     private func resumeMeasurementWaiters() {
@@ -113,7 +114,7 @@ class WebApplePayAvailability {
             waiters.removeAll()
             return pending
         }
-        waiters.forEach { $0.resume() }
+        if let heldMs = waiters.compactMap({ $0.resume() }).max() { launchWaitMs = heldMs }
     }
 
     /// The origin to probe, claimed for this caller, or `nil` when no probe should run.
@@ -165,6 +166,7 @@ class WebApplePayAvailability {
                 timedOut: outcome.timedOut,
                 failureReason: outcome.failureReason,
                 deviceCanMakePayments: ApplePayHelper.shared.canMakePayments(),
+                launchWaitMs: launchWaitMs,
                 servedFromCache: servedFromCache?.rawValue,
                 cacheWasCorrect: Self.cacheCorrectness(of: servedFromCache, against: outcome.readiness)
             ),
@@ -234,19 +236,28 @@ class WebApplePayAvailability {
     func persistedReadinessForTesting() -> WebApplePayReadiness? {
         persistedReadiness
     }
+
+    func launchWaitMsForTesting() -> Int? {
+        launchWaitMs
+    }
 }
 
 /// A launch waiting on a measurement, resumed by whichever of the measurement and the
 /// wait budget arrives first.
 private final class MeasurementWaiter {
     private var continuation: CheckedContinuation<Void, Never>?
+    private let startedAt = Date()
 
     init(_ continuation: CheckedContinuation<Void, Never>) {
         self.continuation = continuation
     }
 
-    func resume() {
-        continuation?.resume()
-        continuation = nil
+    /// How long the launch was held, or `nil` when it was already resumed.
+    @discardableResult
+    func resume() -> Int? {
+        guard let continuation else { return nil }
+        self.continuation = nil
+        continuation.resume()
+        return Int(Date().timeIntervalSince(startedAt) * 1000)
     }
 }

@@ -335,6 +335,10 @@ struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
     let timedOut: Bool
     let failureReason: String?
     let deviceCanMakePayments: Bool
+    /// How long the launch request was held waiting on a measurement, absent when it was
+    /// not held at all. Capped by the launch wait budget, so it is below `durationMs`
+    /// whenever the probe outlived the launch that started it.
+    let launchWaitMs: Int?
     /// Readiness served from the persisted cache while this probe ran, if any, and whether
     /// it matched what the probe then measured.
     let servedFromCache: String?
@@ -350,6 +354,7 @@ struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
             "cacheHit": servedFromCache != nil,
         ]
         if let reason = truncatedForObservability(failureReason) { p["failureReason"] = reason }
+        if let launchWaitMs { p["launchWaitMs"] = launchWaitMs }
         if let servedFromCache { p["servedFromCache"] = servedFromCache }
         if let cacheWasCorrect { p["cacheWasCorrect"] = cacheWasCorrect }
         return p
