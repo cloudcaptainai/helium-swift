@@ -89,6 +89,11 @@ struct ContentView: View {
                     ApplePayProbeSpikeView()
                 }
                 .accessibilityIdentifier("openApplePayProbeSpike")
+
+                NavigationLink("Probe attachment benchmark (HEL-5834)") {
+                    ProbeAttachmentBenchmarkView()
+                }
+                .accessibilityIdentifier("openProbeAttachmentBenchmark")
             }
 
             Section("Test Default Paywall") {
