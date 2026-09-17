@@ -330,6 +330,44 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
     }
 }
 
+// MARK: - Web Apple Pay
+
+/// Result of running Apple Pay's web API on the origin external web checkout is served
+/// from. `deviceCanMakePayments` is the native PassKit answer, which stays true on a
+/// device with an empty Wallet, so the two together separate "no Apple Pay here" from
+/// "Apple Pay but nothing to pay with".
+struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
+    let readiness: WebApplePayReadiness
+    let durationMs: Int
+    let timedOut: Bool
+    let failureReason: String?
+    let deviceCanMakePayments: Bool
+    /// How long the launch request was held waiting on a measurement, absent when it was
+    /// not held at all. Capped by the launch wait budget, so it is below `durationMs`
+    /// whenever the probe outlived the launch that started it.
+    let launchWaitMs: Int?
+    /// Readiness served from the persisted cache while this probe ran, if any, and whether
+    /// it matched what the probe then measured.
+    let servedFromCache: String?
+    let cacheWasCorrect: Bool?
+
+    var name: String { "web_apple_pay_probe_completed" }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "readiness": readiness.rawValue,
+            "durationMs": durationMs,
+            "timedOut": timedOut,
+            "deviceCanMakePayments": deviceCanMakePayments,
+            "cacheHit": servedFromCache != nil,
+        ]
+        if let reason = truncatedForObservability(failureReason) { p["failureReason"] = reason }
+        if let launchWaitMs { p["launchWaitMs"] = launchWaitMs }
+        if let servedFromCache { p["servedFromCache"] = servedFromCache }
+        if let cacheWasCorrect { p["cacheWasCorrect"] = cacheWasCorrect }
+        return p
+    }
+}
+
 // MARK: - Paywall webview render
 
 enum PaywallJSErrorOutcome: String {

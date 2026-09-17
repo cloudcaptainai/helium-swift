@@ -832,6 +832,21 @@ public class HeliumConfig {
     /// Defaults to `false`.
     public var allowWebCheckoutWithoutUserId: Bool = false
 
+    /// Measures whether Apple Pay reports a card it can pay with at the origin external web
+    /// checkout is served from, and reports it to Helium so a workflow can target on it.
+    ///
+    /// The measurement is an optimization signal rather than a guarantee. It is taken in an
+    /// offscreen web view owned by the app, not in the browser the user is handed off to, and
+    /// the Wallet can change between the measurement and checkout.
+    ///
+    /// The first launch after install delays the config request by up to two seconds so the
+    /// measurement can be reported; later launches report the stored measurement immediately
+    /// and re-measure in the background. Nothing about presentation waits on it.
+    ///
+    /// Defaults to `false`, in which case no measurement runs and every user is reported as
+    /// Apple Pay ready.
+    public var enableWebApplePayReadiness: Bool = false
+
 }
 
 public class HeliumExperiments {

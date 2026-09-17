@@ -19,7 +19,7 @@ public struct PaddleTransactionCheckoutResult {
 
 final class PaddleBFFClient {
 
-    private static let prodSourcePageOrigin = "https://bundles.clickthrough.to"
+    static let prodSourcePageOrigin = "https://bundles.clickthrough.to"
     private static let sandboxSourcePageOrigin = "https://bundles-staging.clickthrough.to"
 
     private static let prodCheckoutBaseURL = "https://checkout-service.paddle.com"

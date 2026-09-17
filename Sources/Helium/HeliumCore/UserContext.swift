@@ -219,7 +219,8 @@ public struct CodableUserContext: Codable {
             "paddleCheckoutEligible": ApplePayHelper.shared.isPaddleCheckoutEligible(),
             "stripeCheckoutEligible": ApplePayHelper.shared.isStripeCheckoutEligible(),
             "hasApplePayCreditCard": ApplePayHelper.shared.hasApplePayCreditCard(),
-            "hasApplePayDebitCard": ApplePayHelper.shared.hasApplePayDebitCard()
+            "hasApplePayDebitCard": ApplePayHelper.shared.hasApplePayDebitCard(),
+            "webApplePayReadiness": WebApplePayAvailability.shared.readiness().rawValue
         ]
     }
 
