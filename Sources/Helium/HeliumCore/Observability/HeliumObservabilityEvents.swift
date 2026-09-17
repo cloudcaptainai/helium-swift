@@ -227,10 +227,11 @@ struct WebCheckoutFlowResolved: HeliumObservabilityEvent {
 struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     let provider: String
     let success: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_browser_open_attempted" }
     var properties: [String: Any] {
-        ["provider": provider, "success": success]
+        ["provider": provider, "success": success, "browserStyle": browserStyle]
     }
 }
 
@@ -266,6 +267,7 @@ struct WebCheckoutRedirectReceived: HeliumObservabilityEvent {
     let redirectKind: String
     let msSinceOpen: Int?
     let observationCount: Int
+    let browserStyle: String
 
     var name: String { "web_checkout_redirect_received" }
     var properties: [String: Any] {
@@ -273,6 +275,7 @@ struct WebCheckoutRedirectReceived: HeliumObservabilityEvent {
             "provider": provider,
             "redirectKind": redirectKind,
             "observationCount": observationCount,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p
@@ -290,6 +293,7 @@ struct WebCheckoutPurchaseDetected: HeliumObservabilityEvent {
     let retryAttempt: Int
     let msSinceOpen: Int?
     let wasRestore: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_purchase_detected" }
     var properties: [String: Any] {
@@ -299,6 +303,7 @@ struct WebCheckoutPurchaseDetected: HeliumObservabilityEvent {
             "source": source.rawValue,
             "retryAttempt": retryAttempt,
             "wasRestore": wasRestore,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p
@@ -310,6 +315,7 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
     let retries: Int
     let msSinceOpen: Int?
     let fromSuccessRedirect: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_purchase_check_exhausted" }
     var properties: [String: Any] {
@@ -317,6 +323,7 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
             "provider": provider,
             "retries": retries,
             "fromSuccessRedirect": fromSuccessRedirect,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p

@@ -1,5 +1,31 @@
 import Foundation
 
+/// Which browser an External Web Checkout URL opens in, and how, sent by the server per
+/// paywall. Unrelated to `HeliumPresentationStyle`, which animates the paywall itself.
+///
+/// Raw values are the wire vocabulary, so they are fixed once a dashboard emits them.
+/// Only `.externalBrowser` hands the user off to their default browser as the external
+/// purchase link entitlement expects; the Safari styles keep checkout inside the app.
+public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
+    case externalBrowser
+    /// `SFSafariViewController` as a page sheet over the paywall.
+    case safariSheet
+    /// `SFSafariViewController` full screen.
+    case safariFullScreen
+}
+
+extension KeyedDecodingContainer {
+    /// A style this SDK version does not recognize is treated as unset rather than throwing,
+    /// which would fail the entire paywall decode over one unknown string.
+    func decodeIfPresent(
+        _ type: WebCheckoutBrowserStyle.Type,
+        forKey key: Key
+    ) throws -> WebCheckoutBrowserStyle? {
+        guard let rawValue = try? decodeIfPresent(String.self, forKey: key) else { return nil }
+        return WebCheckoutBrowserStyle(rawValue: rawValue)
+    }
+}
+
 /// Which of the configured checkout redirect URLs the user returned through.
 public enum HeliumCheckoutRedirectType: String {
     case success
