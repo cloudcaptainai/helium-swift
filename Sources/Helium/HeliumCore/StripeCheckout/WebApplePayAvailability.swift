@@ -66,11 +66,8 @@ class WebApplePayAvailability {
     /// Starts the one refresh this launch gets. Returns immediately; the result lands in the
     /// cache and in storage when the probe completes.
     func refreshIfNeeded() {
-        guard let origin = claimProbe() else { return }
-
         Task { @MainActor in
-            let outcome = await WebApplePayProbe(origin: origin).run()
-            apply(outcome)
+            await refreshAndWait()
         }
     }
 
