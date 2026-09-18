@@ -72,8 +72,8 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
 
     // MARK: - WKNavigationDelegate
 
-    /// Only Helium's own redirect is intercepted. Checkout legitimately navigates off-site
-    /// for 3DS and bank challenges, and blocking those would strand the purchase.
+    /// Only Helium's own redirect is intercepted. Anything else a checkout navigates to is
+    /// its own business, and blocking it would strand the purchase.
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
@@ -117,10 +117,13 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
 
     // MARK: - WKUIDelegate
 
-    /// A `WKWebView` drops `target="_blank"` and `window.open` unless this is implemented,
-    /// with no error of any kind — the tap simply does nothing. Loading it in place keeps
-    /// the original request rather than rebuilding one from its URL, which would lose the
-    /// method and body a form post carries.
+    /// Checkout is Apple Pay only and opens no popups, so nothing reaches this today. It
+    /// exists because a `WKWebView` drops `target="_blank"` and `window.open` when it is
+    /// absent, with no error of any kind — the tap simply does nothing, which is close to
+    /// undiagnosable if the page ever gains a payment method that needs one.
+    ///
+    /// The original request is loaded rather than one rebuilt from its URL, which would
+    /// lose the method and body a form post carries.
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
@@ -128,9 +131,6 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         if navigationAction.targetFrame == nil {
-            HeliumLogger.log(.debug, category: .entitlements, "In-app web view checkout opened a popup in place", metadata: [
-                "host": navigationAction.request.url?.host ?? "unknown"
-            ])
             webView.load(navigationAction.request)
         }
         return nil
