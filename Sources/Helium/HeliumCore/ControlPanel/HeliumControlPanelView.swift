@@ -401,6 +401,7 @@ struct HeliumControlPanelView: View {
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
                     webPaywallBundleUrl: version.webPaywallBundleUrl,
                     shouldEnableScroll: version.shouldEnableScroll,
+                    webCheckoutBrowserStyle: paywall.webCheckoutBrowserStyle,
                     identity: HeliumFetchedConfigManager.PreviewPaywallIdentity(
                         paywallId: paywall.paywallId,
                         paywallUuid: paywall.paywallUuid,

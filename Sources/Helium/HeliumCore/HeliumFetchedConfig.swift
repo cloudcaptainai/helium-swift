@@ -1165,6 +1165,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle? = nil,
         identity: PreviewPaywallIdentity? = nil,
         secondTry: PreviewSecondTryBundle? = nil
     ) throws {
@@ -1186,6 +1187,7 @@ public class HeliumFetchedConfigManager {
                 productIdsStripeWeb: productIdsStripeWeb,
                 webPaywallBundleUrl: webPaywallBundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
+                webCheckoutBrowserStyle: webCheckoutBrowserStyle,
                 identity: identity,
                 secondTry: secondTry
             )
@@ -1221,6 +1223,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
         identity: PreviewPaywallIdentity?,
         secondTry: PreviewSecondTryBundle?
     ) throws -> String {
@@ -1242,6 +1245,7 @@ public class HeliumFetchedConfigManager {
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll,
+            webCheckoutBrowserStyle: webCheckoutBrowserStyle,
             identity: identity
         )
 
@@ -1258,6 +1262,7 @@ public class HeliumFetchedConfigManager {
                 productIdsStripeWeb: [],
                 webPaywallBundleUrl: nil,
                 shouldEnableScroll: secondTry.shouldEnableScroll,
+                webCheckoutBrowserStyle: nil,
                 identity: secondTry.identity
             )
         } else {
@@ -1287,6 +1292,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
         identity: PreviewPaywallIdentity?
     ) throws -> HeliumPaywallInfo {
         var previewPaywallInfo = donorPaywallInfo
@@ -1325,6 +1331,8 @@ public class HeliumFetchedConfigManager {
             additionalFields["webPaywallBundleUrl"] = JSON.null
         }
         previewPaywallInfo.additionalPaywallFields = additionalFields
+
+        previewPaywallInfo.webCheckoutBrowserStyle = webCheckoutBrowserStyle
 
         previewPaywallInfo.productsOfferedIOS = productIds
         previewPaywallInfo.productsOfferedStripe = productIdsStripe
