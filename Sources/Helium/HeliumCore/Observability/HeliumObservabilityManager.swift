@@ -59,11 +59,20 @@ class HeliumObservabilityManager {
     ) -> [String: Any] {
         var p = eventProps
         p["sdkVersion"] = BuildConstants.version
+        p["sdkVersionWrapper"] = HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        p["wrapperSdk"] = HeliumSdkConfig.shared.heliumSdk
         p["heliumPersistentId"] = HeliumIdentityManager.shared.getHeliumPersistentId()
         p["userId"] = HeliumIdentityManager.shared.getResolvedUserId()
         p["hasCustomUserId"] = HeliumIdentityManager.shared.hasCustomUserId()
         if let rcId = HeliumIdentityManager.shared.revenueCatAppUserId {
             p["revenueCatAppUserId"] = rcId
+        }
+        if let thirdPartyId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId() {
+            p["thirdPartyAnalyticsAnonymousId"] = thirdPartyId
+        }
+        if let anonymousId = HeliumAnalyticsManager.shared.getActiveAnalyticsInstance()?.anonymousId,
+           !anonymousId.isEmpty {
+            p["anonymousId"] = anonymousId
         }
         p["heliumSessionId"] = HeliumIdentityManager.shared.getHeliumSessionId()
         if let scope {
@@ -72,6 +81,7 @@ class HeliumObservabilityManager {
             if let uuid = scope.paywallUUID {
                 p["paywallUUID"] = uuid
             }
+            p["isFallback"] = scope.isFallback
         }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             p["organizationId"] = orgId
