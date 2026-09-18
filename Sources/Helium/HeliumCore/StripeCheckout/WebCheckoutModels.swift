@@ -12,6 +12,8 @@ public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
     case safariSheet
     /// `SFSafariViewController` full screen.
     case safariFullScreen
+    /// A `WKWebView` that opens full screen.
+    case inAppWebView
 }
 
 extension KeyedDecodingContainer {

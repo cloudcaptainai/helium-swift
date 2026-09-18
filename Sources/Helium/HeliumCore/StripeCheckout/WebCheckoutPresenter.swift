@@ -5,26 +5,28 @@ import SafariServices
 @MainActor
 enum WebCheckoutPresenter {
 
-    private static weak var presentedBrowser: WebCheckoutSafariViewController?
+    private static weak var presentedBrowser: WebCheckoutBrowserViewController?
 
     /// Returns whether the browser was shown. `onBrowserDismissed` fires only for the
     /// in-app styles, which close without the app ever backgrounding.
     static func present(
         _ url: URL,
         style: WebCheckoutBrowserStyle,
-        onBrowserDismissed: @escaping @MainActor () -> Void
+        onBrowserDismissed: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void
     ) async -> Bool {
         switch style {
         case .externalBrowser:
             return await UIApplication.shared.open(url)
 
-        case .safariSheet, .safariFullScreen:
+        case .safariSheet, .safariFullScreen, .inAppWebView:
             guard let presenter = UIWindowHelper.findTopMostViewController() else { return false }
-            let browser = WebCheckoutSafariViewController(
-                url: url,
-                fullScreen: style == .safariFullScreen,
-                onDismiss: onBrowserDismissed
-            )
+            let browser: WebCheckoutBrowserViewController = style == .inAppWebView
+                ? WebCheckoutWebViewController(url: url, onDismiss: onBrowserDismissed)
+                : WebCheckoutSafariViewController(
+                    url: url,
+                    fullScreen: style == .safariFullScreen,
+                    onDismiss: onBrowserDismissed
+                )
             presentedBrowser = browser
             return await presentModally(browser, from: presenter)
         }
@@ -45,25 +47,71 @@ enum WebCheckoutPresenter {
     }
 }
 
+/// Why an in-app browser closed, which decides what the checkout it was showing can still
+/// be waiting for.
+enum WebCheckoutBrowserDismissal {
+    /// The user closed it, or the page did. A purchase may have completed first.
+    case closed
+    /// The page never rendered, so nothing can have been bought in it.
+    case neverLoaded
+}
+
+/// Shared by every in-app browser: closing is the only signal that an in-app checkout
+/// ended, since the app never backgrounds.
+@MainActor
+class WebCheckoutBrowserViewController: UIViewController {
+
+    private let onDismiss: @MainActor (WebCheckoutBrowserDismissal) -> Void
+    private var reportsDismissal = true
+    private var dismissalReason: WebCheckoutBrowserDismissal = .closed
+
+    init(onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
+        self.onDismiss = onDismiss
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// For a caller that already knows checkout is over, since each report costs an
+    /// entitlement refresh.
+    func dismissWithoutReporting() {
+        reportsDismissal = false
+        dismiss(animated: true)
+    }
+
+    /// Still reports, so the manager learns the browser is gone, but says why: a checkout
+    /// whose page never arrived has nothing left to wait for.
+    func dismissAfterFailingToLoad() {
+        dismissalReason = .neverLoaded
+        dismiss(animated: true)
+    }
+
+    /// Catches a swiped-down sheet, which reaches no dismiss-button callback of any kind.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed && reportsDismissal {
+            onDismiss(dismissalReason)
+        }
+    }
+}
+
 /// Hosts an `SFSafariViewController` as a child so its dismissal can be observed.
 ///
 /// Presented on its own it installs a transitioning delegate that animates sideways like
 /// a navigation push and overrides `modalTransitionStyle`; as a child, the container's
 /// transition governs instead.
 @MainActor
-final class WebCheckoutSafariViewController: UIViewController, @preconcurrency SFSafariViewControllerDelegate {
+final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @preconcurrency SFSafariViewControllerDelegate {
 
     private let safariViewController: SFSafariViewController
-    private let onDismiss: @MainActor () -> Void
-    private var reportsDismissal = true
     private let cover = UIView()
     private var coverLifted = false
     private static let coverTimeout: TimeInterval = 8
 
-    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor () -> Void) {
+    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         safariViewController = SFSafariViewController(url: url)
-        self.onDismiss = onDismiss
-        super.init(nibName: nil, bundle: nil)
+        super.init(onDismiss: onDismiss)
         if fullScreen {
             modalPresentationStyle = .fullScreen
             modalTransitionStyle = .coverVertical
@@ -72,9 +120,6 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         }
         safariViewController.delegate = self
     }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var childForStatusBarStyle: UIViewController? { safariViewController }
 
@@ -123,22 +168,6 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         }
     }
 
-    /// For a caller that already knows checkout is over, since each report costs an
-    /// entitlement refresh.
-    func dismissWithoutReporting() {
-        reportsDismissal = false
-        dismiss(animated: true)
-    }
-
-    /// A swiped-down sheet never reaches `safariViewControllerDidFinish`, so dismissal is
-    /// observed here instead.
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        if isBeingDismissed && reportsDismissal {
-            onDismiss()
-        }
-    }
-
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         Task { @MainActor [weak self] in
@@ -147,7 +176,16 @@ final class WebCheckoutSafariViewController: UIViewController, @preconcurrency S
         }
     }
 
+    /// The cover is deliberately left up on failure so it masks Safari's error page through
+    /// the dismissal. Closing rather than leaving the page for the user to reload is what
+    /// makes dropping the observation safe: a reload we stopped watching could otherwise
+    /// complete a purchase nothing would detect.
     func safariViewController(_ controller: SFSafariViewController, didCompleteInitialLoad didLoadSuccessfully: Bool) {
+        guard didLoadSuccessfully else {
+            HeliumLogger.log(.debug, category: .entitlements, "In-app Safari checkout failed to load — closing")
+            dismissAfterFailingToLoad()
+            return
+        }
         liftCover()
     }
 

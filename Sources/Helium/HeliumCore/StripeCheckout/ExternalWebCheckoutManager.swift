@@ -404,8 +404,8 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] in
-            self?.onInAppBrowserDismissed()
+        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] reason in
+            self?.onInAppBrowserDismissed(reason, paywallSession: paywallSession)
         }
         HeliumObservabilityManager.shared.track(
             WebCheckoutBrowserOpenAttempted(
@@ -530,10 +530,19 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// An in-app browser never backgrounds the app, so its closing is the only signal that
     /// checkout ended.
+    ///
+    /// A browser whose page never rendered is the one case where nothing needs checking:
+    /// there was nothing to buy in, so the session is dropped rather than left able to
+    /// claim an entitlement that arrives from somewhere else later.
     @MainActor
-    private func onInAppBrowserDismissed() {
+    private func onInAppBrowserDismissed(_ reason: WebCheckoutBrowserDismissal, paywallSession: PaywallSession) {
         isShowingInAppBrowser = false
-        checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
+        switch reason {
+        case .neverLoaded:
+            stopObserving(paywallSession: paywallSession)
+        case .closed:
+            checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
+        }
     }
 
     /// Both ways a user comes back from checkout: the app returning to the foreground, and
@@ -771,6 +780,12 @@ public class ExternalWebCheckoutManager: NSObject {
             // in-app checkout is over once its browser closes, and an observation kept past
             // that would let an entitlement arriving from anywhere else land as a purchase
             // on this abandoned session.
+            //
+            // The SFSafariViewController styles are the imperfect case: their toolbar can
+            // hand the page off to the user's own browser, and that tab outlives the
+            // cancel. Dropping the observation means a purchase finished there reports
+            // nothing until the next entitlement read, which is preferred over every
+            // cancelled session staying able to claim an unrelated purchase.
             let abandoned = activeCheckoutObservations.values
                 .filter { resolvedBrowserStyle(for: $0.paywallSession) != .externalBrowser }
                 .map(\.paywallSession)
