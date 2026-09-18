@@ -36,6 +36,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     @State private var isEntitled: Bool? = nil
     @State private var loadingStartTime = DispatchTime.now()
     @State private var resolvedLoadTimeTakenMS: UInt64?
+    @State private var apiCallReported = false
+    @Environment(\.paywallPresentationState) private var presentationState
     
     /// Creates a new paywall view for the specified trigger with default loading view
     ///
@@ -117,6 +119,9 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     }
             }
         }
+        .onAppear {
+            reportApiCall()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
             if case .waitingForPaywallsDownload = state, !loadingBudgetExpired {
                 transitionState(allowLoadingState: true)
@@ -171,6 +176,21 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         }
     }
     
+    private func reportApiCall() {
+        guard !apiCallReported else { return }
+        apiCallReported = true
+        let entryPoint: SdkApiEntryPoint = presentationState.viewType == .triggered ? .swiftuiModifier : .embeddedView
+        trackSdkApiCall(.presentPaywall, presentPaywallObservabilityProperties(
+            trigger: trigger,
+            config: config,
+            entryPoint: entryPoint,
+            deprecatedOverload: false,
+            hasEventHandlers: eventHandlers != nil,
+            hasOnEntitled: presentationContext.onEntitled != nil,
+            hasOnPaywallNotShown: false
+        ))
+    }
+
     private func transitionState(allowLoadingState: Bool) {
         let newState = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: allowLoadingState, config: config, presentationContext: presentationContext)
         if state.isLoading && !newState.isLoading {

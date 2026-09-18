@@ -62,6 +62,29 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         XCTAssertEqual(enriched["triggerName"] as? String, "onboarding")
     }
 
+    func testEnrichWritesSortedTagsThreadFlagAndInitializeTiming() {
+        let enriched = HeliumObservabilityManager.shared.enrich(
+            eventProps: [:],
+            tags: [.sdkApi, .lifecycle],
+            scope: nil,
+            isMainThread: false,
+            msSinceInitialize: 12
+        )
+
+        XCTAssertEqual(enriched["tags"] as? [String], ["lifecycle", "sdk_api"])
+        XCTAssertEqual(enriched["isMainThread"] as? Bool, false)
+        XCTAssertEqual(enriched["msSinceInitialize"] as? Int, 12)
+    }
+
+    func testEnrichOmitsInitializeTimingAndWrapperKeysWhenUnset() {
+        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
+
+        XCTAssertEqual(enriched["tags"] as? [String], [])
+        XCTAssertNil(enriched["msSinceInitialize"])
+        XCTAssertNil(enriched["wrapperSdk"])
+        XCTAssertNil(enriched["wrapperSdkVersion"])
+    }
+
     func testEnrichPreservesEventProperties() {
         let enriched = HeliumObservabilityManager.shared.enrich(
             eventProps: ["triggerCount": 2],
