@@ -14,6 +14,7 @@ struct HeliumControlPanelView: View {
     /// presented on top of a sheet that is still on its way out.
     @State private var queuedLaunch: (() -> Void)? = nil
     private let previewSettings = HeliumPreviewConfigurationStore.shared
+    var hostPresentationContext: PaywallPresentationContext? = nil
 
     var body: some View {
         NavigationView {
@@ -482,17 +483,35 @@ struct HeliumControlPanelView: View {
     /// open keeps the panel inert the whole time a preview is on screen, so no tap can stack a
     /// second preview over it.
     private func previewPresentationContext() -> PaywallPresentationContext {
-        PaywallPresentationContext(
+        PaywallPresentationContext.preview(
+            inheriting: hostPresentationContext,
+            onPreviewClosed: { activity = .idle },
+            onPreviewNotShown: { activity = .idle }
+        )
+    }
+}
+
+extension PaywallPresentationContext {
+    static func preview(
+        inheriting host: PaywallPresentationContext?,
+        onPreviewClosed: @escaping () -> Void,
+        onPreviewNotShown: @escaping () -> Void
+    ) -> PaywallPresentationContext {
+        var handlers = host?.eventHandlers ?? PaywallEventHandlers()
+        let hostOnClose = handlers.onClose
+        // A second try preview shares this context and closes back onto the main preview,
+        // so only the main preview trigger closing releases the lock.
+        handlers.onClose = { event in
+            hostOnClose?(event)
+            if event.triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
+                onPreviewClosed()
+            }
+        }
+        return PaywallPresentationContext(
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
-            // A second try preview shares this context and closes back onto the main preview,
-            // so only the main preview trigger closing releases the lock.
-            eventHandlers: PaywallEventHandlers().onClose { event in
-                if event.triggerName == HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER {
-                    activity = .idle
-                }
-            },
-            onEntitled: nil,
-            onPaywallNotShown: { _ in activity = .idle }
+            eventHandlers: handlers,
+            onEntitled: host?.onEntitled,
+            onPaywallNotShown: { _ in onPreviewNotShown() }
         )
     }
 }
