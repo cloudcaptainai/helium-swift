@@ -111,6 +111,11 @@ public struct CanShowPaywallResult {
 
 public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
+    /// Optional reasons supplied by Bandit when a trigger did not resolve to a paywall.
+    ///
+    /// This is a sibling map rather than a change to `triggerToPaywalls`, preserving the existing
+    /// on-launch contract for older Bandit responses and bundled fallback files.
+    var triggerToPaywallReasons: [String: String]? = nil
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
     var orgName: String?
