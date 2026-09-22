@@ -4,7 +4,28 @@ import Foundation
 /// props (identity, paywall scope, platform) are attached by the manager.
 protocol HeliumObservabilityEvent {
     var name: String { get }
+    var tags: Set<HeliumObservabilityTag> { get }
     var properties: [String: Any] { get }
+}
+
+enum HeliumObservabilityTag: String, Comparable {
+    case sdkApi = "sdk_api"
+    case lifecycle
+    case presentation
+    case identity
+    case entitlements
+    case experiments
+    case webCheckout = "web_checkout"
+    case paddlePrefetch = "paddle_prefetch"
+    case paywallRuntime = "paywall_runtime"
+    case fallback
+    case config
+    case deprecatedApi = "deprecated_api"
+    case anomaly
+
+    static func < (lhs: HeliumObservabilityTag, rhs: HeliumObservabilityTag) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
 }
 
 /// Truncates strings before they hit the wire so a stack-trace-heavy error
@@ -17,6 +38,12 @@ func truncatedForObservability(_ s: String?, maxLength: Int = 500) -> String? {
 /// Cuts a URL at its query/fragment, which can carry user data.
 func urlForObservability(_ url: URL) -> String {
     String(url.absoluteString.prefix { $0 != "?" && $0 != "#" })
+}
+
+/// Host-authored keys describe an integration, never a user, but they are still
+/// capped so a runaway map cannot inflate the payload.
+func keysForObservability(_ keys: [String], maxKeys: Int = 50, maxKeyLength: Int = 64) -> String {
+    keys.sorted().prefix(maxKeys).map { String($0.prefix(maxKeyLength)) }.joined(separator: ",")
 }
 
 func msSince(_ start: Date) -> Int {
@@ -89,6 +116,7 @@ struct EndpointCallTelemetry {
 struct PaddlePrefetchStarted: HeliumObservabilityEvent {
     let priceIds: [String]
     var name: String { "paddle_prefetch_started" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
         ["priceIds": priceIds, "priceCount": priceIds.count]
     }
@@ -101,6 +129,7 @@ struct PaddlePrefetchBanditCompleted: HeliumObservabilityEvent {
     let alreadyEntitledCode: String?
 
     var name: String { "paddle_prefetch_bandit_completed" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
         var p = endpointCall.properties
         p["priceId"] = priceId
@@ -116,6 +145,7 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
     let endpointCall: EndpointCallTelemetry
 
     var name: String { "paddle_prefetch_bff_completed" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
         var p = endpointCall.properties
         p["priceId"] = priceId
@@ -142,6 +172,7 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
     let consentRequired: String?
 
     var name: String { "paddle_prefetch_outcome_finalized" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "priceId": priceId,
@@ -171,6 +202,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
     let shortCircuited: Bool
 
     var name: String { "paddle_prefetch_await_resolved" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
         [
             "tappedPriceId": tappedPriceId,
@@ -197,6 +229,7 @@ struct WebCheckoutFlowStarted: HeliumObservabilityEvent {
     let productKey: String
 
     var name: String { "web_checkout_flow_started" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         ["provider": provider, "productKey": productKey]
     }
@@ -211,6 +244,7 @@ struct WebCheckoutFlowResolved: HeliumObservabilityEvent {
     let totalDurationMs: Int
 
     var name: String { "web_checkout_flow_resolved" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "provider": provider,
@@ -230,6 +264,7 @@ struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     let browserStyle: String
 
     var name: String { "web_checkout_browser_open_attempted" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         ["provider": provider, "success": success, "browserStyle": browserStyle]
     }
@@ -254,6 +289,7 @@ struct PaywallLinkOpenAttempted: HeliumObservabilityEvent {
     let url: String?
 
     var name: String { "paywall_link_open_attempted" }
+    var tags: Set<HeliumObservabilityTag> { [.paywallRuntime] }
     var properties: [String: Any] {
         var p: [String: Any] = ["source": source.rawValue, "openedInApp": openedInApp, "success": success]
         if let scheme { p["scheme"] = scheme }
@@ -270,6 +306,7 @@ struct WebCheckoutRedirectReceived: HeliumObservabilityEvent {
     let browserStyle: String
 
     var name: String { "web_checkout_redirect_received" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "provider": provider,
@@ -296,6 +333,7 @@ struct WebCheckoutPurchaseDetected: HeliumObservabilityEvent {
     let browserStyle: String
 
     var name: String { "web_checkout_purchase_detected" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "provider": provider,
@@ -318,6 +356,7 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
     let browserStyle: String
 
     var name: String { "web_checkout_purchase_check_exhausted" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "provider": provider,
@@ -392,6 +431,7 @@ struct PaywallJSErrorDetected: HeliumObservabilityEvent {
     let msSinceLoadStart: Int?
 
     var name: String { "paywall_js_error_detected" }
+    var tags: Set<HeliumObservabilityTag> { [.paywallRuntime, .anomaly] }
     var properties: [String: Any] {
         var p: [String: Any] = [
             "source": source,
@@ -410,6 +450,7 @@ struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
     let wasContentLoaded: Bool
 
     var name: String { "paywall_web_process_terminated" }
+    var tags: Set<HeliumObservabilityTag> { [.paywallRuntime, .anomaly] }
     var properties: [String: Any] {
         ["loadAttempt": loadAttempt, "wasContentLoaded": wasContentLoaded]
     }
@@ -423,6 +464,7 @@ struct PaywallTraitsFreezeMissingAtMakePurchase: HeliumObservabilityEvent {
     let productId: String
 
     var name: String { "paywall_traits_freeze_missing_at_make_purchase" }
+    var tags: Set<HeliumObservabilityTag> { [.paywallRuntime, .anomaly] }
     var properties: [String: Any] {
         ["productId": productId]
     }
@@ -432,6 +474,7 @@ struct PaywallTraitsFreezeMissingAtMakePurchase: HeliumObservabilityEvent {
 /// signal, as automatic opens emit nothing.
 struct EmbeddedPaywallManualDismissalEnabled: HeliumObservabilityEvent {
     var name: String { "embedded_paywall_manual_dismissal_enabled" }
+    var tags: Set<HeliumObservabilityTag> { [.presentation, .config] }
     var properties: [String: Any] { [:] }
 }
 
@@ -447,6 +490,7 @@ struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
     let triggerToPaywallUUID: [String: String?]
 
     var name: String { "fallback_paywalls_configured" }
+    var tags: Set<HeliumObservabilityTag> { [.fallback, .config, .lifecycle] }
     var properties: [String: Any] {
         let resolvedUUIDs = triggerToPaywallUUID.compactMapValues { $0 }
         var p: [String: Any] = [

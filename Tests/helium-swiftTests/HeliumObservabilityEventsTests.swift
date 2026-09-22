@@ -19,6 +19,119 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
     }
 
+    // MARK: - Tags
+
+    func testEveryEventFamilyDeclaresItsTags() {
+        let expectations: [(any HeliumObservabilityEvent, [String])] = [
+            (PaddlePrefetchStarted(priceIds: []), ["paddle_prefetch", "web_checkout"]),
+            (WebCheckoutFlowStarted(provider: "paddle", productKey: "p"), ["web_checkout"]),
+            (PaywallLinkOpenAttempted(source: .anchor, openedInApp: false, success: false, scheme: nil, url: nil), ["paywall_runtime"]),
+            (PaywallWebProcessTerminated(loadAttempt: "first", wasContentLoaded: false), ["anomaly", "paywall_runtime"]),
+            (EmbeddedPaywallManualDismissalEnabled(), ["config", "presentation"]),
+            (FallbackPaywallsConfigured(generatedAt: nil, organizationID: nil, triggerToPaywallUUID: [:]), ["config", "fallback", "lifecycle"]),
+        ]
+
+        for (event, tags) in expectations {
+            XCTAssertEqual(event.tags.map(\.rawValue).sorted(), tags, event.name)
+        }
+    }
+
+    // MARK: - SdkApiCalled
+
+    /// Wire names and tags for every public API event. Shared verbatim with the
+    /// Android SDK; a change here needs the same change there.
+    func testSdkApiMethodsMatchTheSharedCatalog() {
+        let catalog = SdkApiMethod.allCases.map {
+            "\($0.wireName) \($0.tags.map(\.rawValue).sorted().joined(separator: ","))"
+        }
+
+        XCTAssertEqual(catalog, [
+            "sdk_api_initialize_called lifecycle,sdk_api",
+            "sdk_api_present_paywall_called presentation,sdk_api",
+            "sdk_api_hide_paywall_called presentation,sdk_api",
+            "sdk_api_hide_all_paywalls_called presentation,sdk_api",
+            "sdk_api_can_show_paywall_for_called presentation,sdk_api",
+            "sdk_api_get_paywall_info_called presentation,sdk_api",
+            "sdk_api_upsell_view_for_trigger_called deprecated_api,presentation,sdk_api",
+            "sdk_api_reset_helium_called lifecycle,sdk_api",
+            "sdk_api_add_helium_event_listener_called lifecycle,sdk_api",
+            "sdk_api_remove_helium_event_listener_called lifecycle,sdk_api",
+            "sdk_api_remove_all_helium_event_listeners_called lifecycle,sdk_api",
+            "sdk_api_handle_deep_link_called deprecated_api,presentation,sdk_api",
+            "sdk_api_handle_url_called sdk_api,web_checkout",
+            "sdk_api_create_stripe_portal_session_called sdk_api,web_checkout",
+            "sdk_api_create_paddle_portal_session_called sdk_api,web_checkout",
+            "sdk_api_get_stripe_customer_id_called sdk_api,web_checkout",
+            "sdk_api_get_paddle_customer_id_called sdk_api,web_checkout",
+            "sdk_api_reset_stripe_entitlements_called sdk_api,web_checkout",
+            "sdk_api_reset_paddle_entitlements_called sdk_api,web_checkout",
+            "sdk_api_enable_external_web_checkout_called config,sdk_api,web_checkout",
+            "sdk_api_disable_external_web_checkout_called config,sdk_api,web_checkout",
+            "sdk_api_identity_set_user_id_called identity,sdk_api",
+            "sdk_api_identity_set_revenue_cat_app_user_id_called identity,sdk_api",
+            "sdk_api_identity_set_third_party_analytics_anonymous_id_called identity,sdk_api",
+            "sdk_api_identity_set_app_account_token_called identity,sdk_api",
+            "sdk_api_identity_set_user_traits_called identity,sdk_api",
+            "sdk_api_identity_add_user_traits_called identity,sdk_api",
+            "sdk_api_set_wrapper_sdk_info_called config,sdk_api",
+        ])
+    }
+
+    func testSdkApiCalledCarriesCallContextAlongsideMethodProperties() throws {
+        let event = SdkApiCalled(
+            method: .hidePaywall,
+            apiCallIndex: 7,
+            callCountForMethod: 2,
+            calledBeforeInitialize: false,
+            methodProperties: ["result": true]
+        )
+
+        XCTAssertEqual(event.name, "sdk_api_hide_paywall_called")
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "result": true,
+            "apiCallIndex": 7,
+            "callCountForMethod": 2,
+            "calledBeforeInitialize": false,
+        ]))
+    }
+
+    func testPresentPaywallPropertiesNeverCarryTraitValues() throws {
+        let config = PaywallPresentationConfig(customPaywallTraits: HeliumUserTraits(["email": "SENTINEL_VALUE"]))
+        let props = presentPaywallObservabilityProperties(
+            trigger: "onboarding",
+            config: config,
+            entryPoint: .presentPaywall,
+            deprecatedOverload: false,
+            hasEventHandlers: false,
+            hasOnEntitled: false,
+            hasOnPaywallNotShown: true
+        )
+
+        let wire = try XCTUnwrap(String(data: try JSONEncoder().encode(try SegmentJSON(props)), encoding: .utf8))
+        XCTAssertFalse(wire.contains("SENTINEL_VALUE"))
+        XCTAssertEqual(props["hasCustomPaywallTraits"] as? Bool, true)
+        XCTAssertEqual(props["customPaywallTraitCount"] as? Int, 1)
+        XCTAssertEqual(props["entryPoint"] as? String, "present_paywall")
+        XCTAssertEqual(props["trigger"] as? String, "onboarding")
+    }
+
+    func testUserTraitsPropertiesCarrySortedKeysButNoValues() {
+        let props = userTraitsObservabilityProperties(HeliumUserTraits(["plan": "pro", "age": 41]), viaMap: true)
+
+        XCTAssertEqual(props["traitCount"] as? Int, 2)
+        XCTAssertEqual(props["traitKeys"] as? String, "age,plan")
+        XCTAssertEqual(props["viaMap"] as? Bool, true)
+    }
+
+    func testKeysForObservabilityCapsKeyCountAndKeyLength() {
+        let keys = (0..<60).map { String(repeating: "k", count: 70) + "\($0)" }
+
+        let parts = keysForObservability(keys).split(separator: ",")
+
+        XCTAssertEqual(parts.count, 50)
+        XCTAssertTrue(parts.allSatisfy { $0.count == 64 })
+    }
+
     // MARK: - PaywallLinkOpenAttempted
 
     func testPaywallLinkOpenCarriesSourceDestinationSuccessSchemeAndUrl() throws {

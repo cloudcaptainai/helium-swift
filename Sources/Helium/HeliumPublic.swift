@@ -14,6 +14,7 @@ public class Helium {
     private func reset() {
         controller = nil
         initialized = false
+        SdkApiCallTracker.shared.markReset()
     }
     
     public static let shared = Helium()
@@ -42,10 +43,16 @@ public class Helium {
             value = true
             return false
         }
+        trackSdkApiCall(
+            .initialize,
+            initializeObservabilityProperties(ignoredAlreadyInitialized: alreadyInitialized),
+            wasInitialized: alreadyInitialized
+        )
         if alreadyInitialized {
             HeliumLogger.log(.warn, category: .core, "Helium already initialized, ignoring subsequent call. Use resetHelium if you need to initialize again.")
             return
         }
+        SdkApiCallTracker.shared.markInitialized()
 
         HeliumObservabilityManager.shared.setUp()
 
@@ -100,7 +107,35 @@ public class Helium {
         onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
+        presentPaywall(
+            trigger: trigger,
+            config: config,
+            eventHandlers: eventHandlers,
+            onEntitled: onEntitled,
+            onPaywallNotShown: onPaywallNotShown,
+            entryPoint: .presentPaywall
+        )
+    }
+
+    func presentPaywall(
+        trigger: String,
+        config: PaywallPresentationConfig,
+        eventHandlers: PaywallEventHandlers?,
+        onEntitled: ((PaywallEntitledEvent) -> Void)?,
+        onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void,
+        entryPoint: SdkApiEntryPoint,
+        deprecatedOverload: Bool = false
+    ) {
         HeliumLogger.log(.info, category: .ui, "presentUpsell called", metadata: ["trigger": trigger])
+        trackSdkApiCall(.presentPaywall, presentPaywallObservabilityProperties(
+            trigger: trigger,
+            config: config,
+            entryPoint: entryPoint,
+            deprecatedOverload: deprecatedOverload,
+            hasEventHandlers: eventHandlers != nil,
+            hasOnEntitled: onEntitled != nil,
+            hasOnPaywallNotShown: true
+        ))
 
         let presentationContext = PaywallPresentationContext(
             config: config,
@@ -129,14 +164,21 @@ public class Helium {
             config: config,
             eventHandlers: eventHandlers,
             onEntitled: { _ in onEntitled() },
-            onPaywallNotShown: onPaywallNotShown
+            onPaywallNotShown: onPaywallNotShown,
+            entryPoint: .presentPaywall,
+            deprecatedOverload: true
         )
     }
     
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
     @discardableResult
     public func hidePaywall() -> Bool {
-        return HeliumPaywallPresenter.shared.hideUpsell();
+        let presenter = HeliumPaywallPresenter.shared
+        let scope = presenter.topPresentedObservabilityScope
+        let presentedPaywallCount = presenter.presentedPaywallCount
+        let result = presenter.hideUpsell()
+        trackSdkApiCall(.hidePaywall, ["presentedPaywallCount": presentedPaywallCount, "result": result], scope: scope)
+        return result
     }
     
     /// Hide all paywalls shown via ``presentPaywall()``, including any
@@ -146,7 +188,11 @@ public class Helium {
     /// those are driven by the host view's state (flip your `isPresented` binding
     /// or remove the view from the hierarchy).
     public func hideAllPaywalls() {
-        return HeliumPaywallPresenter.shared.hideAllUpsells()
+        let presenter = HeliumPaywallPresenter.shared
+        let scope = presenter.topPresentedObservabilityScope
+        let presentedPaywallCount = presenter.presentedPaywallCount
+        presenter.hideAllUpsells()
+        trackSdkApiCall(.hideAllPaywalls, ["presentedPaywallCount": presentedPaywallCount], scope: scope)
     }
     
     /// Checks whether a paywall can be displayed for the given trigger without actually presenting it.
@@ -162,11 +208,13 @@ public class Helium {
             trigger: trigger, presentationContext: PaywallPresentationContext.empty)
         
         let canShow = upsellResult.viewAndSession?.view != nil
-        return CanShowPaywallResult(
+        let result = CanShowPaywallResult(
             canShow: canShow,
             isFallback: canShow ? upsellResult.isFallback : nil,
             paywallUnavailableReason: upsellResult.fallbackReason
         )
+        trackSdkApiCall(.canShowPaywallFor, canShowPaywallObservabilityProperties(trigger: trigger, result: result))
+        return result
     }
     
     /// Returns metadata about the paywall configured for a given trigger.
@@ -176,6 +224,12 @@ public class Helium {
     /// - Parameter trigger: The trigger configured in the Helium dashboard.
     /// - Returns: A ``PaywallInfo`` containing the paywall template name and whether it should show, or `nil` if paywalls haven't loaded or no paywall is configured for this trigger.
     public func getPaywallInfo(trigger: String) -> PaywallInfo? {
+        let info = fetchedPaywallInfo(trigger: trigger)
+        trackSdkApiCall(.getPaywallInfo, paywallInfoObservabilityProperties(trigger: trigger, info: info))
+        return info
+    }
+
+    func fetchedPaywallInfo(trigger: String) -> PaywallInfo? {
         if !paywallsLoaded() {
             return nil
         }
@@ -202,16 +256,19 @@ public class Helium {
     
     /// Add a listener for all Helium events. Listeners are stored weakly, so if you create a listener inline it may not be retained.
     public func addHeliumEventListener(_ listener: HeliumEventListener) {
+        trackSdkApiCall(.addHeliumEventListener)
         HeliumEventListeners.shared.addListener(listener)
     }
     
     /// Remove a specific Helium event listener.
     public func removeHeliumEventListener(_ listener: HeliumEventListener) {
+        trackSdkApiCall(.removeHeliumEventListener)
         HeliumEventListeners.shared.removeListener(listener)
     }
     
     /// Remove all Helium event listeners.
     public func removeAllHeliumEventListeners() {
+        trackSdkApiCall(.removeAllHeliumEventListeners)
         HeliumEventListeners.shared.removeAllListeners()
     }
     
@@ -220,9 +277,16 @@ public class Helium {
     @available(*, deprecated, message: "Deep link handling is being replaced with paywall previews.")
     @discardableResult
     public func handleDeepLink(_ url: URL?) -> Bool {
-        guard let url else {
-            return false
-        }
+        let handled = url.map(handleTestDeepLink) ?? false
+        trackSdkApiCall(.handleDeepLink, [
+            "hasUrl": url != nil,
+            "isHeliumTestHost": url?.host == "helium-test",
+            "handled": handled,
+        ])
+        return handled
+    }
+
+    private func handleTestDeepLink(_ url: URL) -> Bool {
         // Only "test paywall" deep links handled at this time.
         guard url.host == "helium-test" else {
             return false
@@ -259,18 +323,25 @@ public class Helium {
             return false
         }
 
-        if getPaywallInfo(trigger: trigger) == nil {
+        if fetchedPaywallInfo(trigger: trigger) == nil {
             HeliumLogger.log(.warn, category: .core, "handleDeepLink - Bundle not available for trigger", metadata: ["trigger": trigger])
             return false
         }
         
         // hide any existing upsells
-        hideAllPaywalls()
+        HeliumPaywallPresenter.shared.hideAllUpsells()
         
         HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
-        presentPaywall(trigger: trigger, config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false)) { reason in
-            HeliumLogger.log(.info, category: .core, "handleDeepLink - Could not show paywall", metadata: ["reason": reason.description])
-        }
+        presentPaywall(
+            trigger: trigger,
+            config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
+            eventHandlers: nil,
+            onEntitled: nil,
+            onPaywallNotShown: { reason in
+                HeliumLogger.log(.info, category: .core, "handleDeepLink - Could not show paywall", metadata: ["reason": reason.description])
+            },
+            entryPoint: .deepLink
+        )
         return true
     }
     
@@ -294,6 +365,15 @@ public class Helium {
         autoInitialize: Bool = false,
         onComplete: (() -> Void)? = nil
     ) {
+        trackSdkApiCall(.resetHelium, [
+            "wasInitialized": Helium.shared.isInitialized(),
+            "clearUserId": clearUserId,
+            "clearUserTraits": clearUserTraits,
+            "clearHeliumEventListeners": clearHeliumEventListeners,
+            "clearExperimentAllocations": clearExperimentAllocations,
+            "clearCachedPaywalls": clearCachedPaywalls,
+            "autoInitialize": autoInitialize,
+        ])
         HeliumPaywallPresenter.shared.hideAllUpsells {
             if clearCachedPaywalls {
                 HeliumAssetManager.shared.clearCache()
@@ -346,9 +426,17 @@ public class Helium {
             onEntitled: nil,
             onPaywallNotShown: nil
         )
-        return HeliumPaywallPresenter.shared.upsellViewResultFor(
+        let view = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: trigger, presentationContext: presentationContext
         ).viewAndSession?.view
+        trackSdkApiCall(.upsellViewForTrigger, [
+            "trigger": trigger,
+            "hasCustomPaywallTraits": customPaywallTraits != nil,
+            "customPaywallTraitCount": customPaywallTraits?.count ?? 0,
+            "hasEventHandlers": eventHandlers != nil,
+            "returnedView": view != nil,
+        ])
+        return view
     }
 
     // MARK: - Stripe Checkout
@@ -361,6 +449,7 @@ public class Helium {
     /// - Returns: The portal session URL.
     @available(*, deprecated, message: "Use getStripeCustomerId() and pass the ID to your server to generate a Stripe customer portal session instead.")
     public func createStripePortalSession(returnUrl: String) async throws -> URL {
+        trackSdkApiCall(.createStripePortalSession, ["isDeprecated": true])
         return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
     }
 
@@ -371,8 +460,10 @@ public class Helium {
     ///
     /// - Returns: The Stripe customer ID, or `nil` if none has been assigned.
     public func getStripeCustomerId() async -> String? {
-        if let customerId = HeliumIdentityManager.shared.getStripeCustomerId() {
-            return customerId
+        let cachedId = HeliumIdentityManager.shared.getStripeCustomerId()
+        trackSdkApiCall(.getStripeCustomerId, ["hadCachedId": cachedId != nil])
+        if let cachedId {
+            return cachedId
         }
         guard Helium.config.webCheckoutProcessors.contains(.stripe) else { return nil }
         await HeliumEntitlementsManager.shared.stripeEntitlementsSource.refreshIfNeeded()
@@ -382,7 +473,8 @@ public class Helium {
     /// Resets Stripe entitlements and clears the user ID.
     /// If your app can support multiple Stripe users on the same device, you'll want to call this to effectively "log out" a Stripe user.
     public func resetStripeEntitlements() {
-        Helium.identify.userId = nil
+        trackSdkApiCall(.resetStripeEntitlements)
+        HeliumIdentityManager.shared.setCustomUserId(nil)
         HeliumEntitlementsManager.shared.stripeEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setStripeCustomerId(nil)
     }
@@ -396,6 +488,7 @@ public class Helium {
     /// - Returns: The portal session URL.
     @available(*, deprecated, message: "Use getPaddleCustomerId() and pass the ID to your server to generate a Paddle customer portal session instead.")
     public func createPaddlePortalSession() async throws -> URL {
+        trackSdkApiCall(.createPaddlePortalSession, ["isDeprecated": true])
         return try await PaddleCheckoutManager.shared.createPortalSession()
     }
 
@@ -406,8 +499,10 @@ public class Helium {
     ///
     /// - Returns: The Paddle customer ID, or `nil` if none has been assigned.
     public func getPaddleCustomerId() async -> String? {
-        if let customerId = HeliumIdentityManager.shared.getPaddleCustomerId() {
-            return customerId
+        let cachedId = HeliumIdentityManager.shared.getPaddleCustomerId()
+        trackSdkApiCall(.getPaddleCustomerId, ["hadCachedId": cachedId != nil])
+        if let cachedId {
+            return cachedId
         }
         guard Helium.config.webCheckoutProcessors.contains(.paddle) else { return nil }
         await HeliumEntitlementsManager.shared.paddleEntitlementsSource.refreshIfNeeded()
@@ -417,7 +512,8 @@ public class Helium {
     /// Resets Paddle entitlements and clears the user ID.
     /// If your app can support multiple Paddle users on the same device, you'll want to call this to effectively "log out" a Paddle user.
     public func resetPaddleEntitlements() {
-        Helium.identify.userId = nil
+        trackSdkApiCall(.resetPaddleEntitlements)
+        HeliumIdentityManager.shared.setCustomUserId(nil)
         HeliumEntitlementsManager.shared.paddleEntitlementsSource.clearEntitlements()
         HeliumIdentityManager.shared.setPaddleCustomerId(nil)
     }
@@ -449,11 +545,17 @@ public class Helium {
     /// - Returns: The matched redirect type when the URL is a Helium checkout redirect; otherwise `nil`.
     @discardableResult
     public func handleURL(_ url: URL) -> HeliumCheckoutRedirectType? {
-        guard Helium.config.webCheckoutEnabled else {
-            return nil
-        }
+        let webCheckoutEnabled = Helium.config.webCheckoutEnabled
+        let redirectKind = webCheckoutEnabled ? WebCheckoutRedirect.classify(url) : nil
+        var props: [String: Any] = [
+            "webCheckoutEnabled": webCheckoutEnabled,
+            "matched": redirectKind != nil,
+        ]
+        if let scheme = url.scheme { props["scheme"] = scheme }
+        if let redirectKind { props["redirectKind"] = redirectKind.rawValue }
+        trackSdkApiCall(.handleURL, props)
 
-        guard let redirectKind = WebCheckoutRedirect.classify(url) else {
+        guard let redirectKind else {
             return nil
         }
         
@@ -541,6 +643,7 @@ public class HeliumIdentify {
         }
         set {
             let userIdChanged = newValue != HeliumIdentityManager.shared.getCustomUserId()
+            trackSdkApiCall(.identitySetUserId, ["hasValue": newValue != nil, "changed": userIdChanged])
             if !userIdChanged && HeliumIdentityManager.shared.hasCustomUserId() {
                 return
             }
@@ -581,6 +684,7 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.appAttributionToken
         }
         set {
+            trackSdkApiCall(.identitySetAppAccountToken)
             HeliumIdentityManager.shared.setCustomAppAccountToken(newValue)
         }
     }
@@ -593,6 +697,7 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.revenueCatAppUserId
         }
         set {
+            trackSdkApiCall(.identitySetRevenueCatAppUserId, ["hasValue": newValue != nil])
             if let newValue {
                 HeliumIdentityManager.shared.setRevenueCatAppUserId(newValue)
             }
@@ -613,6 +718,7 @@ public class HeliumIdentify {
             HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId()
         }
         set {
+            trackSdkApiCall(.identitySetThirdPartyAnalyticsAnonymousId, ["hasValue": newValue != nil])
             HeliumIdentityManager.shared.setThirdPartyAnalyticsAnonymousId(newValue)
         }
     }
@@ -625,13 +731,16 @@ public class HeliumIdentify {
     /// - Parameter traits: The new set of user traits.
     /// - SeeAlso: ``addUserTraits(_:)``
     public func setUserTraits(_ traits: HeliumUserTraits) {
+        trackSdkApiCall(.identitySetUserTraits, userTraitsObservabilityProperties(traits, viaMap: false))
         HeliumIdentityManager.shared.setCustomUserTraits(traits)
     }
     /// Replaces all custom user traits with the provided dictionary.
     ///
     /// - Parameter traits: A dictionary of traits. Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
     public func setUserTraits(_ traits: [String: Any]) {
-        HeliumIdentityManager.shared.setCustomUserTraits(HeliumUserTraits(traits))
+        let userTraits = HeliumUserTraits(traits)
+        trackSdkApiCall(.identitySetUserTraits, userTraitsObservabilityProperties(userTraits, viaMap: true))
+        HeliumIdentityManager.shared.setCustomUserTraits(userTraits)
     }
     /// Merges the provided traits into the existing custom user traits, overwriting any matching keys.
     ///
@@ -641,13 +750,16 @@ public class HeliumIdentify {
     /// - Parameter traits: The traits to add or update.
     /// - SeeAlso: ``setUserTraits(_:)``
     public func addUserTraits(_ traits: HeliumUserTraits) {
+        trackSdkApiCall(.identityAddUserTraits, userTraitsObservabilityProperties(traits, viaMap: false))
         HeliumIdentityManager.shared.addToCustomUserTraits(traits)
     }
     /// Merges the provided dictionary into the existing custom user traits, overwriting any matching keys.
     ///
     /// - Parameter traits: A dictionary of traits. Supports JSON-compatible types: String, Int, Double, Bool, Array, Dictionary.
     public func addUserTraits(_ traits: [String: Any]) {
-        HeliumIdentityManager.shared.addToCustomUserTraits(HeliumUserTraits(traits))
+        let userTraits = HeliumUserTraits(traits)
+        trackSdkApiCall(.identityAddUserTraits, userTraitsObservabilityProperties(userTraits, viaMap: true))
+        HeliumIdentityManager.shared.addToCustomUserTraits(userTraits)
     }
     /// Returns the current custom user traits as a dictionary.
     ///
@@ -767,11 +879,19 @@ public class HeliumConfig {
         redirectURL: String,
         paymentProcessors: WebCheckoutProcessors
     ) {
-        guard let parsed = URL(string: redirectURL), parsed.scheme != nil else {
+        let accepted: Bool
+        if URL(string: redirectURL)?.scheme != nil {
+            accepted = setExternalWebCheckout(successURL: redirectURL, cancelURL: redirectURL, paymentProcessors: paymentProcessors)
+        } else {
             HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: invalid redirectURL. It must be a valid URL with a scheme (e.g. https://example.com or myapp://path).")
-            return
+            accepted = false
         }
-        setExternalWebCheckout(successURL: redirectURL, cancelURL: redirectURL, paymentProcessors: paymentProcessors)
+        trackSdkApiCall(.enableExternalWebCheckout, webCheckoutObservabilityProperties(
+            processors: paymentProcessors,
+            hasRedirectUrl: !redirectURL.isEmpty,
+            accepted: accepted,
+            deprecatedOverload: false
+        ))
     }
 
     /// Enables External Web Checkout Flow with separate success and cancel URLs.
@@ -784,26 +904,34 @@ public class HeliumConfig {
         cancelURL: String,
         paymentProcessors: WebCheckoutProcessors
     ) {
-        guard let successParsed = URL(string: successURL), successParsed.scheme != nil,
-              let cancelParsed = URL(string: cancelURL), cancelParsed.scheme != nil else {
+        let accepted: Bool
+        if URL(string: successURL)?.scheme != nil, URL(string: cancelURL)?.scheme != nil {
+            accepted = setExternalWebCheckout(successURL: successURL, cancelURL: cancelURL, paymentProcessors: paymentProcessors)
+        } else {
             HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: invalid URLs provided. Both successURL and cancelURL must be valid URLs with a scheme (e.g. https://example.com or myapp://path).")
-            return
+            accepted = false
         }
-        setExternalWebCheckout(successURL: successURL, cancelURL: cancelURL, paymentProcessors: paymentProcessors)
+        trackSdkApiCall(.enableExternalWebCheckout, webCheckoutObservabilityProperties(
+            processors: paymentProcessors,
+            hasRedirectUrl: !successURL.isEmpty,
+            accepted: accepted,
+            deprecatedOverload: true
+        ))
     }
 
     private func setExternalWebCheckout(
         successURL: String,
         cancelURL: String,
         paymentProcessors: WebCheckoutProcessors
-    ) {
+    ) -> Bool {
         guard !paymentProcessors.isEmpty else {
             HeliumLogger.log(.error, category: .core, "enableExternalWebCheckout: paymentProcessors must not be empty. Pass .all, .paddle, or .stripe.")
-            return
+            return false
         }
         checkoutSuccessURL = successURL
         checkoutCancelURL = cancelURL
         webCheckoutProcessors = paymentProcessors
+        return true
     }
 
     /// Disables External Web Checkout Flow. Paywalls with Paddle or Stripe products
@@ -811,6 +939,7 @@ public class HeliumConfig {
     /// NOTE - if you have existing Paddle/Stripe customers, Helium will attempt to continue respecting their entitlements but is
     /// not guaranteed to do so.
     public func disableExternalWebCheckout() {
+        trackSdkApiCall(.disableExternalWebCheckout)
         webCheckoutProcessors = []
         checkoutSuccessURL = nil
         checkoutCancelURL = nil

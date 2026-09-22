@@ -21,6 +21,12 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+
+    var presentedPaywallCount: Int { paywallsDisplayed.count }
+
+    var topPresentedObservabilityScope: PaywallObservabilityScope? {
+        paywallsDisplayed.last?.paywallSession.observabilityScope
+    }
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     func isSecondTryPaywall(trigger: String) -> Bool {
@@ -136,7 +142,7 @@ class HeliumPaywallPresenter {
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
-                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    paywallName: Helium.shared.fetchedPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "A paywall is already being presented.",
                     paywallUnavailableReason: .alreadyPresented,
                     loadingBudgetMS: config.loadingBudgetForAnalyticsMS
@@ -363,7 +369,7 @@ class HeliumPaywallPresenter {
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 PaywallOpenFailedEvent(
                     triggerName: trigger,
-                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    paywallName: Helium.shared.fetchedPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "No window scene found",
                     paywallUnavailableReason: .noRootController,
                     loadingBudgetMS: presentationContext.config.loadingBudgetForAnalyticsMS
