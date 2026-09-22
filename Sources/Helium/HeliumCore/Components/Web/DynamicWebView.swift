@@ -147,11 +147,11 @@ struct DynamicWebView: View {
        .edgesIgnoringSafeArea(.all)
        .sheet(isPresented: $showControlPanel) {
            if #available(iOS 16.0, *) {
-               HeliumControlPanelView()
+               HeliumControlPanelView(hostPresentationContext: paywallSession?.presentationContext)
                    .presentationDetents([.large])
                    .presentationDragIndicator(.visible)
            } else {
-               HeliumControlPanelView()
+               HeliumControlPanelView(hostPresentationContext: paywallSession?.presentationContext)
            }
        }
        .onAppear {
