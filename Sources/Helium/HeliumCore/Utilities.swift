@@ -185,14 +185,45 @@ class UIWindowHelper {
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
             return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
         }
-        
+
         if let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundInactive }) as? UIWindowScene {
             return windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
         }
-        
+
         let allWindows = UIApplication.shared.connectedScenes.flatMap { ($0 as? UIWindowScene)?.windows ?? [] }
         return allWindows.first { $0.isKeyWindow } ?? allWindows.first
     }
-    
+
+}
+
+/// Presents a simple single-button informational alert in its own window.
+///
+/// Using a dedicated window (rather than presenting on the top-most view controller) keeps the
+/// alert alive when a Helium paywall dismisses right after triggering it — dismissing the paywall
+/// cascades to anything it presents, but not to a separate window.
+@MainActor
+enum HeliumSimpleAlert {
+    private static var alertWindow: UIWindow?
+
+    static func present(title: String?, message: String?, buttonText: String) {
+        guard alertWindow == nil,
+              let windowScene = UIWindowHelper.findActiveWindow()?.windowScene else {
+            return
+        }
+
+        let window = UIWindow(windowScene: windowScene)
+        let containerVC = UIViewController()
+        window.rootViewController = containerVC
+        window.windowLevel = .alert + 1
+        window.makeKeyAndVisible()
+        alertWindow = window
+
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: buttonText, style: .default) { _ in
+            window.isHidden = true
+            alertWindow = nil
+        })
+        containerVC.present(alert, animated: true)
+    }
 }

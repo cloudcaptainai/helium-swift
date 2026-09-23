@@ -128,6 +128,16 @@ class HeliumPaywallDelegateWrapper {
                 restoreOrigin: .duringPurchase,
                 paymentProcessor: paymentProcessor
             ), paywallSession: paywallSession)
+            if (paymentProcessor == .paddle || paymentProcessor == .stripe),
+               Helium.config.alreadyPurchasedDialogConfig.showHeliumDialog {
+                Task { @MainActor in
+                    HeliumSimpleAlert.present(
+                        title: Helium.config.alreadyPurchasedDialogConfig.title,
+                        message: Helium.config.alreadyPurchasedDialogConfig.message,
+                        buttonText: Helium.config.alreadyPurchasedDialogConfig.closeButtonText
+                    )
+                }
+            }
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
