@@ -202,7 +202,7 @@ extension PurchaseSucceededEvent {
         payload["storeKitTransactionId"] = storeKitTransactionId
         payload["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
         payload["skPostPurchaseTxnTimeMS"] = skPostPurchaseTxnTimeMS
-        payload["canonicalJoinTransactionId"] = canonicalJoinTransactionId
+        payload["canonicalJoinTransactionId"] = storeKitTransactionId
         payload["paymentProcessor"] = paymentProcessor.rawValue
         return payload
     }
