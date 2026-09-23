@@ -595,6 +595,9 @@ public struct PurchaseSucceededEvent: ProductEvent {
 
     public var eventName: String { "purchaseSucceeded" }
 
+    /// The transaction identifier used to join this purchase against transactions in other systems.
+    public var canonicalJoinTransactionId: String? { storeKitTransactionId }
+
     public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "type": eventName,
@@ -607,7 +610,9 @@ public struct PurchaseSucceededEvent: ProductEvent {
         ]
         if let storeKitTransactionId {
             dict["storeKitTransactionId"] = storeKitTransactionId
-            dict["canonicalJoinTransactionId"] = storeKitTransactionId
+        }
+        if let canonicalJoinTransactionId {
+            dict["canonicalJoinTransactionId"] = canonicalJoinTransactionId
         }
         if let storeKitOriginalTransactionId {
             dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
