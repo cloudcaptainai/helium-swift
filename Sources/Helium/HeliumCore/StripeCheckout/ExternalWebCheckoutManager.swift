@@ -571,7 +571,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// immediately available after an external purchase. Returns true if a
     /// purchase was detected.
     @MainActor
-    private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
+    private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false, transactionId: String? = nil) async -> Bool {
         let delays: [UInt64] = [0, 2_000_000_000]
 
         guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
@@ -588,6 +588,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
             let purchaseDetected = await checkForNewPurchase(
                 fromSuccessRedirect: fromSuccessRedirect,
+                transactionId: transactionId,
                 retryAttempt: i + 1
             )
             if Task.isCancelled { return false }
@@ -617,7 +618,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// offered on the same paywall. In either case, observations are cleared
     /// and paywalls hidden. Succeeded wins over Restored across all sessions.
     @MainActor
-    private func checkForNewPurchase(fromSuccessRedirect: Bool = false, retryAttempt: Int = 1) async -> Bool {
+    private func checkForNewPurchase(fromSuccessRedirect: Bool = false, transactionId: String? = nil, retryAttempt: Int = 1) async -> Bool {
         await entitlementsSource.refreshEntitlements()
         let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
         HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase", metadata: [
@@ -657,6 +658,7 @@ public class ExternalWebCheckoutManager: NSObject {
                         paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                         storeKitTransactionId: nil,
                         storeKitOriginalTransactionId: nil,
+                        transactionId: transactionId,
                         paymentProcessor: provider.kind
                     ),
                     paywallSession: observation.paywallSession,
@@ -730,7 +732,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// so observations are kept and the foreground observer is re-armed so a later
     /// purchase still gets picked up on the next app return.
     @MainActor
-    func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
+    func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType, transactionId: String? = nil) async {
         guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return
         }
@@ -768,7 +770,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 overlayTimeoutTask.cancel()
                 NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
             }
-            _ = await checkForNewPurchaseWithRetry(fromSuccessRedirect: true)
+            _ = await checkForNewPurchaseWithRetry(fromSuccessRedirect: true, transactionId: transactionId)
             if !activeCheckoutObservations.isEmpty {
                 armForegroundObserverAfterBackground()
             }
