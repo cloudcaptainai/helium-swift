@@ -216,7 +216,11 @@ class HeliumPaywallDelegateWrapper {
         let source: HeliumPaymentEntitlementsSource = paymentProcessor == .stripe
             ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
             : HeliumEntitlementsManager.shared.paddleEntitlementsSource
-        if let expiresAt = source.subscriptionExpiresAt(forHeliumProductId: productKey) {
+        let entitlement = source.entitlement(forHeliumProductId: productKey)
+        if let startedAt = entitlement?.subscriptionStartedAt {
+            debugLines.append("Started: \(formatDateForDisplay(startedAt))")
+        }
+        if let expiresAt = entitlement?.subscriptionExpiresAt {
             debugLines.append("Renews/expires: \(formatDateForDisplay(expiresAt))")
         }
         debugLines.append("")

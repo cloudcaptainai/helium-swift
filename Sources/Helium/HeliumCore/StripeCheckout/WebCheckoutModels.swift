@@ -200,11 +200,10 @@ struct ResponseMeta: Decodable {
     let requestId: String?
 }
 
-// Stripe and Paddle don't return identical shapes. Stripe emits `trialEnd`;
-// Paddle emits `trialStartsAt`/`trialEndsAt` and additional fields
-// (`startedAt`, `nextBilledAt`, `currentPeriodStart`, `canceledAt`,
-// `scheduledChange`) that we don't currently consume. Add them here if a
-// consumer ever needs them.
+// Stripe and Paddle don't use identical keys for the same concepts. Subscription start comes as
+// `createdAt` from Stripe and `startedAt` from Paddle; trial end as `trialEnd` from Stripe and
+// `trialEndsAt` from Paddle. Fields only one provider sends (e.g. Stripe `cancelAtPeriodEnd`/
+// `productName`, Paddle `nextBilledAt`/`scheduledChange`) are simply nil for the other.
 struct PaymentSubscriptionInfo: Codable, Sendable {
     let subscriptionId: String
     let productId: String
@@ -212,6 +211,8 @@ struct PaymentSubscriptionInfo: Codable, Sendable {
     let priceId: String?
     let productName: String?
     let productDescription: String?
+    let createdAt: String?
+    let startedAt: String?
     let currentPeriodEnd: String?
     let cancelAtPeriodEnd: Bool?
     let trialEnd: String?
@@ -228,6 +229,8 @@ struct PaymentSubscriptionInfo: Codable, Sendable {
 struct ProductEntitlement: Codable {
     let productId: String
     let priceId: String?
+    /// When the subscription started. Nil for one-time purchases, or when the server omits it.
+    let subscriptionStartedAt: Date?
     /// When the subscription period actually ends.
     /// Nil for one-time purchases (permanent entitlement).
     let subscriptionExpiresAt: Date?

@@ -82,6 +82,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         let newEntitlement = ProductEntitlement(
             productId: productId,
             priceId: priceId,
+            subscriptionStartedAt: nil,
             subscriptionExpiresAt: subscriptionExpiresAt
         )
         lock.withLock {
@@ -126,12 +127,12 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         }
     }
 
-    /// Expiration/renewal date for the given Helium product id from currently held entitlements, if
-    /// any. Reads existing state without triggering a fetch.
-    func subscriptionExpiresAt(forHeliumProductId heliumProductId: String) -> Date? {
+    /// The currently held entitlement for the given Helium product id, if any. Reads existing state
+    /// without triggering a fetch.
+    func entitlement(forHeliumProductId heliumProductId: String) -> ProductEntitlement? {
         lock.withLock {
             let products = cached?.products ?? persisted
-            return products.first { $0.heliumProductId == heliumProductId }?.subscriptionExpiresAt
+            return products.first { $0.heliumProductId == heliumProductId }
         }
     }
 
@@ -193,9 +194,9 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
-                let dateString = sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt
-                let expiresAt = parseISODate(dateString)
-                return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionExpiresAt: expiresAt)
+                let expiresAt = parseISODate(sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt)
+                let startedAt = parseISODate(sub.startedAt ?? sub.createdAt)
+                return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionStartedAt: startedAt, subscriptionExpiresAt: expiresAt)
             }
 
             lock.withLock {
