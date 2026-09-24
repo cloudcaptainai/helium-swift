@@ -125,13 +125,6 @@ class HeliumPaywallDelegateWrapper {
         case .failed(let error):
             self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(
-                productId: productKey,
-                triggerName: triggerName,
-                paywallName: paywallTemplateName,
-                restoreOrigin: .duringPurchase,
-                paymentProcessor: paymentProcessor
-            ), paywallSession: paywallSession)
             let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
             if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
                 let title = dialogConfig.title
@@ -141,7 +134,8 @@ class HeliumPaywallDelegateWrapper {
                     productKey: productKey,
                     paymentProcessor: paymentProcessor
                 )
-                // Show the alert and wait for the user to dismiss it before returning.
+                // Show the alert and wait for the user to dismiss it before firing the event, so an
+                // event handler that dismisses the paywall can't tear the alert down before it's read.
                 await withCheckedContinuation { continuation in
                     Task { @MainActor in
                         HeliumPaywallPresenter.shared.presentAlertOverPaywall(
@@ -153,6 +147,13 @@ class HeliumPaywallDelegateWrapper {
                     }
                 }
             }
+            self.fireEvent(PurchaseRestoredEvent(
+                productId: productKey,
+                triggerName: triggerName,
+                paywallName: paywallTemplateName,
+                restoreOrigin: .duringPurchase,
+                paymentProcessor: paymentProcessor
+            ), paywallSession: paywallSession)
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
