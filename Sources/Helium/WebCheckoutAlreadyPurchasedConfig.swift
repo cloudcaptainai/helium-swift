@@ -27,11 +27,11 @@ public class WebCheckoutAlreadyPurchasedConfig {
             ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
             : HeliumEntitlementsManager.shared.paddleEntitlementsSource
         let productId = String(productKey.prefix(while: { $0 != ":" }))
-        // Ownership is product-level, so list every owned price of the tapped product — the tapped
+        // Ownership is product-level, so list every owned price of the selected product — the selected
         // price may not be the one actually owned.
         let owned = source.entitlements(forProductId: productId)
 
-        var debugLines = ["DEBUG/TESTFLIGHT DETAILS", "", "Tapped: \(productKey)", ""]
+        var debugLines = ["DEBUG/TESTFLIGHT DETAILS", "", "Selected: \(productKey)", ""]
         if owned.isEmpty {
             debugLines.append("Owned: none found")
         } else {
