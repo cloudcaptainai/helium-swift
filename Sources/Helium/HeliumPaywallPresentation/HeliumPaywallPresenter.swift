@@ -409,7 +409,7 @@ class HeliumPaywallPresenter {
     /// behind the alert. Uses the presented paywall's own view controller when there is one, otherwise
     /// the top-most view controller (e.g. for an embedded ``HeliumPaywall``).
     ///
-    /// `onDismiss` is guaranteed to be called exactly once: when the user taps the button, or — so a
+    /// `completion` is guaranteed to be called exactly once: when the user taps the button, or — so a
     /// caller awaiting it can never hang — if there is nowhere to present, if presentation silently
     /// fails, or if the alert is torn down some other way before the button is tapped.
     @MainActor
@@ -417,13 +417,13 @@ class HeliumPaywallPresenter {
         title: String?,
         message: String?,
         buttonText: String,
-        onDismiss: @escaping () -> Void
+        completion: @escaping () -> Void
     ) {
         var didFinish = false
         func finish() {
             guard !didFinish else { return }
             didFinish = true
-            onDismiss()
+            completion()
         }
 
         let base: UIViewController? = paywallsDisplayed.last ?? UIWindowHelper.findTopMostViewController()

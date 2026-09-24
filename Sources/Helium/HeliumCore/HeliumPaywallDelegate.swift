@@ -142,7 +142,7 @@ class HeliumPaywallDelegateWrapper {
                             title: title,
                             message: message,
                             buttonText: buttonText,
-                            onDismiss: { continuation.resume() }
+                            completion: { continuation.resume() }
                         )
                     }
                 }

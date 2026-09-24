@@ -14,8 +14,8 @@ public class WebCheckoutAlreadyPurchasedConfig {
     let message = "You already own this product. Contact support if you have any issues."
     let closeButtonText = "OK"
 
-    /// Disable the default dialog that Helium displays when a purchase attempt resolves as already owned.
-    public func disableAlreadyPurchasedDialog() {
+    /// Disable the default dialog that Helium displays when a web checkout purchase attempt resolves as already owned.
+    public func disable() {
         showHeliumDialog = false
     }
 
