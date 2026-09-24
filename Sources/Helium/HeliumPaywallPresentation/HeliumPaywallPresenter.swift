@@ -441,7 +441,7 @@ class HeliumPaywallPresenter {
         // way without it being tapped, poll until the alert is confirmed gone and resume then — so we
         // never leave the caller hanging, but also never dismiss an alert the user is still reading.
         func resumeOnceAlertGone() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 guard !didFinish else { return }
                 if alert.presentingViewController == nil {
                     finish()
