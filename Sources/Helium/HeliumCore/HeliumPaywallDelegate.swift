@@ -131,12 +131,12 @@ class HeliumPaywallDelegateWrapper {
             // StoreKit surfaces the already-owned case through Apple's own system dialog, so only
             // web checkout needs Helium's alert.
             if paymentProcessor.isWebCheckout,
-               Helium.config.alreadyPurchasedDialogConfig.showHeliumDialog {
+               Helium.config.webCheckoutAlreadyPurchasedDialogConfig.showHeliumDialog {
                 Task { @MainActor in
                     HeliumSimpleAlert.present(
-                        title: Helium.config.alreadyPurchasedDialogConfig.title,
-                        message: Helium.config.alreadyPurchasedDialogConfig.message,
-                        buttonText: Helium.config.alreadyPurchasedDialogConfig.closeButtonText
+                        title: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.title,
+                        message: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.message,
+                        buttonText: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.closeButtonText
                     )
                 }
             }

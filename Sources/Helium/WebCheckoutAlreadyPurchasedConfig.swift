@@ -1,9 +1,9 @@
 //
-//  AlreadyPurchasedConfig.swift
+//  WebCheckoutAlreadyPurchasedConfig.swift
 //  helium-swift
 //
 
-public class AlreadyPurchasedConfig {
+public class WebCheckoutAlreadyPurchasedConfig {
     init() {}
 
     private static let defaultShowHeliumDialog = true

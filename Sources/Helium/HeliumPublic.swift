@@ -711,10 +711,10 @@ public class HeliumConfig {
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
 
-    /// Configuration for the dialog that shows when a purchase attempt resolves as already owned because the user already owns the product (e.g. an existing Paddle subscription).
+    /// Configuration for the dialog that shows when a web checkout (Paddle or Stripe) purchase attempt resolves as already owned because the user already owns the product.
     /// Typically you want to avoid reaching this state at all by checking entitlements before showing a paywall.
     /// You can disable this dialog and, if desired, present your own UI by listening for `PurchaseRestoredEvent` (its `restoreOrigin` is `.duringPurchase` for this case).
-    public let alreadyPurchasedDialogConfig = AlreadyPurchasedConfig()
+    public let webCheckoutAlreadyPurchasedDialogConfig = WebCheckoutAlreadyPurchasedConfig()
     
     /// Whether a diagnostic view may appear explaining why a paywall failed to display or was
     /// skipped. Defaults to `true`; set to `false` to turn it off entirely.
