@@ -127,12 +127,14 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         }
     }
 
-    /// The currently held entitlement for the given Helium product id, if any. Reads existing state
+    /// The currently held entitlement for the given product id, ignoring price, if any. Web checkout
+    /// entitlements are product-level (a product can be owned under any of its prices), so callers
+    /// match on the product rather than the full `product:price` composite. Reads existing state
     /// without triggering a fetch.
-    func entitlement(forHeliumProductId heliumProductId: String) -> ProductEntitlement? {
+    func entitlement(forProductId productId: String) -> ProductEntitlement? {
         lock.withLock {
             let products = cached?.products ?? persisted
-            return products.first { $0.heliumProductId == heliumProductId }
+            return products.first { $0.productId == productId }
         }
     }
 

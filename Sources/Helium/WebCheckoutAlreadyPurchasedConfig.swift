@@ -27,7 +27,8 @@ public class WebCheckoutAlreadyPurchasedConfig {
         let source: HeliumPaymentEntitlementsSource = paymentProcessor == .stripe
             ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
             : HeliumEntitlementsManager.shared.paddleEntitlementsSource
-        let entitlement = source.entitlement(forHeliumProductId: productKey)
+        let productId = String(productKey.prefix(while: { $0 != ":" }))
+        let entitlement = source.entitlement(forProductId: productId)
         if let startedAt = entitlement?.subscriptionStartedAt {
             debugLines.append("Started: \(formatDateForDisplay(startedAt))")
         }
