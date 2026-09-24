@@ -416,15 +416,17 @@ class HeliumPaywallPresenter {
         }
     }
 
-    /// Presents a single-button alert over the paywall the user is looking at, keeping it on screen
-    /// behind the alert. Uses the presented paywall's own view controller when there is one, otherwise
-    /// the top-most view controller (e.g. for an embedded ``HeliumPaywall``).
+    /// Presents a single-button alert over the paywall for `paywallSession`.
+    /// Presents on that session's own presented view controller when it is still up,
+    /// otherwise the top-most view controller (e.g. for an embedded ``HeliumPaywall``, whose session is
+    /// not tracked here).
     ///
     /// `completion` is guaranteed to be called exactly once, with the outcome — when the user taps the
     /// button, or — so a caller awaiting it can never hang — if there is nowhere to present, if
     /// presentation silently fails, or if the alert is torn down some other way before it is tapped.
     @MainActor
     func presentAlertOverPaywall(
+        paywallSession: PaywallSession,
         title: String?,
         message: String?,
         buttonText: String,
@@ -438,7 +440,8 @@ class HeliumPaywallPresenter {
             completion(outcome)
         }
 
-        let base: UIViewController? = paywallsDisplayed.last ?? UIWindowHelper.findTopMostViewController()
+        let base: UIViewController? = paywallsDisplayed.first { $0.paywallSession.sessionId == paywallSession.sessionId }
+            ?? UIWindowHelper.findTopMostViewController()
         guard let presenter = base else {
             finish(.notPresented)
             return

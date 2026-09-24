@@ -141,6 +141,7 @@ class HeliumPaywallDelegateWrapper {
                 let outcome = await withCheckedContinuation { continuation in
                     Task { @MainActor in
                         HeliumPaywallPresenter.shared.presentAlertOverPaywall(
+                            paywallSession: paywallSession,
                             title: title,
                             message: message,
                             buttonText: buttonText,
