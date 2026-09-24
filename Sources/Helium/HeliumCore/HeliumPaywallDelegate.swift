@@ -135,8 +135,12 @@ class HeliumPaywallDelegateWrapper {
             let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
             if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
                 let title = dialogConfig.title
-                let message = dialogConfig.message
                 let buttonText = dialogConfig.closeButtonText
+                let message = alreadyOwnedAlertMessage(
+                    baseMessage: dialogConfig.message,
+                    productKey: productKey,
+                    paymentProcessor: paymentProcessor
+                )
                 // Show the alert and wait for the user to dismiss it before returning.
                 await withCheckedContinuation { continuation in
                     Task { @MainActor in
@@ -198,7 +202,29 @@ class HeliumPaywallDelegateWrapper {
         }
         return transactionStatus;
     }
-    
+
+    private func alreadyOwnedAlertMessage(
+        baseMessage: String,
+        productKey: String,
+        paymentProcessor: HeliumPaymentProcessor
+    ) -> String {
+        guard AppReceiptsHelper.shared.environment != .production else {
+            return baseMessage
+        }
+
+        var debugLines = ["Debug/TestFlight details:", "Product: \(productKey)"]
+        let source: HeliumPaymentEntitlementsSource = paymentProcessor == .stripe
+            ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
+            : HeliumEntitlementsManager.shared.paddleEntitlementsSource
+        if let expiresAt = source.subscriptionExpiresAt(forHeliumProductId: productKey) {
+            debugLines.append("Renews/expires: \(formatDateForDisplay(expiresAt))")
+        }
+        debugLines.append("")
+        debugLines.append("Delete and reinstall the app to be treated as a fresh user.")
+
+        return baseMessage + "\n\n" + debugLines.joined(separator: "\n")
+    }
+
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
         var result: Bool
         var restoringProcessor: HeliumPaymentProcessor = .appStore

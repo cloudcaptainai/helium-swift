@@ -123,6 +123,10 @@ func formatDateForDisplay(_ dateString: String?) -> String {
     return displayDateFormatter.string(from: date)
 }
 
+func formatDateForDisplay(_ date: Date) -> String {
+    return displayDateFormatter.string(from: date)
+}
+
 
 public func getVersionIndependentSafeAreaInsets(additionalTopPadding: CGFloat = 0, additionalBottomPadding: CGFloat = 0) -> EdgeInsets {
     let topPadding: CGFloat

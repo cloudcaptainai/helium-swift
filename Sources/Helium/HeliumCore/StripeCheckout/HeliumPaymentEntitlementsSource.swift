@@ -126,6 +126,15 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         }
     }
 
+    /// Expiration/renewal date for the given Helium product id from currently held entitlements, if
+    /// any. Reads existing state without triggering a fetch.
+    func subscriptionExpiresAt(forHeliumProductId heliumProductId: String) -> Date? {
+        lock.withLock {
+            let products = cached?.products ?? persisted
+            return products.first { $0.heliumProductId == heliumProductId }?.subscriptionExpiresAt
+        }
+    }
+
     private var currentHeliumProductIds: Set<String> {
         if let cached {
             return cached.activeHeliumProductIds
