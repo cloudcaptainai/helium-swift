@@ -527,6 +527,13 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
     case stripe
     case paddle
 
+    var isWebCheckout: Bool {
+        switch self {
+        case .stripe, .paddle: return true
+        case .appStore: return false
+        }
+    }
+
     static func resolve(for productKey: String) -> HeliumPaymentProcessor {
         if HeliumFetchedConfigManager.shared.getStripeProductsPriceMap()?[productKey] != nil {
             return .stripe
