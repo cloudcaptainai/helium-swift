@@ -75,6 +75,8 @@ class HeliumPaywallDelegateWrapper {
 
         let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
 
+        var resolvedAlreadyOwnedViaWebCheckout = false
+
         if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: productKey) {
             transactionStatus = simulated
         } else {
@@ -89,6 +91,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -101,6 +104,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -128,16 +132,21 @@ class HeliumPaywallDelegateWrapper {
                 restoreOrigin: .duringPurchase,
                 paymentProcessor: paymentProcessor
             ), paywallSession: paywallSession)
-            // StoreKit surfaces the already-owned case through Apple's own system dialog, so only
-            // web checkout needs Helium's alert.
-            if paymentProcessor.isWebCheckout,
-               Helium.config.webCheckoutAlreadyPurchasedDialogConfig.showHeliumDialog {
-                Task { @MainActor in
-                    HeliumSimpleAlert.present(
-                        title: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.title,
-                        message: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.message,
-                        buttonText: Helium.config.webCheckoutAlreadyPurchasedDialogConfig.closeButtonText
-                    )
+            let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
+            if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
+                let title = dialogConfig.title
+                let message = dialogConfig.message
+                let buttonText = dialogConfig.closeButtonText
+                // Show the alert and wait for the user to dismiss it before returning.
+                await withCheckedContinuation { continuation in
+                    Task { @MainActor in
+                        HeliumPaywallPresenter.shared.presentAlertOverPaywall(
+                            title: title,
+                            message: message,
+                            buttonText: buttonText,
+                            onDismiss: { continuation.resume() }
+                        )
+                    }
                 }
             }
         case .purchased:
