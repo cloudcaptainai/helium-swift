@@ -23,17 +23,29 @@ public class WebCheckoutAlreadyPurchasedConfig {
             return message
         }
 
-        var debugLines = ["DEBUG/TESTFLIGHT DETAILS", "", "Product: \(productKey)"]
         let source: HeliumPaymentEntitlementsSource = paymentProcessor == .stripe
             ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
             : HeliumEntitlementsManager.shared.paddleEntitlementsSource
         let productId = String(productKey.prefix(while: { $0 != ":" }))
-        let entitlement = source.entitlement(forProductId: productId)
-        if let startedAt = entitlement?.subscriptionStartedAt {
-            debugLines.append("Started: \(formatDateForDisplay(startedAt))")
-        }
-        if let expiresAt = entitlement?.subscriptionExpiresAt {
-            debugLines.append("Renews/expires: \(formatDateForDisplay(expiresAt))")
+        // Ownership is product-level, so list every owned price of the tapped product — the tapped
+        // price may not be the one actually owned.
+        let owned = source.entitlements(forProductId: productId)
+
+        var debugLines = ["DEBUG/TESTFLIGHT DETAILS", "", "Tapped: \(productKey)", ""]
+        if owned.isEmpty {
+            debugLines.append("Owned: none found")
+        } else {
+            debugLines.append("Owned:")
+            for (index, entitlement) in owned.enumerated() {
+                if index > 0 { debugLines.append("") }
+                debugLines.append(entitlement.heliumProductId)
+                if let startedAt = entitlement.subscriptionStartedAt {
+                    debugLines.append("Started \(formatDateForDisplay(startedAt))")
+                }
+                if let expiresAt = entitlement.subscriptionExpiresAt {
+                    debugLines.append("Renews \(formatDateForDisplay(expiresAt))")
+                }
+            }
         }
         debugLines.append("")
         debugLines.append("Delete and reinstall the app to be treated as a fresh user.")
