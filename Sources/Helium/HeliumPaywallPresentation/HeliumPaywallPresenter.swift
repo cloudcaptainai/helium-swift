@@ -427,12 +427,9 @@ class HeliumPaywallPresenter {
         }
 
         let base: UIViewController? = paywallsDisplayed.last ?? UIWindowHelper.findTopMostViewController()
-        guard var presenter = base else {
+        guard let presenter = base else {
             finish()
             return
-        }
-        while let presented = presenter.presentedViewController {
-            presenter = presented
         }
 
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
