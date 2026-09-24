@@ -408,7 +408,10 @@ class HeliumPaywallPresenter {
     /// Presents a single-button alert over the paywall the user is looking at, keeping it on screen
     /// behind the alert. Uses the presented paywall's own view controller when there is one, otherwise
     /// the top-most view controller (e.g. for an embedded ``HeliumPaywall``).
-    /// `onDismiss` is called when the user taps the button, or immediately if there is nowhere to present.
+    ///
+    /// `onDismiss` is guaranteed to be called exactly once: when the user taps the button, or — so a
+    /// caller awaiting it can never hang — if there is nowhere to present, if presentation silently
+    /// fails, or if the alert is torn down some other way before the button is tapped.
     @MainActor
     func presentAlertOverPaywall(
         title: String?,
@@ -416,19 +419,39 @@ class HeliumPaywallPresenter {
         buttonText: String,
         onDismiss: @escaping () -> Void
     ) {
+        var didFinish = false
+        func finish() {
+            guard !didFinish else { return }
+            didFinish = true
+            onDismiss()
+        }
+
         let base: UIViewController? = paywallsDisplayed.last ?? UIWindowHelper.findTopMostViewController()
         guard var presenter = base else {
-            onDismiss()
+            finish()
             return
         }
         while let presented = presenter.presentedViewController {
             presenter = presented
         }
+
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: buttonText, style: .default) { _ in
-            onDismiss()
+            finish()
         })
-        presenter.present(alert, animated: true)
+
+        // Backstop: if the alert is torn down without the button being tapped (e.g. its presenter is
+        // dismissed by other code), nothing else would resume the caller.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            finish()
+        }
+
+        presenter.present(alert, animated: true) {
+            // If presentation silently failed there is no button to tap, so resume now.
+            if alert.presentingViewController == nil {
+                finish()
+            }
+        }
     }
 
     @discardableResult
