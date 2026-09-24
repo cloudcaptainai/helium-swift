@@ -2,6 +2,17 @@ import Foundation
 import SwiftUI
 import UIKit
 
+/// Outcome of ``HeliumPaywallPresenter/presentAlertOverPaywall(title:message:buttonText:completion:)``.
+enum PaywallAlertOutcome {
+    /// The user tapped the button.
+    case acknowledged
+    /// The alert was shown, then dismissed some other way before the button was tapped (e.g. the host
+    /// closed the paywall).
+    case dismissedWhilePresented
+    /// The alert never appeared (nowhere to present, or presentation failed).
+    case notPresented
+}
+
 class HeliumPaywallPresenter {
     static let shared = HeliumPaywallPresenter()
     
@@ -409,42 +420,44 @@ class HeliumPaywallPresenter {
     /// behind the alert. Uses the presented paywall's own view controller when there is one, otherwise
     /// the top-most view controller (e.g. for an embedded ``HeliumPaywall``).
     ///
-    /// `completion` is guaranteed to be called exactly once: when the user taps the button, or — so a
-    /// caller awaiting it can never hang — if there is nowhere to present, if presentation silently
-    /// fails, or if the alert is torn down some other way before the button is tapped.
+    /// `completion` is guaranteed to be called exactly once, with the outcome — when the user taps the
+    /// button, or — so a caller awaiting it can never hang — if there is nowhere to present, if
+    /// presentation silently fails, or if the alert is torn down some other way before it is tapped.
     @MainActor
     func presentAlertOverPaywall(
         title: String?,
         message: String?,
         buttonText: String,
-        completion: @escaping () -> Void
+        completion: @escaping (PaywallAlertOutcome) -> Void
     ) {
         var didFinish = false
-        func finish() {
+        var didPresent = false
+        func finish(_ outcome: PaywallAlertOutcome) {
             guard !didFinish else { return }
             didFinish = true
-            completion()
+            completion(outcome)
         }
 
         let base: UIViewController? = paywallsDisplayed.last ?? UIWindowHelper.findTopMostViewController()
         guard let presenter = base else {
-            finish()
+            finish(.notPresented)
             return
         }
 
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: buttonText, style: .default) { _ in
-            finish()
+            finish(.acknowledged)
         })
 
         // Safety net: the button normally resumes the caller. If the alert is torn down some other
         // way without it being tapped, poll until the alert is confirmed gone and resume then — so we
         // never leave the caller hanging, but also never dismiss an alert the user is still reading.
+        // Whether it had actually presented distinguishes an external dismissal from a failure to show.
         func resumeOnceAlertGone() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 guard !didFinish else { return }
                 if alert.presentingViewController == nil {
-                    finish()
+                    finish(didPresent ? .dismissedWhilePresented : .notPresented)
                 } else {
                     resumeOnceAlertGone()
                 }
@@ -453,9 +466,11 @@ class HeliumPaywallPresenter {
         resumeOnceAlertGone()
 
         presenter.present(alert, animated: true) {
-            // If presentation silently failed there is no button to tap, so resume now.
             if alert.presentingViewController == nil {
-                finish()
+                // Presentation silently failed — there is no button to tap, so resume now.
+                finish(.notPresented)
+            } else {
+                didPresent = true
             }
         }
     }
