@@ -442,7 +442,7 @@ class HeliumPaywallPresenter {
 
         // Backstop: if the alert is torn down without the button being tapped (e.g. its presenter is
         // dismissed by other code), nothing else would resume the caller.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
             finish()
         }
 
