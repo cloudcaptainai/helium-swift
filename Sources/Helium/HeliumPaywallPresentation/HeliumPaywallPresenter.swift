@@ -437,11 +437,20 @@ class HeliumPaywallPresenter {
             finish()
         })
 
-        // Backstop: if the alert is torn down without the button being tapped (e.g. its presenter is
-        // dismissed by other code), nothing else would resume the caller.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-            finish()
+        // Safety net: the button normally resumes the caller. If the alert is torn down some other
+        // way without it being tapped, poll until the alert is confirmed gone and resume then — so we
+        // never leave the caller hanging, but also never dismiss an alert the user is still reading.
+        func resumeOnceAlertGone() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                guard !didFinish else { return }
+                if alert.presentingViewController == nil {
+                    finish()
+                } else {
+                    resumeOnceAlertGone()
+                }
+            }
         }
+        resumeOnceAlertGone()
 
         presenter.present(alert, animated: true) {
             // If presentation silently failed there is no button to tap, so resume now.
