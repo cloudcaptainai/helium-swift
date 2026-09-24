@@ -43,7 +43,7 @@ public class WebCheckoutAlreadyPurchasedConfig {
                     debugLines.append("Started \(formatDateForDisplay(startedAt))")
                 }
                 if let expiresAt = entitlement.subscriptionExpiresAt {
-                    debugLines.append("Renews \(formatDateForDisplay(expiresAt))")
+                    debugLines.append("Until \(formatDateForDisplay(expiresAt))")
                 }
             }
         }
