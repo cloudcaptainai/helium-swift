@@ -129,8 +129,7 @@ class HeliumPaywallDelegateWrapper {
             if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
                 let title = dialogConfig.title
                 let buttonText = dialogConfig.closeButtonText
-                let message = alreadyOwnedAlertMessage(
-                    baseMessage: dialogConfig.message,
+                let message = dialogConfig.alreadyOwnedMessage(
                     productKey: productKey,
                     paymentProcessor: paymentProcessor
                 )
@@ -202,32 +201,6 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         return transactionStatus;
-    }
-
-    private func alreadyOwnedAlertMessage(
-        baseMessage: String,
-        productKey: String,
-        paymentProcessor: HeliumPaymentProcessor
-    ) -> String {
-        guard AppReceiptsHelper.shared.environment != .production else {
-            return baseMessage
-        }
-
-        var debugLines = ["Debug/TestFlight details:", "Product: \(productKey)"]
-        let source: HeliumPaymentEntitlementsSource = paymentProcessor == .stripe
-            ? HeliumEntitlementsManager.shared.stripeEntitlementsSource
-            : HeliumEntitlementsManager.shared.paddleEntitlementsSource
-        let entitlement = source.entitlement(forHeliumProductId: productKey)
-        if let startedAt = entitlement?.subscriptionStartedAt {
-            debugLines.append("Started: \(formatDateForDisplay(startedAt))")
-        }
-        if let expiresAt = entitlement?.subscriptionExpiresAt {
-            debugLines.append("Renews/expires: \(formatDateForDisplay(expiresAt))")
-        }
-        debugLines.append("")
-        debugLines.append("Delete and reinstall the app to be treated as a fresh user.")
-
-        return baseMessage + "\n\n" + debugLines.joined(separator: "\n")
     }
 
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
