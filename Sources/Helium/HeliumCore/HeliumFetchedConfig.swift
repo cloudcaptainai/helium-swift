@@ -889,7 +889,9 @@ public class HeliumFetchedConfigManager {
 
         var allFound = false
         _localizedPriceMap.withValue { map in
-            allFound = productIds.allSatisfy { map.keys.contains($0) }
+            // The map is keyed by bare product ids while configured ids may carry
+            // a promo-offer suffix, so compare on the bare id.
+            allFound = productIds.allSatisfy { map.keys.contains(HeliumIosProductKey.productId($0)) }
         }
         return allFound
     }
@@ -937,7 +939,14 @@ public class HeliumFetchedConfigManager {
     }
     
     func refreshLocalizedPriceMap() async {
-        let productIds = Array(localizedPriceMap.keys)
+        // Re-fetch from the configured ids so promo composites keep their pairing;
+        // map keys alone would only carry the bare ids.
+        let productIds: [String]
+        if let fetchedConfig {
+            productIds = getAllProductIdsIos(config: fetchedConfig)
+        } else {
+            productIds = Array(localizedPriceMap.keys)
+        }
         await buildLocalizedPriceMap(productIds)
     }
     
@@ -990,7 +999,10 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        return getLocalizedPriceMap().filter { productIDs.contains($0.key) }
+        // Configured ids may be `productId:offerId` composites while the map is
+        // keyed by bare ids, so match on the bare id too.
+        let acceptedProductIds = Set(productIDs.map { HeliumIosProductKey.productId($0) })
+        return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     
     private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {

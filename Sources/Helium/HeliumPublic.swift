@@ -1081,11 +1081,18 @@ public class HeliumTesting {
     /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
     public var introOfferEligibility: ((String) async -> Bool)?
 
+    /// Returns a stubbed promo-offer eligibility for the given product ID.
+    /// When set, overrides the StoreKit transaction-history check.
+    ///
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
+    public var promoOfferEligibility: ((String) async -> Bool)?
+
     /// Clears all configured test handlers.
     public func reset() {
         purchaseHandler = nil
         restoreHandler = nil
         introOfferEligibility = nil
+        promoOfferEligibility = nil
     }
 
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
@@ -1108,6 +1115,15 @@ public class HeliumTesting {
         guard let handler = introOfferEligibility else { return nil }
         guard !isProductionEnvironment else {
             HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.introOfferEligibility.")
+            return nil
+        }
+        return await handler(productId)
+    }
+
+    func simulatedPromoOfferEligibilityIfActive(productId: String) async -> Bool? {
+        guard let handler = promoOfferEligibility else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.promoOfferEligibility.")
             return nil
         }
         return await handler(productId)
