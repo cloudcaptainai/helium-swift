@@ -939,15 +939,14 @@ public class HeliumFetchedConfigManager {
     }
     
     func refreshLocalizedPriceMap() async {
-        // Re-fetch from the configured ids so promo composites keep their pairing;
-        // map keys alone would only carry the bare ids.
-        let productIds: [String]
+        // Union live config ids (promo composites included), bundled fallback config
+        // ids, and anything already priced so no product loses its pairing.
+        var productIds = Set(localizedPriceMap.keys)
         if let fetchedConfig {
-            productIds = getAllProductIdsIos(config: fetchedConfig)
-        } else {
-            productIds = Array(localizedPriceMap.keys)
+            productIds.formUnion(getAllProductIdsIos(config: fetchedConfig))
         }
-        await buildLocalizedPriceMap(productIds)
+        productIds.formUnion(HeliumFallbackViewManager.shared.iosProductIds)
+        await buildLocalizedPriceMap(Array(productIds))
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use
@@ -999,9 +998,10 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        // Configured ids may be `productId:offerId` composites while the map is
-        // keyed by bare ids, so match on the bare id too.
-        let acceptedProductIds = Set(productIDs.map { HeliumIosProductKey.productId($0) })
+        // The map carries bare ids plus one entry per configured composite; match
+        // either the configured key itself or the bare id of a composite.
+        var acceptedProductIds = Set(productIDs)
+        acceptedProductIds.formUnion(productIDs.map { HeliumIosProductKey.productId($0) })
         return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     

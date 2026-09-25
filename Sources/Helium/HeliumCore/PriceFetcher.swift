@@ -247,8 +247,10 @@ class PriceFetcher {
         var priceMap: [String: LocalizedPrice] = [:]
 
             // iOS keys may arrive as `<productId>:<promoOfferId>` composites; StoreKit
-            // only knows the bare id, so the map stays keyed by `product.id`.
-            var promoOfferIdsByProduct: [String: String] = [:]
+            // only knows the bare id. The map keeps a bare entry per product (no promo
+            // fields) plus one entry per composite sku carrying that offer's promo data,
+            // so the same product can pair different offers across triggers.
+            var compositesByProduct: [String: [(sku: String, offerId: String)]] = [:]
             var bareSkus: [String] = []
             var seenBareSkus = Set<String>()
             for sku in skus {
@@ -257,15 +259,12 @@ class PriceFetcher {
                     bareSkus.append(parts.productId)
                 }
                 if let offerId = parts.promoOfferId {
-                    if let existing = promoOfferIdsByProduct[parts.productId], existing != offerId {
-                        HeliumLogger.log(.debug, category: .core, "Conflicting promo offers paired with product", metadata: ["productId": parts.productId, "kept": existing, "ignored": offerId])
-                    } else {
-                        promoOfferIdsByProduct[parts.productId] = offerId
-                    }
+                    compositesByProduct[parts.productId, default: []].append((sku, offerId))
                 }
             }
 
             let products = await fetchProductsWithRetry(for: bareSkus)
+            var promoEligibilityByProduct: [String: Bool] = [:]
             
             for product in products {
                 let formatter = NumberFormatter()
@@ -285,8 +284,11 @@ class PriceFetcher {
                 var iapInfo: IAPInfo?
                 
                 // Handle different product types
+                var subscriptionPeriodUnit = ""
+                var subscriptionPeriodValue = 0
+                var introOfferEligible = false
+                var introOfferData: SubscriptionOffer? = nil
                 if let sub = product.subscription {
-                    var introOfferData: SubscriptionOffer? = nil
                     if let introOffer = sub.introductoryOffer {
                         introOfferData = SubscriptionOffer(
                             type: introOffer.type.rawValue,
@@ -298,41 +300,21 @@ class PriceFetcher {
                             paymentMode: introOffer.paymentMode.rawValue
                         )
                     }
-
-                    var promoOfferEligible: Bool? = nil
-                    var promoOfferData: PromotionalOfferInfo? = nil
-                    if let offerId = promoOfferIdsByProduct[product.id] {
-                        if let offer = sub.promotionalOffers.first(where: { $0.id == offerId }) {
-                            promoOfferEligible = await checkPromoOfferEligibility(for: product)
-                            promoOfferData = PromotionalOfferInfo(
-                                offerId: offerId,
-                                type: "promotional",
-                                price: offer.price,
-                                displayPrice: offer.displayPrice,
-                                periodUnit: formatSubscriptionPeriod(offer.period.unit),
-                                periodValue: offer.period.value,
-                                periodCount: offer.periodCount,
-                                paymentMode: offer.paymentMode.rawValue
-                            )
-                        } else {
-                            promoOfferEligible = false
-                            HeliumLogger.log(.debug, category: .core, "Paired promo offer not present on product", metadata: ["productId": product.id, "offerId": offerId])
-                        }
-                    }
+                    subscriptionPeriodUnit = formatSubscriptionPeriod(sub.subscriptionPeriod.unit)
+                    subscriptionPeriodValue = sub.subscriptionPeriod.value
+                    introOfferEligible = await checkIntroOfferEligibility(for: product)
 
                     subscriptionInfo = SubscriptionInfo(
-                        periodUnit: formatSubscriptionPeriod(sub.subscriptionPeriod.unit),
-                        periodValue: sub.subscriptionPeriod.value,
-                        introOfferEligible: await checkIntroOfferEligibility(for: product),
-                        introOffer: introOfferData,
-                        promoOfferEligible: promoOfferEligible,
-                        promoOffer: promoOfferData
+                        periodUnit: subscriptionPeriodUnit,
+                        periodValue: subscriptionPeriodValue,
+                        introOfferEligible: introOfferEligible,
+                        introOffer: introOfferData
                     )
                 } else {
                     // Any non-subscription product is an IAP
                     iapInfo = IAPInfo(quantity: 1)
                 }
-                
+
                 let price = LocalizedPrice(
                     baseInfo: baseInfo,
                     productType: product.type.rawValue,
@@ -344,8 +326,58 @@ class PriceFetcher {
                     iapInfo: iapInfo,
                     familyShareable: product.isFamilyShareable
                 )
-                
+
                 priceMap[product.id] = price
+
+                guard let sub = product.subscription,
+                      let composites = compositesByProduct[product.id] else {
+                    continue
+                }
+                for composite in composites {
+                    var promoOfferEligible = false
+                    var promoOfferData: PromotionalOfferInfo? = nil
+                    if let offer = sub.promotionalOffers.first(where: { $0.id == composite.offerId }) {
+                        if let eligible = promoEligibilityByProduct[product.id] {
+                            promoOfferEligible = eligible
+                        } else {
+                            // Eligibility is subscription-group level, so it is shared
+                            // across every offer paired with this product.
+                            promoOfferEligible = await checkPromoOfferEligibility(for: product)
+                            promoEligibilityByProduct[product.id] = promoOfferEligible
+                        }
+                        promoOfferData = PromotionalOfferInfo(
+                            offerId: composite.offerId,
+                            type: "promotional",
+                            price: offer.price,
+                            displayPrice: offer.displayPrice,
+                            periodUnit: formatSubscriptionPeriod(offer.period.unit),
+                            periodValue: offer.period.value,
+                            periodCount: offer.periodCount,
+                            paymentMode: offer.paymentMode.rawValue
+                        )
+                    } else {
+                        HeliumLogger.log(.debug, category: .core, "Paired promo offer not present on product", metadata: ["productId": product.id, "offerId": composite.offerId])
+                    }
+
+                    priceMap[composite.sku] = LocalizedPrice(
+                        baseInfo: baseInfo,
+                        productType: product.type.rawValue,
+                        localizedTitle: product.id,
+                        localizedDescription: nil,
+                        displayName: nil,
+                        description: nil,
+                        subscriptionInfo: SubscriptionInfo(
+                            periodUnit: subscriptionPeriodUnit,
+                            periodValue: subscriptionPeriodValue,
+                            introOfferEligible: introOfferEligible,
+                            introOffer: introOfferData,
+                            promoOfferEligible: promoOfferEligible,
+                            promoOffer: promoOfferData
+                        ),
+                        iapInfo: iapInfo,
+                        familyShareable: product.isFamilyShareable
+                    )
+                }
             }
         
         return priceMap
