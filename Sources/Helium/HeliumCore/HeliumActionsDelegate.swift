@@ -76,8 +76,8 @@ class ActionsDelegateWrapper: ObservableObject {
     }
     
     @MainActor
-    func makePurchase() async -> HeliumPaywallTransactionStatus {
-        await delegate.makePurchase();
+    func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
+        await delegate.makePurchase(promoOfferId: promoOfferId);
     }
     
     @MainActor
@@ -225,7 +225,7 @@ class HeliumActionsDelegate: ObservableObject {
         resolvedPaywallTraits = traits
     }
 
-    func makePurchase() async -> HeliumPaywallTransactionStatus {
+    func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
         let pressedEvent = PurchasePressedEvent(
@@ -251,7 +251,7 @@ class HeliumActionsDelegate: ObservableObject {
                 presentationTraits: paywallSession.presentationContext.customPaywallTraits
             )
         }
-        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits)
+        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits, promoOfferId: promoOfferId)
     }
     
     @MainActor

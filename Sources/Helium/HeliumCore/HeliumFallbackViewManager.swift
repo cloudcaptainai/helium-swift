@@ -27,7 +27,13 @@ public class HeliumFallbackViewManager {
     
     private var loadedConfig: HeliumFetchedConfig?
     private var loadedConfigJSON: JSON?
-    
+
+    /// iOS product ids from the bundled fallback config, including promo composites.
+    var iosProductIds: [String] {
+        guard let loadedConfig else { return [] }
+        return Array(Set(loadedConfig.triggerToPaywalls.values.flatMap { $0.productIdsIOS }))
+    }
+
     func setUpFallbackBundle() {
         var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
         if let customURL = Helium.config.customFallbacksURL {

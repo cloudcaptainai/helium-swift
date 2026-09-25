@@ -15,6 +15,7 @@ import StoreKit
 open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
     
     public var delegateType: String { "h_revenuecat" }
+    open var supportsPromotionalOffers: Bool { true }
     
     public let entitlementId: String?
     private var offerings: Offerings?
@@ -95,6 +96,19 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
     }
     
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
+        await performPurchase(productId: productId, promoOfferId: nil)
+    }
+
+    /// Executes a purchase with the App Store promotional offer identified by
+    /// `promoOfferId` (the offer identifier configured on the product in App Store
+    /// Connect). If RevenueCat reports the user as ineligible for the offer, the
+    /// purchase proceeds without it; Apple still applies an intro offer when eligible.
+    /// A signing or lookup failure returns `.failed` rather than a full-price purchase.
+    open func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus {
+        await performPurchase(productId: productId, promoOfferId: promoOfferId)
+    }
+
+    private func performPurchase(productId: String, promoOfferId: String?) async -> HeliumPaywallTransactionStatus {
         // Keep this value as up-to-date as possible
         Helium.identify.revenueCatAppUserId = Purchases.shared.appUserID
         if allowHeliumUserAttribute {
@@ -104,14 +118,13 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                 ])
             }
         }
-        
+
         do {
-            var result: PurchaseResultData? = nil
+            var packageToPurchase: Package? = nil
+            var storeProductToPurchase: StoreProduct? = nil
             var offeringWithProduct: Offering? = nil
-            
+
             if let offerings {
-                var packageToPurchase: Package? = nil
-                
                 for (_, offering) in offerings.all {
                     for package in offering.availablePackages {
                         if package.storeProduct.productIdentifier == productId {
@@ -124,28 +137,53 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
                         break
                     }
                 }
-                
-                if let package = packageToPurchase {
-                    result = try await Purchases.shared.purchase(package: package)
-                }
             }
-            
-            if result == nil {
+
+            if packageToPurchase == nil {
                 if let product = productMappings[productId] {
-                    result = try await Purchases.shared.purchase(product: product)
+                    storeProductToPurchase = product
                 }
             }
-            
-            if result == nil {
+
+            if packageToPurchase == nil && storeProductToPurchase == nil {
                 let productToPurchase = await Purchases.shared.products([productId])
                 if let product = productToPurchase.first {
                     productMappings[productId] = product
-                    result = try await Purchases.shared.purchase(product: product)
+                    storeProductToPurchase = product
                 }
             }
-            
-            guard let result else {
+
+            guard let storeProduct = packageToPurchase?.storeProduct ?? storeProductToPurchase else {
                 return .failed(RevenueCatDelegateError.cannotFindProduct)
+            }
+
+            var promotionalOffer: PromotionalOffer? = nil
+            if let promoOfferId {
+                guard let discount = storeProduct.discounts.first(where: { $0.offerIdentifier == promoOfferId }) else {
+                    return .failed(RevenueCatDelegateError.promoOfferNotFound)
+                }
+                do {
+                    promotionalOffer = try await Purchases.shared.promotionalOffer(forProductDiscount: discount, product: storeProduct)
+                } catch let error as RevenueCat.ErrorCode where error == .ineligibleError {
+                    print("[Helium] RevenueCatDelegate - User ineligible for promo offer \(promoOfferId); purchasing without it")
+                } catch {
+                    return .failed(error)
+                }
+            }
+
+            let result: PurchaseResultData
+            if let package = packageToPurchase {
+                if let promotionalOffer {
+                    result = try await Purchases.shared.purchase(package: package, promotionalOffer: promotionalOffer)
+                } else {
+                    result = try await Purchases.shared.purchase(package: package)
+                }
+            } else {
+                if let promotionalOffer {
+                    result = try await Purchases.shared.purchase(product: storeProduct, promotionalOffer: promotionalOffer)
+                } else {
+                    result = try await Purchases.shared.purchase(product: storeProduct)
+                }
             }
             
             if result.userCancelled {
@@ -291,6 +329,7 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 public enum RevenueCatDelegateError: LocalizedError {
     case cannotFindProduct
     case couldNotVerifyTransaction
+    case promoOfferNotFound
 
     public var errorDescription: String? {
         switch self {
@@ -298,6 +337,8 @@ public enum RevenueCatDelegateError: LocalizedError {
             return "Could not find product. Please ensure products are properly configured."
         case .couldNotVerifyTransaction:
             return "Purchase transaction could not be verified."
+        case .promoOfferNotFound:
+            return "Promotional offer not found on this product."
         }
     }
 }

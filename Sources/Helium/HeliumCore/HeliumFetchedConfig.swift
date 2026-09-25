@@ -889,7 +889,9 @@ public class HeliumFetchedConfigManager {
 
         var allFound = false
         _localizedPriceMap.withValue { map in
-            allFound = productIds.allSatisfy { map.keys.contains($0) }
+            // The map is keyed by bare product ids while configured ids may carry
+            // a promo-offer suffix, so compare on the bare id.
+            allFound = productIds.allSatisfy { map.keys.contains(HeliumIosProductKey.productId($0)) }
         }
         return allFound
     }
@@ -937,8 +939,14 @@ public class HeliumFetchedConfigManager {
     }
     
     func refreshLocalizedPriceMap() async {
-        let productIds = Array(localizedPriceMap.keys)
-        await buildLocalizedPriceMap(productIds)
+        // Union live config ids (promo composites included), bundled fallback config
+        // ids, and anything already priced so no product loses its pairing.
+        var productIds = Set(localizedPriceMap.keys)
+        if let fetchedConfig {
+            productIds.formUnion(getAllProductIdsIos(config: fetchedConfig))
+        }
+        productIds.formUnion(HeliumFallbackViewManager.shared.iosProductIds)
+        await buildLocalizedPriceMap(Array(productIds))
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use
@@ -990,7 +998,11 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        return getLocalizedPriceMap().filter { productIDs.contains($0.key) }
+        // The map carries bare ids plus one entry per configured composite; match
+        // either the configured key itself or the bare id of a composite.
+        var acceptedProductIds = Set(productIDs)
+        acceptedProductIds.formUnion(productIDs.map { HeliumIosProductKey.productId($0) })
+        return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     
     private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
