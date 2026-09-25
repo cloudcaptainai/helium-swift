@@ -31,6 +31,10 @@ public protocol HeliumPaywallDelegate: AnyObject {
     /// applies no offer.
     func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus
 
+    /// Whether `makePurchase(productId:promoOfferId:)` actually applies the offer. When `false`,
+    /// paired promotional offers are reported as ineligible so the paywall shows the regular price.
+    var supportsPromotionalOffers: Bool { get }
+
     /// Attempt to restore previous purchases. Return `true` if any were restored.
     func restorePurchases() async -> Bool
 
@@ -55,6 +59,8 @@ public extension HeliumPaywallDelegate {
     func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus {
         await makePurchase(productId: productId)
     }
+
+    var supportsPromotionalOffers: Bool { false }
 }
 
 

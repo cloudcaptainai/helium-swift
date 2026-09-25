@@ -15,6 +15,7 @@ import StoreKit
 open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransaction {
     
     public var delegateType: String { "h_revenuecat" }
+    open var supportsPromotionalOffers: Bool { true }
     
     public let entitlementId: String?
     private var offerings: Offerings?

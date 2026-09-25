@@ -14,6 +14,7 @@ private final class SingleArgPurchaseDelegate: HeliumPaywallDelegate {
 
 private final class PromoRecordingDelegate: HeliumPaywallDelegate {
     var received: [(productId: String, promoOfferId: String)] = []
+    var supportsPromotionalOffers: Bool { true }
 
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         .failed(NSError(domain: "unexpected", code: 0))
@@ -42,5 +43,10 @@ final class HeliumPaywallDelegateOverloadTests: HeliumTestCase {
         XCTAssertEqual(delegate.received.count, 1)
         XCTAssertEqual(delegate.received[0].productId, "test_yearly")
         XCTAssertEqual(delegate.received[0].promoOfferId, "OFFER50")
+    }
+
+    func testSupportsPromotionalOffersDefaultsToFalse() {
+        XCTAssertFalse(SingleArgPurchaseDelegate().supportsPromotionalOffers)
+        XCTAssertTrue(PromoRecordingDelegate().supportsPromotionalOffers)
     }
 }

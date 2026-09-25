@@ -337,7 +337,9 @@ class PriceFetcher {
                     var promoOfferEligible = false
                     var promoOfferData: PromotionalOfferInfo? = nil
                     if let offer = sub.promotionalOffers.first(where: { $0.id == composite.offerId }) {
-                        if let eligible = promoEligibilityByProduct[product.id] {
+                        if !Helium.config.purchaseDelegate.supportsPromotionalOffers {
+                            promoOfferEligible = false
+                        } else if let eligible = promoEligibilityByProduct[product.id] {
                             promoOfferEligible = eligible
                         } else {
                             // Eligibility is subscription-group level, so it is shared
