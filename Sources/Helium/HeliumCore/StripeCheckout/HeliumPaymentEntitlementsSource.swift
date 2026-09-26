@@ -82,6 +82,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         let newEntitlement = ProductEntitlement(
             productId: productId,
             priceId: priceId,
+            subscriptionStartedAt: nil,
             subscriptionExpiresAt: subscriptionExpiresAt
         )
         lock.withLock {
@@ -123,6 +124,17 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         }
         if let fileURL = persistenceFileURL {
             try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    /// All currently held entitlements for the given product id, ignoring price. Web checkout
+    /// entitlements are product-level (a product can be owned under any of its prices), so callers
+    /// match on the product rather than the full `product:price` composite. Reads existing state
+    /// without triggering a fetch.
+    func entitlements(forProductId productId: String) -> [ProductEntitlement] {
+        lock.withLock {
+            let products = cached?.products ?? persisted
+            return products.filter { $0.productId == productId }
         }
     }
 
@@ -184,9 +196,9 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
             let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
-                let dateString = sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt
-                let expiresAt = parseISODate(dateString)
-                return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionExpiresAt: expiresAt)
+                let expiresAt = parseISODate(sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt)
+                let startedAt = parseISODate(sub.startedAt ?? sub.createdAt)
+                return ProductEntitlement(productId: sub.productId, priceId: sub.priceId, subscriptionStartedAt: startedAt, subscriptionExpiresAt: expiresAt)
             }
 
             lock.withLock {
