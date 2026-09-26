@@ -70,10 +70,6 @@ class HeliumObservabilityManager {
         if let thirdPartyId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId() {
             p["thirdPartyAnalyticsAnonymousId"] = thirdPartyId
         }
-        if let anonymousId = HeliumAnalyticsManager.shared.getActiveAnalyticsInstance()?.anonymousId,
-           !anonymousId.isEmpty {
-            p["anonymousId"] = anonymousId
-        }
         p["heliumSessionId"] = HeliumIdentityManager.shared.getHeliumSessionId()
         if let scope {
             p["heliumPaywallSessionId"] = scope.sessionId

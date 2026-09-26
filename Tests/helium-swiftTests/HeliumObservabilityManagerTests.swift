@@ -12,7 +12,6 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         // Enrichment reads the organization off the downloaded config; clear it so
         // the no-downloaded-config path is what's under test.
         HeliumFetchedConfigManager.reset()
-        HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
     }
 
     override func tearDown() {
@@ -106,12 +105,6 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
 
         XCTAssertNil(enriched["thirdPartyAnalyticsAnonymousId"])
-    }
-
-    func testEnrichOmitsAnonymousIdWhenNoProductAnalyticsInstanceIsLive() {
-        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
-
-        XCTAssertNil(enriched["anonymousId"])
     }
 
     func testEnrichPreservesEventProperties() {
