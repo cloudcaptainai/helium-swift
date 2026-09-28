@@ -101,11 +101,29 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 
     /// Executes a purchase with the App Store promotional offer identified by
     /// `promoOfferId` (the offer identifier configured on the product in App Store
-    /// Connect). If RevenueCat reports the user as ineligible for the offer, the
-    /// purchase proceeds without it; Apple still applies an intro offer when eligible.
+    /// Connect). Offer resolution goes through `promotionalOffer(for:product:)`:
+    /// if RevenueCat reports the user as ineligible for the offer, the purchase
+    /// proceeds without it; Apple still applies an intro offer when eligible.
     /// A signing or lookup failure returns `.failed` rather than a full-price purchase.
     open func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus {
         await performPurchase(productId: productId, promoOfferId: promoOfferId)
+    }
+
+    /// Resolves the signed RevenueCat `PromotionalOffer` for `promoOfferId` on `product`.
+    /// Returns nil when RevenueCat reports the user ineligible, so the purchase proceeds
+    /// without the offer. Throws `RevenueCatDelegateError.promoOfferNotFound` when the
+    /// product has no discount with that identifier, and rethrows signing errors.
+    /// Override to customize offer lookup or eligibility handling.
+    open func promotionalOffer(for promoOfferId: String, product: StoreProduct) async throws -> PromotionalOffer? {
+        guard let discount = product.discounts.first(where: { $0.offerIdentifier == promoOfferId }) else {
+            throw RevenueCatDelegateError.promoOfferNotFound
+        }
+        do {
+            return try await Purchases.shared.promotionalOffer(forProductDiscount: discount, product: product)
+        } catch let error as RevenueCat.ErrorCode where error == .ineligibleError {
+            print("[Helium] RevenueCatDelegate - User ineligible for promo offer \(promoOfferId); purchasing without it")
+            return nil
+        }
     }
 
     private func performPurchase(productId: String, promoOfferId: String?) async -> HeliumPaywallTransactionStatus {
@@ -159,13 +177,8 @@ open class RevenueCatDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTrans
 
             var promotionalOffer: PromotionalOffer? = nil
             if let promoOfferId {
-                guard let discount = storeProduct.discounts.first(where: { $0.offerIdentifier == promoOfferId }) else {
-                    return .failed(RevenueCatDelegateError.promoOfferNotFound)
-                }
                 do {
-                    promotionalOffer = try await Purchases.shared.promotionalOffer(forProductDiscount: discount, product: storeProduct)
-                } catch let error as RevenueCat.ErrorCode where error == .ineligibleError {
-                    print("[Helium] RevenueCatDelegate - User ineligible for promo offer \(promoOfferId); purchasing without it")
+                    promotionalOffer = try await self.promotionalOffer(for: promoOfferId, product: storeProduct)
                 } catch {
                     return .failed(error)
                 }
