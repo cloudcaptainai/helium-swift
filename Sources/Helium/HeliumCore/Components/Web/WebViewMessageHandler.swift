@@ -93,7 +93,10 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 if let productId = data["product"] as? String {
                     self.delegateWrapper?.selectProduct(productId: productId)
                 }
-                let promoOfferId = (data["promoOfferId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                var promoOfferId: String? = nil
+                if let offerId = data["promoOfferId"] as? String, !offerId.isEmpty {
+                    promoOfferId = offerId
+                }
                 if let result = await self.delegateWrapper?.makePurchase(promoOfferId: promoOfferId) {
                     switch result {
                     case .purchased:

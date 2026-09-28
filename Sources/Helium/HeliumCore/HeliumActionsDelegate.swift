@@ -77,7 +77,7 @@ class ActionsDelegateWrapper: ObservableObject {
     
     @MainActor
     func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
-        await delegate.makePurchase(promoOfferId: promoOfferId);
+        await delegate.makePurchase(promoOfferId: promoOfferId)
     }
     
     @MainActor

@@ -870,8 +870,8 @@ public class HeliumFetchedConfigManager {
     
     @discardableResult
     func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
-        let productIds = getAllProductIdsIos(config: config)
-        await buildLocalizedPriceMap(productIds)
+        let configuredProductIds = getAllProductIdsIos(config: config)
+        await buildLocalizedPriceMap(configuredProductIds)
 
         // Merge server-provided prices (favoring StoreKit values on collision)
         if let serverPrices = config?.stripeProducts {
@@ -889,9 +889,10 @@ public class HeliumFetchedConfigManager {
 
         var allFound = false
         _localizedPriceMap.withValue { map in
-            // The map is keyed by bare product ids while configured ids may carry
-            // a promo-offer suffix, so compare on the bare id.
-            allFound = productIds.allSatisfy { map.keys.contains(HeliumIosProductKey.productId($0)) }
+            allFound = configuredProductIds.allSatisfy { configuredId in
+                let bareProductId = HeliumIosProductKey.productId(configuredId)
+                return map[bareProductId] != nil
+            }
         }
         return allFound
     }
@@ -939,14 +940,8 @@ public class HeliumFetchedConfigManager {
     }
     
     func refreshLocalizedPriceMap() async {
-        // Union live config ids (promo composites included), bundled fallback config
-        // ids, and anything already priced so no product loses its pairing.
-        var productIds = Set(localizedPriceMap.keys)
-        if let fetchedConfig {
-            productIds.formUnion(getAllProductIdsIos(config: fetchedConfig))
-        }
-        productIds.formUnion(HeliumFallbackViewManager.shared.iosProductIds)
-        await buildLocalizedPriceMap(Array(productIds))
+        let productIds = Array(localizedPriceMap.keys)
+        await buildLocalizedPriceMap(productIds)
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use
