@@ -287,6 +287,40 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         )
     }
 
+    func testPurchaseSucceededPayloadIncludesOfferIdentifier() throws {
+        try assertWirePayload(
+            PurchaseSucceededEvent(
+                productId: "com.test.product", offerIdentifier: "WIN_BACK",
+                triggerName: "onboarding", paywallName: "spring_sale",
+                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+                paymentProcessor: .appStore
+            ),
+            equals: [
+                "type": "subscriptionSucceeded",
+                "productKey": "com.test.product",
+                "offerIdentifier": "WIN_BACK",
+                "triggerName": "onboarding",
+                "paywallTemplateName": "spring_sale",
+                "paymentProcessor": "appStore",
+            ]
+        )
+        try assertWirePayload(
+            PurchaseSucceededEvent(
+                productId: "com.test.product",
+                triggerName: "onboarding", paywallName: "spring_sale",
+                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+                paymentProcessor: .appStore
+            ),
+            equals: [
+                "type": "subscriptionSucceeded",
+                "productKey": "com.test.product",
+                "triggerName": "onboarding",
+                "paywallTemplateName": "spring_sale",
+                "paymentProcessor": "appStore",
+            ]
+        )
+    }
+
     func testPurchaseFailedPayload() throws {
         let error = NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Something failed"])
         try assertWirePayload(

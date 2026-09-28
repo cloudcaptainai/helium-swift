@@ -228,8 +228,10 @@ class HeliumActionsDelegate: ObservableObject {
     func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
+        let selectedParts = HeliumIosProductKey.split(selectedProductId)
         let pressedEvent = PurchasePressedEvent(
-            productId: selectedProductId,
+            productId: selectedParts.productId,
+            offerIdentifier: promoOfferId ?? selectedParts.promoOfferId,
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
             paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId)

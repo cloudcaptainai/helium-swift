@@ -49,6 +49,11 @@ final class PromoPurchaseRoutingTests: HeliumTestCase {
         }
         XCTAssertEqual(productId, "test_yearly")
         XCTAssertEqual(promoOfferId, "test_yearly_offer_identifier")
+
+        waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
+        let event = listener.eventsOfType(PurchaseSucceededEvent.self).first
+        XCTAssertEqual(event?.productId, "test_yearly")
+        XCTAssertEqual(event?.offerIdentifier, "test_yearly_offer_identifier")
     }
 
     func testCompositeKeyWithoutExplicitOfferIdStillRoutesToPromoOverload() async {
@@ -64,6 +69,11 @@ final class PromoPurchaseRoutingTests: HeliumTestCase {
         }
         XCTAssertEqual(productId, "test_yearly")
         XCTAssertEqual(promoOfferId, "test_yearly_offer_identifier")
+
+        waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
+        let event = listener.eventsOfType(PurchaseSucceededEvent.self).first
+        XCTAssertEqual(event?.productId, "test_yearly")
+        XCTAssertEqual(event?.offerIdentifier, "test_yearly_offer_identifier")
     }
 
     func testBareKeyRoutesToSingleArgPurchase() async {
@@ -78,6 +88,11 @@ final class PromoPurchaseRoutingTests: HeliumTestCase {
             return XCTFail("expected plain purchase call, got \(String(describing: recordingDelegate.calls.first))")
         }
         XCTAssertEqual(productId, "test_yearly")
+
+        waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
+        let event = listener.eventsOfType(PurchaseSucceededEvent.self).first
+        XCTAssertEqual(event?.productId, "test_yearly")
+        XCTAssertNil(event?.offerIdentifier)
     }
 
     func testStripeCompositeKeyKeepsWebRouting() async {

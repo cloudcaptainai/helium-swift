@@ -64,6 +64,7 @@ extension ProductEvent {
     fileprivate func productAnalyticsPayload() -> [String: Any] {
         var payload = contextAnalyticsPayload()
         payload["productKey"] = productId
+        payload["offerIdentifier"] = offerIdentifier
         return payload
     }
 }
