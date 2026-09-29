@@ -35,28 +35,7 @@ final class PromoPurchaseRoutingTests: HeliumTestCase {
         makeTestSession(trigger: "test_trigger")
     }
 
-    func testCompositeKeyWithExplicitOfferIdRoutesToPromoOverload() async {
-        _ = await HeliumPaywallDelegateWrapper.shared.handlePurchase(
-            productKey: "test_yearly:test_yearly_offer_identifier",
-            triggerName: "test_trigger",
-            paywallTemplateName: "test_paywall",
-            paywallSession: makeSession(),
-            promoOfferId: "test_yearly_offer_identifier"
-        )
-
-        guard case .promo(let productId, let promoOfferId) = recordingDelegate.calls.first else {
-            return XCTFail("expected promo purchase call, got \(String(describing: recordingDelegate.calls.first))")
-        }
-        XCTAssertEqual(productId, "test_yearly")
-        XCTAssertEqual(promoOfferId, "test_yearly_offer_identifier")
-
-        waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
-        let event = listener.eventsOfType(PurchaseSucceededEvent.self).first
-        XCTAssertEqual(event?.productId, "test_yearly")
-        XCTAssertEqual(event?.offerIdentifier, "test_yearly_offer_identifier")
-    }
-
-    func testCompositeKeyWithoutExplicitOfferIdStillRoutesToPromoOverload() async {
+    func testCompositeKeyRoutesToPromoOverload() async {
         _ = await HeliumPaywallDelegateWrapper.shared.handlePurchase(
             productKey: "test_yearly:test_yearly_offer_identifier",
             triggerName: "test_trigger",

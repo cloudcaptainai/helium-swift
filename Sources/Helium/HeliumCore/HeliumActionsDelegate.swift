@@ -76,8 +76,8 @@ class ActionsDelegateWrapper: ObservableObject {
     }
     
     @MainActor
-    func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
-        await delegate.makePurchase(promoOfferId: promoOfferId)
+    func makePurchase() async -> HeliumPaywallTransactionStatus {
+        await delegate.makePurchase()
     }
     
     @MainActor
@@ -225,13 +225,13 @@ class HeliumActionsDelegate: ObservableObject {
         resolvedPaywallTraits = traits
     }
 
-    func makePurchase(promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
+    func makePurchase() async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
         let selectedParts = HeliumIosProductKey.split(selectedProductId)
         let pressedEvent = PurchasePressedEvent(
             productId: selectedParts.productId,
-            offerIdentifier: promoOfferId ?? selectedParts.promoOfferId,
+            offerIdentifier: selectedParts.promoOfferId,
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
             paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId)
@@ -253,7 +253,7 @@ class HeliumActionsDelegate: ObservableObject {
                 presentationTraits: paywallSession.presentationContext.customPaywallTraits
             )
         }
-        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits, promoOfferId: promoOfferId)
+        return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits)
     }
     
     @MainActor

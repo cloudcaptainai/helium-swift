@@ -93,11 +93,7 @@ class WebViewMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
                 if let productId = data["product"] as? String {
                     self.delegateWrapper?.selectProduct(productId: productId)
                 }
-                var promoOfferId: String? = nil
-                if let offerId = data["promoOfferId"] as? String, !offerId.isEmpty {
-                    promoOfferId = offerId
-                }
-                if let result = await self.delegateWrapper?.makePurchase(promoOfferId: promoOfferId) {
+                if let result = await self.delegateWrapper?.makePurchase() {
                     switch result {
                     case .purchased:
                         self.haptics.onPurchaseSucceeded()

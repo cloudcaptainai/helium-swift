@@ -81,12 +81,12 @@ class HeliumPaywallDelegateWrapper {
         return Helium.config.purchaseDelegate
     }
     
-    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, paywallTraits: HeliumUserTraits? = nil, promoOfferId: String? = nil) async -> HeliumPaywallTransactionStatus {
-        // StoreKit APIs all take the bare product id. The bridge-provided offer id
-        // wins; the composite suffix is the safety net when the message omits it.
+    func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, paywallTraits: HeliumUserTraits? = nil) async -> HeliumPaywallTransactionStatus {
+        // StoreKit APIs all take the bare product id; the composite suffix carries
+        // the paired promo offer id.
         let keyParts = HeliumIosProductKey.split(productKey)
         let storeKitProductId = keyParts.productId
-        let resolvedPromoOfferId = promoOfferId ?? keyParts.promoOfferId
+        let resolvedPromoOfferId = keyParts.promoOfferId
 
         let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: storeKitProductId)
