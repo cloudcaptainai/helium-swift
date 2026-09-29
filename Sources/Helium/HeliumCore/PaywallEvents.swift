@@ -566,12 +566,16 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: Template name from Helium configuration
     public let paywallName: String
     
+    /// The transaction identifier for this purchase from the payment processor
+    /// that completed it. For App Store purchases this is the StoreKit transaction ID.
+    public let transactionId: String?
+
     /// StoreKit transaction ID
     public let storeKitTransactionId: String?
-    
+
     /// StoreKit original transaction ID
     public let storeKitOriginalTransactionId: String?
-    
+
     /// Time taken to retrieve StoreKit transaction IDs after purchase successs in milliseconds
     public let skPostPurchaseTxnTimeMS: UInt64?
 
@@ -582,12 +586,13 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, transactionId: String? = nil, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
         self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
+        self.transactionId = transactionId ?? storeKitTransactionId
         self.skPostPurchaseTxnTimeMS = skPostPurchaseTxnTimeMS
         self.paymentProcessor = paymentProcessor
         self.timestamp = timestamp
@@ -605,6 +610,9 @@ public struct PurchaseSucceededEvent: ProductEvent {
             "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let transactionId {
+            dict["transactionId"] = transactionId
+        }
         if let storeKitTransactionId {
             dict["storeKitTransactionId"] = storeKitTransactionId
             dict["canonicalJoinTransactionId"] = storeKitTransactionId

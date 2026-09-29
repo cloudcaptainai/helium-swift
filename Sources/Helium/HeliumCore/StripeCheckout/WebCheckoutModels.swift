@@ -64,6 +64,17 @@ enum WebCheckoutRedirect {
         }
     }
 
+    /// The processor's transaction identifier appended to the success redirect URL,
+    /// if present. Empty values are treated as absent.
+    static func transactionId(from url: URL) -> String? {
+        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard let value = queryItems.first(where: { $0.name == "transactionId" })?.value,
+              !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
     private static func classifyByQueryParams(_ url: URL) -> HeliumCheckoutRedirectType? {
         let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? {
