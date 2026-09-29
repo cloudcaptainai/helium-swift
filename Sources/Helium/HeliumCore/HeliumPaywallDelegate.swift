@@ -27,9 +27,7 @@ public protocol HeliumPaywallDelegate: AnyObject {
 
     /// Execute a purchase for the given product, applying the App Store promotional
     /// offer identified by `promoOfferId`. `productId` is the plain App Store product
-    /// identifier. The default implementation applies no offer and calls
-    /// `makePurchase(productId:)`; `StoreKitDelegate` uses that default, `RevenueCatDelegate`
-    /// applies the offer.
+    /// identifier.
     func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus
 
     /// Whether `makePurchase(productId:promoOfferId:)` actually applies the offer. When `false`,
