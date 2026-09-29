@@ -96,6 +96,8 @@ class HeliumPaywallDelegateWrapper {
 
         let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
 
+        var resolvedAlreadyOwnedViaWebCheckout = false
+
         if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: storeKitProductId) {
             transactionStatus = simulated
         } else {
@@ -110,6 +112,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -122,6 +125,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -144,13 +148,41 @@ class HeliumPaywallDelegateWrapper {
         case .failed(let error):
             self.fireEvent(PurchaseFailedEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(
-                productId: storeKitProductId,
-                triggerName: triggerName,
-                paywallName: paywallTemplateName,
-                restoreOrigin: .duringPurchase,
-                paymentProcessor: paymentProcessor
-            ), paywallSession: paywallSession)
+            let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
+            var fireRestoreEvent = true
+            if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
+                let title = dialogConfig.title
+                let buttonText = dialogConfig.closeButtonText
+                let message = dialogConfig.alreadyOwnedMessage(
+                    productKey: productKey,
+                    paymentProcessor: paymentProcessor
+                )
+                // Show the alert and wait for it to resolve before firing the event, so an event
+                // handler that dismisses the paywall can't tear the alert down before it's read. If the
+                // host closes the paywall while the alert is up, treat the flow as cancelled and fire
+                // neither the event nor the resulting onEntitled callback.
+                let outcome = await withCheckedContinuation { continuation in
+                    Task { @MainActor in
+                        HeliumPaywallPresenter.shared.presentAlertOverPaywall(
+                            paywallSession: paywallSession,
+                            title: title,
+                            message: message,
+                            buttonText: buttonText,
+                            completion: { continuation.resume(returning: $0) }
+                        )
+                    }
+                }
+                fireRestoreEvent = outcome != .dismissedWhilePresented
+            }
+            if fireRestoreEvent {
+                self.fireEvent(PurchaseRestoredEvent(
+                    productId: storeKitProductId,
+                    triggerName: triggerName,
+                    paywallName: paywallTemplateName,
+                    restoreOrigin: .duringPurchase,
+                    paymentProcessor: paymentProcessor
+                ), paywallSession: paywallSession)
+            }
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
@@ -204,7 +236,7 @@ class HeliumPaywallDelegateWrapper {
         }
         return transactionStatus;
     }
-    
+
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
         var result: Bool
         var restoringProcessor: HeliumPaymentProcessor = .appStore

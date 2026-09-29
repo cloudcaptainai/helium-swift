@@ -14,6 +14,11 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         HeliumFetchedConfigManager.reset()
     }
 
+    override func tearDown() {
+        HeliumIdentityManager.shared.setThirdPartyAnalyticsAnonymousId(nil)
+        super.tearDown()
+    }
+
     /// Events that carry their own organization must keep it when no downloaded
     /// config is available, otherwise early-startup telemetry loses its org.
     func testEnrichKeepsAnEventSuppliedOrganizationWhenNoConfigIsDownloaded() {
@@ -31,6 +36,7 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         XCTAssertNil(enriched["heliumPaywallSessionId"])
         XCTAssertNil(enriched["triggerName"])
         XCTAssertNil(enriched["paywallUUID"])
+        XCTAssertNil(enriched["isFallback"])
         XCTAssertEqual(enriched["platform"] as? String, "ios")
     }
 
@@ -38,7 +44,8 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         let scope = PaywallObservabilityScope(
             sessionId: "session_1",
             trigger: "onboarding",
-            paywallUUID: "uuid_1"
+            paywallUUID: "uuid_1",
+            isFallback: false
         )
 
         let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: scope)
@@ -46,13 +53,28 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         XCTAssertEqual(enriched["heliumPaywallSessionId"] as? String, "session_1")
         XCTAssertEqual(enriched["triggerName"] as? String, "onboarding")
         XCTAssertEqual(enriched["paywallUUID"] as? String, "uuid_1")
+        XCTAssertEqual(enriched["isFallback"] as? Bool, false)
+    }
+
+    func testEnrichWithFallbackScopeMarksTheEventAsFallback() {
+        let scope = PaywallObservabilityScope(
+            sessionId: "session_1",
+            trigger: "onboarding",
+            paywallUUID: nil,
+            isFallback: true
+        )
+
+        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: scope)
+
+        XCTAssertEqual(enriched["isFallback"] as? Bool, true)
     }
 
     func testEnrichWithScopeMissingAPaywallUUIDOmitsOnlyThatKey() {
         let scope = PaywallObservabilityScope(
             sessionId: "session_1",
             trigger: "onboarding",
-            paywallUUID: nil
+            paywallUUID: nil,
+            isFallback: false
         )
 
         let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: scope)
@@ -60,6 +82,29 @@ final class HeliumObservabilityManagerTests: XCTestCase {
         XCTAssertNil(enriched["paywallUUID"])
         XCTAssertEqual(enriched["heliumPaywallSessionId"] as? String, "session_1")
         XCTAssertEqual(enriched["triggerName"] as? String, "onboarding")
+    }
+
+    func testEnrichWithoutWrapperSdkFallsBackToNativeVersionAndPlatform() {
+        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
+
+        XCTAssertEqual(enriched["sdkVersionWrapper"] as? String, BuildConstants.version)
+        XCTAssertEqual(enriched["wrapperSdk"] as? String, "ios")
+    }
+
+    func testEnrichIncludesThirdPartyAnalyticsAnonymousIdWhenSet() {
+        HeliumIdentityManager.shared.setThirdPartyAnalyticsAnonymousId("third_party_anon_1")
+
+        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
+
+        XCTAssertEqual(enriched["thirdPartyAnalyticsAnonymousId"] as? String, "third_party_anon_1")
+    }
+
+    func testEnrichOmitsThirdPartyAnalyticsAnonymousIdWhenUnset() {
+        HeliumIdentityManager.shared.setThirdPartyAnalyticsAnonymousId(nil)
+
+        let enriched = HeliumObservabilityManager.shared.enrich(eventProps: [:], scope: nil)
+
+        XCTAssertNil(enriched["thirdPartyAnalyticsAnonymousId"])
     }
 
     func testEnrichPreservesEventProperties() {

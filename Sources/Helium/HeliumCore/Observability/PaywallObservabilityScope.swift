@@ -6,6 +6,7 @@ struct PaywallObservabilityScope: Sendable {
     let sessionId: String
     let trigger: String
     let paywallUUID: String?
+    let isFallback: Bool
 }
 
 extension PaywallSession {
@@ -13,7 +14,8 @@ extension PaywallSession {
         PaywallObservabilityScope(
             sessionId: sessionId,
             trigger: trigger,
-            paywallUUID: paywallInfoWithBackups?.paywallUUID
+            paywallUUID: paywallInfoWithBackups?.paywallUUID,
+            isFallback: isFallback
         )
     }
 }
