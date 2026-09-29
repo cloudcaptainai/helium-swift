@@ -180,7 +180,10 @@ class HeliumPaywallDelegateWrapper {
                 let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
                 let purchaseSucceededEvent = PurchaseSucceededEvent(
                     productId: storeKitProductId,
-                    offerIdentifier: resolvedPromoOfferId,
+                    offerIdentifier: Self.appliedPromoOfferIdentifier(
+                        transaction: transactionIds?.transaction,
+                        requested: resolvedPromoOfferId
+                    ),
                     triggerName: triggerName,
                     paywallName: paywallTemplateName,
                     storeKitTransactionId: transactionIds?.transactionId,
@@ -453,6 +456,18 @@ class HeliumPaywallDelegateWrapper {
     /// How long to wait for a pending purchase (e.g., Ask to Buy) before giving up.
     private static let pendingPurchaseTimeoutNanoseconds: UInt64 = 24 * 60 * 60 * 1_000_000_000 // 24 hours
 
+    /// The promotional offer actually applied to a completed transaction. On OS versions that
+    /// expose `Transaction.offer`, the transaction is authoritative (nil when the store completed
+    /// a plain or introductory purchase); otherwise the requested offer id is reported.
+    static func appliedPromoOfferIdentifier(transaction: Transaction?, requested: String?) -> String? {
+        guard let transaction else { return requested }
+        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *) {
+            let offer = transaction.offer
+            return offer?.type == .promotional ? offer?.id : nil
+        }
+        return requested
+    }
+
     /// Observes Transaction.updates for a pending purchase (e.g., Ask to Buy) to complete.
     /// When the transaction is approved, finishes it, updates entitlements, and fires events.
     /// Automatically cancels after a timeout if no verified transaction arrives.
@@ -500,13 +515,10 @@ class HeliumPaywallDelegateWrapper {
                         let transactionIds = HeliumTransactionIdResult(transaction: transaction)
                         self?.syncAfterPurchase(productId: productId, transaction: transaction)
 
-                        // The approved transaction reports the offer actually applied;
-                        // prefer it over the id the paywall paired.
-                        var appliedOfferIdentifier = offerIdentifier
-                        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *) {
-                            let offer = transaction.offer
-                            appliedOfferIdentifier = offer?.type == .promotional ? offer?.id : nil
-                        }
+                        let appliedOfferIdentifier = Self.appliedPromoOfferIdentifier(
+                            transaction: transaction,
+                            requested: offerIdentifier
+                        )
 
                         // Fire purchase success event
                         self?.fireEvent(
