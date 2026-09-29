@@ -500,11 +500,18 @@ class HeliumPaywallDelegateWrapper {
                         let transactionIds = HeliumTransactionIdResult(transaction: transaction)
                         self?.syncAfterPurchase(productId: productId, transaction: transaction)
 
+                        // The approved transaction reports the offer actually applied;
+                        // prefer it over the id the paywall paired.
+                        var appliedOfferIdentifier = offerIdentifier
+                        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *), let offer = transaction.offer {
+                            appliedOfferIdentifier = offer.type == .promotional ? offer.id : nil
+                        }
+
                         // Fire purchase success event
                         self?.fireEvent(
                             PurchaseSucceededEvent(
                                 productId: productId,
-                                offerIdentifier: offerIdentifier,
+                                offerIdentifier: appliedOfferIdentifier,
                                 triggerName: triggerName,
                                 paywallName: paywallTemplateName,
                                 storeKitTransactionId: transactionIds.transactionId,

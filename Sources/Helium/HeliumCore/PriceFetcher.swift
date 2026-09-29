@@ -20,7 +20,7 @@ public struct SubscriptionInfo: Codable {
     /// Nil unless a promotional offer is paired with this product. Independent of
     /// `introOfferEligible` — each is read from its own check, never derived.
     public let promoOfferEligible: Bool?
-    public let promoOffer: PromotionalOfferInfo?
+    public let promoOffer: SubscriptionOffer?
 
     public init(
         periodUnit: String,
@@ -28,7 +28,7 @@ public struct SubscriptionInfo: Codable {
         introOfferEligible: Bool,
         introOffer: SubscriptionOffer?,
         promoOfferEligible: Bool? = nil,
-        promoOffer: PromotionalOfferInfo? = nil
+        promoOffer: SubscriptionOffer? = nil
     ) {
         self.periodUnit = periodUnit
         self.periodValue = periodValue
@@ -39,17 +39,6 @@ public struct SubscriptionInfo: Codable {
     }
 }
 
-public struct PromotionalOfferInfo: Codable {
-    public let offerId: String
-    public let type: String
-    public let price: Decimal
-    public let displayPrice: String
-    public let periodUnit: String
-    public let periodValue: Int
-    public let periodCount: Int
-    public let paymentMode: String
-}
-
 public struct SubscriptionOffer: Codable {
     public let type: String
     public let price: Decimal
@@ -58,6 +47,28 @@ public struct SubscriptionOffer: Codable {
     public let periodValue: Int
     public let periodCount: Int
     public let paymentMode: String
+    /// App Store promotional offer identifier. Nil for intro offers.
+    public let offerId: String?
+
+    public init(
+        type: String,
+        price: Decimal,
+        displayPrice: String,
+        periodUnit: String,
+        periodValue: Int,
+        periodCount: Int,
+        paymentMode: String,
+        offerId: String? = nil
+    ) {
+        self.type = type
+        self.price = price
+        self.displayPrice = displayPrice
+        self.periodUnit = periodUnit
+        self.periodValue = periodValue
+        self.periodCount = periodCount
+        self.paymentMode = paymentMode
+        self.offerId = offerId
+    }
 }
 
 // IAP specific info (combines consumable and non-consumable)
@@ -124,8 +135,7 @@ public struct LocalizedPrice: Codable {
                 subDict["promoOfferEligible"] = promoOfferEligible
             }
             if let promoOffer = subInfo.promoOffer {
-                subDict["promoOffer"] = [
-                    "offerId": promoOffer.offerId,
+                var promoDict: [String: Any] = [
                     "type": promoOffer.type,
                     "price": promoOffer.price,
                     "displayPrice": promoOffer.displayPrice,
@@ -134,6 +144,10 @@ public struct LocalizedPrice: Codable {
                     "periodCount": promoOffer.periodCount,
                     "paymentMode": promoOffer.paymentMode,
                 ]
+                if let offerId = promoOffer.offerId {
+                    promoDict["offerId"] = offerId
+                }
+                subDict["promoOffer"] = promoDict
             }
             dict["subscription"] = subDict
         }
@@ -335,7 +349,7 @@ class PriceFetcher {
                 }
                 for composite in composites {
                     var promoOfferEligible = false
-                    var promoOfferData: PromotionalOfferInfo? = nil
+                    var promoOfferData: SubscriptionOffer? = nil
                     if let offer = sub.promotionalOffers.first(where: { $0.id == composite.offerId }) {
                         if !Helium.config.purchaseDelegate.supportsPromotionalOffers {
                             promoOfferEligible = false
@@ -347,15 +361,15 @@ class PriceFetcher {
                             promoOfferEligible = await checkPromoOfferEligibility(for: product)
                             promoEligibilityByProduct[product.id] = promoOfferEligible
                         }
-                        promoOfferData = PromotionalOfferInfo(
-                            offerId: composite.offerId,
+                        promoOfferData = SubscriptionOffer(
                             type: "promotional",
                             price: offer.price,
                             displayPrice: offer.displayPrice,
                             periodUnit: formatSubscriptionPeriod(offer.period.unit),
                             periodValue: offer.period.value,
                             periodCount: offer.periodCount,
-                            paymentMode: offer.paymentMode.rawValue
+                            paymentMode: offer.paymentMode.rawValue,
+                            offerId: composite.offerId
                         )
                     } else {
                         HeliumLogger.log(.debug, category: .core, "Paired promo offer not present on product", metadata: ["productId": product.id, "offerId": composite.offerId])

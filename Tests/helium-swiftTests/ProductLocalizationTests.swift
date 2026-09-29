@@ -124,15 +124,15 @@ final class ProductLocalizationTests: XCTestCase {
             introOfferEligible: false,
             introOffer: nil,
             promoOfferEligible: true,
-            promoOffer: PromotionalOfferInfo(
-                offerId: "test_yearly_offer_identifier",
+            promoOffer: SubscriptionOffer(
                 type: "promotional",
                 price: 3.99,
                 displayPrice: "$3.99",
                 periodUnit: "week",
                 periodValue: 1,
                 periodCount: 1,
-                paymentMode: "payAsYouGo"
+                paymentMode: "payAsYouGo",
+                offerId: "test_yearly_offer_identifier"
             )
         ))
 
@@ -185,19 +185,19 @@ final class ProductLocalizationTests: XCTestCase {
         XCTAssertEqual(subscription?["promoOfferEligible"] as? Bool, true)
     }
 
-    func testPromotionalOfferInfoCodableRoundTrip() throws {
-        let original = PromotionalOfferInfo(
-            offerId: "OFFER50",
+    func testSubscriptionOfferCodableRoundTrip() throws {
+        let original = SubscriptionOffer(
             type: "promotional",
             price: 3.99,
             displayPrice: "$3.99",
             periodUnit: "month",
             periodValue: 3,
             periodCount: 1,
-            paymentMode: "payUpFront"
+            paymentMode: "payUpFront",
+            offerId: "OFFER50"
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(PromotionalOfferInfo.self, from: data)
+        let decoded = try JSONDecoder().decode(SubscriptionOffer.self, from: data)
         XCTAssertEqual(decoded.offerId, "OFFER50")
         XCTAssertEqual(decoded.type, "promotional")
         XCTAssertEqual(decoded.price, 3.99)
@@ -206,6 +206,21 @@ final class ProductLocalizationTests: XCTestCase {
         XCTAssertEqual(decoded.periodValue, 3)
         XCTAssertEqual(decoded.periodCount, 1)
         XCTAssertEqual(decoded.paymentMode, "payUpFront")
+    }
+
+    func testIntroOfferEncodesWithoutOfferIdKey() throws {
+        let introOffer = SubscriptionOffer(
+            type: "introductory",
+            price: 0,
+            displayPrice: "Free",
+            periodUnit: "week",
+            periodValue: 1,
+            periodCount: 1,
+            paymentMode: "freeTrial"
+        )
+        let data = try JSONEncoder().encode(introOffer)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertNil(json?["offerId"])
     }
 
     func testBasePriceInfoCodable() throws {

@@ -447,7 +447,7 @@ public struct ProductSelectedEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where selection occurred
@@ -496,7 +496,7 @@ public struct PurchasePressedEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where purchase was initiated
@@ -579,7 +579,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where purchase succeeded
@@ -655,7 +655,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where purchase was cancelled
@@ -709,7 +709,7 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where purchase failed
@@ -873,7 +873,7 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where re-purchase was attempted
@@ -984,7 +984,7 @@ public struct PurchasePendingEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect
     public let productId: String
 
-    /// App Store promotional offer identifier applied to this product, when one is paired.
+    /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
     /// The trigger identifier for the paywall where purchase is pending
