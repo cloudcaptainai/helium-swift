@@ -503,8 +503,9 @@ class HeliumPaywallDelegateWrapper {
                         // The approved transaction reports the offer actually applied;
                         // prefer it over the id the paywall paired.
                         var appliedOfferIdentifier = offerIdentifier
-                        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *), let offer = transaction.offer {
-                            appliedOfferIdentifier = offer.type == .promotional ? offer.id : nil
+                        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *) {
+                            let offer = transaction.offer
+                            appliedOfferIdentifier = offer?.type == .promotional ? offer?.id : nil
                         }
 
                         // Fire purchase success event
