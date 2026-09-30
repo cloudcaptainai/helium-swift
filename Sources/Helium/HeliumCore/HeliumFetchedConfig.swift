@@ -242,7 +242,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
-    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic var localizedPriceMap: [String: LocalizedPrice] = [:]
     @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
 
     func fetchConfig(
@@ -939,6 +939,12 @@ public class HeliumFetchedConfigManager {
         }
     }
     
+    /// Product keys of a paywall that have no entry in the localized price map yet.
+    func productIdsMissingLocalizedPrices(_ productIds: [String]) -> [String] {
+        let known = Set(localizedPriceMap.keys)
+        return Array(Set(productIds)).filter { !known.contains($0) }.sorted()
+    }
+
     func refreshLocalizedPriceMap() async {
         let productIds = Array(localizedPriceMap.keys)
         await buildLocalizedPriceMap(productIds)
