@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Which browser an External Web Checkout URL opens in, and how, sent by the server per
 /// paywall. Unrelated to `HeliumPresentationStyle`, which animates the paywall itself.
@@ -14,6 +15,39 @@ public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
     case safariFullScreen
     /// A `WKWebView` that opens full screen.
     case inAppWebView
+}
+
+/// What an in-app web checkout shows while its page loads. Does not apply to the
+/// `.externalBrowser` ``WebCheckoutBrowserStyle``.
+public enum InAppWebCheckoutLoadingCover {
+    /// A loading spinner on the system background, following ``HeliumConfig/lightDarkModeOverride``.
+    case standard
+    /// Nothing over the page, so the browser paints white until the first byte arrives
+    /// (in dark mode too). In the Safari styles, a page that fails to load also shows Safari's
+    /// error page briefly as the browser closes.
+    case disabled
+    /// A loading spinner on this specified color. The spinner's color is black or white,
+    /// whatever contrasts better.
+    case color(UIColor)
+}
+
+extension InAppWebCheckoutLoadingCover {
+    /// nil when disabled.
+    var backgroundColor: UIColor? {
+        switch self {
+        case .standard: return .systemBackground
+        case .disabled: return nil
+        case .color(let color): return color
+        }
+    }
+
+    /// nil keeps the spinner's own default.
+    var spinnerColor: UIColor? {
+        guard case .color(let background) = self else { return nil }
+        return UIColor { traits in
+            background.resolvedColor(with: traits).preferredContrastColor
+        }
+    }
 }
 
 extension KeyedDecodingContainer {

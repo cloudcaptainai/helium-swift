@@ -28,20 +28,25 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     /// does, and owns its own way out — closing is a cancel redirect like any other.
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = loadingCover.backgroundColor ?? .systemBackground
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         // Painted before the first load so the wait for the first byte shows this rather
         // than the web view's white default.
-        webView.isOpaque = false
-        webView.backgroundColor = .systemBackground
-        webView.scrollView.backgroundColor = .systemBackground
+        if let background = loadingCover.backgroundColor {
+            webView.isOpaque = false
+            webView.backgroundColor = background
+            webView.scrollView.backgroundColor = background
+        }
         // Edge to edge, as the paywall renders: the page handles its own safe areas.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
 
         activityIndicator.hidesWhenStopped = true
+        if let spinnerColor = loadingCover.spinnerColor {
+            activityIndicator.color = spinnerColor
+        }
 
         for subview in [webView, activityIndicator] {
             subview.translatesAutoresizingMaskIntoConstraints = false
@@ -63,6 +68,7 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     }
 
     private func showSpinnerIfStillLoading() {
+        guard loadingCover.backgroundColor != nil else { return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.spinnerDelay * 1_000_000_000))
             guard let self, !hasRenderedSomething else { return }

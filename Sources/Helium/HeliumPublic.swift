@@ -742,6 +742,10 @@ public class HeliumConfig {
 
     // MARK: - External Web Checkout Configuration
 
+    /// What an in-app web checkout shows while its page loads. Read when checkout opens, so a
+    /// change applies to the next one. Defaults to `.standard`.
+    public var inAppWebCheckoutLoadingCover: InAppWebCheckoutLoadingCover = .standard
+
     /// Which External Web Checkout payment processors are enabled. Empty means disabled.
     private(set) var webCheckoutProcessors: WebCheckoutProcessors = []
 

@@ -72,6 +72,7 @@ enum WebCheckoutBrowserDismissal {
 class WebCheckoutBrowserViewController: UIViewController {
 
     private let onDismiss: @MainActor (WebCheckoutBrowserDismissal) -> Void
+    let loadingCover = Helium.config.inAppWebCheckoutLoadingCover
     private var reportsDismissal = true
     private var dismissalReason: WebCheckoutBrowserDismissal = .closed
 
@@ -140,7 +141,7 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = loadingCover.backgroundColor ?? .systemBackground
 
         addChild(safariViewController)
         safariViewController.view.frame = view.bounds
@@ -155,12 +156,16 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
     /// colour it, so it is covered until the page can paint itself. In place before the
     /// presentation animation starts, so there is no frame where the white shows.
     private func addCover() {
-        cover.backgroundColor = .systemBackground
+        guard let background = loadingCover.backgroundColor else { return }
+        cover.backgroundColor = background
         cover.frame = view.bounds
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(cover)
 
         let spinner = UIActivityIndicatorView(style: .medium)
+        if let spinnerColor = loadingCover.spinnerColor {
+            spinner.color = spinnerColor
+        }
         spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.startAnimating()
         cover.addSubview(spinner)
