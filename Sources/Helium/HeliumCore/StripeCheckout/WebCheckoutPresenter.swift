@@ -6,12 +6,14 @@ import SafariServices
 enum WebCheckoutPresenter {
 
     private static weak var presentedBrowser: WebCheckoutBrowserViewController?
+    private static var presentedBrowserSessionId: String?
 
     /// Returns whether the browser was shown. `onBrowserDismissed` fires only for the
     /// in-app styles, which close without the app ever backgrounding.
     static func present(
         _ url: URL,
         style: WebCheckoutBrowserStyle,
+        paywallSessionId: String,
         onBrowserDismissed: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void
     ) async -> Bool {
         switch style {
@@ -28,6 +30,7 @@ enum WebCheckoutPresenter {
                     onDismiss: onBrowserDismissed
                 )
             presentedBrowser = browser
+            presentedBrowserSessionId = paywallSessionId
             return await presentModally(browser, from: presenter)
         }
     }
@@ -36,6 +39,13 @@ enum WebCheckoutPresenter {
     static func dismissInAppBrowser() {
         presentedBrowser?.dismissWithoutReporting()
         presentedBrowser = nil
+        presentedBrowserSessionId = nil
+    }
+
+    /// A full-screen style takes the paywall under it off screen, which an inline paywall
+    /// would otherwise read as the user closing it.
+    static func isShowingCheckout(forSessionId sessionId: String) -> Bool {
+        presentedBrowser != nil && presentedBrowserSessionId == sessionId
     }
 
     private static func presentModally(_ viewController: UIViewController, from presenter: UIViewController) async -> Bool {

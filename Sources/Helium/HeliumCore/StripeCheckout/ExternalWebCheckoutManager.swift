@@ -404,7 +404,11 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] reason in
+        let opened = await WebCheckoutPresenter.present(
+            url,
+            style: browserStyle,
+            paywallSessionId: paywallSession.sessionId
+        ) { [weak self] reason in
             self?.onInAppBrowserDismissed(reason, paywallSession: paywallSession)
         }
         HeliumObservabilityManager.shared.track(
