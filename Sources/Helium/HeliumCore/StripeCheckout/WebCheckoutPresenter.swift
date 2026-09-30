@@ -42,7 +42,7 @@ enum WebCheckoutPresenter {
         presentedBrowserSessionId = nil
     }
 
-    /// A full-screen style takes the paywall under it off screen, which an inline paywall
+    /// A full-screen style takes the paywall under it off screen, which a `HeliumPaywall`
     /// would otherwise read as the user closing it.
     static func isShowingCheckout(forSessionId sessionId: String) -> Bool {
         presentedBrowser != nil && presentedBrowserSessionId == sessionId
