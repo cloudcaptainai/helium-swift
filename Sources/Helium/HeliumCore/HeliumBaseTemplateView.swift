@@ -82,7 +82,7 @@ public struct DynamicBaseTemplateView: View {
                 let sessionId = actionsDelegate.paywallSession.sessionId
                 // Still open underneath its own checkout, which has to be able to detect the
                 // purchase and dismiss this paywall once it closes.
-                if WebCheckoutPresenter.isShowingCheckout(forSessionId: sessionId) {
+                if WebCheckoutPresenter.isCoveringPaywall(forSessionId: sessionId) {
                     return
                 }
                 InlinePaywallDismissRegistry.unregister(sessionId: sessionId)

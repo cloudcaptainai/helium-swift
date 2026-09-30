@@ -43,9 +43,11 @@ enum WebCheckoutPresenter {
     }
 
     /// A full-screen style takes the paywall under it off screen, which a `HeliumPaywall`
-    /// would otherwise read as the user closing it.
-    static func isShowingCheckout(forSessionId sessionId: String) -> Bool {
-        presentedBrowser != nil && presentedBrowserSessionId == sessionId
+    /// would otherwise read as the user closing it. A sheet leaves the paywall on screen, so
+    /// the paywall disappearing under one is a real close.
+    static func isCoveringPaywall(forSessionId sessionId: String) -> Bool {
+        guard let presentedBrowser, presentedBrowserSessionId == sessionId else { return false }
+        return presentedBrowser.modalPresentationStyle == .fullScreen
     }
 
     private static func presentModally(_ viewController: UIViewController, from presenter: UIViewController) async -> Bool {
