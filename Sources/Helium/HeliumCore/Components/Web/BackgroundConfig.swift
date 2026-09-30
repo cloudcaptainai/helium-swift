@@ -22,9 +22,13 @@ extension UIColor {
 
     /// Black or white, whichever reads better on this color. White when the luminance
     /// can't be resolved, since it reads on more unknown content than black does.
+    ///
+    /// White is kept for as long as it holds WCAG's 3:1 minimum for non-text UI, which it
+    /// loses at a luminance of 0.3. Black out-contrasts it from about 0.18, but white on
+    /// mid-tones such as the system blue still reads well and looks more natural.
     var preferredContrastColor: UIColor {
         guard let luminance = relativeLuminance else { return .white }
-        return luminance > 0.5 ? .black : .white
+        return luminance > 0.3 ? .black : .white
     }
 }
 
