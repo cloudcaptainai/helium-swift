@@ -411,7 +411,8 @@ struct HeliumControlPanelView: View {
                     secondTry: secondTryBundle
                 )
 
-                let missing = HeliumFetchedConfigManager.shared.productIdsMissingLocalizedPrices(version.productIds ?? [])
+                let previewProductIds = (version.productIds ?? []) + (secondTryBundle?.productIds ?? [])
+                let missing = HeliumFetchedConfigManager.shared.productIdsMissingLocalizedPrices(previewProductIds)
                 await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(missing)
 
                 guard !Task.isCancelled else {
