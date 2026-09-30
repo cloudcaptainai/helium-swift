@@ -78,6 +78,11 @@ class WebCheckoutBrowserViewController: UIViewController {
     init(onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
+        switch Helium.config.lightDarkModeOverride {
+        case .light: overrideUserInterfaceStyle = .light
+        case .dark: overrideUserInterfaceStyle = .dark
+        case .system: overrideUserInterfaceStyle = .unspecified
+        }
     }
 
     @available(*, unavailable)
