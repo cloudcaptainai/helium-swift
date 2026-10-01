@@ -535,14 +535,15 @@ public class ExternalWebCheckoutManager: NSObject {
     /// An in-app browser never backgrounds the app, so its closing is the only signal that
     /// checkout ended.
     ///
-    /// A browser whose page never rendered is the one case where nothing needs checking:
-    /// there was nothing to buy in, so the session is dropped rather than left able to
-    /// claim an entitlement that arrives from somewhere else later.
+    /// Nothing needs checking when the page never rendered, since there was nothing to buy
+    /// in, or when the paywall that opened it closed, since checkout ended with it. The
+    /// session is dropped rather than left able to claim an entitlement that arrives from
+    /// somewhere else later.
     @MainActor
     private func onInAppBrowserDismissed(_ reason: WebCheckoutBrowserDismissal, paywallSession: PaywallSession) {
         isShowingInAppBrowser = false
         switch reason {
-        case .neverLoaded:
+        case .neverLoaded, .paywallClosed:
             stopObserving(paywallSession: paywallSession)
         case .closed:
             checkForPurchaseAfterReturn(reason: "In-app browser dismissed")

@@ -21,7 +21,10 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     init(url: URL, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         self.url = url
         super.init(onDismiss: onDismiss)
-        modalPresentationStyle = .fullScreen
+        // Unlike `.fullScreen`, leaves the paywall in the window, so a `HeliumPaywall` under
+        // checkout does not read as closed.
+        modalPresentationStyle = .overFullScreen
+        modalPresentationCapturesStatusBarAppearance = true
     }
 
     /// No chrome of our own: the page fills the screen exactly as the paywall beneath it

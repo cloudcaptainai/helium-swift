@@ -42,12 +42,13 @@ enum WebCheckoutPresenter {
         presentedBrowserSessionId = nil
     }
 
-    /// A full-screen style takes the paywall under it off screen, which a `HeliumPaywall`
-    /// would otherwise read as the user closing it. A sheet leaves the paywall on screen, so
-    /// the paywall disappearing under one is a real close.
-    static func isCoveringPaywall(forSessionId sessionId: String) -> Bool {
-        guard let presentedBrowser, presentedBrowserSessionId == sessionId else { return false }
-        return presentedBrowser.modalPresentationStyle == .fullScreen
+    /// Checkout belongs to the paywall that opened it, so a paywall that closes while its
+    /// checkout is up takes the checkout with it.
+    static func closeCheckout(forClosedPaywallSessionId sessionId: String) {
+        guard let browser = presentedBrowser, presentedBrowserSessionId == sessionId else { return }
+        presentedBrowser = nil
+        presentedBrowserSessionId = nil
+        browser.dismissAfterPaywallClosed()
     }
 
     private static func presentModally(_ viewController: UIViewController, from presenter: UIViewController) async -> Bool {
@@ -66,6 +67,8 @@ enum WebCheckoutBrowserDismissal {
     case closed
     /// The page never rendered, so nothing can have been bought in it.
     case neverLoaded
+    /// The paywall that opened it closed, and checkout ended with it.
+    case paywallClosed
 }
 
 /// Shared by every in-app browser: closing is the only signal that an in-app checkout
@@ -105,6 +108,21 @@ class WebCheckoutBrowserViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    /// Skipped when the browser is already gone or going, as when it was presented over a
+    /// paywall that is itself being dismissed.
+    func dismissAfterPaywallClosed() {
+        guard presentingViewController != nil, !isBeingDismissed else { return }
+        dismissalReason = .paywallClosed
+        dismiss(animated: true)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // The paywall stays in the hierarchy under a full-screen browser, so VoiceOver would
+        // otherwise reach it.
+        view.accessibilityViewIsModal = true
+    }
+
     /// Catches a swiped-down sheet, which reaches no dismiss-button callback of any kind.
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
@@ -131,7 +149,10 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
         safariViewController = SFSafariViewController(url: url)
         super.init(onDismiss: onDismiss)
         if fullScreen {
-            modalPresentationStyle = .fullScreen
+            // Unlike `.fullScreen`, leaves the paywall in the window, so a `HeliumPaywall`
+            // under checkout does not read as closed.
+            modalPresentationStyle = .overFullScreen
+            modalPresentationCapturesStatusBarAppearance = true
             modalTransitionStyle = .coverVertical
         } else {
             modalPresentationStyle = .pageSheet
