@@ -18,9 +18,9 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     /// vanishes too fast to mean anything.
     private static let spinnerDelay: TimeInterval = 0.25
 
-    init(url: URL, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
+    init(url: URL, paywallSessionId: String, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
         self.url = url
-        super.init(onDismiss: onDismiss)
+        super.init(paywallSessionId: paywallSessionId, onDismiss: onDismiss)
         // Unlike `.fullScreen`, leaves the paywall in the window, so a `HeliumPaywall` under
         // checkout does not read as closed.
         modalPresentationStyle = .overFullScreen
@@ -31,7 +31,6 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     /// does, and owns its own way out — closing is a cancel redirect like any other.
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = loadingCover.backgroundColor ?? .systemBackground
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -71,7 +70,7 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
     }
 
     private func showSpinnerIfStillLoading() {
-        guard loadingCover.backgroundColor != nil else { return }
+        if case .disabled = loadingCover { return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.spinnerDelay * 1_000_000_000))
             guard let self, !hasRenderedSomething else { return }

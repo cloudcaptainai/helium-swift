@@ -313,6 +313,16 @@ public enum HeliumLightDarkMode {
     case system
 }
 
+extension HeliumLightDarkMode {
+    var userInterfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return .unspecified
+        }
+    }
+}
+
 /// Selects which External Web Checkout payment processors are enabled.
 /// Use `.all` for both, or `.paddle` / `.stripe` individually.
 public struct WebCheckoutProcessors: OptionSet, Sendable, CustomStringConvertible {

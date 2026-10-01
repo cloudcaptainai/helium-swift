@@ -710,14 +710,7 @@ class WebViewManager {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
         
-        switch Helium.config.lightDarkModeOverride {
-        case .light:
-            webView.overrideUserInterfaceStyle = .light
-        case .dark:
-            webView.overrideUserInterfaceStyle = .dark
-        case .system:
-            webView.overrideUserInterfaceStyle = .unspecified
-        }
+        webView.overrideUserInterfaceStyle = Helium.config.lightDarkModeOverride.userInterfaceStyle
         
         webView.scrollView.isScrollEnabled = shouldEnableScroll
         webView.scrollView.bounces = shouldEnableScroll
