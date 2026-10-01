@@ -27,7 +27,8 @@ public enum InAppWebCheckoutLoadingCover {
     /// error page briefly as the browser closes.
     case disabled
     /// A loading spinner over this specified color. The spinner's color is black or white,
-    /// whatever contrasts better.
+    /// whatever contrasts better. Should be opaque, since whatever is beneath shows through
+    /// while the page loads.
     case color(UIColor)
 }
 
