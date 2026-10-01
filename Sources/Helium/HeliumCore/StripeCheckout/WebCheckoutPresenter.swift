@@ -108,12 +108,26 @@ class WebCheckoutBrowserViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    /// Nothing tracks the browser once its paywall has closed, so this has to close it even
+    /// mid-presentation or with something presented over it, either of which makes UIKit
+    /// ignore a plain `dismiss`. The `.inAppWebView` style has no chrome to close it by hand.
+    func dismissAfterPaywallClosed() {
+        dismissalReason = .paywallClosed
+        if isBeingPresented, let transitionCoordinator {
+            transitionCoordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                self?.dismissFromPresenter()
+            }
+        } else {
+            dismissFromPresenter()
+        }
+    }
+
+    /// Dismissing from the presenter takes down everything above it, this browser included.
     /// Skipped when the browser is already gone or going, as when it was presented over a
     /// paywall that is itself being dismissed.
-    func dismissAfterPaywallClosed() {
-        guard presentingViewController != nil, !isBeingDismissed else { return }
-        dismissalReason = .paywallClosed
-        dismiss(animated: true)
+    private func dismissFromPresenter() {
+        guard let presentingViewController, !isBeingDismissed else { return }
+        presentingViewController.dismiss(animated: true)
     }
 
     override func viewDidLoad() {

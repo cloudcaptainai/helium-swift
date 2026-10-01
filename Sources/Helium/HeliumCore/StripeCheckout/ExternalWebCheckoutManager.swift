@@ -749,6 +749,11 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
+        // Ahead of the observation check: a redirect means the checkout on screen concluded,
+        // and an in-app browser with nothing left watching it would otherwise stay up. On
+        // success it also uncovers the paywall the processing overlay shows on.
+        closeInAppBrowser()
+
         guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return
         }
@@ -773,8 +778,6 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
-            // The processing overlay shows on the paywall, which an in-app browser covers.
-            closeInAppBrowser()
             NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
             // Cap the spinner — a slow network call could leave app in unusable state.
             let overlayTimeoutTask = Task { @MainActor in
@@ -792,8 +795,6 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         case .cancel, .paymentFailure:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — external browser observations kept in case user resumes checkout")
-            // An in-app browser is still covering the paywall with the cancelled page.
-            closeInAppBrowser()
             // Only an external browser leaves a tab the user can go back and finish in. An
             // in-app checkout is over once its browser closes, and an observation kept past
             // that would let an entitlement arriving from anywhere else land as a purchase
