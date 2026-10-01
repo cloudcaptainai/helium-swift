@@ -749,9 +749,9 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
-        // Ahead of the observation check: a redirect means the checkout on screen concluded,
-        // and an in-app browser with nothing left watching it would otherwise stay up. On
-        // success it also uncovers the paywall the processing overlay shows on.
+        // A redirect means the checkout on screen concluded, so its browser closes even when
+        // nothing is watching it. On success it also uncovers the paywall the processing
+        // overlay shows on.
         closeInAppBrowser()
 
         guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
