@@ -383,13 +383,15 @@ public class ExternalWebCheckoutManager: NSObject {
         return url
     }
 
+    static let preCheckRefreshTimeoutMilliseconds: UInt64 = 3_000
+
     /// Opens the enriched checkout URL in the configured browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
-    /// Returns `.preCheckResolved` if cached entitlements already include `productKey`;
+    /// Returns `.preCheckResolved` if entitlements already include `productKey`;
     /// otherwise `.opened`.
     @MainActor
     func openEnrichedCheckoutURL(_ url: URL, productKey: String, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
-        let entitledBefore = await entitlementsSource.purchasedHeliumProductIds()
+        let entitledBefore = await entitledProductIdsBeforeCheckout(productKey: productKey)
 
         if entitledBefore.contains(productKey) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
@@ -426,6 +428,27 @@ public class ExternalWebCheckoutManager: NSObject {
         isShowingInAppBrowser = browserStyle != .externalBrowser
         startForegroundObserver()
         return .opened
+    }
+
+    func entitledProductIdsBeforeCheckout(
+        productKey: String,
+        refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds
+    ) async -> Set<String> {
+        let cachedIds = await entitlementsSource.purchasedHeliumProductIds()
+        guard cachedIds.contains(productKey) else { return cachedIds }
+
+        entitlementsSource.invalidateCache()
+        let refreshedIds = await withTimeoutOrNil(milliseconds: refreshTimeoutMilliseconds) { [entitlementsSource] in
+            await entitlementsSource.purchasedHeliumProductIds()
+        }
+        guard let refreshedIds else {
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement refresh for \(productKey) timed out — keeping cached answer")
+            return cachedIds
+        }
+        if !refreshedIds.contains(productKey) {
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: refresh shows \(productKey) no longer owned — continuing to checkout")
+        }
+        return refreshedIds
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
