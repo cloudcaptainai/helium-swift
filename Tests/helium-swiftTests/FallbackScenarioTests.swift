@@ -38,6 +38,28 @@ final class FallbackScenarioTests: XCTestCase {
         XCTAssertEqual(result.fallbackReason, .triggerHasNoPaywall)
     }
 
+    func testBanditReasonIsResolvedForTheCurrentTrigger() {
+        var config = makeTestConfig(triggers: [:])
+        config.triggerToPaywallReasons = [
+            "checkout": "  App-to-Web paywalls are not available in this region.  ",
+            "other": "A different reason",
+        ]
+        injectConfig(config)
+
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getBanditReasonForTrigger("checkout"),
+            "App-to-Web paywalls are not available in this region."
+        )
+    }
+
+    func testBlankBanditReasonIsIgnored() {
+        var config = makeTestConfig(triggers: [:])
+        config.triggerToPaywallReasons = ["checkout": "  \n "]
+        injectConfig(config)
+
+        XCTAssertNil(HeliumFetchedConfigManager.shared.getBanditReasonForTrigger("checkout"))
+    }
+
     func testNoProductsIOSReturnsFallbackReason() {
         Helium.shared.markInitializedForTesting()
 
