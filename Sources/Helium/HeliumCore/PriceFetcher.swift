@@ -17,6 +17,26 @@ public struct SubscriptionInfo: Codable {
     public let periodValue: Int
     public let introOfferEligible: Bool
     public let introOffer: SubscriptionOffer?
+    /// Nil unless a promotional offer is paired with this product. Independent of
+    /// `introOfferEligible` — each is read from its own check, never derived.
+    public let promoOfferEligible: Bool?
+    public let promoOffer: SubscriptionOffer?
+
+    public init(
+        periodUnit: String,
+        periodValue: Int,
+        introOfferEligible: Bool,
+        introOffer: SubscriptionOffer?,
+        promoOfferEligible: Bool? = nil,
+        promoOffer: SubscriptionOffer? = nil
+    ) {
+        self.periodUnit = periodUnit
+        self.periodValue = periodValue
+        self.introOfferEligible = introOfferEligible
+        self.introOffer = introOffer
+        self.promoOfferEligible = promoOfferEligible
+        self.promoOffer = promoOffer
+    }
 }
 
 public struct SubscriptionOffer: Codable {
@@ -27,6 +47,28 @@ public struct SubscriptionOffer: Codable {
     public let periodValue: Int
     public let periodCount: Int
     public let paymentMode: String
+    /// App Store promotional offer identifier. Nil for intro offers.
+    public let offerId: String?
+
+    public init(
+        type: String,
+        price: Decimal,
+        displayPrice: String,
+        periodUnit: String,
+        periodValue: Int,
+        periodCount: Int,
+        paymentMode: String,
+        offerId: String? = nil
+    ) {
+        self.type = type
+        self.price = price
+        self.displayPrice = displayPrice
+        self.periodUnit = periodUnit
+        self.periodValue = periodValue
+        self.periodCount = periodCount
+        self.paymentMode = paymentMode
+        self.offerId = offerId
+    }
 }
 
 // IAP specific info (combines consumable and non-consumable)
@@ -88,6 +130,24 @@ public struct LocalizedPrice: Codable {
                     "periodCount": introOffer.periodCount,
                     "paymentMode": introOffer.paymentMode,
                 ]
+            }
+            if let promoOfferEligible = subInfo.promoOfferEligible {
+                subDict["promoOfferEligible"] = promoOfferEligible
+            }
+            if let promoOffer = subInfo.promoOffer {
+                var promoDict: [String: Any] = [
+                    "type": promoOffer.type,
+                    "price": promoOffer.price,
+                    "displayPrice": promoOffer.displayPrice,
+                    "periodUnit": promoOffer.periodUnit,
+                    "periodValue": promoOffer.periodValue,
+                    "periodCount": promoOffer.periodCount,
+                    "paymentMode": promoOffer.paymentMode,
+                ]
+                if let offerId = promoOffer.offerId {
+                    promoDict["offerId"] = offerId
+                }
+                subDict["promoOffer"] = promoDict
             }
             dict["subscription"] = subDict
         }
@@ -199,8 +259,26 @@ class PriceFetcher {
     /// - Returns: Dictionary mapping SKUs to their localized price information
     static func localizedPricing(for skus: [String]) async -> [String: LocalizedPrice] {
         var priceMap: [String: LocalizedPrice] = [:]
-        
-            let products = await fetchProductsWithRetry(for: skus)
+
+            // iOS keys may arrive as `<productId>:<promoOfferId>` composites; StoreKit
+            // only knows the bare id. The map keeps a bare entry per product (no promo
+            // fields) plus one entry per composite sku carrying that offer's promo data,
+            // so the same product can pair different offers across triggers.
+            var compositesByProduct: [String: [(sku: String, offerId: String)]] = [:]
+            var bareSkus: [String] = []
+            var seenBareSkus = Set<String>()
+            for sku in skus {
+                let parts = HeliumIosProductKey.split(sku)
+                if seenBareSkus.insert(parts.productId).inserted {
+                    bareSkus.append(parts.productId)
+                }
+                if let offerId = parts.promoOfferId {
+                    compositesByProduct[parts.productId, default: []].append((sku, offerId))
+                }
+            }
+
+            let products = await fetchProductsWithRetry(for: bareSkus)
+            var promoEligibilityByProduct: [String: Bool] = [:]
             
             for product in products {
                 let formatter = NumberFormatter()
@@ -220,8 +298,11 @@ class PriceFetcher {
                 var iapInfo: IAPInfo?
                 
                 // Handle different product types
+                var subscriptionPeriodUnit = ""
+                var subscriptionPeriodValue = 0
+                var introOfferEligible = false
+                var introOfferData: SubscriptionOffer? = nil
                 if let sub = product.subscription {
-                    var introOfferData: SubscriptionOffer? = nil
                     if let introOffer = sub.introductoryOffer {
                         introOfferData = SubscriptionOffer(
                             type: introOffer.type.rawValue,
@@ -233,18 +314,21 @@ class PriceFetcher {
                             paymentMode: introOffer.paymentMode.rawValue
                         )
                     }
-                    
+                    subscriptionPeriodUnit = formatSubscriptionPeriod(sub.subscriptionPeriod.unit)
+                    subscriptionPeriodValue = sub.subscriptionPeriod.value
+                    introOfferEligible = await checkIntroOfferEligibility(for: product)
+
                     subscriptionInfo = SubscriptionInfo(
-                        periodUnit: formatSubscriptionPeriod(sub.subscriptionPeriod.unit),
-                        periodValue: sub.subscriptionPeriod.value,
-                        introOfferEligible: await checkIntroOfferEligibility(for: product),
+                        periodUnit: subscriptionPeriodUnit,
+                        periodValue: subscriptionPeriodValue,
+                        introOfferEligible: introOfferEligible,
                         introOffer: introOfferData
                     )
                 } else {
                     // Any non-subscription product is an IAP
                     iapInfo = IAPInfo(quantity: 1)
                 }
-                
+
                 let price = LocalizedPrice(
                     baseInfo: baseInfo,
                     productType: product.type.rawValue,
@@ -256,8 +340,60 @@ class PriceFetcher {
                     iapInfo: iapInfo,
                     familyShareable: product.isFamilyShareable
                 )
-                
+
                 priceMap[product.id] = price
+
+                guard let sub = product.subscription,
+                      let composites = compositesByProduct[product.id] else {
+                    continue
+                }
+                for composite in composites {
+                    var promoOfferEligible = false
+                    var promoOfferData: SubscriptionOffer? = nil
+                    if let offer = sub.promotionalOffers.first(where: { $0.id == composite.offerId }) {
+                        if !Helium.config.purchaseDelegate.supportsPromotionalOffers {
+                            promoOfferEligible = false
+                        } else if let eligible = promoEligibilityByProduct[product.id] {
+                            promoOfferEligible = eligible
+                        } else {
+                            // Eligibility is subscription-group level, so it is shared
+                            // across every offer paired with this product.
+                            promoOfferEligible = await checkPromoOfferEligibility(for: product)
+                            promoEligibilityByProduct[product.id] = promoOfferEligible
+                        }
+                        promoOfferData = SubscriptionOffer(
+                            type: "promotional",
+                            price: offer.price,
+                            displayPrice: offer.displayPrice,
+                            periodUnit: formatSubscriptionPeriod(offer.period.unit),
+                            periodValue: offer.period.value,
+                            periodCount: offer.periodCount,
+                            paymentMode: offer.paymentMode.rawValue,
+                            offerId: composite.offerId
+                        )
+                    } else {
+                        HeliumLogger.log(.debug, category: .core, "Paired promo offer not present on product", metadata: ["productId": product.id, "offerId": composite.offerId])
+                    }
+
+                    priceMap[composite.sku] = LocalizedPrice(
+                        baseInfo: baseInfo,
+                        productType: product.type.rawValue,
+                        localizedTitle: product.id,
+                        localizedDescription: nil,
+                        displayName: nil,
+                        description: nil,
+                        subscriptionInfo: SubscriptionInfo(
+                            periodUnit: subscriptionPeriodUnit,
+                            periodValue: subscriptionPeriodValue,
+                            introOfferEligible: introOfferEligible,
+                            introOffer: introOfferData,
+                            promoOfferEligible: promoOfferEligible,
+                            promoOffer: promoOfferData
+                        ),
+                        iapInfo: iapInfo,
+                        familyShareable: product.isFamilyShareable
+                    )
+                }
             }
         
         return priceMap
@@ -322,15 +458,38 @@ class PriceFetcher {
         guard let subscription = product.subscription else {
             return false
         }
-        
+
         // Check if product has an intro offer
         guard subscription.introductoryOffer != nil else {
             return false
         }
-        
+
         // Check if user is eligible
         let isEligible = await subscription.isEligibleForIntroOffer
         return isEligible
+    }
+
+    /// Eligible iff the user holds or ever held an auto-renewable transaction in the
+    /// product's subscription group — Apple's rule for promotional offer eligibility.
+    @available(iOS 15.0, *)
+    static func checkPromoOfferEligibility(for product: Product) async -> Bool {
+        if let simulated = await Helium.testing.simulatedPromoOfferEligibilityIfActive(productId: product.id) {
+            return simulated
+        }
+
+        guard let groupID = product.subscription?.subscriptionGroupID else {
+            return false
+        }
+
+        for await verificationResult in Transaction.all {
+            guard case .verified(let transaction) = verificationResult else {
+                continue
+            }
+            if transaction.productType == .autoRenewable && transaction.subscriptionGroupID == groupID {
+                return true
+            }
+        }
+        return false
     }
     
     @available(iOS 15.0, *)

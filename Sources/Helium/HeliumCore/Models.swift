@@ -57,8 +57,15 @@ public struct HeliumPaywallInfo: Codable {
         productIdsIOS + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
     }
 
+    /// Bare App Store ids — promo offer suffixes stripped so StoreKit transaction
+    /// and product lookups match.
+    var storeKitProductIds: [String] {
+        productIdsIOS.map { HeliumIosProductKey.productId($0) }
+    }
+
     var productIdsIncludingWebProductIds: [String] {
-        productIds + (webProductsOfferedPaddle ?? []) + (webProductsOfferedStripe ?? [])
+        storeKitProductIds + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
+            + (webProductsOfferedPaddle ?? []) + (webProductsOfferedStripe ?? [])
     }
 
     var hasProducts: Bool {

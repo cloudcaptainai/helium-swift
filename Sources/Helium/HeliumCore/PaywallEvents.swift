@@ -69,6 +69,11 @@ extension PaywallContextEvent {
 /// Events related to products/subscriptions
 public protocol ProductEvent: PaywallContextEvent {
     var productId: String { get }
+    var offerIdentifier: String? { get }
+}
+
+public extension ProductEvent {
+    var offerIdentifier: String? { nil }
 }
 
 // MARK: - Lifecycle Events
@@ -441,7 +446,10 @@ public struct ProductSelectedEvent: ProductEvent {
     /// The product identifier that was selected
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where selection occurred
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -454,8 +462,9 @@ public struct ProductSelectedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.timestamp = timestamp
@@ -464,7 +473,7 @@ public struct ProductSelectedEvent: ProductEvent {
     public var eventName: String { "productSelected" }
     
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
@@ -472,6 +481,10 @@ public struct ProductSelectedEvent: ProductEvent {
             "isSecondTry": isSecondTry,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
+        }
+        return dict
     }
     
 }
@@ -482,7 +495,10 @@ public struct PurchasePressedEvent: ProductEvent {
     /// The product identifier being purchased
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where purchase was initiated
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -498,8 +514,9 @@ public struct PurchasePressedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
@@ -509,7 +526,7 @@ public struct PurchasePressedEvent: ProductEvent {
     public var eventName: String { "purchasePressed" }
 
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
@@ -518,6 +535,10 @@ public struct PurchasePressedEvent: ProductEvent {
             "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
+        }
+        return dict
     }
 }
 
@@ -557,7 +578,10 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// The Helium product identifier that was successfully purchased
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where purchase succeeded
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -582,8 +606,9 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
@@ -615,6 +640,9 @@ public struct PurchaseSucceededEvent: ProductEvent {
         if let skPostPurchaseTxnTimeMS {
             dict["skPostPurchaseTxnTimeMS"] = skPostPurchaseTxnTimeMS
         }
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
+        }
         return dict
     }
     
@@ -626,7 +654,10 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// The product identifier that user was attempting to purchase
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where purchase was cancelled
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -642,8 +673,9 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
@@ -653,7 +685,7 @@ public struct PurchaseCancelledEvent: ProductEvent {
     public var eventName: String { "purchaseCancelled" }
 
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
@@ -662,6 +694,10 @@ public struct PurchaseCancelledEvent: ProductEvent {
             "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
+        }
+        return dict
     }
     
 }
@@ -672,7 +708,10 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// The product identifier that failed to purchase
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where purchase failed
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -692,8 +731,9 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
@@ -715,6 +755,9 @@ public struct PurchaseFailedEvent: ProductEvent {
         ]
         if let error = error {
             dict["error"] = error.localizedDescription
+        }
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
         }
         return dict
     }
@@ -830,6 +873,9 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// - Note: StoreKit product ID from App Store Connect
     public let productId: String
 
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where re-purchase was attempted
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -848,8 +894,9 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
@@ -874,6 +921,9 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
         }
         if let storeKitOriginalTransactionId {
             dict["storeKitOriginalTransactionId"] = storeKitOriginalTransactionId
+        }
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
         }
         return dict
     }
@@ -933,7 +983,10 @@ public struct PurchasePendingEvent: ProductEvent {
     /// The product identifier that is pending
     /// - Note: StoreKit product ID from App Store Connect
     public let productId: String
-    
+
+    /// App Store promotional offer identifier applied to this product.
+    public let offerIdentifier: String?
+
     /// The trigger identifier for the paywall where purchase is pending
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -949,8 +1002,9 @@ public struct PurchasePendingEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
         self.productId = productId
+        self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
@@ -960,7 +1014,7 @@ public struct PurchasePendingEvent: ProductEvent {
     public var eventName: String { "purchasePending" }
 
     public func toDictionary() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "type": eventName,
             "productId": productId,
             "triggerName": triggerName,
@@ -969,6 +1023,10 @@ public struct PurchasePendingEvent: ProductEvent {
             "paymentProcessor": paymentProcessor.rawValue,
             "timestamp": timestamp.timeIntervalSince1970
         ]
+        if let offerIdentifier {
+            dict["offerIdentifier"] = offerIdentifier
+        }
+        return dict
     }
     
 }

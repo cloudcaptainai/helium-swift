@@ -36,10 +36,13 @@ class MockHeliumPaywallDelegate: HeliumPaywallDelegate {
 // MARK: - CapturingEventListener
 
 class CapturingEventListener: HeliumEventListener {
-    var capturedEvents: [HeliumEvent] = []
+    private let lock = NSLock()
+
+    private var _capturedEvents: [HeliumEvent] = []
+    var capturedEvents: [HeliumEvent] { lock.withLock { _capturedEvents } }
 
     func onHeliumEvent(event: HeliumEvent) {
-        capturedEvents.append(event)
+        lock.withLock { _capturedEvents.append(event) }
     }
 
     func eventsOfType<T: HeliumEvent>(_ type: T.Type) -> [T] {

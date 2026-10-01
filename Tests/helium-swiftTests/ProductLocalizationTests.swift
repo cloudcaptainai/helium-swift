@@ -96,6 +96,133 @@ final class ProductLocalizationTests: XCTestCase {
         XCTAssertTrue(map.isEmpty)
     }
 
+    private func makePriceWithSubscription(_ subscriptionInfo: SubscriptionInfo) -> LocalizedPrice {
+        LocalizedPrice(
+            baseInfo: BasePriceInfo(
+                currency: "USD",
+                locale: "en_US",
+                value: 4.99,
+                formattedPrice: "$4.99",
+                currencySymbol: "$",
+                decimalSeparator: "."
+            ),
+            productType: "autoRenewable",
+            localizedTitle: nil,
+            localizedDescription: nil,
+            displayName: nil,
+            description: nil,
+            subscriptionInfo: subscriptionInfo,
+            iapInfo: nil,
+            familyShareable: false
+        )
+    }
+
+    func testPromoOfferSerialization() {
+        let price = makePriceWithSubscription(SubscriptionInfo(
+            periodUnit: "year",
+            periodValue: 1,
+            introOfferEligible: false,
+            introOffer: nil,
+            promoOfferEligible: true,
+            promoOffer: SubscriptionOffer(
+                type: "promotional",
+                price: 3.99,
+                displayPrice: "$3.99",
+                periodUnit: "week",
+                periodValue: 1,
+                periodCount: 1,
+                paymentMode: "payAsYouGo",
+                offerId: "test_yearly_offer_identifier"
+            )
+        ))
+
+        let subscription = price.json["subscription"] as? [String: Any]
+        XCTAssertEqual(subscription?["promoOfferEligible"] as? Bool, true)
+        let promoOffer = subscription?["promoOffer"] as? [String: Any]
+        XCTAssertEqual(promoOffer?["offerId"] as? String, "test_yearly_offer_identifier")
+        XCTAssertEqual(promoOffer?["type"] as? String, "promotional")
+        XCTAssertEqual(promoOffer?["displayPrice"] as? String, "$3.99")
+        XCTAssertEqual(promoOffer?["periodUnit"] as? String, "week")
+        XCTAssertEqual(promoOffer?["paymentMode"] as? String, "payAsYouGo")
+    }
+
+    func testNilPromoFieldsAreAbsentFromJson() {
+        let price = makePriceWithSubscription(SubscriptionInfo(
+            periodUnit: "month",
+            periodValue: 1,
+            introOfferEligible: false,
+            introOffer: nil
+        ))
+
+        let subscription = price.json["subscription"] as? [String: Any]
+        XCTAssertNil(subscription?["promoOfferEligible"])
+        XCTAssertNil(subscription?["promoOffer"])
+    }
+
+    func testIntroAndPromoEligibilitySerializeIndependently() {
+        let introTruePromoFalse = makePriceWithSubscription(SubscriptionInfo(
+            periodUnit: "month",
+            periodValue: 1,
+            introOfferEligible: true,
+            introOffer: nil,
+            promoOfferEligible: false,
+            promoOffer: nil
+        ))
+        var subscription = introTruePromoFalse.json["subscription"] as? [String: Any]
+        XCTAssertEqual(subscription?["introOfferEligible"] as? Bool, true)
+        XCTAssertEqual(subscription?["promoOfferEligible"] as? Bool, false)
+
+        let introFalsePromoTrue = makePriceWithSubscription(SubscriptionInfo(
+            periodUnit: "month",
+            periodValue: 1,
+            introOfferEligible: false,
+            introOffer: nil,
+            promoOfferEligible: true,
+            promoOffer: nil
+        ))
+        subscription = introFalsePromoTrue.json["subscription"] as? [String: Any]
+        XCTAssertEqual(subscription?["introOfferEligible"] as? Bool, false)
+        XCTAssertEqual(subscription?["promoOfferEligible"] as? Bool, true)
+    }
+
+    func testSubscriptionOfferCodableRoundTrip() throws {
+        let original = SubscriptionOffer(
+            type: "promotional",
+            price: 3.99,
+            displayPrice: "$3.99",
+            periodUnit: "month",
+            periodValue: 3,
+            periodCount: 1,
+            paymentMode: "payUpFront",
+            offerId: "OFFER50"
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(SubscriptionOffer.self, from: data)
+        XCTAssertEqual(decoded.offerId, "OFFER50")
+        XCTAssertEqual(decoded.type, "promotional")
+        XCTAssertEqual(decoded.price, 3.99)
+        XCTAssertEqual(decoded.displayPrice, "$3.99")
+        XCTAssertEqual(decoded.periodUnit, "month")
+        XCTAssertEqual(decoded.periodValue, 3)
+        XCTAssertEqual(decoded.periodCount, 1)
+        XCTAssertEqual(decoded.paymentMode, "payUpFront")
+    }
+
+    func testIntroOfferEncodesWithoutOfferIdKey() throws {
+        let introOffer = SubscriptionOffer(
+            type: "introductory",
+            price: 0,
+            displayPrice: "Free",
+            periodUnit: "week",
+            periodValue: 1,
+            periodCount: 1,
+            paymentMode: "freeTrial"
+        )
+        let data = try JSONEncoder().encode(introOffer)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertNil(json?["offerId"])
+    }
+
     func testBasePriceInfoCodable() throws {
         let original = BasePriceInfo(
             currency: "EUR",

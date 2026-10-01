@@ -242,7 +242,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
-    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic var localizedPriceMap: [String: LocalizedPrice] = [:]
     @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
 
     func fetchConfig(
@@ -870,8 +870,8 @@ public class HeliumFetchedConfigManager {
     
     @discardableResult
     func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
-        let productIds = getAllProductIdsIos(config: config)
-        await buildLocalizedPriceMap(productIds)
+        let configuredProductIds = getAllProductIdsIos(config: config)
+        await buildLocalizedPriceMap(configuredProductIds)
 
         // Merge server-provided prices (favoring StoreKit values on collision)
         if let serverPrices = config?.stripeProducts {
@@ -889,7 +889,10 @@ public class HeliumFetchedConfigManager {
 
         var allFound = false
         _localizedPriceMap.withValue { map in
-            allFound = productIds.allSatisfy { map.keys.contains($0) }
+            allFound = configuredProductIds.allSatisfy { configuredId in
+                let bareProductId = HeliumIosProductKey.productId(configuredId)
+                return map[bareProductId] != nil
+            }
         }
         return allFound
     }
@@ -936,6 +939,12 @@ public class HeliumFetchedConfigManager {
         }
     }
     
+    /// Product keys of a paywall that have no entry in the localized price map yet.
+    func productIdsMissingLocalizedPrices(_ productIds: [String]) -> [String] {
+        let known = Set(localizedPriceMap.keys)
+        return Array(Set(productIds)).filter { !known.contains($0) }.sorted()
+    }
+
     func refreshLocalizedPriceMap() async {
         let productIds = Array(localizedPriceMap.keys)
         await buildLocalizedPriceMap(productIds)
@@ -990,7 +999,11 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        return getLocalizedPriceMap().filter { productIDs.contains($0.key) }
+        // The map carries bare ids plus one entry per configured composite; match
+        // either the configured key itself or the bare id of a composite.
+        var acceptedProductIds = Set(productIDs)
+        acceptedProductIds.formUnion(productIDs.map { HeliumIosProductKey.productId($0) })
+        return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     
     private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
