@@ -1,7 +1,7 @@
 import Foundation
 
 /// One-shot resume guard for `withCheckedContinuation` races.
-private final class ResumeGuard: @unchecked Sendable {
+final class ResumeGuard: @unchecked Sendable {
     private let lock = NSLock()
     private var resumed = false
 
