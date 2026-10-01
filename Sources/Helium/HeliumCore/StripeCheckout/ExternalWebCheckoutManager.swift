@@ -577,11 +577,13 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase was detected.
     @MainActor
     private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
-        let delays: [UInt64] = [0, 2_000_000_000]
-
         guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return false
         }
+        let delays = Self.purchaseCheckDelays(
+            fromSuccessRedirect: fromSuccessRedirect,
+            inAppBrowser: resolvedBrowserStyle(for: newestObservation.paywallSession) != .externalBrowser
+        )
         let oldestOpenedAt = activeCheckoutObservations.values.min(by: { $0.addedAt < $1.addedAt })?.addedAt
 
         for (i, delay) in delays.enumerated() {
@@ -610,6 +612,17 @@ public class ExternalWebCheckoutManager: NSObject {
             scope: newestObservation.paywallSession.observabilityScope
         )
         return false
+    }
+
+    /// Nanoseconds to wait before each check. The entitlement lands only once the processor's
+    /// webhook reaches the server, so the wait is for that.
+    ///
+    /// A success redirect is evidence the user paid, which earns it more checks. An in-app
+    /// browser hands the redirect over the instant the page navigates, so its first check
+    /// waits a beat that the switch back from an external browser already provides.
+    static func purchaseCheckDelays(fromSuccessRedirect: Bool, inAppBrowser: Bool) -> [UInt64] {
+        guard fromSuccessRedirect else { return [0, 2_000_000_000] }
+        return [inAppBrowser ? 750_000_000 : 0, 2_000_000_000, 2_000_000_000, 3_000_000_000]
     }
 
     /// Refreshes entitlements once and scans active observations (newest-first).
@@ -765,7 +778,7 @@ public class ExternalWebCheckoutManager: NSObject {
             NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
             // Cap the spinner — a slow network call could leave app in unusable state.
             let overlayTimeoutTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
                 if Task.isCancelled { return }
                 NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
             }
