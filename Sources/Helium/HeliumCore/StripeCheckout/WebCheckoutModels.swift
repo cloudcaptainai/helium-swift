@@ -20,13 +20,13 @@ public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
 /// What an in-app web checkout shows while its page loads. Does not apply to the
 /// `.externalBrowser` ``WebCheckoutBrowserStyle``.
 public enum InAppWebCheckoutLoadingCover {
-    /// A loading spinner on the system background, following ``HeliumConfig/lightDarkModeOverride``.
+    /// A loading spinner over the system background, following ``HeliumConfig/lightDarkModeOverride``.
     case standard
     /// Nothing over the page, so the browser paints white until the first byte arrives
     /// (in dark mode too). In the Safari styles, a page that fails to load also shows Safari's
     /// error page briefly as the browser closes.
     case disabled
-    /// A loading spinner on this specified color. The spinner's color is black or white,
+    /// A loading spinner over this specified color. The spinner's color is black or white,
     /// whatever contrasts better.
     case color(UIColor)
 }
