@@ -669,6 +669,9 @@ extension HeliumPaywallPresenter {
             if paddleBroken || stripeBroken {
                 return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutNotEnabled, presentationContext: presentationContext)
             }
+            if hasAppToWebProducts && HeliumRuntimeEnvironment.isSimulator && !HeliumFetchedConfigManager.isPreviewTrigger(trigger) {
+                return fallbackViewFor(trigger: trigger, paywallInfo: templatePaywallInfo, fallbackReason: .webCheckoutUnsupportedOnSimulator, presentationContext: presentationContext)
+            }
             
             do {
                 guard let filePath = templatePaywallInfo.localBundlePath else {

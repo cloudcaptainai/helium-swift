@@ -87,6 +87,8 @@ struct DiagnosticContentMapper {
             return webCheckoutNoCustomUserId(code)
         case .webCheckoutNotEnabled:
             return webCheckoutNotEnabled(code, context)
+        case .webCheckoutUnsupportedOnSimulator:
+            return webCheckoutUnsupportedOnSimulator(code)
 
         case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
             return paywallsNotDownloaded(code)
@@ -221,6 +223,21 @@ struct DiagnosticContentMapper {
                 + "fallback.",
             usersWillSeeLink: nil,
             cta: .openUrl(label: "Fallback Docs", url: Url.fallbackGuide),
+            reasonCode: code
+        )
+    }
+
+    private func webCheckoutUnsupportedOnSimulator(_ code: String) -> DiagnosticContent {
+        DiagnosticContent(
+            category: .expected,
+            title: "Web checkout isn't available on a simulator",
+            body: "This paywall has Stripe/Paddle products, and external web checkout cannot "
+                + "complete a purchase on a simulator, so Helium attempted your fallback instead. "
+                + "Run on a physical device to test web checkout.",
+            usersWillSee: "Users on a physical device see this paywall normally. On a simulator "
+                + "nothing is shown unless a fallback paywall is bundled.",
+            usersWillSeeLink: UsersWillSee.fallbackGuideLink,
+            cta: .openUrl(label: "View Docs", url: Url.quickstart),
             reasonCode: code
         )
     }
