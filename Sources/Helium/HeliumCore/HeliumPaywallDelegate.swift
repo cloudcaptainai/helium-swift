@@ -354,6 +354,7 @@ class HeliumPaywallDelegateWrapper {
             Task { @MainActor in
                 PaddleCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
                 StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
+                WebCheckoutPresenter.closeCheckout(forClosedPaywallSessionId: paywallSession.sessionId)
                 PaddleCheckoutPrefetchCoordinator.shared.handlePaywallClose(paywallSession: paywallSession)
             }
         }

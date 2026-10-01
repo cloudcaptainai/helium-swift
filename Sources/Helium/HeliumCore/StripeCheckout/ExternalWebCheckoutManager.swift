@@ -404,7 +404,11 @@ public class ExternalWebCheckoutManager: NSObject {
         activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
-        let opened = await WebCheckoutPresenter.present(url, style: browserStyle) { [weak self] reason in
+        let opened = await WebCheckoutPresenter.present(
+            url,
+            style: browserStyle,
+            paywallSessionId: paywallSession.sessionId
+        ) { [weak self] reason in
             self?.onInAppBrowserDismissed(reason, paywallSession: paywallSession)
         }
         HeliumObservabilityManager.shared.track(
@@ -531,14 +535,15 @@ public class ExternalWebCheckoutManager: NSObject {
     /// An in-app browser never backgrounds the app, so its closing is the only signal that
     /// checkout ended.
     ///
-    /// A browser whose page never rendered is the one case where nothing needs checking:
-    /// there was nothing to buy in, so the session is dropped rather than left able to
-    /// claim an entitlement that arrives from somewhere else later.
+    /// Nothing needs checking when the page never rendered, since there was nothing to buy
+    /// in, or when the paywall that opened it closed, since checkout ended with it. The
+    /// session is dropped rather than left able to claim an entitlement that arrives from
+    /// somewhere else later.
     @MainActor
     private func onInAppBrowserDismissed(_ reason: WebCheckoutBrowserDismissal, paywallSession: PaywallSession) {
         isShowingInAppBrowser = false
         switch reason {
-        case .neverLoaded:
+        case .neverLoaded, .paywallClosed:
             stopObserving(paywallSession: paywallSession)
         case .closed:
             checkForPurchaseAfterReturn(reason: "In-app browser dismissed")
@@ -572,11 +577,13 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase was detected.
     @MainActor
     private func checkForNewPurchaseWithRetry(fromSuccessRedirect: Bool = false) async -> Bool {
-        let delays: [UInt64] = [0, 2_000_000_000]
-
         guard let newestObservation = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return false
         }
+        let delays = Self.purchaseCheckDelays(
+            fromSuccessRedirect: fromSuccessRedirect,
+            inAppBrowser: resolvedBrowserStyle(for: newestObservation.paywallSession) != .externalBrowser
+        )
         let oldestOpenedAt = activeCheckoutObservations.values.min(by: { $0.addedAt < $1.addedAt })?.addedAt
 
         for (i, delay) in delays.enumerated() {
@@ -605,6 +612,17 @@ public class ExternalWebCheckoutManager: NSObject {
             scope: newestObservation.paywallSession.observabilityScope
         )
         return false
+    }
+
+    /// Nanoseconds to wait before each check. The entitlement lands only once the processor's
+    /// webhook reaches the server, so the wait is for that.
+    ///
+    /// A success redirect is evidence the user paid, which earns it more checks. An in-app
+    /// browser hands the redirect over the instant the page navigates, so its first check
+    /// waits a beat that the switch back from an external browser already provides.
+    static func purchaseCheckDelays(fromSuccessRedirect: Bool, inAppBrowser: Bool) -> [UInt64] {
+        guard fromSuccessRedirect else { return [0, 2_000_000_000] }
+        return [inAppBrowser ? 750_000_000 : 0, 2_000_000_000, 2_000_000_000, 3_000_000_000]
     }
 
     /// Refreshes entitlements once and scans active observations (newest-first).
@@ -731,6 +749,11 @@ public class ExternalWebCheckoutManager: NSObject {
     /// purchase still gets picked up on the next app return.
     @MainActor
     func handleExternalReturn(redirectKind: HeliumCheckoutRedirectType) async {
+        // A redirect means the checkout on screen concluded, so its browser closes even when
+        // nothing is watching it. On success it also uncovers the paywall the processing
+        // overlay shows on.
+        closeInAppBrowser()
+
         guard let newest = activeCheckoutObservations.values.max(by: { $0.addedAt < $1.addedAt }) else {
             return
         }
@@ -755,12 +778,10 @@ public class ExternalWebCheckoutManager: NSObject {
         switch redirectKind {
         case .success:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) success redirect handled — checking for new purchase")
-            // The processing overlay shows on the paywall, which an in-app browser covers.
-            closeInAppBrowser()
             NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": true])
             // Cap the spinner — a slow network call could leave app in unusable state.
             let overlayTimeoutTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
                 if Task.isCancelled { return }
                 NotificationCenter.default.post(name: .heliumWebCheckoutProcessingChanged, object: nil, userInfo: ["visible": false])
             }
@@ -774,8 +795,6 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         case .cancel, .paymentFailure:
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) \(redirectKind.rawValue) redirect handled — external browser observations kept in case user resumes checkout")
-            // An in-app browser is still covering the paywall with the cancelled page.
-            closeInAppBrowser()
             // Only an external browser leaves a tab the user can go back and finish in. An
             // in-app checkout is over once its browser closes, and an observation kept past
             // that would let an entitlement arriving from anywhere else land as a purchase

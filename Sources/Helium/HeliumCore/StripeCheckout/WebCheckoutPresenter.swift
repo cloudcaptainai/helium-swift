@@ -12,6 +12,7 @@ enum WebCheckoutPresenter {
     static func present(
         _ url: URL,
         style: WebCheckoutBrowserStyle,
+        paywallSessionId: String,
         onBrowserDismissed: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void
     ) async -> Bool {
         switch style {
@@ -21,10 +22,15 @@ enum WebCheckoutPresenter {
         case .safariSheet, .safariFullScreen, .inAppWebView:
             guard let presenter = UIWindowHelper.findTopMostViewController() else { return false }
             let browser: WebCheckoutBrowserViewController = style == .inAppWebView
-                ? WebCheckoutWebViewController(url: url, onDismiss: onBrowserDismissed)
+                ? WebCheckoutWebViewController(
+                    url: url,
+                    paywallSessionId: paywallSessionId,
+                    onDismiss: onBrowserDismissed
+                )
                 : WebCheckoutSafariViewController(
                     url: url,
                     fullScreen: style == .safariFullScreen,
+                    paywallSessionId: paywallSessionId,
                     onDismiss: onBrowserDismissed
                 )
             presentedBrowser = browser
@@ -36,6 +42,14 @@ enum WebCheckoutPresenter {
     static func dismissInAppBrowser() {
         presentedBrowser?.dismissWithoutReporting()
         presentedBrowser = nil
+    }
+
+    /// Checkout belongs to the paywall that opened it, so a paywall that closes while its
+    /// checkout is up takes the checkout with it.
+    static func closeCheckout(forClosedPaywallSessionId sessionId: String) {
+        guard let browser = presentedBrowser, browser.paywallSessionId == sessionId else { return }
+        presentedBrowser = nil
+        browser.dismissAfterPaywallClosed()
     }
 
     private static func presentModally(_ viewController: UIViewController, from presenter: UIViewController) async -> Bool {
@@ -54,6 +68,8 @@ enum WebCheckoutBrowserDismissal {
     case closed
     /// The page never rendered, so nothing can have been bought in it.
     case neverLoaded
+    /// The paywall that opened it closed, and checkout ended with it.
+    case paywallClosed
 }
 
 /// Shared by every in-app browser: closing is the only signal that an in-app checkout
@@ -61,13 +77,17 @@ enum WebCheckoutBrowserDismissal {
 @MainActor
 class WebCheckoutBrowserViewController: UIViewController {
 
+    let paywallSessionId: String
     private let onDismiss: @MainActor (WebCheckoutBrowserDismissal) -> Void
+    let loadingCover = Helium.config.inAppWebCheckoutLoadingCover
     private var reportsDismissal = true
     private var dismissalReason: WebCheckoutBrowserDismissal = .closed
 
-    init(onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
+    init(paywallSessionId: String, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
+        self.paywallSessionId = paywallSessionId
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
+        overrideUserInterfaceStyle = Helium.config.lightDarkModeOverride.userInterfaceStyle
     }
 
     @available(*, unavailable)
@@ -85,6 +105,36 @@ class WebCheckoutBrowserViewController: UIViewController {
     func dismissAfterFailingToLoad() {
         dismissalReason = .neverLoaded
         dismiss(animated: true)
+    }
+
+    /// Nothing tracks the browser once its paywall has closed, so this has to close it even
+    /// mid-presentation or with something presented over it, either of which makes UIKit
+    /// ignore a plain `dismiss`. The `.inAppWebView` style has no chrome to close it by hand.
+    func dismissAfterPaywallClosed() {
+        dismissalReason = .paywallClosed
+        if isBeingPresented, let transitionCoordinator {
+            transitionCoordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                self?.dismissFromPresenter()
+            }
+        } else {
+            dismissFromPresenter()
+        }
+    }
+
+    /// Dismissing from the presenter takes down everything above it, this browser included.
+    /// Skipped when the browser is already gone or going, as when it was presented over a
+    /// paywall that is itself being dismissed.
+    private func dismissFromPresenter() {
+        guard let presentingViewController, !isBeingDismissed else { return }
+        presentingViewController.dismiss(animated: true)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = loadingCover.backgroundColor ?? .systemBackground
+        // The paywall stays in the hierarchy under a full-screen browser, so VoiceOver would
+        // otherwise reach it.
+        view.accessibilityViewIsModal = true
     }
 
     /// Catches a swiped-down sheet, which reaches no dismiss-button callback of any kind.
@@ -109,11 +159,19 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
     private var coverLifted = false
     private static let coverTimeout: TimeInterval = 8
 
-    init(url: URL, fullScreen: Bool, onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void) {
+    init(
+        url: URL,
+        fullScreen: Bool,
+        paywallSessionId: String,
+        onDismiss: @escaping @MainActor (WebCheckoutBrowserDismissal) -> Void
+    ) {
         safariViewController = SFSafariViewController(url: url)
-        super.init(onDismiss: onDismiss)
+        super.init(paywallSessionId: paywallSessionId, onDismiss: onDismiss)
         if fullScreen {
-            modalPresentationStyle = .fullScreen
+            // Unlike `.fullScreen`, leaves the paywall in the window, so a `HeliumPaywall`
+            // under checkout does not read as closed.
+            modalPresentationStyle = .overFullScreen
+            modalPresentationCapturesStatusBarAppearance = true
             modalTransitionStyle = .coverVertical
         } else {
             modalPresentationStyle = .pageSheet
@@ -125,7 +183,6 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
 
         addChild(safariViewController)
         safariViewController.view.frame = view.bounds
@@ -140,12 +197,16 @@ final class WebCheckoutSafariViewController: WebCheckoutBrowserViewController, @
     /// colour it, so it is covered until the page can paint itself. In place before the
     /// presentation animation starts, so there is no frame where the white shows.
     private func addCover() {
-        cover.backgroundColor = .systemBackground
+        guard let background = loadingCover.backgroundColor else { return }
+        cover.backgroundColor = background
         cover.frame = view.bounds
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(cover)
 
         let spinner = UIActivityIndicatorView(style: .medium)
+        if let spinnerColor = loadingCover.spinnerColor {
+            spinner.color = spinnerColor
+        }
         spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.startAnimating()
         cover.addSubview(spinner)
