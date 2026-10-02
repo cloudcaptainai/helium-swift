@@ -440,7 +440,7 @@ public class ExternalWebCheckoutManager: NSObject {
         guard cachedIds.contains(productKey) else { return cachedIds }
 
         let refreshedIds = await boundedEntitledProductIds(timeoutMilliseconds: refreshTimeoutMilliseconds) { source in
-            await source.refreshEntitlements()
+            await source.refreshEntitlementsJoiningInFlightFetch()
             return source.cachedHeliumProductIds()
         }
         if !refreshedIds.contains(productKey) {

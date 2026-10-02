@@ -250,6 +250,22 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         XCTAssertLessThan(elapsed, 0.5, "pre-check waited for the hung refresh instead of timing out")
     }
 
+    func testPreCheck_fetchAlreadyInFlight_isJoinedNotRestarted() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        preCheckSource.invalidateCache()
+        let launchFetch = Task { [preCheckSource] in await preCheckSource!.purchasedHeliumProductIds() }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
+        _ = await launchFetch.value
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1, "pre-check restarted the fetch that was already in flight")
+        XCTAssertFalse(preCheckSource.cachedHeliumProductIds().contains(Self.ownedKey))
+    }
+
     func testPreCheck_afterTimedOutRefresh_nextReadDoesNotWaitForIt() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
