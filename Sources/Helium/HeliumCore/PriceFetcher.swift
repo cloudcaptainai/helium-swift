@@ -19,6 +19,7 @@ public struct SubscriptionInfo: Codable {
     public let introOffer: SubscriptionOffer?
     /// Nil unless a promotional offer is paired with this product. Independent of
     /// `introOfferEligible` — each is read from its own check, never derived.
+    /// This is a prediction; Apple can still reject the offer at purchase time.
     public let promoOfferEligible: Bool?
     public let promoOffer: SubscriptionOffer?
 

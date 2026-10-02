@@ -659,6 +659,12 @@ public class HeliumIdentify {
     
 }
 
+/// Returns a compact JWS for one promotional offer purchase attempt (Apple's promotional offer v2 signature).
+/// Set `Helium.config.promoOfferSigner` to sign with your own server instead of Helium's.
+public protocol HeliumPromoOfferSigner {
+    func signPromoOffer(productId: String, offerId: String, appTransactionId: String?) async throws -> String
+}
+
 public class HeliumConfig {
 
     init() {}
@@ -686,6 +692,10 @@ public class HeliumConfig {
     
     /// Set a custom Helium API endpoint to use. Only set this if told to do so by Helium.
     public var customAPIEndpoint: String? = nil
+
+    /// Signs promotional offer purchases. When nil, Helium signs with the
+    /// In-App Purchase key uploaded in the dashboard via Helium's server.
+    public var promoOfferSigner: HeliumPromoOfferSigner? = nil
     
     /// Maximum time (in seconds) to show the loading state before displaying fallback.
     /// After this timeout, even if the paywall is still downloading, a fallback will be shown if available.
@@ -1189,6 +1199,8 @@ extension Product {
 public enum HeliumPurchaseError: LocalizedError {
     case appAccountTokenMismatch
     case testingProductNotFound
+    case promoOfferNotFound(offerId: String)
+    case promoOfferSigningFailed(underlying: Error)
 
     public var errorDescription: String? {
         switch self {
@@ -1196,6 +1208,10 @@ public enum HeliumPurchaseError: LocalizedError {
             return "If providing appAccountToken, it MUST match Helium's appAccountToken. Set via Helium.identify.appAccountToken = <UUID>, ideally before initializing Helium."
         case .testingProductNotFound:
             return "Could not find product. Please ensure products are properly configured in the Helium dashboard. Returning .failed to surface the misconfiguration."
+        case .promoOfferNotFound(let offerId):
+            return "Promotional offer \(offerId) is not available for this product on the App Store."
+        case .promoOfferSigningFailed(let underlying):
+            return "Could not sign the promotional offer purchase: \(underlying.localizedDescription)"
         }
     }
 }
