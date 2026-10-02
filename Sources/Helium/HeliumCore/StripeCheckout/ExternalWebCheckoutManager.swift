@@ -434,21 +434,31 @@ public class ExternalWebCheckoutManager: NSObject {
         productKey: String,
         refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds
     ) async -> Set<String> {
-        let cachedIds = await entitlementsSource.purchasedHeliumProductIds()
+        let cachedIds = await boundedEntitledProductIds(timeoutMilliseconds: refreshTimeoutMilliseconds) { source in
+            await source.purchasedHeliumProductIds()
+        }
         guard cachedIds.contains(productKey) else { return cachedIds }
 
-        entitlementsSource.invalidateCache()
-        let refreshedIds = await withTimeoutOrNil(milliseconds: refreshTimeoutMilliseconds) { [entitlementsSource] in
-            await entitlementsSource.purchasedHeliumProductIds()
-        }
-        guard let refreshedIds else {
-            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement refresh for \(productKey) timed out — keeping cached answer")
-            return cachedIds
+        let refreshedIds = await boundedEntitledProductIds(timeoutMilliseconds: refreshTimeoutMilliseconds) { source in
+            await source.refreshEntitlements()
+            return source.cachedHeliumProductIds()
         }
         if !refreshedIds.contains(productKey) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: refresh shows \(productKey) no longer owned — continuing to checkout")
         }
         return refreshedIds
+    }
+
+    private func boundedEntitledProductIds(
+        timeoutMilliseconds: UInt64,
+        _ read: @escaping @Sendable (HeliumPaymentEntitlementsSource) async -> Set<String>
+    ) async -> Set<String> {
+        let source = entitlementsSource
+        if let ids = await withTimeoutOrNil(milliseconds: timeoutMilliseconds, operation: { await read(source) }) {
+            return ids
+        }
+        HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement read timed out — using cached entitlements")
+        return source.cachedHeliumProductIds()
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without

@@ -237,7 +237,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_owned_serverTimesOut_keepsCachedAnswer() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [], delay: 1)
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
 
         let start = Date()
         let ids = await manager.entitledProductIdsBeforeCheckout(
@@ -248,5 +248,19 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
         XCTAssertTrue(ids.contains(Self.ownedKey))
         XCTAssertLessThan(elapsed, 0.5, "pre-check waited for the hung refresh instead of timing out")
+    }
+
+    func testPreCheck_afterTimedOutRefresh_nextReadDoesNotWaitForIt() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        _ = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
+
+        let start = Date()
+        let ids = await preCheckSource.purchasedHeliumProductIds()
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertLessThan(elapsed, 0.5, "a read after the timed-out refresh blocked on the still-running fetch")
     }
 }
