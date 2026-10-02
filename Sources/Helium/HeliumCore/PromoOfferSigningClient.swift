@@ -73,7 +73,10 @@ final class HeliumPromoOfferSigningClient: HeliumPromoOfferSigner {
             body["appTransactionId"] = appTransactionId
         }
 
-        var request = URLRequest(url: URL(string: Self.signEndpointURL())!)
+        guard let url = URL(string: Self.signEndpointURL()) else {
+            throw SigningError(code: "invalid_endpoint")
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval

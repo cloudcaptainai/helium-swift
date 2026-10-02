@@ -65,7 +65,7 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
                 HeliumLogger.log(.error, category: .core, "StoreKitDelegate - makePurchase could not find product: \(productId)")
                 return .failed(StoreKitDelegateError.cannotFindProduct)
             }
-            guard let offer = product.subscription?.promotionalOffers.first(where: { $0.id == promoOfferId }) else {
+            guard product.subscription?.promotionalOffers.contains(where: { $0.id == promoOfferId }) == true else {
                 HeliumLogger.log(.error, category: .core, "StoreKitDelegate - promotional offer not found: \(promoOfferId) for product: \(productId)")
                 return .failed(HeliumPurchaseError.promoOfferNotFound(offerId: promoOfferId))
             }
