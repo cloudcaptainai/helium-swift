@@ -69,6 +69,14 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
+    func cachedHeliumProductIds() -> Set<String> {
+        lock.withLock { currentHeliumProductIds }
+    }
+
+    func refreshEntitlementsJoiningInFlightFetch() async {
+        await fetchFromServer()
+    }
+
     /// Latest server-reported intro-offer eligibility for this customer, or nil
     /// if unknown (no fetch yet, or server omitted the field on partial failure).
     open func introOfferEligible() async -> Bool? {

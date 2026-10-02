@@ -148,4 +148,135 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: ["pro_ghost:pri_missing", yearlyTrial], priceMap: priceMap))
     }
+
+    // MARK: - Already-owned pre-check refresh
+
+    private static let ownedKey = "prod_owned:price_owned"
+
+    private var preCheckSource: HeliumPaymentEntitlementsSource!
+
+    private func seedOwnedEntitlement() -> ExternalWebCheckoutManager {
+        URLProtocol.registerClass(MockURLProtocol.self)
+        MockURLProtocol.reset()
+        Helium.lastApiKeyUsed = "test_api_key_for_precheck_tests"
+        preCheckSource = HeliumPaymentEntitlementsSource(provider: .stripe)
+        preCheckSource.didCompletePurchase(
+            productId: "prod_owned",
+            priceId: "price_owned",
+            subscriptionExpiresAt: Date().addingTimeInterval(3600)
+        )
+        return ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: preCheckSource)
+    }
+
+    private func tearDownPreCheck() {
+        preCheckSource?.clearEntitlements()
+        preCheckSource = nil
+        Helium.lastApiKeyUsed = nil
+        MockURLProtocol.reset()
+        URLProtocol.unregisterClass(MockURLProtocol.self)
+    }
+
+    private func stubCheckEntitlement(subscriptions: [[String: Any]], delay: TimeInterval = 0) {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertTrue(request.url?.path.hasSuffix("stripe/check-entitlement") == true, "Unexpected request: \(request.url?.absoluteString ?? "nil")")
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+            let body = try JSONSerialization.data(withJSONObject: [
+                "hasActiveEntitlement": !subscriptions.isEmpty,
+                "subscriptions": subscriptions,
+            ])
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+            return (response, body)
+        }
+    }
+
+    private var activeOwnedSubscription: [String: Any] {
+        [
+            "subscriptionId": "sub_1",
+            "productId": "prod_owned",
+            "status": "active",
+            "priceId": "price_owned",
+            "currentPeriodEnd": ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600)),
+        ]
+    }
+
+    func testPreCheck_notOwned_skipsNetwork() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [])
+
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: "prod_other:price_other")
+
+        XCTAssertEqual(ids, [Self.ownedKey])
+        XCTAssertTrue(MockURLProtocol.capturedRequests.isEmpty)
+    }
+
+    func testPreCheck_owned_serverConfirms_staysOwned() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [activeOwnedSubscription])
+
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey)
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
+    }
+
+    func testPreCheck_owned_serverSaysExpired_continuesToCheckout() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [])
+
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey)
+
+        XCTAssertFalse(ids.contains(Self.ownedKey))
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
+        let cachedAfter = await preCheckSource.purchasedHeliumProductIds()
+        XCTAssertFalse(cachedAfter.contains(Self.ownedKey))
+    }
+
+    func testPreCheck_owned_serverTimesOut_keepsCachedAnswer() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+
+        let start = Date()
+        let ids = await manager.entitledProductIdsBeforeCheckout(
+            productKey: Self.ownedKey,
+            refreshTimeoutMilliseconds: 50
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertLessThan(elapsed, 0.5, "pre-check waited for the hung refresh instead of timing out")
+    }
+
+    func testPreCheck_fetchAlreadyInFlight_isJoinedNotRestarted() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        preCheckSource.invalidateCache()
+        let launchFetch = Task { [preCheckSource] in await preCheckSource!.purchasedHeliumProductIds() }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
+        _ = await launchFetch.value
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1, "pre-check restarted the fetch that was already in flight")
+        XCTAssertFalse(preCheckSource.cachedHeliumProductIds().contains(Self.ownedKey))
+    }
+
+    func testPreCheck_afterTimedOutRefresh_nextReadDoesNotWaitForIt() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        _ = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
+
+        let start = Date()
+        let ids = await preCheckSource.purchasedHeliumProductIds()
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertLessThan(elapsed, 0.5, "a read after the timed-out refresh blocked on the still-running fetch")
+    }
 }
