@@ -46,15 +46,19 @@ final class HeliumPromoOfferSigningClient: HeliumPromoOfferSigner {
     /// The sign endpoint URL. `customAPIEndpoint` points at the full on-launch
     /// URL, so the base is derived by stripping the trailing "on-launch".
     static func signEndpointURL() -> String {
-        if let custom = Helium.config.customAPIEndpoint {
-            var base = custom
-            if base.hasSuffix("on-launch") {
-                base = String(base.dropLast("on-launch".count))
+        if let custom = Helium.config.customAPIEndpoint,
+           var components = URLComponents(string: custom) {
+            var pathParts = components.path.split(separator: "/").map(String.init)
+            if pathParts.last == "on-launch" {
+                pathParts.removeLast()
             }
-            if !base.hasSuffix("/") {
-                base += "/"
+            pathParts.append(contentsOf: ["promo-offer", "sign"])
+            components.path = "/" + pathParts.joined(separator: "/")
+            components.query = nil
+            components.fragment = nil
+            if let url = components.string {
+                return url
             }
-            return base + "promo-offer/sign"
         }
         return HeliumAPIEndpoint.defaultBaseURL + "promo-offer/sign"
     }

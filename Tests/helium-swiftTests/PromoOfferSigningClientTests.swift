@@ -12,16 +12,19 @@ final class PromoOfferSigningClientTests: HeliumTestCase {
 
     private var previousCustomEndpoint: String?
     private var previousSigner: HeliumPromoOfferSigner?
+    private var previousApiKey: String?
 
     override func setUp() {
         super.setUp()
         previousCustomEndpoint = Helium.config.customAPIEndpoint
         previousSigner = Helium.config.promoOfferSigner
+        previousApiKey = Helium.lastApiKeyUsed
     }
 
     override func tearDown() {
         Helium.config.customAPIEndpoint = previousCustomEndpoint
         Helium.config.promoOfferSigner = previousSigner
+        Helium.lastApiKeyUsed = previousApiKey
         super.tearDown()
     }
 
@@ -45,6 +48,14 @@ final class PromoOfferSigningClientTests: HeliumTestCase {
 
     func testSignEndpointKeepsCustomBaseWithoutOnLaunchSuffix() {
         Helium.config.customAPIEndpoint = "https://staging.example.com/"
+        XCTAssertEqual(
+            HeliumPromoOfferSigningClient.signEndpointURL(),
+            "https://staging.example.com/promo-offer/sign"
+        )
+    }
+
+    func testSignEndpointDropsQueryAndFragment() {
+        Helium.config.customAPIEndpoint = "https://staging.example.com/on-launch?x=1#frag"
         XCTAssertEqual(
             HeliumPromoOfferSigningClient.signEndpointURL(),
             "https://staging.example.com/promo-offer/sign"
