@@ -69,6 +69,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
+    var hasEntitlementsSnapshot: Bool {
+        lock.withLock { cached != nil }
+    }
+
     var hasFreshEntitlementsCache: Bool {
         lock.withLock { cached.map { !$0.needsRefresh } ?? false }
     }

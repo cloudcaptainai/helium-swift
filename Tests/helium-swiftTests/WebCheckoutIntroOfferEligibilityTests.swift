@@ -253,7 +253,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         await preCheckSource.refreshEntitlementsJoiningInFlightFetch()
     }
 
-    func testPreCheck_staleCache_waitsForTheInFlightFetch() async {
+    func testPreCheck_staleCache_joinsInFlightFetchAndKeepsStaleIdsOnTimeout() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
         stubCheckEntitlement(subscriptions: [], delay: 0.3)
@@ -261,11 +261,31 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         let launchFetch = Task { [preCheckSource] in await preCheckSource!.purchasedHeliumProductIds() }
         try? await Task.sleep(nanoseconds: 50_000_000)
 
+        let start = Date()
         let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
+        let elapsed = Date().timeIntervalSince(start)
         _ = await launchFetch.value
 
-        XCTAssertFalse(ids.contains(Self.ownedKey))
+        XCTAssertTrue(ids.contains(Self.ownedKey))
+        XCTAssertLessThan(elapsed, 0.25, "stale snapshot waited past the refresh timeout")
         XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1, "pre-check started a second fetch instead of joining the in-flight one")
+        XCTAssertFalse(preCheckSource.cachedHeliumProductIds().contains(Self.ownedKey))
+    }
+
+    func testPreCheck_staleCacheNotOwned_isBoundedByTheRefreshTimeout() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        preCheckSource.invalidateCache()
+
+        let start = Date()
+        let ids = await manager.entitledProductIdsBeforeCheckout(productKey: "prod_other:price_other", refreshTimeoutMilliseconds: 50)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(ids, [Self.ownedKey])
+        XCTAssertLessThan(elapsed, 0.25, "stale snapshot waited past the refresh timeout")
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
+        await preCheckSource.refreshEntitlementsJoiningInFlightFetch()
     }
 
     func testPreCheck_coldCache_waitsForTheServerAnswer() async {

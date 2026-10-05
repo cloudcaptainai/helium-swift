@@ -432,11 +432,11 @@ public class ExternalWebCheckoutManager: NSObject {
         refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds
     ) async -> Set<String> {
         let source = entitlementsSource
-        guard source.hasFreshEntitlementsCache else {
+        guard source.hasEntitlementsSnapshot else {
             return await source.purchasedHeliumProductIds()
         }
         let cachedIds = source.cachedHeliumProductIds()
-        guard cachedIds.contains(productKey) else { return cachedIds }
+        guard !source.hasFreshEntitlementsCache || cachedIds.contains(productKey) else { return cachedIds }
 
         let refreshedIds = await withTimeoutAbandoningOperation(milliseconds: refreshTimeoutMilliseconds) {
             await source.refreshEntitlementsJoiningInFlightFetch()
