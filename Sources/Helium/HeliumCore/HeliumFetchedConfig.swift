@@ -1404,22 +1404,3 @@ enum FetchError: LocalizedError {
         }
     }
 }
-
-/// Executes an async operation with a timeout, returning nil if the timeout is exceeded
-func withTimeoutOrNil<T: Sendable>(milliseconds: UInt64, operation: @escaping @Sendable () async -> T?) async -> T? {
-    await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
-        let resumeGuard = ResumeGuard()
-        Task.detached {
-            let result = await operation()
-            if resumeGuard.tryResume() {
-                continuation.resume(returning: result)
-            }
-        }
-        Task.detached {
-            try? await Task.sleep(nanoseconds: milliseconds * 1_000_000)
-            if resumeGuard.tryResume() {
-                continuation.resume(returning: nil)
-            }
-        }
-    }
-}

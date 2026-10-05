@@ -69,6 +69,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         await fetchFromServer(forceNew: true)
     }
 
+    var hasFreshEntitlementsCache: Bool {
+        lock.withLock { cached.map { !$0.needsRefresh } ?? false }
+    }
+
     func cachedHeliumProductIds() -> Set<String> {
         lock.withLock { currentHeliumProductIds }
     }

@@ -98,6 +98,12 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.webPaywallBundleUrlMissing
         }
 
+        let entitledBefore = await entitledProductIdsBeforeCheckout(productKey: productKey)
+        if entitledBefore.contains(productKey) {
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
+            return .preCheckResolved
+        }
+
         let templateEvent = PurchaseSucceededEvent(
             productId: "",
             triggerName: triggerName,
@@ -186,7 +192,7 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallTraits: paywallTraits
         )
 
-        return try await openEnrichedCheckoutURL(enrichedURL, productKey: productKey, paywallSession: paywallSession)
+        return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession)
     }
 
     /// Whether this customer is deemed intro-offer eligible for the web paywall.
@@ -387,20 +393,11 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Opens the enriched checkout URL in the configured browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
-    /// Returns `.preCheckResolved` if entitlements already include `productKey`;
-    /// otherwise `.opened`.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, productKey: String, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
-        let entitledBefore = await entitledProductIdsBeforeCheckout(productKey: productKey)
-
-        if entitledBefore.contains(productKey) {
-            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
-            return .preCheckResolved
-        }
-
+    func openEnrichedCheckoutURL(_ url: URL, entitledProductIdsBeforeCheckout: Set<String>, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
         let observation = CheckoutObservation(
             paywallSession: paywallSession,
-            entitledProductIdsBeforeCheckout: entitledBefore,
+            entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout,
             addedAt: Date()
         )
         activeCheckoutObservations[paywallSession.sessionId] = observation
@@ -434,31 +431,25 @@ public class ExternalWebCheckoutManager: NSObject {
         productKey: String,
         refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds
     ) async -> Set<String> {
-        let cachedIds = await boundedEntitledProductIds(timeoutMilliseconds: refreshTimeoutMilliseconds) { source in
-            await source.purchasedHeliumProductIds()
+        let source = entitlementsSource
+        guard source.hasFreshEntitlementsCache else {
+            return await source.purchasedHeliumProductIds()
         }
+        let cachedIds = source.cachedHeliumProductIds()
         guard cachedIds.contains(productKey) else { return cachedIds }
 
-        let refreshedIds = await boundedEntitledProductIds(timeoutMilliseconds: refreshTimeoutMilliseconds) { source in
+        let refreshedIds = await withTimeoutAbandoningOperation(milliseconds: refreshTimeoutMilliseconds) {
             await source.refreshEntitlementsJoiningInFlightFetch()
             return source.cachedHeliumProductIds()
+        }
+        guard let refreshedIds else {
+            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement refresh for \(productKey) timed out — keeping cached answer")
+            return cachedIds
         }
         if !refreshedIds.contains(productKey) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: refresh shows \(productKey) no longer owned — continuing to checkout")
         }
         return refreshedIds
-    }
-
-    private func boundedEntitledProductIds(
-        timeoutMilliseconds: UInt64,
-        _ read: @escaping @Sendable (HeliumPaymentEntitlementsSource) async -> Set<String>
-    ) async -> Set<String> {
-        let source = entitlementsSource
-        if let ids = await withTimeoutOrNil(milliseconds: timeoutMilliseconds, operation: { await read(source) }) {
-            return ids
-        }
-        HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement read timed out — using cached entitlements")
-        return source.cachedHeliumProductIds()
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
