@@ -1404,17 +1404,3 @@ enum FetchError: LocalizedError {
         }
     }
 }
-
-/// Executes an async operation with a timeout, returning nil if the timeout is exceeded
-func withTimeoutOrNil<T>(milliseconds: UInt64, operation: @escaping () async -> T?) async -> T? {
-    await withTaskGroup(of: T?.self) { group in
-        group.addTask { await operation() }
-        group.addTask {
-            try? await Task.sleep(nanoseconds: milliseconds * 1_000_000)
-            return nil
-        }
-        let result = await group.next()
-        group.cancelAll()
-        return result ?? nil
-    }
-}
