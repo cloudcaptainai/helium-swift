@@ -17,16 +17,17 @@ func withTimeoutOrNil<T>(milliseconds: UInt64, operation: @escaping () async -> 
 func withTimeoutAbandoningOperation<T: Sendable>(milliseconds: UInt64, operation: @escaping @Sendable () async -> T) async -> T? {
     await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
         let resumeGuard = ResumeGuard()
-        Task.detached {
-            let result = await operation()
-            if resumeGuard.tryResume() {
-                continuation.resume(returning: result)
-            }
-        }
-        Task.detached {
+        let timer = Task.detached(priority: .userInitiated) {
             try? await Task.sleep(nanoseconds: milliseconds * 1_000_000)
             if resumeGuard.tryResume() {
                 continuation.resume(returning: nil)
+            }
+        }
+        Task.detached(priority: .userInitiated) {
+            let result = await operation()
+            if resumeGuard.tryResume() {
+                timer.cancel()
+                continuation.resume(returning: result)
             }
         }
     }

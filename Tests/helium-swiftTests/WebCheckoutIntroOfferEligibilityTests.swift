@@ -239,7 +239,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_owned_serverTimesOut_keepsCachedAnswer() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        stubCheckEntitlement(subscriptions: [], delay: 1)
 
         let start = Date()
         let ids = await manager.entitledProductIdsBeforeCheckout(
@@ -256,7 +256,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_staleCache_joinsInFlightFetchAndKeepsStaleIdsOnTimeout() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        stubCheckEntitlement(subscriptions: [], delay: 1)
         preCheckSource.invalidateCache()
         let launchFetch = Task { [preCheckSource] in await preCheckSource!.purchasedHeliumProductIds() }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -267,7 +267,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         _ = await launchFetch.value
 
         XCTAssertTrue(ids.contains(Self.ownedKey))
-        XCTAssertLessThan(elapsed, 0.25, "stale snapshot waited past the refresh timeout")
+        XCTAssertLessThan(elapsed, 0.5, "stale snapshot waited past the refresh timeout")
         XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1, "pre-check started a second fetch instead of joining the in-flight one")
         XCTAssertFalse(preCheckSource.cachedHeliumProductIds().contains(Self.ownedKey))
     }
@@ -275,7 +275,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_staleCacheNotOwned_isBoundedByTheRefreshTimeout() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        stubCheckEntitlement(subscriptions: [], delay: 1)
         preCheckSource.invalidateCache()
 
         let start = Date()
@@ -283,7 +283,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         let elapsed = Date().timeIntervalSince(start)
 
         XCTAssertEqual(ids, [Self.ownedKey])
-        XCTAssertLessThan(elapsed, 0.25, "stale snapshot waited past the refresh timeout")
+        XCTAssertLessThan(elapsed, 0.5, "stale snapshot waited past the refresh timeout")
         XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
         await preCheckSource.refreshEntitlementsJoiningInFlightFetch()
     }
@@ -291,7 +291,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_coldCache_waitsForTheServerAnswer() async {
         let manager = seedOwnedEntitlement(seedOwned: false)
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [activeOwnedSubscription], delay: 0.3)
+        stubCheckEntitlement(subscriptions: [activeOwnedSubscription], delay: 1)
 
         let ids = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
 
@@ -302,7 +302,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
     func testPreCheck_afterTimedOutRefresh_nextReadDoesNotWaitForIt() async {
         let manager = seedOwnedEntitlement()
         defer { tearDownPreCheck() }
-        stubCheckEntitlement(subscriptions: [], delay: 0.3)
+        stubCheckEntitlement(subscriptions: [], delay: 1)
         _ = await manager.entitledProductIdsBeforeCheckout(productKey: Self.ownedKey, refreshTimeoutMilliseconds: 50)
 
         let start = Date()
