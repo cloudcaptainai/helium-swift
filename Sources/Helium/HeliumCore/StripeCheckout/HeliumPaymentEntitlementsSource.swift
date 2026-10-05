@@ -81,6 +81,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         lock.withLock { currentHeliumProductIds }
     }
 
+    func cachedIntroOfferEligible() -> Bool? {
+        lock.withLock { cached?.introOfferEligible }
+    }
+
     func refreshEntitlementsJoiningInFlightFetch() async {
         await fetchFromServer()
     }

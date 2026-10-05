@@ -288,6 +288,23 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         await preCheckSource.refreshEntitlementsJoiningInFlightFetch()
     }
 
+    func testPreCheck_staleCacheAfterTimeout_eligibilityReadsTheSnapshotWithoutNetwork() async {
+        let manager = seedOwnedEntitlement()
+        defer { tearDownPreCheck() }
+        stubCheckEntitlement(subscriptions: [], delay: 1)
+        preCheckSource.invalidateCache()
+        _ = await manager.entitledProductIdsBeforeCheckout(productKey: "prod_other:price_other", refreshTimeoutMilliseconds: 50)
+
+        let start = Date()
+        let eligible = preCheckSource.cachedIntroOfferEligible()
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(eligible, false)
+        XCTAssertLessThan(elapsed, 0.5)
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 1)
+        await preCheckSource.refreshEntitlementsJoiningInFlightFetch()
+    }
+
     func testPreCheck_coldCache_waitsForTheServerAnswer() async {
         let manager = seedOwnedEntitlement(seedOwned: false)
         defer { tearDownPreCheck() }

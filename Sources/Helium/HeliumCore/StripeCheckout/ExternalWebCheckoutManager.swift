@@ -185,7 +185,7 @@ public class ExternalWebCheckoutManager: NSObject {
             triggerName: triggerName,
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
-            introOfferEligible: await isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
+            introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
             stripeOfferTerms: buildStripeOfferTerms(paywallInfo: paywallSession.paywallInfoWithBackups),
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
@@ -199,13 +199,13 @@ public class ExternalWebCheckoutManager: NSObject {
     ///
     /// Prefers the server's per-customer signal from `/check-entitlement` when
     /// available — the local price map can go stale.
-    private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) async -> Bool {
+    private func isIntroOfferEligibleForWebCheckout(paywallInfo: HeliumPaywallInfo?) -> Bool {
         guard let paywallInfo,
               let products = provider.getOfferedProducts(paywallInfo, false),
               !products.isEmpty else {
             return false
         }
-        if let serverValue = await entitlementsSource.introOfferEligible() {
+        if let serverValue = entitlementsSource.cachedIntroOfferEligible() {
             return serverValue
         }
         return Self.blanketIntroOfferEligibility(
