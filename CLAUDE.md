@@ -26,7 +26,7 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 There are two main ways to show a paywall, plus a third built on the second:
 
 - **Presented**: `Helium.shared.presentPaywall(...)`. The SDK presents the paywall modally itself. This is the most common style.
-- **Embedded**: the `HeliumPaywall` SwiftUI view, which the host app places in its own view hierarchy and dismisses itself.
+- **Embedded**: the `HeliumPaywall` SwiftUI view, which the host app places in its own view hierarchy.
 - **Triggered**: the `.heliumPaywall(isPresented:trigger:...)` view modifier, which wraps `HeliumPaywall` in a `fullScreenCover`.
 
 Most testing and usage goes through the presented path, but any change that could affect `HeliumPaywall` has to work for embedded (and so triggered) paywalls too. Check lifecycle, dismissal, event, and session handling in both paths, not just the presented one.
