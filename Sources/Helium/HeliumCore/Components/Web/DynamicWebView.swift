@@ -494,6 +494,7 @@ struct DynamicWebView: View {
 
     private func advanceFileLoadAttempt(to attempt: FileLoadAttempt, useBackup: Bool) {
         Task { @MainActor in
+            terminationReloadPending = false
             fileLoadAttempt = attempt
             webView = nil
             jsCrashProbeActive = false
