@@ -6,6 +6,12 @@ enum WebViewFailKind {
     case processTerminated
 }
 
+enum ProcessTerminationRecovery: String, Equatable {
+    case reload
+    case reloadWhenActive
+    case advanceLadder
+}
+
 /// Load-ladder decisions and injected scripts for detecting blank paywall renders.
 enum WebViewRenderGuard {
 
@@ -24,6 +30,19 @@ enum WebViewRenderGuard {
         case .backupLoad:
             return nil
         }
+    }
+
+    static let maxReloadsOfRenderedPaywall = 3
+
+    static func processTerminationRecovery(
+        wasContentLoaded: Bool,
+        reloadsSoFar: Int,
+        isAppActive: Bool
+    ) -> ProcessTerminationRecovery {
+        guard wasContentLoaded, reloadsSoFar < maxReloadsOfRenderedPaywall else {
+            return .advanceLadder
+        }
+        return isAppActive ? .reload : .reloadWhenActive
     }
 
     /// didFinish fires even when the page's JS crashed, so errors stay fatal for a

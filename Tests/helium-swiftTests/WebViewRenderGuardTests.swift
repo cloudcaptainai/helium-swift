@@ -60,6 +60,43 @@ final class WebViewRenderGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Process termination recovery
+
+    func testRenderedPaywallTerminationReloadsWhileActive() {
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: true, reloadsSoFar: 0, isAppActive: true),
+            .reload
+        )
+    }
+
+    func testRenderedPaywallTerminationDefersReloadUntilActive() {
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: true, reloadsSoFar: 0, isAppActive: false),
+            .reloadWhenActive
+        )
+    }
+
+    func testTerminationBeforeRenderAdvancesLadder() {
+        for isAppActive in [true, false] {
+            XCTAssertEqual(
+                WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: false, reloadsSoFar: 0, isAppActive: isAppActive),
+                .advanceLadder
+            )
+        }
+    }
+
+    func testRenderedPaywallTerminationFallsToLadderAtReloadCap() {
+        let cap = WebViewRenderGuard.maxReloadsOfRenderedPaywall
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: true, reloadsSoFar: cap - 1, isAppActive: true),
+            .reload
+        )
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: true, reloadsSoFar: cap, isAppActive: true),
+            .advanceLadder
+        )
+    }
+
     // MARK: - Fatal window
 
     func testErrorBeforeContentLoadedIsAlwaysWithinWindow() {

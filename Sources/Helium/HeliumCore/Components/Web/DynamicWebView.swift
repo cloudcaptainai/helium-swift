@@ -35,6 +35,8 @@ struct DynamicWebView: View {
     @State private var isContentLoaded = false
     @State private var contentLoadedAt: Date? = nil
     @State private var jsCrashProbeActive = false
+    @State private var terminationReloadCount = 0
+    @State private var terminationReloadPending = false
     @State private var loadToken = UUID().uuidString
     @State private var webView: WKWebView? = nil
     @State private var showControlPanel = false
@@ -193,6 +195,11 @@ struct DynamicWebView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewProcessTerminated)) { res in
           guard res.object as? WKWebView === webView else { return }
+          let recovery = WebViewRenderGuard.processTerminationRecovery(
+              wasContentLoaded: isContentLoaded,
+              reloadsSoFar: terminationReloadCount,
+              isAppActive: UIApplication.shared.applicationState == .active
+          )
           HeliumObservabilityManager.shared.track(
               PaywallWebProcessTerminated(
                   loadAttempt: String(describing: fileLoadAttempt),
@@ -200,8 +207,18 @@ struct DynamicWebView: View {
               ),
               scope: actionsDelegate.observabilityScope
           )
-          guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) else { return }
-          webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
+          switch recovery {
+          case .reload:
+              reloadAfterProcessTermination()
+          case .reloadWhenActive:
+              terminationReloadPending = true
+          case .advanceLadder:
+              webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
+          }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+          guard terminationReloadPending else { return }
+          reloadAfterProcessTermination()
       }
       .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
           guard let visible = notification.userInfo?["visible"] as? Bool else { return }
@@ -467,6 +484,12 @@ struct DynamicWebView: View {
         }
     }
     
+    private func reloadAfterProcessTermination() {
+        terminationReloadPending = false
+        terminationReloadCount += 1
+        advanceFileLoadAttempt(to: fileLoadAttempt, useBackup: fileLoadAttempt == .backupLoad)
+    }
+
     private func advanceFileLoadAttempt(to attempt: FileLoadAttempt, useBackup: Bool) {
         Task { @MainActor in
             fileLoadAttempt = attempt
