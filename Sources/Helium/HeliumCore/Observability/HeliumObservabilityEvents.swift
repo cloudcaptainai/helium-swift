@@ -408,10 +408,17 @@ struct PaywallJSErrorDetected: HeliumObservabilityEvent {
 struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
     let loadAttempt: String
     let wasContentLoaded: Bool
+    let recovery: ProcessTerminationRecovery
+    let reloadCount: Int
 
     var name: String { "paywall_web_process_terminated" }
     var properties: [String: Any] {
-        ["loadAttempt": loadAttempt, "wasContentLoaded": wasContentLoaded]
+        [
+            "loadAttempt": loadAttempt,
+            "wasContentLoaded": wasContentLoaded,
+            "recovery": recovery.rawValue,
+            "reloadCount": reloadCount,
+        ]
     }
 }
 

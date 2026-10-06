@@ -191,12 +191,19 @@ final class WebViewRenderGuardTests: XCTestCase {
     }
 
     func testWebProcessTerminatedEventShape() throws {
-        let event = PaywallWebProcessTerminated(loadAttempt: "backupLoad", wasContentLoaded: true)
+        let event = PaywallWebProcessTerminated(
+            loadAttempt: "backupLoad",
+            wasContentLoaded: true,
+            recovery: .reloadWhenActive,
+            reloadCount: 2
+        )
 
         XCTAssertEqual(event.name, "paywall_web_process_terminated")
         XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
             "loadAttempt": "backupLoad",
             "wasContentLoaded": true,
+            "recovery": "reloadWhenActive",
+            "reloadCount": 2,
         ]))
     }
 

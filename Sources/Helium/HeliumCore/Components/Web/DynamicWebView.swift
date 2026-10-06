@@ -203,7 +203,9 @@ struct DynamicWebView: View {
           HeliumObservabilityManager.shared.track(
               PaywallWebProcessTerminated(
                   loadAttempt: String(describing: fileLoadAttempt),
-                  wasContentLoaded: isContentLoaded
+                  wasContentLoaded: isContentLoaded,
+                  recovery: recovery,
+                  reloadCount: terminationReloadCount
               ),
               scope: actionsDelegate.observabilityScope
           )
