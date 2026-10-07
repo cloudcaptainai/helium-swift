@@ -12,10 +12,15 @@ import UIKit
 /// bounded by the launch wait budget; a probe slower than the budget outlives it and stores
 /// its measurement for the next launch.
 ///
-/// Measurement runs only for apps with external web checkout configured on a device that
-/// can make Apple Pay payments, and not on a launch into the background.
+/// Measurement runs only for apps with external web checkout configured that have not turned
+/// off `enableWebApplePayReadiness`, on a device that can make Apple Pay payments, and not on
+/// a launch into the background.
 class WebApplePayAvailability {
     static let shared = WebApplePayAvailability()
+
+    private static var isMeasurementEnabled: Bool {
+        Helium.config.enableWebApplePayReadiness && !Helium.config.webCheckoutProcessors.isEmpty
+    }
 
     private static let persistedReadinessKey = "heliumWebApplePayReadiness"
     private static let hasProbedKey = "heliumWebApplePayProbed"
@@ -47,7 +52,7 @@ class WebApplePayAvailability {
 
     /// The value sent to targeting.
     func readiness() -> WebApplePayReadiness {
-        guard !Helium.config.webCheckoutProcessors.isEmpty else { return .unknown(.notMeasured) }
+        guard Self.isMeasurementEnabled else { return .unknown(.notMeasured) }
         // Apple Pay being unavailable on the device outranks any browser measurement, including
         // one taken before restrictions or an iCloud sign-out removed it.
         guard ApplePayHelper.shared.canMakePayments() else { return .unknown(.deviceCannotPay) }
@@ -60,6 +65,7 @@ class WebApplePayAvailability {
     /// having probed rather than on holding a measurement, so a probe that keeps failing
     /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
+        guard Self.isMeasurementEnabled else { return }
         if await deferProbeIfInBackground() { return }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()
@@ -169,6 +175,7 @@ class WebApplePayAvailability {
         guard shouldProbe() else {
             HeliumLogger.log(.debug, category: .core, "Skipping web Apple Pay probe", metadata: [
                 "webCheckoutEnabled": String(!Helium.config.webCheckoutProcessors.isEmpty),
+                "readinessEnabled": String(Helium.config.enableWebApplePayReadiness),
                 "deviceCanMakePayments": String(ApplePayHelper.shared.canMakePayments()),
                 "alreadyProbed": String(probeAttempted),
             ])
@@ -228,7 +235,7 @@ class WebApplePayAvailability {
     /// A device that cannot do Apple Pay at all is left as `unknown` rather than
     /// reported as not ready, so the value only ever reflects a real measurement.
     func shouldProbe() -> Bool {
-        guard !Helium.config.webCheckoutProcessors.isEmpty else { return false }
+        guard Self.isMeasurementEnabled else { return false }
         guard ApplePayHelper.shared.canMakePayments() else { return false }
         return !probeAttempted
     }
