@@ -422,6 +422,16 @@ struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
     }
 }
 
+struct PaywallWebProcessRecovered: HeliumObservabilityEvent {
+    let reloadCount: Int
+    let msSinceReloadStart: Int
+
+    var name: String { "paywall_web_process_recovered" }
+    var properties: [String: Any] {
+        ["reloadCount": reloadCount, "msSinceReloadStart": msSinceReloadStart]
+    }
+}
+
 /// The paywall webview freezes the fully assembled traits at display time, and that
 /// always runs before a purchase can be triggered. A miss at purchase time therefore
 /// means that invariant broke, so the traits get reconstructed as a safety net (some

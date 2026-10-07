@@ -77,12 +77,35 @@ final class WebViewRenderGuardTests: XCTestCase {
     }
 
     func testTerminationBeforeRenderAdvancesLadder() {
-        for isAppActive in [true, false] {
-            XCTAssertEqual(
-                WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: false, reloadsSoFar: 0, isAppActive: isAppActive),
-                .advanceLadder
-            )
-        }
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: false, reloadsSoFar: 0, isAppActive: true),
+            .advanceLadder
+        )
+        XCTAssertEqual(
+            WebViewRenderGuard.processTerminationRecovery(wasContentLoaded: false, reloadsSoFar: 0, isAppActive: false),
+            .advanceLadderWhenActive
+        )
+    }
+
+    func testDeferredRecoveriesWaitForActiveApp() {
+        XCTAssertTrue(ProcessTerminationRecovery.reloadWhenActive.waitsForActiveApp)
+        XCTAssertTrue(ProcessTerminationRecovery.advanceLadderWhenActive.waitsForActiveApp)
+        XCTAssertFalse(ProcessTerminationRecovery.reload.waitsForActiveApp)
+        XCTAssertFalse(ProcessTerminationRecovery.advanceLadder.waitsForActiveApp)
+    }
+
+    func testReloadCountResetsOnceThePageSurvivedTheWindow() {
+        let loadedAt = Date(timeIntervalSince1970: 1_000)
+        let window = WebViewRenderGuard.reloadCapResetWindow
+        XCTAssertEqual(
+            WebViewRenderGuard.reloadsToCount(reloadsSoFar: 2, contentLoadedAt: loadedAt, now: loadedAt.addingTimeInterval(window - 1)),
+            2
+        )
+        XCTAssertEqual(
+            WebViewRenderGuard.reloadsToCount(reloadsSoFar: 2, contentLoadedAt: loadedAt, now: loadedAt.addingTimeInterval(window)),
+            0
+        )
+        XCTAssertEqual(WebViewRenderGuard.reloadsToCount(reloadsSoFar: 2, contentLoadedAt: nil, now: loadedAt), 2)
     }
 
     func testRenderedPaywallTerminationFallsToLadderAtReloadCap() {
@@ -204,6 +227,16 @@ final class WebViewRenderGuardTests: XCTestCase {
             "wasContentLoaded": true,
             "recovery": "reloadWhenActive",
             "reloadCount": 2,
+        ]))
+    }
+
+    func testWebProcessRecoveredEventShape() throws {
+        let event = PaywallWebProcessRecovered(reloadCount: 1, msSinceReloadStart: 420)
+
+        XCTAssertEqual(event.name, "paywall_web_process_recovered")
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "reloadCount": 1,
+            "msSinceReloadStart": 420,
         ]))
     }
 
