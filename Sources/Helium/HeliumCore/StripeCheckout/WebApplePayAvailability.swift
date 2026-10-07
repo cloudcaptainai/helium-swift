@@ -50,6 +50,10 @@ class WebApplePayAvailability {
         loadPersistedReadiness()
     }
 
+    deinit {
+        removePendingActiveObserver()
+    }
+
     /// The value sent to targeting.
     func readiness() -> WebApplePayReadiness {
         guard Self.isMeasurementEnabled else { return .unknown(.notMeasured) }
