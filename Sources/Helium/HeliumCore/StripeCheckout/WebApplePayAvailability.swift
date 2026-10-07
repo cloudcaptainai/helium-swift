@@ -42,7 +42,7 @@ class WebApplePayAvailability {
     @HeliumAtomic private var probedOnAPreviousLaunch: Bool = false
     @HeliumAtomic private var measurementWaiters: [ObjectIdentifier: MeasurementWaiter] = [:]
     @HeliumAtomic private var launchWaitMs: Int?
-    @HeliumAtomic private var inBackgroundOverride: Bool?
+    @HeliumAtomic private var inBackgroundForTesting: Bool?
     @HeliumAtomic private var pendingActiveObserver: NSObjectProtocol?
 
     init(storage: HeliumStorage = .shared) {
@@ -81,9 +81,9 @@ class WebApplePayAvailability {
     /// the next activation. Checking state and registering for activation in one main-actor turn
     /// means an activation can't land between them.
     private func deferProbeIfInBackground() async -> Bool {
-        if let inBackgroundOverride {
-            if inBackgroundOverride { startProbeWhenActive() }
-            return inBackgroundOverride
+        if let inBackgroundForTesting {
+            if inBackgroundForTesting { startProbeWhenActive() }
+            return inBackgroundForTesting
         }
         return await MainActor.run {
             guard UIApplication.shared.applicationState == .background else { return false }
@@ -274,7 +274,7 @@ class WebApplePayAvailability {
 
     func setReadinessForTesting(_ readiness: WebApplePayReadiness, probed: Bool = true) {
         removePendingActiveObserver()
-        inBackgroundOverride = nil
+        inBackgroundForTesting = nil
         cachedReadiness = readiness
         persistedReadiness = nil
         probeInFlight = false
@@ -283,7 +283,7 @@ class WebApplePayAvailability {
     }
 
     func setInBackgroundForTesting(_ value: Bool?) {
-        inBackgroundOverride = value
+        inBackgroundForTesting = value
     }
 
     func setProbeInFlightForTesting(_ inFlight: Bool) {

@@ -853,8 +853,7 @@ public class HeliumConfig {
     /// and re-measure in the background. Nothing about presentation waits on it.
     ///
     /// Measured only when external web checkout is configured. Defaults to `true`. Set to
-    /// `false` to stop measuring; the launch request then reports `unknown:notMeasured`, which
-    /// the Browser Apple Pay ready targeting rule lets through.
+    /// `false` to stop measuring; the launch request then reports `unknown:notMeasured`.
     public var enableWebApplePayReadiness: Bool = true
 
 }
