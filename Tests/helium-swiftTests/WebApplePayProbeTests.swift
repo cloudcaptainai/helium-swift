@@ -136,6 +136,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAMeasuredAnswerIsRememberedAndAnUnknownOneIsNot() throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
 
         availability.apply(makeOutcome(readiness: .notReady))
@@ -148,6 +149,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAMeasuredAnswerIsServedImmediatelyOnTheNextLaunch() throws {
+        configureWebCheckout(processor: .paddle)
         let defaults = try makeIsolatedDefaults()
         makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .notReady))
 
@@ -158,6 +160,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testADeviceThatCannotPayOutranksAMeasuredAnswer() throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
         availability.apply(makeOutcome(readiness: .ready))
         XCTAssertEqual(availability.readiness(), .ready)
@@ -182,6 +185,18 @@ final class WebApplePayProbeTests: XCTestCase {
 
         XCTAssertFalse(availability.shouldProbe())
         XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
+
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
+
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "unknown:notMeasured")
+    }
+
+    func testAStoredMeasurementIsNotReportedOnceWebCheckoutIsDisabled() {
+        configureWebCheckout(processor: .paddle)
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready)
+        Helium.config.disableExternalWebCheckout()
+
+        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown(.notMeasured))
 
         let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
 
@@ -276,6 +291,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAWaitingLaunchResumesAsSoonAsTheMeasurementLands() async throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
 
         let startedAt = Date()
@@ -312,6 +328,7 @@ final class WebApplePayProbeTests: XCTestCase {
     // MARK: - Readiness reported to the server
 
     func testOnLaunchCarriesTheTriStateReadinessRatherThanABoolean() {
+        configureWebCheckout(processor: .paddle)
         for readiness in [WebApplePayReadiness.ready, .notReady, .unknown(.probeFailed)] {
             WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 

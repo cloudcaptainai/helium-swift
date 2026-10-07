@@ -47,6 +47,7 @@ class WebApplePayAvailability {
 
     /// The value sent to targeting.
     func readiness() -> WebApplePayReadiness {
+        guard !Helium.config.webCheckoutProcessors.isEmpty else { return .unknown(.notMeasured) }
         // Apple Pay being unavailable on the device outranks any browser measurement, including
         // one taken before restrictions or an iCloud sign-out removed it.
         guard ApplePayHelper.shared.canMakePayments() else { return .unknown(.deviceCannotPay) }
@@ -59,19 +60,26 @@ class WebApplePayAvailability {
     /// having probed rather than on holding a measurement, so a probe that keeps failing
     /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
-        if await isInBackground() {
-            startProbeWhenActive()
-            return
-        }
+        if await deferProbeIfInBackground() { return }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()
         guard waitsForMeasurement, started else { return }
         await awaitMeasurement(upTo: Self.launchWaitBudget)
     }
 
-    private func isInBackground() async -> Bool {
-        if let inBackgroundOverride { return inBackgroundOverride }
-        return await MainActor.run { UIApplication.shared.applicationState == .background }
+    /// Reports whether the launch is in the background, in which case the probe is deferred to
+    /// the next activation. Checking state and registering for activation in one main-actor turn
+    /// means an activation can't land between them.
+    private func deferProbeIfInBackground() async -> Bool {
+        if let inBackgroundOverride {
+            if inBackgroundOverride { startProbeWhenActive() }
+            return inBackgroundOverride
+        }
+        return await MainActor.run {
+            guard UIApplication.shared.applicationState == .background else { return false }
+            startProbeWhenActive()
+            return true
+        }
     }
 
     private func startProbeWhenActive() {
