@@ -852,8 +852,9 @@ public class HeliumConfig {
     /// measurement can be reported; later launches report the stored measurement immediately
     /// and re-measure in the background. Nothing about presentation waits on it.
     ///
-    /// Defaults to `false`, in which case no measurement runs and every user is reported as
-    /// Apple Pay ready.
+    /// This property has no effect. Web Apple Pay readiness is measured automatically whenever
+    /// external web checkout is configured.
+    @available(*, deprecated, message: "Web Apple Pay readiness is measured automatically whenever external web checkout is configured. Setting this has no effect.")
     public var enableWebApplePayReadiness: Bool = false
 
 }
