@@ -463,6 +463,9 @@ struct DynamicWebView: View {
 
     private func webViewLoadFail(reason: String, kind: WebViewFailKind = .navigation) {
         HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
+        // A failed termination reload must not mark the ladder's next load as a recovery.
+        // Only a failure clears it: the reload itself also starts a new load attempt.
+        terminationReloadStartedAt = nil
         if let next = WebViewRenderGuard.nextLoadAttempt(
             after: fileLoadAttempt,
             kind: kind,
