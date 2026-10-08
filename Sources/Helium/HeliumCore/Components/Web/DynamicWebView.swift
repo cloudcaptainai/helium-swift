@@ -224,6 +224,7 @@ struct DynamicWebView: View {
               scope: actionsDelegate.observabilityScope
           )
           if recovery.waitsForActiveApp {
+              loadToken = UUID().uuidString
               pendingTerminationRecovery = recovery
           } else {
               performTerminationRecovery(recovery)
