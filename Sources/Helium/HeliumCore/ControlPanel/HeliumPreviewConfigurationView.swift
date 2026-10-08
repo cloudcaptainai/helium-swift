@@ -142,7 +142,7 @@ struct HeliumPreviewConfigurationView: View {
                         Text(mode.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.primary)
-                        if mode.isUSOnly {
+                        if isDisabled {
                             tag("US ONLY")
                         }
                     }

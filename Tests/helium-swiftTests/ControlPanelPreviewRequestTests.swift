@@ -17,6 +17,7 @@ final class ControlPanelPreviewRequestTests: XCTestCase {
         XCTAssertEqual(appInfo?["heliumSdkVersion"] as? String, BuildConstants.version)
         XCTAssertEqual(appInfo?["heliumSdk"] as? String, HeliumSdkConfig.shared.heliumSdk)
         XCTAssertEqual(appInfo?["heliumWrapperSdkVersion"] as? String, HeliumSdkConfig.shared.heliumWrapperSdkVersion)
+        XCTAssertEqual(appInfo?["environment"] as? String, AppReceiptsHelper.shared.getEnvironment().uppercased())
         XCTAssertTrue(JSONSerialization.isValidJSONObject(context))
     }
 }

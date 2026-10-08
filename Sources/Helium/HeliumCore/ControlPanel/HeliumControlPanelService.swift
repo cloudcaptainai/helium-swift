@@ -86,6 +86,7 @@ class HeliumControlPanelService {
                 "heliumSdk": config.heliumSdk,
                 "heliumSdkVersion": config.heliumSdkVersion,
                 "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
+                "environment": AppReceiptsHelper.shared.getEnvironment().uppercased(),
             ],
         ]
     }
