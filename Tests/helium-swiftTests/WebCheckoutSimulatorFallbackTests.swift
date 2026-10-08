@@ -9,7 +9,7 @@ final class WebCheckoutSimulatorFallbackTests: XCTestCase {
         try super.setUpWithError()
         try XCTSkipUnless(HeliumRuntimeEnvironment.isSimulator)
         HeliumAnalyticsManager.shared.disableAnalyticsForTesting()
-        Helium.resetHelium()
+        Helium.resetHelium(clearUserId: true)
         Helium.shared.markInitializedForTesting()
         Helium.config.enableExternalWebCheckout(
             redirectURL: "myapp://checkout/return",
@@ -64,7 +64,15 @@ final class WebCheckoutSimulatorFallbackTests: XCTestCase {
     }
 
     func testPreviewTriggerIsExempt() throws {
-        let config = makeTestConfig(triggers: ["a_trigger": makeTestPaywallInfo()])
+        var donor = makeTestPaywallInfo(paywallName: "donor_paywall", products: ["donor.product"])
+        donor.resolvedConfig = AnyCodable([
+            "baseStack": [
+                "componentProps": [
+                    "bundleURL": "https://cdn.example.com/bundles/bundle_donor123.html"
+                ]
+            ]
+        ] as [String: Any])
+        let config = makeTestConfig(triggers: ["a_trigger": donor])
         injectConfig(config, json: try JSON(data: JSONEncoder().encode(config)))
         try HeliumFetchedConfigManager.shared.setPreviewTriggerConfig(
             bundleId: "preview456",
@@ -77,10 +85,7 @@ final class WebCheckoutSimulatorFallbackTests: XCTestCase {
             productIdsStripeWeb: []
         )
 
-        XCTAssertNotEqual(
-            fallbackReason(for: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER),
-            .webCheckoutUnsupportedOnSimulator
-        )
+        XCTAssertNil(fallbackReason(for: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER))
     }
 
     private func injectPaywall(_ configure: (inout HeliumPaywallInfo) -> Void) {
