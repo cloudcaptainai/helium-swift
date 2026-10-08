@@ -6,6 +6,17 @@ enum WebViewFailKind {
     case processTerminated
 }
 
+enum ProcessTerminationRecovery: String, Equatable {
+    case reload
+    case reloadWhenActive
+    case advanceLadder
+    case advanceLadderWhenActive
+
+    var waitsForActiveApp: Bool {
+        self == .reloadWhenActive || self == .advanceLadderWhenActive
+    }
+}
+
 /// Load-ladder decisions and injected scripts for detecting blank paywall renders.
 enum WebViewRenderGuard {
 
@@ -23,6 +34,37 @@ enum WebViewRenderGuard {
             return hasBackup ? .backupLoad : nil
         case .backupLoad:
             return nil
+        }
+    }
+
+    static let maxReloadsOfRenderedPaywall = 3
+
+    /// The cap exists to stop a crash loop. A page that stayed alive this long since its
+    /// last load was killed for an unrelated reason, so its reload count starts over.
+    /// WebKit resets its own crash counter after the same window.
+    static let reloadCapResetWindow: TimeInterval = 30.0
+
+    static func reloadsToCount(reloadsSoFar: Int, contentLoadedAt: Date?, now: Date = Date()) -> Int {
+        guard let contentLoadedAt, now.timeIntervalSince(contentLoadedAt) >= reloadCapResetWindow else {
+            return reloadsSoFar
+        }
+        return 0
+    }
+
+    /// An OS kill of a rendered paywall is not a bundle fault, so it reloads the same
+    /// bundle; a kill before the first render runs the ladder instead. Neither runs
+    /// while the app is inactive.
+    static func processTerminationRecovery(
+        wasContentLoaded: Bool,
+        reloadsSoFar: Int,
+        isAppActive: Bool
+    ) -> ProcessTerminationRecovery {
+        let canReload = wasContentLoaded && reloadsSoFar < maxReloadsOfRenderedPaywall
+        switch (canReload, isAppActive) {
+        case (true, true): return .reload
+        case (true, false): return .reloadWhenActive
+        case (false, true): return .advanceLadder
+        case (false, false): return .advanceLadderWhenActive
         }
     }
 
