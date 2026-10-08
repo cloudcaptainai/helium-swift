@@ -46,6 +46,8 @@ public class ExternalWebCheckoutManager: NSObject {
     private struct CheckoutObservation {
         let paywallSession: PaywallSession
         let entitledProductIdsBeforeCheckout: Set<String>
+        /// The web second try's products, when the checkout's page could sell them.
+        let secondTryProducts: [String]
         let addedAt: Date
     }
     // Usually there will only be one checkout per paywall but second try paywall would have
@@ -208,7 +210,12 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallTraits: paywallTraits
         )
 
-        return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession)
+        return try await openEnrichedCheckoutURL(
+            enrichedURL,
+            entitledProductIdsBeforeCheckout: entitledBefore,
+            secondTryProducts: secondTry?.purchasableProducts ?? [],
+            paywallSession: paywallSession
+        )
     }
 
     /// Whether this customer is deemed intro-offer eligible for the web paywall.
@@ -418,13 +425,12 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Opens the enriched checkout URL in the configured browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, entitledProductIdsBeforeCheckout: Set<String>, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
-        let observation = CheckoutObservation(
+    func openEnrichedCheckoutURL(_ url: URL, entitledProductIdsBeforeCheckout: Set<String>, secondTryProducts: [String] = [], paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
+        addObservation(
             paywallSession: paywallSession,
             entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout,
-            addedAt: Date()
+            secondTryProducts: secondTryProducts
         )
-        activeCheckoutObservations[paywallSession.sessionId] = observation
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
         let opened = await WebCheckoutPresenter.present(
@@ -480,6 +486,22 @@ public class ExternalWebCheckoutManager: NSObject {
     /// an app update.
     private func resolvedBrowserStyle(for paywallSession: PaywallSession) -> WebCheckoutBrowserStyle {
         paywallSession.paywallInfoWithBackups?.webCheckoutBrowserStyle ?? .externalBrowser
+    }
+
+    /// Records the session's checkout, so a later purchase check can attribute a newly entitled
+    /// product to it.
+    @MainActor
+    func addObservation(
+        paywallSession: PaywallSession,
+        entitledProductIdsBeforeCheckout: Set<String>,
+        secondTryProducts: [String]
+    ) {
+        activeCheckoutObservations[paywallSession.sessionId] = CheckoutObservation(
+            paywallSession: paywallSession,
+            entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout,
+            secondTryProducts: secondTryProducts,
+            addedAt: Date()
+        )
     }
 
     /// Stops observing for purchase completion if the session matches.
@@ -697,12 +719,13 @@ public class ExternalWebCheckoutManager: NSObject {
         var restoredCandidate: (productId: String, observation: CheckoutObservation)?
 
         for (sessionId, observation) in observationsSnapshot {
-            guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) else {
+            guard let paywallOfferedProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) else {
                 // Skip, don't remove. Offered-products is static for the
                 // observation's lifetime, so removing here would also kill the
                 // redirect path where the in-app-set safety net would match.
                 continue
             }
+            let offeredProducts = paywallOfferedProducts + observation.secondTryProducts
 
             let newlyEntitledIds = currentEntitledIds
                 .subtracting(observation.entitledProductIdsBeforeCheckout)
@@ -748,10 +771,12 @@ public class ExternalWebCheckoutManager: NSObject {
 
             // Record newest session with an already-entitled offered product as a
             // restored candidate. Only fires if no session produces a Succeeded match
-            // and the caller has positive evidence of checkout completion.
+            // and the caller has positive evidence of checkout completion. Only the
+            // paywall's own products count: an owned second-try product would otherwise
+            // stand in for a purchase whose entitlement hasn't landed yet.
             if fromSuccessRedirect,
                restoredCandidate == nil,
-               let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) })  {
+               let entitledProductId = currentEntitledIds.first(where: { paywallOfferedProducts.contains($0) })  {
                 restoredCandidate = (entitledProductId, observation)
             }
         }

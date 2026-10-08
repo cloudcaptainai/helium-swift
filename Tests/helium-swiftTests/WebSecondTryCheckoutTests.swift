@@ -193,4 +193,118 @@ final class WebSecondTryCheckoutTests: XCTestCase {
         let primaryOnly = try XCTUnwrap(manager.buildStripeOfferTerms(paywallInfo: paywallInfo))
         XCTAssertEqual(Set(primaryOnly.keys), ["prod_main:price_main"])
     }
+
+    // MARK: - Purchase detection
+
+    /// Entitlements as successive purchase checks read them, the last repeating, as when a
+    /// purchase's webhook lands between checks.
+    private final class StubEntitlementsSource: HeliumPaymentEntitlementsSource, @unchecked Sendable {
+        private let lock = NSLock()
+        private let entitledIdsByCheck: [Set<String>]
+        private var checks = 0
+
+        init(provider: PaymentProviderConfig, entitledIdsByCheck: [Set<String>]) {
+            self.entitledIdsByCheck = entitledIdsByCheck
+            super.init(provider: provider)
+        }
+
+        override func refreshEntitlements() async {}
+
+        override func purchasedHeliumProductIds() async -> Set<String> {
+            lock.withLock {
+                defer { checks += 1 }
+                return entitledIdsByCheck[min(checks, entitledIdsByCheck.count - 1)]
+            }
+        }
+    }
+
+    /// Runs the purchase checks a success redirect makes for one checkout and returns the events
+    /// its session received.
+    @MainActor
+    private func eventsAfterSuccessRedirect(
+        provider: PaymentProviderConfig,
+        paywallInfo: HeliumPaywallInfo,
+        entitledIdsByCheck: [Set<String>],
+        entitledBeforeCheckout: Set<String>,
+        secondTryProducts: [String]
+    ) async throws -> [PaywallContextEvent] {
+        let captor = PaywallEventHandlersCaptor()
+        let manager = ExternalWebCheckoutManager(
+            provider: provider,
+            entitlementsSource: StubEntitlementsSource(provider: provider, entitledIdsByCheck: entitledIdsByCheck)
+        )
+        manager.addObservation(
+            paywallSession: makeTestSession(eventHandlers: captor.handlers, paywallInfo: paywallInfo),
+            entitledProductIdsBeforeCheckout: entitledBeforeCheckout,
+            secondTryProducts: secondTryProducts
+        )
+
+        await manager.handleExternalReturn(redirectKind: .success)
+        // Session handlers receive events on a later main-actor turn.
+        let deadline = Date().addingTimeInterval(2)
+        while captor.anyEvents.isEmpty && Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return captor.anyEvents
+    }
+
+    /// A purchase made in the second try's page lands as an entitlement to one of its products,
+    /// which the paywall's own offered set doesn't contain.
+    @MainActor
+    func testSuccessRedirect_attributesAPurchaseOfTheSecondTrysProduct() async throws {
+        var paywallInfo = makeTestPaywallInfo()
+        paywallInfo.webProductsOfferedPaddle = ["pro_main:pri_main"]
+
+        let events = try await eventsAfterSuccessRedirect(
+            provider: .paddle,
+            paywallInfo: paywallInfo,
+            entitledIdsByCheck: [["pro_unrelated:pri_unrelated", "pro_st:pri_st"]],
+            entitledBeforeCheckout: [],
+            secondTryProducts: ["pro_st:pri_st"]
+        )
+
+        let succeeded = events.compactMap { $0 as? PurchaseSucceededEvent }
+        XCTAssertEqual(succeeded.map(\.productId), ["pro_st:pri_st"])
+        XCTAssertEqual(succeeded.first?.paymentProcessor, .paddle)
+    }
+
+    /// A redirect's first check can run before the new purchase's webhook lands. A second-try
+    /// product the user already owned must not pass for a restore there, which would end the
+    /// checks before the purchase shows up.
+    @MainActor
+    func testSuccessRedirect_ownedSecondTryProduct_doesNotPreemptTheNewPurchase() async throws {
+        var paywallInfo = makeTestPaywallInfo()
+        paywallInfo.webProductsOfferedStripe = ["prod_main:price_y"]
+
+        let events = try await eventsAfterSuccessRedirect(
+            provider: .stripe,
+            paywallInfo: paywallInfo,
+            entitledIdsByCheck: [["prod_st:price_x"], ["prod_st:price_x", "prod_main:price_y"]],
+            entitledBeforeCheckout: ["prod_st:price_x"],
+            secondTryProducts: ["prod_st:price_x"]
+        )
+
+        XCTAssertEqual(events.compactMap { ($0 as? PurchaseSucceededEvent)?.productId }, ["prod_main:price_y"])
+        XCTAssertFalse(events.contains { $0 is PurchaseRestoredEvent }, "\(events.map(\.eventName))")
+    }
+
+    /// While the page couldn't show the second try, an entitlement to one of its products didn't
+    /// come from this checkout.
+    @MainActor
+    func testSuccessRedirect_doesNotCountADisabledSecondTrysProducts() async throws {
+        let disabled = WebSecondTryCheckout(info: paddleSecondTry, provider: .paddle, paddleOutcomes: [:])
+        XCTAssertFalse(disabled.enabled)
+        var paywallInfo = makeTestPaywallInfo()
+        paywallInfo.webProductsOfferedPaddle = ["pro_main:pri_main"]
+
+        let events = try await eventsAfterSuccessRedirect(
+            provider: .paddle,
+            paywallInfo: paywallInfo,
+            entitledIdsByCheck: [["pro_st:pri_st_monthly"], ["pro_st:pri_st_monthly", "pro_main:pri_main"]],
+            entitledBeforeCheckout: [],
+            secondTryProducts: disabled.purchasableProducts
+        )
+
+        XCTAssertEqual(events.compactMap { ($0 as? PurchaseSucceededEvent)?.productId }, ["pro_main:pri_main"])
+    }
 }
