@@ -117,6 +117,9 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallSession: paywallSession
         )
 
+        let webSecondTry = paywallSession.paywallInfoWithBackups?.activeWebSecondTry
+
+        var paddleOutcomes: [String: PaddlePrefetchOutcome] = [:]
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
         if provider.kind == .paddle,
@@ -170,12 +173,21 @@ public class ExternalWebCheckoutManager: NSObject {
                 throw WebCheckoutError.paddlePrefetchNotReady(priceIds: notReadyOffered)
             }
 
+            paddleOutcomes = outcomes
             paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
                 outcomesByPriceId: outcomes
             )
             paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
                 outcomesByPriceId: outcomes
             )
+        }
+
+        let secondTry = webSecondTry.map {
+            WebSecondTryCheckout(info: $0, provider: provider.kind, paddleOutcomes: paddleOutcomes)
+        }
+        if let secondTry, !secondTry.enabled {
+            HeliumLogger.log(.debug, category: .entitlements,
+                             "\(provider.displayName) web second try off for this checkout: not every second-try price is ready")
         }
 
         let enrichedURL = try buildEnrichedCheckoutURL(
@@ -186,9 +198,13 @@ public class ExternalWebCheckoutManager: NSObject {
             successURL: resolvedSuccessURL,
             cancelURL: resolvedCancelURL,
             introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: paywallSession.paywallInfoWithBackups),
-            stripeOfferTerms: buildStripeOfferTerms(paywallInfo: paywallSession.paywallInfoWithBackups),
+            stripeOfferTerms: buildStripeOfferTerms(
+                paywallInfo: paywallSession.paywallInfoWithBackups,
+                secondTryProducts: secondTry?.purchasableProducts ?? []
+            ),
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
+            secondTry: secondTry?.ctx,
             paywallTraits: paywallTraits
         )
 
@@ -233,7 +249,8 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     /// Projects every offered Stripe product's subscription detail into a map
-    /// keyed by product key. The standalone paywall is interactive, so the user
+    /// keyed by product key, along with the web second try's products when its
+    /// page may show it. The standalone paywall is interactive, so the user
     /// can re-select before authorizing — a single tapped-product block would go
     /// stale. Keys mirror the injected `subscription` price shape.
     ///
@@ -241,7 +258,10 @@ public class ExternalWebCheckoutManager: NSObject {
     /// can lag the live per-customer signal; the authoritative eligibility gate
     /// is the top-level `introOfferEligible` in ctx. This block carries the
     /// offer terms, not the gate.
-    private func buildStripeOfferTerms(paywallInfo: HeliumPaywallInfo?) -> [String: Any]? {
+    func buildStripeOfferTerms(
+        paywallInfo: HeliumPaywallInfo?,
+        secondTryProducts: [String] = []
+    ) -> [String: Any]? {
         guard provider.kind == .stripe,
               let paywallInfo,
               let offered = provider.getOfferedProducts(paywallInfo, false),
@@ -251,7 +271,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let priceMap = provider.getProductsPriceMap() ?? [:]
 
         var byProductKey: [String: Any] = [:]
-        for productKey in offered {
+        for productKey in offered + secondTryProducts {
             guard let sub = priceMap[productKey]?.subscription else { continue }
 
             var terms: [String: Any] = [:]
@@ -291,6 +311,7 @@ public class ExternalWebCheckoutManager: NSObject {
         stripeOfferTerms: [String: Any]? = nil,
         paddleBootstraps: [String: Any]? = nil,
         paddleAlreadyEntitled: [String: Any]? = nil,
+        secondTry: [String: Any]? = nil,
         paywallTraits: HeliumUserTraits? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -355,6 +376,9 @@ public class ExternalWebCheckoutManager: NSObject {
         }
         if let paddleAlreadyEntitled = paddleAlreadyEntitled {
             ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
+        }
+        if let secondTry {
+            ctx["secondTry"] = secondTry
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
