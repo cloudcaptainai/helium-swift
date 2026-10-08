@@ -854,6 +854,8 @@ public class HeliumConfig {
     ///
     /// Measured only when external web checkout is configured. Defaults to `true`. Set to
     /// `false` to stop measuring; the launch request then reports `unknown:notMeasured`.
+    /// Apps that declare `WKAppBoundDomains` must list `bundles.clickthrough.to` for it to be
+    /// measured; otherwise it reports `unknown:probeFailed`.
     public var enableWebApplePayReadiness: Bool = true
 
 }
