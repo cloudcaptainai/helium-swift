@@ -852,9 +852,11 @@ public class HeliumConfig {
     /// measurement can be reported; later launches report the stored measurement immediately
     /// and re-measure in the background. Nothing about presentation waits on it.
     ///
-    /// Defaults to `false`, in which case no measurement runs and every user is reported as
-    /// Apple Pay ready.
-    public var enableWebApplePayReadiness: Bool = false
+    /// Measured only when external web checkout is configured. Defaults to `true`. Set to
+    /// `false` to stop measuring; the launch request then reports `unknown:notMeasured`.
+    /// Apps that declare `WKAppBoundDomains` must list `bundles.clickthrough.to` for it to be
+    /// measured; otherwise it reports `unknown:probeFailed`.
+    public var enableWebApplePayReadiness: Bool = true
 
 }
 

@@ -1,3 +1,4 @@
+import UIKit
 import WebKit
 import XCTest
 @testable import Helium
@@ -13,14 +14,16 @@ final class WebApplePayProbeTests: XCTestCase {
         Helium.config.enableWebApplePayReadiness = true
         ApplePayHelper.shared.setCanMakePaymentsForTesting(true)
         WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
+        WebApplePayAvailability.shared.setInBackgroundForTesting(false)
     }
 
     override func tearDown() {
         WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
+        WebApplePayAvailability.shared.setInBackgroundForTesting(nil)
         ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
         Helium.config.disableExternalWebCheckout()
         Helium.config.allowWebCheckoutWithoutUserId = false
-        Helium.config.enableWebApplePayReadiness = false
+        Helium.config.enableWebApplePayReadiness = true
         Helium.resetHelium()
         super.tearDown()
     }
@@ -124,6 +127,10 @@ final class WebApplePayProbeTests: XCTestCase {
 
     // MARK: - Availability cache
 
+    func testReadinessIsOnByDefault() {
+        XCTAssertTrue(HeliumConfig().enableWebApplePayReadiness)
+    }
+
     func testReadinessIsUnknownUntilAProbeAnswers() {
         XCTAssertTrue(WebApplePayAvailability.shared.readiness().isUnknown)
     }
@@ -135,6 +142,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAMeasuredAnswerIsRememberedAndAnUnknownOneIsNot() throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
 
         availability.apply(makeOutcome(readiness: .notReady))
@@ -147,6 +155,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAMeasuredAnswerIsServedImmediatelyOnTheNextLaunch() throws {
+        configureWebCheckout(processor: .paddle)
         let defaults = try makeIsolatedDefaults()
         makeAvailability(defaults: defaults).apply(makeOutcome(readiness: .notReady))
 
@@ -157,6 +166,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testADeviceThatCannotPayOutranksAMeasuredAnswer() throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
         availability.apply(makeOutcome(readiness: .ready))
         XCTAssertEqual(availability.readiness(), .ready)
@@ -166,15 +176,52 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertEqual(availability.readiness(), .unknown(.deviceCannotPay))
     }
 
-    // MARK: - Opting in
+    // MARK: - Automatic measurement
 
-    func testAnAppThatHasNotOptedInIsNeverProbedAndIsReportedReady() {
-        Helium.config.enableWebApplePayReadiness = false
+    func testAnAppWithWebCheckoutIsProbedByDefault() throws {
         configureWebCheckout(processor: .paddle)
-        WebApplePayAvailability.shared.setReadinessForTesting(.notReady, probed: false)
+        let availability = makeAvailability()
 
-        XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
-        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .ready)
+        XCTAssertTrue(availability.shouldProbe())
+        XCTAssertTrue(availability.needsMeasurementBeforeLaunch())
+    }
+
+    func testAnAppWithoutWebCheckoutReportsUnmeasuredRatherThanReady() {
+        let availability = WebApplePayAvailability.shared
+
+        XCTAssertFalse(availability.shouldProbe())
+        XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
+
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
+
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "unknown:notMeasured")
+    }
+
+    func testTurningReadinessOffStopsTheProbeAndReportsNotMeasured() {
+        configureWebCheckout(processor: .paddle)
+        Helium.config.enableWebApplePayReadiness = false
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready, probed: false)
+        let availability = WebApplePayAvailability.shared
+
+        XCTAssertFalse(availability.shouldProbe())
+        XCTAssertFalse(availability.startProbe())
+        XCTAssertEqual(availability.readiness(), .unknown(.notMeasured))
+
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
+
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "unknown:notMeasured")
+    }
+
+    func testAStoredMeasurementIsNotReportedOnceWebCheckoutIsDisabled() {
+        configureWebCheckout(processor: .paddle)
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready)
+        Helium.config.disableExternalWebCheckout()
+
+        XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown(.notMeasured))
+
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
+
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "unknown:notMeasured")
     }
 
     // MARK: - Measuring before the launch request
@@ -210,14 +257,53 @@ final class WebApplePayProbeTests: XCTestCase {
 
     func testALaunchThatWouldNotProbeAtAllDoesNotWait() throws {
         configureWebCheckout(processor: .paddle)
-        Helium.config.enableWebApplePayReadiness = false
-
-        XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
-
-        Helium.config.enableWebApplePayReadiness = true
         ApplePayHelper.shared.setCanMakePaymentsForTesting(false)
 
         XCTAssertFalse(makeAvailability().needsMeasurementBeforeLaunch())
+    }
+
+    func testABackgroundLaunchNeitherProbesNorWaits() async throws {
+        configureWebCheckout(processor: .paddle)
+        let availability = makeAvailability()
+        availability.setInBackgroundForTesting(true)
+
+        let startedAt = Date()
+        await availability.prepareForRequest()
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), WebApplePayAvailability.launchWaitBudget / 2)
+        XCTAssertTrue(availability.shouldProbe())
+    }
+
+    func testABackgroundLaunchProbesOnceTheAppBecomesActive() async throws {
+        configureWebCheckout(processor: .paddle)
+        let availability = makeAvailability()
+        availability.setInBackgroundForTesting(true)
+
+        await availability.prepareForRequest()
+
+        await MainActor.run {
+            NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+            NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        }
+
+        XCTAssertFalse(availability.shouldProbe())
+    }
+
+    func testTurningReadinessOffSkipsTheDeferredProbeOnActivation() async throws {
+        configureWebCheckout(processor: .paddle)
+        let availability = makeAvailability()
+        availability.setInBackgroundForTesting(true)
+        Helium.config.enableWebApplePayReadiness = false
+
+        await availability.prepareForRequest()
+        XCTAssertFalse(availability.shouldProbe())
+
+        Helium.config.enableWebApplePayReadiness = true
+        await MainActor.run {
+            NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        }
+
+        XCTAssertTrue(availability.shouldProbe())
     }
 
     func testALaunchGivesUpOnAProbeSlowerThanItsBudget() async throws {
@@ -243,6 +329,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testAWaitingLaunchResumesAsSoonAsTheMeasurementLands() async throws {
+        configureWebCheckout(processor: .paddle)
         let availability = makeAvailability()
 
         let startedAt = Date()
@@ -279,6 +366,7 @@ final class WebApplePayProbeTests: XCTestCase {
     // MARK: - Readiness reported to the server
 
     func testOnLaunchCarriesTheTriStateReadinessRatherThanABoolean() {
+        configureWebCheckout(processor: .paddle)
         for readiness in [WebApplePayReadiness.ready, .notReady, .unknown(.probeFailed)] {
             WebApplePayAvailability.shared.setReadinessForTesting(readiness)
 
@@ -286,15 +374,6 @@ final class WebApplePayProbeTests: XCTestCase {
 
             XCTAssertEqual(payload["webApplePayReadiness"] as? String, readiness.rawValue)
         }
-    }
-
-    func testOnLaunchReportsReadyForAnAppThatHasNotOptedIn() {
-        Helium.config.enableWebApplePayReadiness = false
-        WebApplePayAvailability.shared.setReadinessForTesting(.notReady)
-
-        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
-
-        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "ready")
     }
 
     // MARK: - Telemetry
