@@ -126,7 +126,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
     }
 
     func testIntentionalNonPresentationIsExpected() {
-        for reason in [PaywallUnavailableReason.alreadyPresented, .forceShowFallback] {
+        for reason in [PaywallUnavailableReason.alreadyPresented, .forceShowFallback, .webCheckoutUnsupportedOnSimulator] {
             XCTAssertEqual(content(for: reason).category, .expected, reason.rawValue)
         }
     }
@@ -307,7 +307,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
     func testFallbackCoverableReasonsSuggestTheFallbackGuide() {
         let coverable: [PaywallUnavailableReason] = [
             .triggerHasNoPaywall, .noProductsIOS,
-            .webCheckoutNoCustomUserId, .webCheckoutNotEnabled,
+            .webCheckoutNoCustomUserId, .webCheckoutNotEnabled, .webCheckoutUnsupportedOnSimulator,
             .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress,
             .productsFetchInProgress, .paywallsDownloadFail,
             .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,

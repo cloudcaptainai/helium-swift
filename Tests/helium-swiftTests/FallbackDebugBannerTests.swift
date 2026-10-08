@@ -45,7 +45,8 @@ final class FallbackDebugBannerTests: XCTestCase {
             .couldNotFindBundleUrl,
             .noProductsIOS,
             .webCheckoutNoCustomUserId,
-            .webCheckoutNotEnabled
+            .webCheckoutNotEnabled,
+            .webCheckoutUnsupportedOnSimulator
         ]
 
         for reason in reasons {
