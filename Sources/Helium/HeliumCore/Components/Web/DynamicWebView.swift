@@ -463,6 +463,7 @@ struct DynamicWebView: View {
 
     private func webViewLoadFail(reason: String, kind: WebViewFailKind = .navigation) {
         HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
+        terminationReloadStartedAt = nil
         if let next = WebViewRenderGuard.nextLoadAttempt(
             after: fileLoadAttempt,
             kind: kind,
