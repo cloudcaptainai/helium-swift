@@ -199,6 +199,7 @@ struct PaddleCreateTransactionForPaywallResponse: Decodable {
     let paddleCustomerId: String?
     let isKnownCustomer: Bool
     let requestId: String
+    let heliumTesting: Bool?
 }
 
 // MARK: - Entitlement Response Types
