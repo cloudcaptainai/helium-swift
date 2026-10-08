@@ -138,6 +138,23 @@ final class WebSecondTryCheckoutTests: XCTestCase {
         XCTAssertEqual(WebSecondTryCheckout(info: info, provider: .stripe, paddleOutcomes: [:]).ctx["conditions"] as? [String], [])
     }
 
+    func testPaddleBootstrapOutcomes_areTheSecondTrysPricesOnlyWhileEnabled() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_st_monthly": ready(),
+            "pri_st_yearly": ready(),
+            "pri_unrelated": ready(),
+        ]
+
+        let enabled = WebSecondTryCheckout(info: paddleSecondTry, provider: .paddle, paddleOutcomes: outcomes)
+        XCTAssertEqual(Set(enabled.paddleBootstrapOutcomes.keys), ["pri_st_monthly", "pri_st_yearly"])
+
+        let disabled = WebSecondTryCheckout(info: paddleSecondTry, provider: .paddle, paddleOutcomes: ["pri_st_monthly": ready()])
+        XCTAssertTrue(disabled.paddleBootstrapOutcomes.isEmpty)
+
+        let stripe = WebSecondTryCheckout(info: paddleSecondTry, provider: .stripe, paddleOutcomes: outcomes)
+        XCTAssertTrue(stripe.paddleBootstrapOutcomes.isEmpty)
+    }
+
     // MARK: - Products
 
     func testPurchasableProducts_areTheProvidersSecondTryProductsWhileEnabled() {

@@ -54,6 +54,9 @@ struct WebSecondTryCheckout {
     let provider: HeliumPaymentProcessor
     /// The page's kill switch: it shows the second try only when this is true.
     let enabled: Bool
+    /// The second try's Paddle prefetches that the page's `paddleBootstraps` carries, keyed by
+    /// price alongside the paywall's own. Empty while it's disabled.
+    let paddleBootstrapOutcomes: [String: PaddlePrefetchOutcome]
 
     init(
         info: WebSecondTryInfo,
@@ -65,6 +68,7 @@ struct WebSecondTryCheckout {
         switch provider {
         case .stripe:
             enabled = true
+            paddleBootstrapOutcomes = [:]
         case .paddle:
             // The page can only render a Paddle price from a bootstrap prefetched for this checkout.
             let priceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -74,8 +78,10 @@ struct WebSecondTryCheckout {
                 if case .ready = paddleOutcomes[priceId] ?? .notStarted { return true }
                 return false
             }
+            paddleBootstrapOutcomes = enabled ? paddleOutcomes.filter { priceIds.contains($0.key) } : [:]
         case .appStore:
             enabled = false
+            paddleBootstrapOutcomes = [:]
         }
     }
 

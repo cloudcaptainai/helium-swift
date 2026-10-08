@@ -122,8 +122,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let webSecondTry = paywallSession.paywallInfoWithBackups?.activeWebSecondTry
 
         var paddleOutcomes: [String: PaddlePrefetchOutcome] = [:]
-        var paddleBootstrapsDict: [String: Any]? = nil
-        var paddleAlreadyEntitledDict: [String: Any]? = nil
+        var secondTryPaddleOutcomes: [String: PaddlePrefetchOutcome] = [:]
         if provider.kind == .paddle,
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -132,9 +131,12 @@ public class ExternalWebCheckoutManager: NSObject {
             let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
 
             let awaitStart = Date()
-            let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
+            let (outcomes, secondTryOutcomes) = await PaddleCheckoutPrefetchCoordinator.shared.collectCheckoutOutcomes(
                 sessionId: paywallSession.sessionId,
-                priceIds: priceIdsToAwait
+                paywallPriceIds: priceIdsToAwait,
+                secondTryPriceIds: PaddleCheckoutPrefetchCoordinator.extractPriceIds(
+                    from: webSecondTry?.productsOffered(by: .paddle) ?? []
+                )
             )
             let awaitDurationMs = msSince(awaitStart)
 
@@ -176,21 +178,26 @@ public class ExternalWebCheckoutManager: NSObject {
             }
 
             paddleOutcomes = outcomes
-            paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
-                outcomesByPriceId: outcomes
-            )
-            paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
-                outcomesByPriceId: outcomes
-            )
+            secondTryPaddleOutcomes = secondTryOutcomes
         }
 
         let secondTry = webSecondTry.map {
-            WebSecondTryCheckout(info: $0, provider: provider.kind, paddleOutcomes: paddleOutcomes)
+            WebSecondTryCheckout(info: $0, provider: provider.kind, paddleOutcomes: secondTryPaddleOutcomes)
         }
         if let secondTry, !secondTry.enabled {
             HeliumLogger.log(.debug, category: .entitlements,
                              "\(provider.displayName) web second try off for this checkout: not every second-try price is ready")
         }
+        let ctxPaddleOutcomes = PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(
+            paywall: paddleOutcomes,
+            secondTry: secondTry
+        )
+        let paddleBootstrapsDict = PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+            outcomesByPriceId: ctxPaddleOutcomes
+        )
+        let paddleAlreadyEntitledDict = PaddleCheckoutPrefetchCoordinator.encodeAlreadyEntitledToCtx(
+            outcomesByPriceId: ctxPaddleOutcomes
+        )
 
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
