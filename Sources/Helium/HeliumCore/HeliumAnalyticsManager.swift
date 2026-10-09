@@ -131,8 +131,11 @@ class HeliumAnalyticsManager {
     // MARK: - Event Tracking
     
     /// Builds a `HeliumPaywallLoggedEvent` with full context enrichment.
+    /// - Parameter analyticsPayload: The event's payload as mapped when it fired. When nil, the
+    ///   event is mapped now.
     func buildLoggedEvent(
         for event: HeliumEvent,
+        analyticsPayload: [String: Any]? = nil,
         paywallSession: PaywallSession?,
         overridePaywallSessionId: String? = nil
     ) -> HeliumPaywallLoggedEvent {
@@ -170,7 +173,7 @@ class HeliumAnalyticsManager {
 
         let heliumEventPayload: SegmentJSON
         do {
-            heliumEventPayload = try SegmentJSON(HeliumAnalyticsMapper.mapToAnalyticsPayload(event))
+            heliumEventPayload = try SegmentJSON(analyticsPayload ?? HeliumAnalyticsMapper.mapToAnalyticsPayload(event))
         } catch {
             HeliumLogger.log(.error, category: .events, "Failed to serialize analytics payload", metadata: ["event": event.eventName])
             // Keep the real type so the event still aggregates normally;
@@ -224,14 +227,13 @@ class HeliumAnalyticsManager {
     ) {
         guard !analyticsDisabledForTesting else { return }
         let dispatchQueue = destination == .initialize ? initQueue : queue
-        dispatchQueue.async { [weak self] in
+        enqueueLoggedEvent(
+            for: event,
+            paywallSession: paywallSession,
+            overridePaywallSessionId: overridePaywallSessionId,
+            on: dispatchQueue
+        ) { [weak self] eventForLogging in
             guard let self else { return }
-            
-            let eventForLogging = buildLoggedEvent(
-                for: event,
-                paywallSession: paywallSession,
-                overridePaywallSessionId: overridePaywallSessionId
-            )
             
             // Track event and flush for critical events
             let eventName = "helium_" + HeliumAnalyticsMapper.getEventName(event)
@@ -263,6 +265,28 @@ class HeliumAnalyticsManager {
         }
     }
     
+    /// Maps the event right away, then builds its logged event on `queue` and hands it to
+    /// `handle` there. Mapping can't wait for the queue: some fields (isSecondTry) read live
+    /// presenter state, which a dismiss clears right after firing its event.
+    func enqueueLoggedEvent(
+        for event: HeliumEvent,
+        paywallSession: PaywallSession?,
+        overridePaywallSessionId: String?,
+        on queue: DispatchQueue,
+        handle: @escaping (HeliumPaywallLoggedEvent) -> Void
+    ) {
+        let analyticsPayload = HeliumAnalyticsMapper.mapToAnalyticsPayload(event)
+        queue.async { [weak self] in
+            guard let self else { return }
+            handle(buildLoggedEvent(
+                for: event,
+                analyticsPayload: analyticsPayload,
+                paywallSession: paywallSession,
+                overridePaywallSessionId: overridePaywallSessionId
+            ))
+        }
+    }
+
     /// Dispatches all pending track operations to analytics. Called after analytics is set up.
     /// Must be called within queue.async.
     private func dispatchPendingTracks() {

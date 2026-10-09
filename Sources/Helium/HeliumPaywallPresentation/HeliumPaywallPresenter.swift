@@ -31,13 +31,24 @@ class HeliumPaywallPresenter {
         )
     }
     
-    private var paywallsDisplayed: [HeliumViewController] = []
+    private var paywallsDisplayed: [HeliumViewController] = [] {
+        didSet {
+            secondTryTriggersDisplayed = Set(paywallsDisplayed.filter(\.isSecondTry).map(\.trigger))
+        }
+    }
+    /// Second-try triggers among `paywallsDisplayed`, kept separately so `isSecondTryPaywall` is
+    /// safe from any thread: events read it wherever they fire, including off the main thread.
+    @HeliumAtomic private var secondTryTriggersDisplayed: Set<String> = []
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     func isSecondTryPaywall(trigger: String) -> Bool {
-        return paywallsDisplayed.contains {
-            $0.trigger == trigger && $0.isSecondTry
-        }
+        return secondTryTriggersDisplayed.contains(trigger)
+    }
+
+    /// Replaces the displayed paywalls without presenting or dismissing anything. Accessible via
+    /// @testable import.
+    func setPaywallsDisplayedForTesting(_ paywalls: [HeliumViewController]) {
+        paywallsDisplayed = paywalls
     }
     
     /// Mark a session as having achieved entitlement (purchase/restore succeeded).
