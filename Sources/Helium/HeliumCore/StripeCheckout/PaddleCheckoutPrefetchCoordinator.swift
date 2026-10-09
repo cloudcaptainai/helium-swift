@@ -36,6 +36,9 @@ final class PaddleCheckoutPrefetchCoordinator {
     private let bffClient: PaddleBFFClient
 
     private var cache: [CacheKey: Task<PaddlePrefetchOutcome, Never>] = [:]
+    /// Outcomes of the cached prefetches that have finished, readable without waiting on one
+    /// still in flight.
+    private var settledOutcomes: [CacheKey: PaddlePrefetchOutcome] = [:]
 
     private struct CacheKey: Hashable {
         let sessionId: String
@@ -60,14 +63,16 @@ final class PaddleCheckoutPrefetchCoordinator {
               !clientToken.isEmpty else {
             return
         }
-        let priceIds = Self.extractPriceIds(from: webProducts)
+        // The web second try's page renders its prices from these prefetches too.
+        let products = webProducts + (info.activeWebSecondTry?.productsOffered(by: .paddle) ?? [])
+        let priceIds = Self.extractPriceIds(from: products)
         guard !priceIds.isEmpty else { return }
 
         // Map each offered price to its creator-configured discount id and
         // forward it with the prefetch. The backend decides whether to apply
         // it, so we forward whenever a discount is configured.
         let discountIdByPriceId = Self.discountIdByPriceId(
-            from: webProducts,
+            from: products,
             priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
         )
 
@@ -106,7 +111,7 @@ final class PaddleCheckoutPrefetchCoordinator {
             let bff = bffClient
             let discountId = discountIdByPriceId[priceId]
 
-            cache[key] = Task.detached(priority: .userInitiated) {
+            let task = Task.detached(priority: .userInitiated) {
                 await Self.runPrefetchChain(
                     priceId: priceId,
                     discountId: discountId,
@@ -117,6 +122,13 @@ final class PaddleCheckoutPrefetchCoordinator {
                     bffClient: bff,
                     scope: scope
                 )
+            }
+            cache[key] = task
+            Task { [weak self] in
+                let outcome = await task.value
+                // A prefetch cancelled or replaced while it ran doesn't report.
+                guard let self, self.cache[key] == task else { return }
+                self.settledOutcomes[key] = outcome
             }
             startedPriceIds.append(priceId)
         }
@@ -189,12 +201,35 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
+    /// The outcome of a prefetch that has finished. Nil while it's still in flight, or when none
+    /// was started.
+    func settledOutcome(sessionId: String, priceId: String) -> PaddlePrefetchOutcome? {
+        settledOutcomes[CacheKey(sessionId: sessionId, priceId: priceId)]
+    }
+
+    /// Awaits the paywall's own prices, then takes the web second try's as they stand, so
+    /// checkout never waits on the second try. Only the paywall's prices decide whether checkout
+    /// opens. A second-try price still in flight is left out, which keeps the second try off.
+    func collectCheckoutOutcomes(
+        sessionId: String,
+        paywallPriceIds: [String],
+        secondTryPriceIds: [String]
+    ) async -> (paywall: [String: PaddlePrefetchOutcome], secondTry: [String: PaddlePrefetchOutcome]) {
+        let paywall = await collectPrefetchOutcomes(sessionId: sessionId, priceIds: paywallPriceIds)
+        var secondTry: [String: PaddlePrefetchOutcome] = [:]
+        for priceId in secondTryPriceIds {
+            secondTry[priceId] = paywall[priceId] ?? settledOutcome(sessionId: sessionId, priceId: priceId)
+        }
+        return (paywall: paywall, secondTry: secondTry)
+    }
+
     func cancelForSession(sessionId: String) {
         for key in Array(cache.keys) where key.sessionId == sessionId {
             if let task = cache.removeValue(forKey: key) {
                 task.cancel()
             }
         }
+        settledOutcomes = settledOutcomes.filter { $0.key.sessionId != sessionId }
     }
 
     func cancelAll() {
@@ -202,6 +237,7 @@ final class PaddleCheckoutPrefetchCoordinator {
             task.cancel()
         }
         cache.removeAll()
+        settledOutcomes.removeAll()
     }
 
     /// Like `cancelAll`, but waits for each Task to finish. Use as a hard
@@ -209,6 +245,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     func cancelAllAndAwait() async {
         let tasks = Array(cache.values)
         cache.removeAll()
+        settledOutcomes.removeAll()
         for task in tasks {
             task.cancel()
         }
@@ -218,6 +255,15 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     // MARK: - ctx encoding
+
+    /// The outcomes a checkout's Paddle ctx encodes: the paywall's own, plus the web second
+    /// try's while its page may show it. Keyed by price, so a price both offer appears once.
+    nonisolated static func checkoutCtxOutcomes(
+        paywall: [String: PaddlePrefetchOutcome],
+        secondTry: WebSecondTryCheckout?
+    ) -> [String: PaddlePrefetchOutcome] {
+        paywall.merging(secondTry?.paddleBootstrapOutcomes ?? [:]) { paywallOutcome, _ in paywallOutcome }
+    }
 
     /// Returns nil when no outcome is `.ready` so callers can omit the
     /// field entirely.

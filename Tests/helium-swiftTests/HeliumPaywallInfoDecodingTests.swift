@@ -97,4 +97,121 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
             XCTAssertNil(decoded.presentationStyle, "raw value: \(raw)")
         }
     }
+
+    // MARK: - webSecondTry
+
+    private let webSecondTryJSON: [String: Any] = [
+        "paywallUUID": "pw-uuid",
+        "paywallVersionUUID": "pwv-uuid",
+        "paywallTemplateName": "Second Try",
+        "conditions": ["dismissed", "applePayCancelled"],
+        "productsOfferedPaddle": ["pro_x:pri_y"],
+        "productsOfferedStripe": ["prod_x:price_y"],
+    ]
+
+    func test_GIVEN_webSecondTryPresent_WHEN_decoded_THEN_parsesEveryField() throws {
+        let decoded = try decodePaywallInfo(extras: ["webSecondTry": webSecondTryJSON])
+
+        XCTAssertEqual(decoded.webSecondTry, WebSecondTryInfo(
+            paywallUUID: "pw-uuid",
+            paywallVersionUUID: "pwv-uuid",
+            paywallTemplateName: "Second Try",
+            conditions: ["dismissed", "applePayCancelled"],
+            productsOfferedPaddle: ["pro_x:pri_y"],
+            productsOfferedStripe: ["prod_x:price_y"]
+        ))
+    }
+
+    func test_GIVEN_webSecondTryAbsentOrNull_WHEN_decoded_THEN_isNil() throws {
+        XCTAssertNil(try decodePaywallInfo().webSecondTry)
+        XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTry": NSNull()]).webSecondTry)
+    }
+
+    /// The server serializes an unset list as null.
+    func test_GIVEN_webSecondTryWithNullListsAndNoTemplateName_WHEN_decoded_THEN_keepsTheRest() throws {
+        let decoded = try decodePaywallInfo(extras: ["webSecondTry": [
+            "paywallUUID": "pw-uuid",
+            "paywallVersionUUID": "pwv-uuid",
+            "conditions": NSNull(),
+            "productsOfferedPaddle": NSNull(),
+            "productsOfferedStripe": NSNull(),
+        ]])
+
+        XCTAssertEqual(decoded.webSecondTry, WebSecondTryInfo(paywallUUID: "pw-uuid", paywallVersionUUID: "pwv-uuid"))
+    }
+
+    /// The page matches the second try it compiled by these ids, so without them there is no second try.
+    func test_GIVEN_webSecondTryMissingAnId_WHEN_decoded_THEN_isNil() throws {
+        for missing in ["paywallUUID", "paywallVersionUUID"] {
+            var json = webSecondTryJSON
+            json.removeValue(forKey: missing)
+
+            XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTry": json]).webSecondTry, "missing: \(missing)")
+        }
+    }
+
+    /// This field decodes alongside `resolvedConfig`, so a bad value has to cost the second try and
+    /// not the entire paywall.
+    func test_GIVEN_malformedWebSecondTry_WHEN_decoded_THEN_isNilAndNeverThrows() throws {
+        func withField(_ key: String, _ value: Any) -> [String: Any] {
+            var json = webSecondTryJSON
+            json[key] = value
+            return json
+        }
+        let hostileValues: [Any] = [
+            "pw-uuid", 42, true, ["pw-uuid"], [String: Any](),
+            withField("paywallUUID", 7),
+            withField("conditions", "dismissed"),
+            withField("conditions", ["dismissed", 1]),
+            withField("productsOfferedPaddle", "pro_x:pri_y"),
+            withField("productsOfferedStripe", [["id": "prod_x"]]),
+        ]
+
+        for value in hostileValues {
+            let decoded = try decodePaywallInfo(extras: ["webSecondTry": value, "presentationStyle": "slideUp"])
+
+            XCTAssertNil(decoded.webSecondTry, "value: \(value)")
+            XCTAssertEqual(decoded.presentationStyle, .slideUp, "value: \(value)")
+        }
+    }
+
+    private final class CapturingLogSink: HeliumLogSink, @unchecked Sendable {
+        private let lock = NSLock()
+        private var logged: [(level: HeliumLogLevel, message: String)] = []
+
+        var webSecondTryWarnings: [String] {
+            lock.withLock { logged.filter { $0.level == .warn && $0.message.contains("webSecondTry") }.map(\.message) }
+        }
+
+        func emit(
+            level: HeliumLogLevel,
+            category: HeliumLogCategory,
+            message: String,
+            metadata: [String: String],
+            file: StaticString,
+            function: StaticString,
+            line: UInt
+        ) {
+            lock.withLock { logged.append((level, message)) }
+        }
+    }
+
+    private func webSecondTryWarnings(decoding extras: [String: Any]) throws -> [String] {
+        let sink = CapturingLogSink()
+        HeliumLogger.setSink(sink)
+        defer { HeliumLogger.setSink(HeliumOSLogSink()) }
+        _ = try decodePaywallInfo(extras: extras)
+        return sink.webSecondTryWarnings
+    }
+
+    /// A shape mismatch with the server should show up rather than silently costing the second try.
+    func test_GIVEN_malformedWebSecondTry_WHEN_decoded_THEN_logsAWarning() throws {
+        XCTAssertEqual(try webSecondTryWarnings(decoding: ["webSecondTry": ["paywallUUID": 7]]).count, 1)
+    }
+
+    func test_GIVEN_webSecondTryAbsentNullOrWellFormed_WHEN_decoded_THEN_logsNoWarning() throws {
+        XCTAssertEqual(try webSecondTryWarnings(decoding: [:]), [])
+        XCTAssertEqual(try webSecondTryWarnings(decoding: ["webSecondTry": NSNull()]), [])
+        XCTAssertEqual(try webSecondTryWarnings(decoding: ["webSecondTry": webSecondTryJSON]), [])
+    }
 }
