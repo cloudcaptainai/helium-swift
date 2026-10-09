@@ -690,6 +690,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     /// try from it right after firing its event, before the analytics queue builds the logged
     /// event. That logged event must still say the event came from a second try.
     func testDismissFiredDuringASecondTry_isLoggedAsSecondTryAfterThePresenterMovesOn() throws {
+        // The first logged event of a run reads the user context for the first time, which runs
+        // one-time Apple Pay availability checks: about a second locally, far longer on a cold CI
+        // simulator under TSan. Pay that here so the timed wait below covers only the queue.
+        _ = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: PaywallCloseEvent(triggerName: "warm_up", paywallName: "warm_up"),
+            paywallSession: nil
+        )
+
         let presenter = HeliumPaywallPresenter.shared
         let trigger = "onboarding_second_try"
         presenter.setPaywallsDisplayedForTesting([HeliumViewController(
@@ -722,7 +730,6 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         presenter.setPaywallsDisplayedForTesting([])
         XCTAssertFalse(event.isSecondTry)
         analyticsQueue.resume()
-        // Building the first logged event of a run can take a couple of seconds under TSan.
         wait(for: [built], timeout: 10)
 
         let data = try JSONEncoder().encode(try XCTUnwrap(lock.withLock { loggedEvent }))
