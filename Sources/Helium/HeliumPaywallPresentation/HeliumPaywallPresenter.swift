@@ -34,7 +34,7 @@ class HeliumPaywallPresenter {
     private var paywallsDisplayed: [HeliumViewController] = []
     // The window keeps a presentation that never finishes from blocking every later call.
     private let pendingPresentationWindow: TimeInterval = 5
-    @HeliumAtomic private var activePresentationClaim: PresentationClaim? = nil
+    private var activePresentationClaim: PresentationClaim?
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     struct PresentationClaim: Equatable {
@@ -42,38 +42,30 @@ class HeliumPaywallPresenter {
         let claimedAt: TimeInterval
     }
 
+    @MainActor
     private func claimPresentation() -> PresentationClaim? {
-        _activePresentationClaim.withValue { active -> PresentationClaim? in
-            let now = ProcessInfo.processInfo.systemUptime
-            if !paywallsDisplayed.isEmpty {
-                return nil
-            }
-            if let active, now - active.claimedAt < pendingPresentationWindow {
-                return nil
-            }
-            let claim = PresentationClaim(claimedAt: now)
-            active = claim
-            return claim
+        let now = ProcessInfo.processInfo.systemUptime
+        if !paywallsDisplayed.isEmpty {
+            return nil
         }
+        if let active = activePresentationClaim, now - active.claimedAt < pendingPresentationWindow {
+            return nil
+        }
+        let claim = PresentationClaim(claimedAt: now)
+        activePresentationClaim = claim
+        return claim
     }
 
+    @MainActor
     private func releasePresentationClaim(_ claim: PresentationClaim?) {
-        guard let claim else { return }
-        _activePresentationClaim.withValue { active in
-            if active == claim {
-                active = nil
-            }
-        }
+        guard let claim, activePresentationClaim == claim else { return }
+        activePresentationClaim = nil
     }
 
+    @MainActor
     private func presentationWasOvertaken(_ claim: PresentationClaim?) -> Bool {
         guard let claim else { return false }
-        if !paywallsDisplayed.isEmpty {
-            return true
-        }
-        return _activePresentationClaim.withValue { active in
-            active != claim
-        }
+        return !paywallsDisplayed.isEmpty || activePresentationClaim != claim
     }
 
     func isSecondTryPaywall(trigger: String) -> Bool {
@@ -183,25 +175,25 @@ class HeliumPaywallPresenter {
     func presentUpsellWithLoadingBudget(trigger: String, presentationContext: PaywallPresentationContext) {
         let config = presentationContext.config
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
-        guard let claim = claimPresentation() else {
-            // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
-            // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
-            // for the event because we don't want to call `onPaywallNotShown` for this.
-            HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
-            HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PaywallOpenFailedEvent(
-                    triggerName: trigger,
-                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                    error: "A paywall is already being presented.",
-                    paywallUnavailableReason: .alreadyPresented,
-                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
-                ),
-                paywallSession: nil
-            )
-            return
-        }
-        
         Task { @MainActor in
+            guard let claim = claimPresentation() else {
+                // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
+                // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
+                // for the event because we don't want to call `onPaywallNotShown` for this.
+                HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
+                HeliumPaywallDelegateWrapper.shared.fireEvent(
+                    PaywallOpenFailedEvent(
+                        triggerName: trigger,
+                        paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                        error: "A paywall is already being presented.",
+                        paywallUnavailableReason: .alreadyPresented,
+                        loadingBudgetMS: config.loadingBudgetForAnalyticsMS
+                    ),
+                    paywallSession: nil
+                )
+                return
+            }
+
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext, claim: claim)
