@@ -32,6 +32,7 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+    @HeliumAtomic private var presentationInProgress: Bool = false
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
     
     func isSecondTryPaywall(trigger: String) -> Bool {
@@ -112,6 +113,7 @@ class HeliumPaywallPresenter {
     func presentUpsell(trigger: String, isSecondTry: Bool = false, presentationContext: PaywallPresentationContext) {
         Task { @MainActor in
             if await paywallEntitlementsCheck(trigger: trigger, context: presentationContext) {
+                presentationInProgress = false
                 return
             }
             
@@ -129,6 +131,7 @@ class HeliumPaywallPresenter {
                     paywallSession: nil,
                     overridePresentationContext: presentationContext
                 )
+                presentationInProgress = false
                 return
             }
             let contentView = viewAndSession.view
@@ -139,7 +142,14 @@ class HeliumPaywallPresenter {
     func presentUpsellWithLoadingBudget(trigger: String, presentationContext: PaywallPresentationContext) {
         let config = presentationContext.config
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
-        if !paywallsDisplayed.isEmpty {
+        let rejected = _presentationInProgress.withValue { inProgress -> Bool in
+            if inProgress || !paywallsDisplayed.isEmpty {
+                return true
+            }
+            inProgress = true
+            return false
+        }
+        if rejected {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
             // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
             // for the event because we don't want to call `onPaywallNotShown` for this.
@@ -381,6 +391,7 @@ class HeliumPaywallPresenter {
                 ),
                 paywallSession: paywallSession
             )
+            presentationInProgress = false
             return
         }
         
@@ -393,6 +404,7 @@ class HeliumPaywallPresenter {
         presenter.present(modalVC, animated: true)
 
         paywallsDisplayed.append(modalVC)
+        presentationInProgress = false
 
         dispatchOpenEvent(paywallVC: modalVC)
     }
