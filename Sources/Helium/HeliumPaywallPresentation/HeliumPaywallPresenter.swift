@@ -32,6 +32,7 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
+    // The window keeps a presentation that never finishes from blocking every later call.
     private let pendingPresentationWindow: TimeInterval = 5
     @HeliumAtomic private var activePresentationClaim: PresentationClaim? = nil
     @HeliumAtomic private var sessionsWithEntitlement: [String: PaywallEntitledEvent] = [:]
