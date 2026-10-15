@@ -173,27 +173,40 @@ class HeliumPaywallPresenter {
     }
     
     func presentUpsellWithLoadingBudget(trigger: String, presentationContext: PaywallPresentationContext) {
-        let config = presentationContext.config
         HeliumLogger.log(.debug, category: .ui, "presentUpsellWithLoadingBudget called", metadata: ["trigger": trigger])
-        Task { @MainActor in
-            guard let claim = claimPresentation() else {
-                // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
-                // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
-                // for the event because we don't want to call `onPaywallNotShown` for this.
-                HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PaywallOpenFailedEvent(
-                        triggerName: trigger,
-                        paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
-                        error: "A paywall is already being presented.",
-                        paywallUnavailableReason: .alreadyPresented,
-                        loadingBudgetMS: config.loadingBudgetForAnalyticsMS
-                    ),
-                    paywallSession: nil
-                )
-                return
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                beginPresentation(trigger: trigger, presentationContext: presentationContext)
             }
+        } else {
+            Task { @MainActor in
+                beginPresentation(trigger: trigger, presentationContext: presentationContext)
+            }
+        }
+    }
 
+    @MainActor
+    private func beginPresentation(trigger: String, presentationContext: PaywallPresentationContext) {
+        let config = presentationContext.config
+        guard let claim = claimPresentation() else {
+            // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
+            // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
+            // for the event because we don't want to call `onPaywallNotShown` for this.
+            HeliumLogger.log(.warn, category: .ui, "Paywall already being presented, skipping", metadata: ["trigger": trigger])
+            HeliumPaywallDelegateWrapper.shared.fireEvent(
+                PaywallOpenFailedEvent(
+                    triggerName: trigger,
+                    paywallName: Helium.shared.getPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
+                    error: "A paywall is already being presented.",
+                    paywallUnavailableReason: .alreadyPresented,
+                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
+                ),
+                paywallSession: nil
+            )
+            return
+        }
+
+        Task { @MainActor in
             // Check if paywall is ready
             if Helium.shared.paywallsLoaded() {
                 presentUpsell(trigger: trigger, presentationContext: presentationContext, claim: claim)
