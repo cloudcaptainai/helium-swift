@@ -96,7 +96,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
-        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
+        let trigger = paywallSession.trigger
+        let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(trigger)
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId)
@@ -110,6 +111,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                 await Self.runPrefetchChain(
                     priceId: priceId,
                     discountId: discountId,
+                    trigger: trigger,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
@@ -269,6 +271,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         ]
         if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {
             banditDict["paddleCustomerId"] = customerId
+        }
+        if let heliumTesting = bandit.heliumTesting {
+            banditDict["heliumTesting"] = heliumTesting
         }
 
         let trimmedPaddleResponse = trimPaddleCheckoutResponse(rawBody: paddle.rawBody)
@@ -443,6 +448,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     private nonisolated static func runPrefetchChain(
         priceId: String,
         discountId: String?,
+        trigger: String,
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
@@ -456,7 +462,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(
                 priceId: priceId,
-                discountId: discountId
+                discountId: discountId,
+                trigger: trigger
             )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)

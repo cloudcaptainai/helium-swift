@@ -83,7 +83,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             transactionId: transactionId,
             paddleCustomerId: nil,
             isKnownCustomer: false,
-            requestId: "req_x"
+            requestId: "req_x",
+            heliumTesting: nil
         )
     }
 
@@ -600,13 +601,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     func testEncodeBootstrapsToCtx_keysMapByPriceId() throws {
         let bandit1 = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a")
+            transactionId: "txn_a", paddleCustomerId: "ctm_a", isKnownCustomer: true, requestId: "req_a", heliumTesting: nil)
         let paddle1 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_a", transactionId: "txn_a"),
             checkoutId: "che_a", transactionId: "txn_a")
 
         let bandit2 = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
+            transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b", heliumTesting: nil)
         let paddle2 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
             checkoutId: "che_b", transactionId: "txn_b")
@@ -627,9 +628,31 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_b")
     }
 
+    func testEncodeBootstrapsToCtx_passesHeliumTestingThrough() throws {
+        let testing = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_t", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_t", heliumTesting: true)
+        let unmarked = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_u", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_u", heliumTesting: nil)
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: try paddleResponseFixtureWithCruft(),
+            checkoutId: "che_x", transactionId: "txn_x")
+
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_t": .ready(bandit: testing, paddle: paddle),
+            "pri_u": .ready(bandit: unmarked, paddle: paddle),
+        ]
+
+        let map = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: outcomes))
+
+        let testingBandit = try XCTUnwrap((map["pri_t"] as? [String: Any])?["banditResponse"] as? [String: Any])
+        let unmarkedBandit = try XCTUnwrap((map["pri_u"] as? [String: Any])?["banditResponse"] as? [String: Any])
+        XCTAssertEqual(testingBandit["heliumTesting"] as? Bool, true)
+        XCTAssertNil(unmarkedBandit["heliumTesting"])
+    }
+
     func testEncodeBootstrapsToCtx_skipsNonReadyOutcomes() throws {
         let bandit = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
+            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x", heliumTesting: nil)
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_x")
@@ -657,7 +680,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     func testEncodeBootstrapsToCtx_keepsOnlyBundleNeededFieldsInPaddleResponse() throws {
         let bandit = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
+            transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test", heliumTesting: nil)
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_test")
@@ -718,7 +741,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     func testEncodeBootstrapsToCtx_dropsLargeUnusedFields() throws {
         let bandit = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x")
+            transactionId: "txn_x", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_x", heliumTesting: nil)
         let paddle = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(),
             checkoutId: "che_x", transactionId: "txn_x")

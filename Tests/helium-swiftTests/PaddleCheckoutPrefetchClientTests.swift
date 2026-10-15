@@ -53,6 +53,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.paddleCustomerId, "ctm_01k77z6m9t3rs0aw23h9gpv61e")
         XCTAssertTrue(result.isKnownCustomer)
         XCTAssertEqual(result.requestId, "req_test_xyz")
+        XCTAssertNil(result.heliumTesting)
     }
 
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {
@@ -329,6 +330,43 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertNil(bodyDict["productPriceId"])
 
         XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
+        XCTAssertEqual(
+            bodyDict["environment"] as? String,
+            AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        )
+        XCTAssertNil(bodyDict["trigger"])
+    }
+
+    func testCreatePaddleTransactionForPaywall_forwardsTriggerWhenProvided() async throws {
+        let bodyJSON = """
+        {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x"}
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_x", trigger: "onboarding")
+
+        let captured = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let bodyDict = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: captured.httpBody ?? Data()) as? [String: Any]
+        )
+        XCTAssertEqual(bodyDict["trigger"] as? String, "onboarding")
+    }
+
+    func testCreatePaddleTransactionForPaywall_decodesHeliumTesting() async throws {
+        let bodyJSON = """
+        {"transactionId": "txn_x", "isKnownCustomer": false, "requestId": "req_x", "heliumTesting": true}
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_x")
+
+        XCTAssertEqual(result.heliumTesting, true)
     }
 
     // MARK: - createPaddleTransactionForPaywall discountId forwarding
