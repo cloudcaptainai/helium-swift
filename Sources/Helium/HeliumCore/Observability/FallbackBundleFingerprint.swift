@@ -5,14 +5,24 @@ struct FallbackBundleFingerprint {
     static let storageKey = "fallbackPaywallsConfiguredBundle"
     private static let lock = NSLock()
 
+    private struct Snapshot: Encodable {
+        let generatedAt: String?
+        let organizationID: String?
+        let triggerToPaywallUUID: [String: String?]
+        let bundleIDs: [String]
+    }
+
     static func fingerprint(_ config: HeliumFetchedConfig) -> String {
-        var parts = [config.generatedAt ?? "", config.organizationID ?? ""]
-        parts += config.triggerToPaywalls
-            .map { "\($0.key)=\($0.value.paywallUUID ?? "")" }
-            .sorted()
-        parts += (config.bundles ?? [:]).keys.sorted()
-        let digest = SHA256.hash(data: Data(parts.joined(separator: "\n").utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
+        let snapshot = Snapshot(
+            generatedAt: config.generatedAt,
+            organizationID: config.organizationID,
+            triggerToPaywallUUID: config.triggerToPaywalls.mapValues { $0.paywallUUID },
+            bundleIDs: (config.bundles ?? [:]).keys.sorted()
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = (try? encoder.encode(snapshot)) ?? Data()
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     static func markConfigured(_ config: HeliumFetchedConfig, storage: HeliumStorage = .shared) -> Bool {

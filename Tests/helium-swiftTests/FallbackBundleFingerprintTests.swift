@@ -56,6 +56,22 @@ final class FallbackBundleFingerprintTests: XCTestCase {
         XCTAssertTrue(FallbackBundleFingerprint.markConfigured(makeConfig(bundles: ["bundle_2": "<html></html>"]), storage: storage))
     }
 
+    func testMissingAndEmptyGeneratedAtAreDifferentBundles() {
+        XCTAssertNotEqual(
+            FallbackBundleFingerprint.fingerprint(makeConfig(generatedAt: nil)),
+            FallbackBundleFingerprint.fingerprint(makeConfig(generatedAt: ""))
+        )
+    }
+
+    func testTriggerAndPaywallBoundariesAreNotAmbiguous() {
+        var p = makeTestPaywallInfo(paywallName: "p"); p.paywallUUID = "p"
+        var trialP = makeTestPaywallInfo(paywallName: "p"); trialP.paywallUUID = "trial=p"
+        let first = makeTestConfig(triggers: ["offer=trial": p])
+        let second = makeTestConfig(triggers: ["offer": trialP])
+
+        XCTAssertNotEqual(FallbackBundleFingerprint.fingerprint(first), FallbackBundleFingerprint.fingerprint(second))
+    }
+
     func testFingerprintIgnoresTriggerOrderAndConfigId() {
         var a = makeTestPaywallInfo(paywallName: "a"); a.paywallUUID = "ua"
         var b = makeTestPaywallInfo(paywallName: "b"); b.paywallUUID = "ub"
