@@ -151,6 +151,8 @@ public class ExternalWebCheckoutManager: NSObject {
                 return .preCheckResolved
             }
 
+            try Self.throwIfNonUSBuyerBlocked(in: outcomes)
+
             if let caPostal = PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: outcomes) {
                 HeliumLogger.log(.debug, category: .entitlements,
                                  "\(provider.displayName) prefetch blocked for California IP (postal \(caPostal)) — failing checkout")
@@ -193,6 +195,15 @@ public class ExternalWebCheckoutManager: NSObject {
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession)
+    }
+
+    static func throwIfNonUSBuyerBlocked(in outcomes: [String: PaddlePrefetchOutcome]) throws {
+        guard let blocked = PaddleCheckoutPrefetchCoordinator.nonUSBuyerBlockedError(in: outcomes) else {
+            return
+        }
+        HeliumLogger.log(.debug, category: .entitlements,
+                         "\(PaymentProviderConfig.paddle.displayName) prefetch blocked for non-US IP country \(blocked.countryCode ?? "unknown") — failing checkout")
+        throw WebCheckoutError.nonUSBuyerBlocked(countryCode: blocked.countryCode)
     }
 
     /// Whether this customer is deemed intro-offer eligible for the web paywall.

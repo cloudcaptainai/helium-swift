@@ -200,4 +200,29 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "errorClass": "SomeError",
         ]))
     }
+
+    func testOutcomeFinalizedRecordsNonUSBlockAndPaddleCountry() throws {
+        let event = PaddlePrefetchOutcomeFinalized(
+            priceId: "pri_x",
+            outcome: .nonUSBlocked,
+            errorClass: "PaddleNonUSBuyerBlocked",
+            totalDurationMs: 42,
+            ipGeoCountry: "MX",
+            ipGeoRegion: nil,
+            ipGeoPostal: nil,
+            californiaDetected: false,
+            caConsentModalEnabled: false,
+            consentRequired: nil
+        )
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "priceId": "pri_x",
+            "outcome": "nonUSBlocked",
+            "errorClass": "PaddleNonUSBuyerBlocked",
+            "totalDurationMs": 42,
+            "ipGeoCountry": "MX",
+            "californiaDetected": false,
+            "caConsentModalEnabled": false,
+        ]))
+    }
 }

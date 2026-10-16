@@ -149,6 +149,17 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             products: ["pro_ghost:pri_missing", yearlyTrial], priceMap: priceMap))
     }
 
+    func testNonUSPrefetchOutcomeThrowsBuyerBlockedCheckoutError() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_non_us": .failed(error: PaddleNonUSBuyerBlocked(countryCode: "MX")),
+        ]
+
+        XCTAssertThrowsError(try ExternalWebCheckoutManager.throwIfNonUSBuyerBlocked(in: outcomes)) { error in
+            XCTAssertEqual((error as? WebCheckoutError)?.caseName, "nonUSBuyerBlocked")
+            XCTAssertTrue(error.localizedDescription.contains("MX"))
+        }
+    }
+
     // MARK: - Already-owned pre-check refresh
 
     private static let ownedKey = "prod_owned:price_owned"
