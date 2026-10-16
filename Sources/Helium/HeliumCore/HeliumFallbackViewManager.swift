@@ -68,14 +68,17 @@ public class HeliumFallbackViewManager {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     }
 
-                    HeliumObservabilityManager.shared.track(
-                        FallbackPaywallsConfigured(
-                            generatedAt: decodedConfig.generatedAt,
-                            organizationID: decodedConfig.organizationID,
-                            triggerToPaywallUUID: decodedConfig.triggerToPaywalls.mapValues { $0.paywallUUID }
-                        ),
-                        scope: nil
-                    )
+                    if ObservabilitySampling.includesThisDevice(rate: ObservabilitySampling.fallbackBundleRate),
+                       FallbackBundleFingerprint.markConfigured(decodedConfig) {
+                        HeliumObservabilityManager.shared.track(
+                            FallbackPaywallsConfigured(
+                                generatedAt: decodedConfig.generatedAt,
+                                organizationID: decodedConfig.organizationID,
+                                triggerToPaywallUUID: decodedConfig.triggerToPaywalls.mapValues { $0.paywallUUID }
+                            ),
+                            scope: nil
+                        )
+                    }
                 } else {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
