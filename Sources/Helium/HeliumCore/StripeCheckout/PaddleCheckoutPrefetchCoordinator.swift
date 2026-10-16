@@ -539,7 +539,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
         guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
               let data = parsed["data"] as? [String: Any],
-              (data["ip_geo_country_code"] as? String) == "US",
+              isUSBuyer(in: rawBody),
               let postal = data["ip_geo_postal_code"] as? String,
               let zip = Int(postal.prefix(5)),
               (90001...96162).contains(zip) else {

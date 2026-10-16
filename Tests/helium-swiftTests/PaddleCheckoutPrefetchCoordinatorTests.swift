@@ -201,7 +201,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                         "id": "che_ca",
                         "transaction_id": "txn_ca",
                         "status": "draft",
-                        "ip_geo_country_code": "US",
+                        "ip_geo_country_code": " us ",
                         "ip_geo_postal_code": "90210"
                     }
                 }
@@ -257,6 +257,20 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
         let caError = try XCTUnwrap(error as? PaddleCaliforniaBlocked)
         XCTAssertEqual(caError.postalCode, "90210")
+    }
+
+    func testCaliforniaPostalCode_acceptsNormalizedUSCountry() throws {
+        let body = try bffBody(
+            checkoutId: "che_ca",
+            transactionId: "txn_ca",
+            countryCode: " us ",
+            postalCode: "90210"
+        ).data(using: .utf8)!
+
+        XCTAssertEqual(
+            PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: body),
+            "90210"
+        )
     }
 
     func testAwaitOutcome_doesNotBlock_whenNonCaliforniaPostal_andFlagOff() async throws {
