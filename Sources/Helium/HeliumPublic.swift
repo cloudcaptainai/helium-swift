@@ -554,7 +554,16 @@ public class Helium {
         if let scheme = url.scheme { props["scheme"] = scheme }
         if let redirectKind { props["redirectKind"] = redirectKind.rawValue }
         trackSdkApiCall(.handleURL, props)
+        return routeCheckoutReturnURL(url, redirectKind: redirectKind)
+    }
 
+    @discardableResult
+    func routeCheckoutReturnURL(_ url: URL) -> HeliumCheckoutRedirectType? {
+        let redirectKind = Helium.config.webCheckoutEnabled ? WebCheckoutRedirect.classify(url) : nil
+        return routeCheckoutReturnURL(url, redirectKind: redirectKind)
+    }
+
+    private func routeCheckoutReturnURL(_ url: URL, redirectKind: HeliumCheckoutRedirectType?) -> HeliumCheckoutRedirectType? {
         guard let redirectKind else {
             return nil
         }
@@ -822,6 +831,11 @@ public class HeliumConfig {
     
     /// Adjust the text copy for the dialog that shows when a user attempts to restore purchases but does not have any to restore. You can also disable the dialog from showing.
     public let restorePurchasesDialog = RestorePurchaseConfig()
+
+    /// Configuration for the dialog that shows when a web checkout (Paddle or Stripe) purchase attempt resolves as already owned because the user already owns the product.
+    /// Typically you want to avoid reaching this state at all by checking entitlements before showing a paywall.
+    /// You can disable this dialog and, if desired, present your own UI by listening for `PurchaseRestoredEvent` (its `restoreOrigin` is `.duringPurchase` for this case).
+    public let webCheckoutAlreadyPurchasedDialogConfig = WebCheckoutAlreadyPurchasedConfig()
     
     /// Whether a diagnostic view may appear explaining why a paywall failed to display or was
     /// skipped. Defaults to `true`; set to `false` to turn it off entirely.
@@ -848,6 +862,10 @@ public class HeliumConfig {
     public var openPaywallLinksInApp: Bool = false
 
     // MARK: - External Web Checkout Configuration
+
+    /// What an in-app web checkout shows while its page loads. Read when checkout opens, so a
+    /// change applies to the next one. Defaults to `.standard`.
+    public var inAppWebCheckoutLoadingCover: InAppWebCheckoutLoadingCover = .standard
 
     /// Which External Web Checkout payment processors are enabled. Empty means disabled.
     private(set) var webCheckoutProcessors: WebCheckoutProcessors = []
@@ -960,6 +978,23 @@ public class HeliumConfig {
     ///
     /// Defaults to `false`.
     public var allowWebCheckoutWithoutUserId: Bool = false
+
+    /// Measures whether Apple Pay reports a card it can pay with at the origin external web
+    /// checkout is served from, and reports it to Helium so a workflow can target on it.
+    ///
+    /// The measurement is an optimization signal rather than a guarantee. It is taken in an
+    /// offscreen web view owned by the app, not in the browser the user is handed off to, and
+    /// the Wallet can change between the measurement and checkout.
+    ///
+    /// The first launch after install delays the config request by up to two seconds so the
+    /// measurement can be reported; later launches report the stored measurement immediately
+    /// and re-measure in the background. Nothing about presentation waits on it.
+    ///
+    /// Measured only when external web checkout is configured. Defaults to `true`. Set to
+    /// `false` to stop measuring; the launch request then reports `unknown:notMeasured`.
+    /// Apps that declare `WKAppBoundDomains` must list `bundles.clickthrough.to` for it to be
+    /// measured; otherwise it reports `unknown:probeFailed`.
+    public var enableWebApplePayReadiness: Bool = true
 
 }
 
@@ -1195,11 +1230,18 @@ public class HeliumTesting {
     /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
     public var introOfferEligibility: ((String) async -> Bool)?
 
+    /// Returns a stubbed promo-offer eligibility for the given product ID.
+    /// When set, overrides the StoreKit transaction-history check.
+    ///
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
+    public var promoOfferEligibility: ((String) async -> Bool)?
+
     /// Clears all configured test handlers.
     public func reset() {
         purchaseHandler = nil
         restoreHandler = nil
         introOfferEligibility = nil
+        promoOfferEligibility = nil
     }
 
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
@@ -1222,6 +1264,15 @@ public class HeliumTesting {
         guard let handler = introOfferEligibility else { return nil }
         guard !isProductionEnvironment else {
             HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.introOfferEligibility.")
+            return nil
+        }
+        return await handler(productId)
+    }
+
+    func simulatedPromoOfferEligibilityIfActive(productId: String) async -> Bool? {
+        guard let handler = promoOfferEligibility else { return nil }
+        guard !isProductionEnvironment else {
+            HeliumLogger.log(.warn, category: .core, "Production environment detected. Ignoring Helium.testing.promoOfferEligibility.")
             return nil
         }
         return await handler(productId)

@@ -25,6 +25,15 @@ public protocol HeliumPaywallDelegate: AnyObject {
     /// Execute a purchase for the given product. Return the transaction status.
     func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus
 
+    /// Execute a purchase for the given product, applying the App Store promotional
+    /// offer identified by `promoOfferId`. `productId` is the plain App Store product
+    /// identifier.
+    func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus
+
+    /// Whether `makePurchase(productId:promoOfferId:)` actually applies the offer. When `false`,
+    /// paired promotional offers are reported as ineligible so the paywall shows the regular price.
+    var supportsPromotionalOffers: Bool { get }
+
     /// Attempt to restore previous purchases. Return `true` if any were restored.
     func restorePurchases() async -> Bool
 
@@ -45,6 +54,12 @@ public extension HeliumPaywallDelegate {
         // Default implementation is a noop
         return false;
     }
+
+    func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus {
+        await makePurchase(productId: productId)
+    }
+
+    var supportsPromotionalOffers: Bool { false }
 }
 
 
@@ -65,17 +80,25 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, paywallTraits: HeliumUserTraits? = nil) async -> HeliumPaywallTransactionStatus {
+        // StoreKit APIs all take the bare product id; the composite suffix carries
+        // the paired promo offer id.
+        let keyParts = HeliumIosProductKey.split(productKey)
+        let storeKitProductId = keyParts.productId
+        let resolvedPromoOfferId = keyParts.promoOfferId
+
         let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
-            await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: productKey)
+            await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: storeKitProductId)
         } ?? false
-        
+
         StoreKit1Listener.ensureListening()
 
         let transactionStatus: HeliumPaywallTransactionStatus
 
         let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
 
-        if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: productKey) {
+        var resolvedAlreadyOwnedViaWebCheckout = false
+
+        if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: storeKitProductId) {
             transactionStatus = simulated
         } else {
             let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
@@ -89,6 +112,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -101,6 +125,7 @@ class HeliumPaywallDelegateWrapper {
                         paywallTraits: paywallTraits
                     )
                     transactionStatus = outcome.transactionStatus
+                    if case .preCheckResolved = outcome { resolvedAlreadyOwnedViaWebCheckout = true }
                 } catch {
                     transactionStatus = .failed(error)
                 }
@@ -110,24 +135,54 @@ class HeliumPaywallDelegateWrapper {
                 // reaches here whenever Apple Pay is available, since the first
                 // branch requires !stripeApplePayFlowEnabled.
                 transactionStatus = .failed(HeliumPaymentRoutingError.unregisteredWebProductKey(productKey))
+            } else if let resolvedPromoOfferId {
+                transactionStatus = await delegate.makePurchase(productId: storeKitProductId, promoOfferId: resolvedPromoOfferId)
             } else {
-                transactionStatus = await delegate.makePurchase(productId: productKey)
+                transactionStatus = await delegate.makePurchase(productId: storeKitProductId)
             }
         }
 
         switch transactionStatus {
         case .cancelled:
-            self.fireEvent(PurchaseCancelledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseCancelledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .failed(let error):
-            self.fireEvent(PurchaseFailedEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseFailedEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
         case .restored:
-            self.fireEvent(PurchaseRestoredEvent(
-                productId: productKey,
-                triggerName: triggerName,
-                paywallName: paywallTemplateName,
-                restoreOrigin: .duringPurchase,
-                paymentProcessor: paymentProcessor
-            ), paywallSession: paywallSession)
+            let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
+            var fireRestoreEvent = true
+            if resolvedAlreadyOwnedViaWebCheckout, dialogConfig.showHeliumDialog {
+                let title = dialogConfig.title
+                let buttonText = dialogConfig.closeButtonText
+                let message = dialogConfig.alreadyOwnedMessage(
+                    productKey: productKey,
+                    paymentProcessor: paymentProcessor
+                )
+                // Show the alert and wait for it to resolve before firing the event, so an event
+                // handler that dismisses the paywall can't tear the alert down before it's read. If the
+                // host closes the paywall while the alert is up, treat the flow as cancelled and fire
+                // neither the event nor the resulting onEntitled callback.
+                let outcome = await withCheckedContinuation { continuation in
+                    Task { @MainActor in
+                        HeliumPaywallPresenter.shared.presentAlertOverPaywall(
+                            paywallSession: paywallSession,
+                            title: title,
+                            message: message,
+                            buttonText: buttonText,
+                            completion: { continuation.resume(returning: $0) }
+                        )
+                    }
+                }
+                fireRestoreEvent = outcome != .dismissedWhilePresented
+            }
+            if fireRestoreEvent {
+                self.fireEvent(PurchaseRestoredEvent(
+                    productId: storeKitProductId,
+                    triggerName: triggerName,
+                    paywallName: paywallTemplateName,
+                    restoreOrigin: .duringPurchase,
+                    paymentProcessor: paymentProcessor
+                ), paywallSession: paywallSession)
+            }
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
             var transactionIds: HeliumTransactionIdResult? = nil
@@ -135,18 +190,18 @@ class HeliumPaywallDelegateWrapper {
             if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
                 // Double-check to make sure correct transaction retrieved
-                if heliumTransactionIdResult.productId == productKey {
+                if heliumTransactionIdResult.productId == storeKitProductId {
                     transactionIds = heliumTransactionIdResult
                 }
             }
             if transactionIds == nil {
-                transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: productKey)
+                transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: storeKitProductId)
             }
             
             if hadEntitlementBeforePurchase {
-                fireEvent(PurchaseAlreadyEntitledEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
+                fireEvent(PurchaseAlreadyEntitledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
             } else {
-                syncAfterPurchase(productId: productKey, transaction: transactionIds?.transaction)
+                syncAfterPurchase(productId: storeKitProductId, transaction: transactionIds?.transaction)
                 
                 #if compiler(>=6.2)
                 if let atID = transactionIds?.transaction?.appTransactionID {
@@ -156,7 +211,11 @@ class HeliumPaywallDelegateWrapper {
                 
                 let skPostPurchaseTxnTimeMS = dispatchTimeDifferenceInMS(from: transactionRetrievalStartTime)
                 let purchaseSucceededEvent = PurchaseSucceededEvent(
-                    productId: productKey,
+                    productId: storeKitProductId,
+                    offerIdentifier: Self.appliedPromoOfferIdentifier(
+                        transaction: transactionIds?.transaction,
+                        requested: resolvedPromoOfferId
+                    ),
                     triggerName: triggerName,
                     paywallName: paywallTemplateName,
                     storeKitTransactionId: transactionIds?.transactionId,
@@ -167,17 +226,17 @@ class HeliumPaywallDelegateWrapper {
                 fireEvent(purchaseSucceededEvent, paywallSession: paywallSession)
             }
         case .pending:
-            self.fireEvent(PurchasePendingEvent(productId: productKey, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchasePendingEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
             // Add a listener for pending appStore purchases.
             // Other processors have their own mechanisms for handling pending purchases.
             if paymentProcessor == .appStore {
                 let detachedSession = paywallSession.withPresentationContext(.empty)
-                observePendingPurchase(productId: productKey, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
+                observePendingPurchase(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallTemplateName: paywallTemplateName, paywallSession: detachedSession)
             }
         }
         return transactionStatus;
     }
-    
+
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {
         var result: Bool
         var restoringProcessor: HeliumPaymentProcessor = .appStore
@@ -322,6 +381,7 @@ class HeliumPaywallDelegateWrapper {
             Task { @MainActor in
                 PaddleCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
                 StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
+                WebCheckoutPresenter.closeCheckout(forClosedPaywallSessionId: paywallSession.sessionId)
                 PaddleCheckoutPrefetchCoordinator.shared.handlePaywallClose(paywallSession: paywallSession)
             }
         }
@@ -429,10 +489,24 @@ class HeliumPaywallDelegateWrapper {
     /// How long to wait for a pending purchase (e.g., Ask to Buy) before giving up.
     private static let pendingPurchaseTimeoutNanoseconds: UInt64 = 24 * 60 * 60 * 1_000_000_000 // 24 hours
 
+    /// The promotional offer actually applied to a completed transaction. On OS versions that
+    /// expose `Transaction.offer`, the transaction is authoritative (nil when the store completed
+    /// a plain or introductory purchase); otherwise the requested offer id is reported.
+    static func appliedPromoOfferIdentifier(transaction: Transaction?, requested: String?) -> String? {
+        guard let transaction else { return requested }
+        if #available(iOS 17.2, macOS 14.2, macCatalyst 17.2, *) {
+            let offer = transaction.offer
+            return offer?.type == .promotional ? offer?.id : nil
+        }
+        return requested
+    }
+
     /// Observes Transaction.updates for a pending purchase (e.g., Ask to Buy) to complete.
     /// When the transaction is approved, finishes it, updates entitlements, and fires events.
     /// Automatically cancels after a timeout if no verified transaction arrives.
-    private func observePendingPurchase(productId: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) {
+    /// `productId` is the bare App Store id used for transaction matching; it is also
+    /// what fired events report, with `offerIdentifier` carrying the paired promo offer.
+    private func observePendingPurchase(productId: String, offerIdentifier: String?, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) {
         let task = Task { [weak self] in
             // Race the transaction listener against a timeout
             await withTaskGroup(of: Void.self) { group in
@@ -474,10 +548,16 @@ class HeliumPaywallDelegateWrapper {
                         let transactionIds = HeliumTransactionIdResult(transaction: transaction)
                         self?.syncAfterPurchase(productId: productId, transaction: transaction)
 
+                        let appliedOfferIdentifier = Self.appliedPromoOfferIdentifier(
+                            transaction: transaction,
+                            requested: offerIdentifier
+                        )
+
                         // Fire purchase success event
                         self?.fireEvent(
                             PurchaseSucceededEvent(
                                 productId: productId,
+                                offerIdentifier: appliedOfferIdentifier,
                                 triggerName: triggerName,
                                 paywallName: paywallTemplateName,
                                 storeKitTransactionId: transactionIds.transactionId,

@@ -77,6 +77,19 @@ class HeliumControlPanelService {
         return true
     }
 
+    static func previewUserContext(locale: [String: Any]) -> [String: Any] {
+        let config = HeliumSdkConfig.shared
+        return [
+            "locale": locale,
+            "applicationInfo": [
+                "platform": config.heliumPlatform,
+                "heliumSdk": config.heliumSdk,
+                "heliumSdkVersion": config.heliumSdkVersion,
+                "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
+            ],
+        ]
+    }
+
     func fetchPreviewPaywalls() async throws -> HeliumControlPanelResponse {
         guard let apiKey = Helium.shared.controller?.apiKey else {
             throw HeliumControlPanelError.noApiKey
@@ -103,7 +116,7 @@ class HeliumControlPanelService {
         let body: [String: Any] = [
             "apiKey": apiKey,
             "platform": "ios",
-            "userContext": ["locale": locale],
+            "userContext": HeliumControlPanelService.previewUserContext(locale: locale),
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

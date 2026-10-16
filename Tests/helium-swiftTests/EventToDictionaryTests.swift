@@ -42,6 +42,27 @@ final class EventToDictionaryTests: XCTestCase {
         XCTAssertEqual(dict["skPostPurchaseTxnTimeMS"] as? UInt64, 50)
     }
 
+    func testPurchaseSucceededEventOfferIdentifier() {
+        let withOffer = PurchaseSucceededEvent(
+            productId: "com.app.premium",
+            offerIdentifier: "WIN_BACK",
+            triggerName: "upgrade",
+            paywallName: "wall",
+            storeKitTransactionId: nil,
+            storeKitOriginalTransactionId: nil
+        )
+        XCTAssertEqual(withOffer.toDictionary()["offerIdentifier"] as? String, "WIN_BACK")
+
+        let withoutOffer = PurchaseSucceededEvent(
+            productId: "com.app.premium",
+            triggerName: "upgrade",
+            paywallName: "wall",
+            storeKitTransactionId: nil,
+            storeKitOriginalTransactionId: nil
+        )
+        XCTAssertNil(withoutOffer.toDictionary()["offerIdentifier"])
+    }
+
     func testPaywallSkippedEventToDictionary() {
         let event = PaywallSkippedEvent(triggerName: "onboarding", skipReason: .targetingHoldout)
         let dict = event.toDictionary()

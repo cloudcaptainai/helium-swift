@@ -26,7 +26,9 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             (PaddlePrefetchStarted(priceIds: []), ["paddle_prefetch", "web_checkout"]),
             (WebCheckoutFlowStarted(provider: "paddle", productKey: "p"), ["web_checkout"]),
             (PaywallLinkOpenAttempted(source: .anchor, openedInApp: false, success: false, scheme: nil, url: nil), ["paywall_runtime"]),
-            (PaywallWebProcessTerminated(loadAttempt: "first", wasContentLoaded: false), ["anomaly", "paywall_runtime"]),
+            (WebApplePayProbeCompleted(readiness: .ready, durationMs: 1, timedOut: false, failureReason: nil, deviceCanMakePayments: true, launchWaitMs: nil, servedFromCache: nil, cacheWasCorrect: nil), ["web_checkout"]),
+            (PaywallWebProcessTerminated(loadAttempt: "first", wasContentLoaded: false, recovery: .reload, reloadCount: 0), ["anomaly", "paywall_runtime"]),
+            (PaywallWebProcessRecovered(reloadCount: 1, msSinceReloadStart: 1), ["paywall_runtime"]),
             (EmbeddedPaywallManualDismissalEnabled(), ["config", "presentation"]),
             (FallbackPaywallsConfigured(generatedAt: nil, organizationID: nil, triggerToPaywallUUID: [:]), ["config", "fallback", "lifecycle"]),
         ]

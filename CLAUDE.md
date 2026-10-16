@@ -11,6 +11,7 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 
 - **Never crash the host app.** This SDK is distributed to apps with millions of users.
 - **Never use the word "fallback" or any variation ("fall back", "falls back", "falling back") in code, comments, or conversation** unless referring to the Helium fallback paywall flow. This term has a specific meaning in this SDK. Use alternatives like "default", "safety net", or "otherwise".
+- **This repo is public — never include customer or internal data** in code, comments, commit messages, PR descriptions, or PR comments.
 
 ## Repository structure
 
@@ -20,6 +21,16 @@ iOS SDK for Helium paywalls. Lets mobile apps show remotely-configured, A/B-test
 - `Sources/HeliumRevenueCat/` — Optional RevenueCat integration.
 - `Tests/helium-swiftTests/` — Unit tests.
 - `HeliumExample/` — Example app with UI tests.
+
+## Ways to show a paywall
+
+There are two main ways to show a paywall, plus a third built on the second:
+
+- **Presented**: `Helium.shared.presentPaywall(...)`. The SDK presents the paywall modally itself. This is the most common style.
+- **Embedded**: the `HeliumPaywall` SwiftUI view, which the host app places in its own view hierarchy.
+- **Triggered**: the `.heliumPaywall(isPresented:trigger:...)` view modifier, which wraps `HeliumPaywall` in a `fullScreenCover`.
+
+Most testing and usage goes through the presented path, but any change that could affect `HeliumPaywall` has to work for embedded (and so triggered) paywalls too. Check lifecycle, dismissal, event, and session handling in both paths, not just the presented one.
 
 ## Code comments
 

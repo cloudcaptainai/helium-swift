@@ -1,4 +1,67 @@
 import Foundation
+import UIKit
+
+/// Which browser an External Web Checkout URL opens in, and how, sent by the server per
+/// paywall. Unrelated to `HeliumPresentationStyle`, which animates the paywall itself.
+///
+/// Raw values are the wire vocabulary, so they are fixed once a dashboard emits them.
+/// Only `.externalBrowser` hands the user off to their default browser as the external
+/// purchase link entitlement expects; the Safari styles keep checkout inside the app.
+public enum WebCheckoutBrowserStyle: String, Codable, Sendable {
+    case externalBrowser
+    /// `SFSafariViewController` as a page sheet over the paywall.
+    case safariSheet
+    /// `SFSafariViewController` full screen.
+    case safariFullScreen
+    /// A `WKWebView` that opens full screen.
+    case inAppWebView
+}
+
+/// What an in-app web checkout shows while its page loads. Does not apply to the
+/// `.externalBrowser` ``WebCheckoutBrowserStyle``.
+public enum InAppWebCheckoutLoadingCover {
+    /// A loading spinner over the system background, following ``HeliumConfig/lightDarkModeOverride``.
+    case standard
+    /// Nothing over the page, so the browser paints white until the first byte arrives
+    /// (in dark mode too). In the Safari styles, a page that fails to load also shows Safari's
+    /// error page briefly as the browser closes.
+    case disabled
+    /// A loading spinner over this specified color. The spinner's color is black or white,
+    /// whatever contrasts better. Should be opaque, since whatever is beneath shows through
+    /// while the page loads.
+    case color(UIColor)
+}
+
+extension InAppWebCheckoutLoadingCover {
+    /// nil when disabled.
+    var backgroundColor: UIColor? {
+        switch self {
+        case .standard: return .systemBackground
+        case .disabled: return nil
+        case .color(let color): return color
+        }
+    }
+
+    /// nil keeps the spinner's own default.
+    var spinnerColor: UIColor? {
+        guard case .color(let background) = self else { return nil }
+        return UIColor { traits in
+            background.resolvedColor(with: traits).preferredContrastColor
+        }
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A style this SDK version does not recognize is treated as unset rather than throwing,
+    /// which would fail the entire paywall decode over one unknown string.
+    func decodeIfPresent(
+        _ type: WebCheckoutBrowserStyle.Type,
+        forKey key: Key
+    ) throws -> WebCheckoutBrowserStyle? {
+        guard let rawValue = try? decodeIfPresent(String.self, forKey: key) else { return nil }
+        return WebCheckoutBrowserStyle(rawValue: rawValue)
+    }
+}
 
 /// Which of the configured checkout redirect URLs the user returned through.
 public enum HeliumCheckoutRedirectType: String {
@@ -172,11 +235,10 @@ struct ResponseMeta: Decodable {
     let requestId: String?
 }
 
-// Stripe and Paddle don't return identical shapes. Stripe emits `trialEnd`;
-// Paddle emits `trialStartsAt`/`trialEndsAt` and additional fields
-// (`startedAt`, `nextBilledAt`, `currentPeriodStart`, `canceledAt`,
-// `scheduledChange`) that we don't currently consume. Add them here if a
-// consumer ever needs them.
+// Stripe and Paddle don't use identical keys for the same concepts. Subscription start comes as
+// `createdAt` from Stripe and `startedAt` from Paddle; trial end as `trialEnd` from Stripe and
+// `trialEndsAt` from Paddle. Fields only one provider sends (e.g. Stripe `cancelAtPeriodEnd`/
+// `productName`, Paddle `nextBilledAt`/`scheduledChange`) are simply nil for the other.
 struct PaymentSubscriptionInfo: Codable, Sendable {
     let subscriptionId: String
     let productId: String
@@ -184,6 +246,8 @@ struct PaymentSubscriptionInfo: Codable, Sendable {
     let priceId: String?
     let productName: String?
     let productDescription: String?
+    let createdAt: String?
+    let startedAt: String?
     let currentPeriodEnd: String?
     let cancelAtPeriodEnd: Bool?
     let trialEnd: String?
@@ -200,6 +264,8 @@ struct PaymentSubscriptionInfo: Codable, Sendable {
 struct ProductEntitlement: Codable {
     let productId: String
     let priceId: String?
+    /// When the subscription started. Nil for one-time purchases, or when the server omits it.
+    let subscriptionStartedAt: Date?
     /// When the subscription period actually ends.
     /// Nil for one-time purchases (permanent entitlement).
     let subscriptionExpiresAt: Date?

@@ -261,11 +261,12 @@ struct WebCheckoutFlowResolved: HeliumObservabilityEvent {
 struct WebCheckoutBrowserOpenAttempted: HeliumObservabilityEvent {
     let provider: String
     let success: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_browser_open_attempted" }
     var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
     var properties: [String: Any] {
-        ["provider": provider, "success": success]
+        ["provider": provider, "success": success, "browserStyle": browserStyle]
     }
 }
 
@@ -302,6 +303,7 @@ struct WebCheckoutRedirectReceived: HeliumObservabilityEvent {
     let redirectKind: String
     let msSinceOpen: Int?
     let observationCount: Int
+    let browserStyle: String
 
     var name: String { "web_checkout_redirect_received" }
     var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
@@ -310,6 +312,7 @@ struct WebCheckoutRedirectReceived: HeliumObservabilityEvent {
             "provider": provider,
             "redirectKind": redirectKind,
             "observationCount": observationCount,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p
@@ -327,6 +330,7 @@ struct WebCheckoutPurchaseDetected: HeliumObservabilityEvent {
     let retryAttempt: Int
     let msSinceOpen: Int?
     let wasRestore: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_purchase_detected" }
     var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
@@ -337,6 +341,7 @@ struct WebCheckoutPurchaseDetected: HeliumObservabilityEvent {
             "source": source.rawValue,
             "retryAttempt": retryAttempt,
             "wasRestore": wasRestore,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
         return p
@@ -348,6 +353,7 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
     let retries: Int
     let msSinceOpen: Int?
     let fromSuccessRedirect: Bool
+    let browserStyle: String
 
     var name: String { "web_checkout_purchase_check_exhausted" }
     var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
@@ -356,8 +362,48 @@ struct WebCheckoutPurchaseCheckExhausted: HeliumObservabilityEvent {
             "provider": provider,
             "retries": retries,
             "fromSuccessRedirect": fromSuccessRedirect,
+            "browserStyle": browserStyle,
         ]
         if let msSinceOpen { p["msSinceOpen"] = msSinceOpen }
+        return p
+    }
+}
+
+// MARK: - Web Apple Pay
+
+/// Result of running Apple Pay's web API on the origin external web checkout is served
+/// from. `deviceCanMakePayments` is the native PassKit answer, which stays true on a
+/// device with an empty Wallet, so the two together separate "no Apple Pay here" from
+/// "Apple Pay but nothing to pay with".
+struct WebApplePayProbeCompleted: HeliumObservabilityEvent {
+    let readiness: WebApplePayReadiness
+    let durationMs: Int
+    let timedOut: Bool
+    let failureReason: String?
+    let deviceCanMakePayments: Bool
+    /// How long the launch request was held waiting on a measurement, absent when it was
+    /// not held at all. Capped by the launch wait budget, so it is below `durationMs`
+    /// whenever the probe outlived the launch that started it.
+    let launchWaitMs: Int?
+    /// Readiness served from the persisted cache while this probe ran, if any, and whether
+    /// it matched what the probe then measured.
+    let servedFromCache: String?
+    let cacheWasCorrect: Bool?
+
+    var name: String { "web_apple_pay_probe_completed" }
+    var tags: Set<HeliumObservabilityTag> { [.webCheckout] }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "readiness": readiness.rawValue,
+            "durationMs": durationMs,
+            "timedOut": timedOut,
+            "deviceCanMakePayments": deviceCanMakePayments,
+            "cacheHit": servedFromCache != nil,
+        ]
+        if let reason = truncatedForObservability(failureReason) { p["failureReason"] = reason }
+        if let launchWaitMs { p["launchWaitMs"] = launchWaitMs }
+        if let servedFromCache { p["servedFromCache"] = servedFromCache }
+        if let cacheWasCorrect { p["cacheWasCorrect"] = cacheWasCorrect }
         return p
     }
 }
@@ -403,11 +449,29 @@ struct PaywallJSErrorDetected: HeliumObservabilityEvent {
 struct PaywallWebProcessTerminated: HeliumObservabilityEvent {
     let loadAttempt: String
     let wasContentLoaded: Bool
+    let recovery: ProcessTerminationRecovery
+    let reloadCount: Int
 
     var name: String { "paywall_web_process_terminated" }
     var tags: Set<HeliumObservabilityTag> { [.paywallRuntime, .anomaly] }
     var properties: [String: Any] {
-        ["loadAttempt": loadAttempt, "wasContentLoaded": wasContentLoaded]
+        [
+            "loadAttempt": loadAttempt,
+            "wasContentLoaded": wasContentLoaded,
+            "recovery": recovery.rawValue,
+            "reloadCount": reloadCount,
+        ]
+    }
+}
+
+struct PaywallWebProcessRecovered: HeliumObservabilityEvent {
+    let reloadCount: Int
+    let msSinceReloadStart: Int
+
+    var name: String { "paywall_web_process_recovered" }
+    var tags: Set<HeliumObservabilityTag> { [.paywallRuntime] }
+    var properties: [String: Any] {
+        ["reloadCount": reloadCount, "msSinceReloadStart": msSinceReloadStart]
     }
 }
 

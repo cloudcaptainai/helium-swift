@@ -303,12 +303,7 @@ public class HeliumSdkConfig {
     public func setWrapperSdkInfo(sdk: String, version: String) {
         self.wrapperSdk = sdk
         self.wrapperSdkVersion = version
-        trackSdkApiCall(.setWrapperSdkInfo, ["wrapperSdk": sdk, "wrapperSdkVersion": version])
-    }
-
-    var wrapperSdkInfo: (sdk: String, version: String)? {
-        guard let wrapperSdk, let wrapperSdkVersion else { return nil }
-        return (wrapperSdk, wrapperSdkVersion)
+        trackSdkApiCall(.setWrapperSdkInfo)
     }
     
     /// Called during Helium.initialize() to set initialization config
@@ -360,6 +355,10 @@ public class ApplePayHelper {
         return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
     }
     
+    func setCanMakePaymentsForTesting(_ canMakePayments: Bool?) {
+        cachedCanMakePayments = canMakePayments
+    }
+
     @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
     public func setStripeApplePayAvailable(_ value: Bool) {
         isStripeApplePayAvailable = value

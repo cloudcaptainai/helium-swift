@@ -9,15 +9,26 @@ import Foundation
 import SwiftUI
 import UIKit
 
-extension Color {
+extension UIColor {
     /// WCAG relative luminance in sRGB. nil if components can't be resolved.
     var relativeLuminance: CGFloat? {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        guard getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
         func linearize(_ c: CGFloat) -> CGFloat {
             c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }
         return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+    }
+
+    /// Black or white, whichever reads better on this color. White when the luminance
+    /// can't be resolved, since it reads on more unknown content than black does.
+    ///
+    /// White is kept for as long as it holds WCAG's 3:1 minimum for non-text UI, which it
+    /// loses at a luminance of 0.3. Black out-contrasts it from about 0.18, but white on
+    /// mid-tones such as the system blue still reads well and looks more natural.
+    var preferredContrastColor: UIColor {
+        guard let luminance = relativeLuminance else { return .white }
+        return luminance > 0.3 ? .black : .white
     }
 }
 
@@ -118,11 +129,8 @@ public struct BackgroundConfig {
     var preferredContrastColor: Color {
         // Default to white for image backgrounds — photographic content varies
         // and white reads on more of it than black does.
-        guard let color = representativeColor,
-              let luminance = color.relativeLuminance else {
-            return .white
-        }
-        return luminance > 0.5 ? .black : .white
+        guard let color = representativeColor else { return .white }
+        return Color(UIColor(color).preferredContrastColor)
     }
 
     // Generate the background view

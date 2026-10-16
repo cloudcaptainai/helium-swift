@@ -242,7 +242,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfig: HeliumFetchedConfig?
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
-    @HeliumAtomic private var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic var localizedPriceMap: [String: LocalizedPrice] = [:]
     @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
 
     func fetchConfig(
@@ -261,7 +261,9 @@ public class HeliumFetchedConfigManager {
             downloadStep = .config
 
             // Pre-fetching
-            await AppStoreCountryHelper.shared.fetchStoreCountryCode()
+            async let storeCountryCode: Void = AppStoreCountryHelper.shared.fetchStoreCountryCode()
+            async let webApplePayReadiness: Void = WebApplePayAvailability.shared.prepareForRequest()
+            _ = await (storeCountryCode, webApplePayReadiness)
             
             let params: [String: Any] = [
                 "apiKey": apiKey,
@@ -868,8 +870,8 @@ public class HeliumFetchedConfigManager {
     
     @discardableResult
     func buildLocalizedPriceMap(config: HeliumFetchedConfig?) async -> Bool {
-        let productIds = getAllProductIdsIos(config: config)
-        await buildLocalizedPriceMap(productIds)
+        let configuredProductIds = getAllProductIdsIos(config: config)
+        await buildLocalizedPriceMap(configuredProductIds)
 
         // Merge server-provided prices (favoring StoreKit values on collision)
         if let serverPrices = config?.stripeProducts {
@@ -887,7 +889,10 @@ public class HeliumFetchedConfigManager {
 
         var allFound = false
         _localizedPriceMap.withValue { map in
-            allFound = productIds.allSatisfy { map.keys.contains($0) }
+            allFound = configuredProductIds.allSatisfy { configuredId in
+                let bareProductId = HeliumIosProductKey.productId(configuredId)
+                return map[bareProductId] != nil
+            }
         }
         return allFound
     }
@@ -934,6 +939,12 @@ public class HeliumFetchedConfigManager {
         }
     }
     
+    /// Product keys of a paywall that have no entry in the localized price map yet.
+    func productIdsMissingLocalizedPrices(_ productIds: [String]) -> [String] {
+        let known = Set(localizedPriceMap.keys)
+        return Array(Set(productIds)).filter { !known.contains($0) }.sorted()
+    }
+
     func refreshLocalizedPriceMap() async {
         let productIds = Array(localizedPriceMap.keys)
         await buildLocalizedPriceMap(productIds)
@@ -988,7 +999,11 @@ public class HeliumFetchedConfigManager {
             return [:]
         }
         
-        return getLocalizedPriceMap().filter { productIDs.contains($0.key) }
+        // The map carries bare ids plus one entry per configured composite; match
+        // either the configured key itself or the bare id of a composite.
+        var acceptedProductIds = Set(productIDs)
+        acceptedProductIds.formUnion(productIDs.map { HeliumIosProductKey.productId($0) })
+        return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     
     private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
@@ -1165,6 +1180,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle? = nil,
         identity: PreviewPaywallIdentity? = nil,
         secondTry: PreviewSecondTryBundle? = nil
     ) throws {
@@ -1186,6 +1202,7 @@ public class HeliumFetchedConfigManager {
                 productIdsStripeWeb: productIdsStripeWeb,
                 webPaywallBundleUrl: webPaywallBundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
+                webCheckoutBrowserStyle: webCheckoutBrowserStyle,
                 identity: identity,
                 secondTry: secondTry
             )
@@ -1221,6 +1238,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
         identity: PreviewPaywallIdentity?,
         secondTry: PreviewSecondTryBundle?
     ) throws -> String {
@@ -1242,6 +1260,7 @@ public class HeliumFetchedConfigManager {
             productIdsStripeWeb: productIdsStripeWeb,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll,
+            webCheckoutBrowserStyle: webCheckoutBrowserStyle,
             identity: identity
         )
 
@@ -1258,6 +1277,7 @@ public class HeliumFetchedConfigManager {
                 productIdsStripeWeb: [],
                 webPaywallBundleUrl: nil,
                 shouldEnableScroll: secondTry.shouldEnableScroll,
+                webCheckoutBrowserStyle: nil,
                 identity: secondTry.identity
             )
         } else {
@@ -1287,6 +1307,7 @@ public class HeliumFetchedConfigManager {
         productIdsStripeWeb: [String],
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
+        webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
         identity: PreviewPaywallIdentity?
     ) throws -> HeliumPaywallInfo {
         var previewPaywallInfo = donorPaywallInfo
@@ -1325,6 +1346,8 @@ public class HeliumFetchedConfigManager {
             additionalFields["webPaywallBundleUrl"] = JSON.null
         }
         previewPaywallInfo.additionalPaywallFields = additionalFields
+
+        previewPaywallInfo.webCheckoutBrowserStyle = webCheckoutBrowserStyle
 
         previewPaywallInfo.productsOfferedIOS = productIds
         previewPaywallInfo.productsOfferedStripe = productIdsStripe
@@ -1379,19 +1402,5 @@ enum FetchError: LocalizedError {
         case .couldNotFetchForAllTriggers:
             return "Failed to fetch bundles for all triggers."
         }
-    }
-}
-
-/// Executes an async operation with a timeout, returning nil if the timeout is exceeded
-func withTimeoutOrNil<T>(milliseconds: UInt64, operation: @escaping () async -> T?) async -> T? {
-    await withTaskGroup(of: T?.self) { group in
-        group.addTask { await operation() }
-        group.addTask {
-            try? await Task.sleep(nanoseconds: milliseconds * 1_000_000)
-            return nil
-        }
-        let result = await group.next()
-        group.cancelAll()
-        return result ?? nil
     }
 }

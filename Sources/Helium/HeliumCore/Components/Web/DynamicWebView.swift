@@ -35,6 +35,9 @@ struct DynamicWebView: View {
     @State private var isContentLoaded = false
     @State private var contentLoadedAt: Date? = nil
     @State private var jsCrashProbeActive = false
+    @State private var terminationReloadCount = 0
+    @State private var terminationReloadStartedAt: Date? = nil
+    @State private var pendingTerminationRecovery: ProcessTerminationRecovery? = nil
     @State private var loadToken = UUID().uuidString
     @State private var webView: WKWebView? = nil
     @State private var showControlPanel = false
@@ -147,11 +150,11 @@ struct DynamicWebView: View {
        .edgesIgnoringSafeArea(.all)
        .sheet(isPresented: $showControlPanel) {
            if #available(iOS 16.0, *) {
-               HeliumControlPanelView()
+               HeliumControlPanelView(hostPresentationContext: paywallSession?.presentationContext)
                    .presentationDetents([.large])
                    .presentationDragIndicator(.visible)
            } else {
-               HeliumControlPanelView()
+               HeliumControlPanelView(hostPresentationContext: paywallSession?.presentationContext)
            }
        }
        .onAppear {
@@ -165,7 +168,16 @@ struct DynamicWebView: View {
           if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               isContentLoaded = true
               contentLoadedAt = Date()
-              if let startTime = viewLoadStartTime {
+              if let reloadStartedAt = terminationReloadStartedAt {
+                  terminationReloadStartedAt = nil
+                  HeliumObservabilityManager.shared.track(
+                      PaywallWebProcessRecovered(
+                          reloadCount: terminationReloadCount,
+                          msSinceReloadStart: msSince(reloadStartedAt)
+                      ),
+                      scope: actionsDelegate.observabilityScope
+                  )
+              } else if let startTime = viewLoadStartTime {
                   let timeInterval = Date().timeIntervalSince(startTime)
                   let milliseconds = UInt64(timeInterval * 1000)
                   let isFallback = fileLoadAttempt == .backupLoad
@@ -193,15 +205,35 @@ struct DynamicWebView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .webViewProcessTerminated)) { res in
           guard res.object as? WKWebView === webView else { return }
+          terminationReloadCount = WebViewRenderGuard.reloadsToCount(
+              reloadsSoFar: terminationReloadCount,
+              contentLoadedAt: contentLoadedAt
+          )
+          let recovery = WebViewRenderGuard.processTerminationRecovery(
+              wasContentLoaded: isContentLoaded,
+              reloadsSoFar: terminationReloadCount,
+              isAppActive: UIApplication.shared.applicationState == .active
+          )
           HeliumObservabilityManager.shared.track(
               PaywallWebProcessTerminated(
                   loadAttempt: String(describing: fileLoadAttempt),
-                  wasContentLoaded: isContentLoaded
+                  wasContentLoaded: isContentLoaded,
+                  recovery: recovery,
+                  reloadCount: terminationReloadCount
               ),
               scope: actionsDelegate.observabilityScope
           )
-          guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) else { return }
-          webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
+          if recovery.waitsForActiveApp {
+              loadToken = UUID().uuidString
+              pendingTerminationRecovery = recovery
+          } else {
+              performTerminationRecovery(recovery)
+          }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+          guard let recovery = pendingTerminationRecovery else { return }
+          pendingTerminationRecovery = nil
+          performTerminationRecovery(recovery)
       }
       .onReceive(NotificationCenter.default.publisher(for: .heliumWebCheckoutProcessingChanged)) { notification in
           guard let visible = notification.userInfo?["visible"] as? Bool else { return }
@@ -431,6 +463,9 @@ struct DynamicWebView: View {
 
     private func webViewLoadFail(reason: String, kind: WebViewFailKind = .navigation) {
         HeliumLogger.log(.debug, category: .ui, "WebView failed to load - \(reason)")
+        // A failed termination reload must not mark the ladder's next load as a recovery.
+        // Only a failure clears it: the reload itself also starts a new load attempt.
+        terminationReloadStartedAt = nil
         if let next = WebViewRenderGuard.nextLoadAttempt(
             after: fileLoadAttempt,
             kind: kind,
@@ -467,8 +502,24 @@ struct DynamicWebView: View {
         }
     }
     
+    private func performTerminationRecovery(_ recovery: ProcessTerminationRecovery) {
+        switch recovery {
+        case .reload, .reloadWhenActive:
+            reloadAfterProcessTermination()
+        case .advanceLadder, .advanceLadderWhenActive:
+            webViewLoadFail(reason: "WebContentProcessTerminated", kind: .processTerminated)
+        }
+    }
+
+    private func reloadAfterProcessTermination() {
+        terminationReloadCount += 1
+        terminationReloadStartedAt = Date()
+        advanceFileLoadAttempt(to: fileLoadAttempt, useBackup: fileLoadAttempt == .backupLoad)
+    }
+
     private func advanceFileLoadAttempt(to attempt: FileLoadAttempt, useBackup: Bool) {
         Task { @MainActor in
+            pendingTerminationRecovery = nil
             fileLoadAttempt = attempt
             webView = nil
             jsCrashProbeActive = false
@@ -710,14 +761,7 @@ class WebViewManager {
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.isOpaque = false
         
-        switch Helium.config.lightDarkModeOverride {
-        case .light:
-            webView.overrideUserInterfaceStyle = .light
-        case .dark:
-            webView.overrideUserInterfaceStyle = .dark
-        case .system:
-            webView.overrideUserInterfaceStyle = .unspecified
-        }
+        webView.overrideUserInterfaceStyle = Helium.config.lightDarkModeOverride.userInterfaceStyle
         
         webView.scrollView.isScrollEnabled = shouldEnableScroll
         webView.scrollView.bounces = shouldEnableScroll

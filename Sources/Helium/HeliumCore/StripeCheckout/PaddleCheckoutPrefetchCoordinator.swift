@@ -1,19 +1,5 @@
 import Foundation
 
-/// One-shot resume guard for `withCheckedContinuation` races.
-private final class ResumeGuard: @unchecked Sendable {
-    private let lock = NSLock()
-    private var resumed = false
-
-    func tryResume() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if resumed { return false }
-        resumed = true
-        return true
-    }
-}
-
 struct PaddlePrefetchAwaitTimeout: LocalizedError {
     let priceId: String
     let timeout: TimeInterval

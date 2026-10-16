@@ -74,15 +74,16 @@ class HeliumObservabilityManager {
         p["isMainThread"] = isMainThread
         if let msSinceInitialize { p["msSinceInitialize"] = msSinceInitialize }
         p["sdkVersion"] = BuildConstants.version
-        if let wrapper = HeliumSdkConfig.shared.wrapperSdkInfo {
-            p["wrapperSdk"] = wrapper.sdk
-            p["wrapperSdkVersion"] = wrapper.version
-        }
+        p["sdkVersionWrapper"] = HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        p["wrapperSdk"] = HeliumSdkConfig.shared.heliumSdk
         p["heliumPersistentId"] = HeliumIdentityManager.shared.getHeliumPersistentId()
         p["userId"] = HeliumIdentityManager.shared.getResolvedUserId()
         p["hasCustomUserId"] = HeliumIdentityManager.shared.hasCustomUserId()
         if let rcId = HeliumIdentityManager.shared.revenueCatAppUserId {
             p["revenueCatAppUserId"] = rcId
+        }
+        if let thirdPartyId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId() {
+            p["thirdPartyAnalyticsAnonymousId"] = thirdPartyId
         }
         p["heliumSessionId"] = HeliumIdentityManager.shared.getHeliumSessionId()
         if let scope {
@@ -91,6 +92,7 @@ class HeliumObservabilityManager {
             if let uuid = scope.paywallUUID {
                 p["paywallUUID"] = uuid
             }
+            p["isFallback"] = scope.isFallback
         }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             p["organizationId"] = orgId

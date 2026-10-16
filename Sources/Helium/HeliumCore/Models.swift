@@ -46,6 +46,7 @@ public struct HeliumPaywallInfo: Codable {
     var experimentInfo: JSON?  // New top-level field from server
     var additionalPaywallFields: JSON?
     var presentationStyle: HeliumPresentationStyle?
+    var webCheckoutBrowserStyle: WebCheckoutBrowserStyle?
     var productHapticsEnabled: [String]? = nil
     
     var productIdsIOS: [String] {
@@ -56,8 +57,15 @@ public struct HeliumPaywallInfo: Codable {
         productIdsIOS + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
     }
 
+    /// Bare App Store ids — promo offer suffixes stripped so StoreKit transaction
+    /// and product lookups match.
+    var storeKitProductIds: [String] {
+        productIdsIOS.map { HeliumIosProductKey.productId($0) }
+    }
+
     var productIdsIncludingWebProductIds: [String] {
-        productIds + (webProductsOfferedPaddle ?? []) + (webProductsOfferedStripe ?? [])
+        storeKitProductIds + (productsOfferedStripe ?? []) + (productsOfferedPaddle ?? [])
+            + (webProductsOfferedPaddle ?? []) + (webProductsOfferedStripe ?? [])
     }
 
     var hasProducts: Bool {
@@ -310,6 +318,16 @@ public enum HeliumLightDarkMode {
     case light
     case dark
     case system
+}
+
+extension HeliumLightDarkMode {
+    var userInterfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .light: return .light
+        case .dark: return .dark
+        case .system: return .unspecified
+        }
+    }
 }
 
 /// Selects which External Web Checkout payment processors are enabled.

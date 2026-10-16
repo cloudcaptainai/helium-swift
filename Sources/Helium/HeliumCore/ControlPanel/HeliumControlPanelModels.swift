@@ -42,6 +42,7 @@ struct HeliumPaywallPreviewEntry: Codable, Identifiable {
     let isWeb: Bool?
     let versions: [HeliumPaywallPreviewVersion]
     let secondTry: HeliumPaywallPreviewSecondTry?
+    let webCheckoutBrowserStyle: WebCheckoutBrowserStyle?
     var id: String { paywallUuid }
 
     /// Web paywalls render in a browser, not in-app.
