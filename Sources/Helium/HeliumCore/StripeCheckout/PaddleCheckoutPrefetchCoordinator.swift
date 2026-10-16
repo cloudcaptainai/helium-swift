@@ -17,6 +17,15 @@ struct PaddleCaliforniaBlocked: LocalizedError {
     }
 }
 
+struct PaddleNonUSBuyerBlocked: LocalizedError {
+    let countryCode: String?
+
+    var errorDescription: String? {
+        let country = countryCode.map { " (detected country \($0))" } ?? " (country unavailable)"
+        return "Paddle prefetch blocked for non-US buyer\(country)"
+    }
+}
+
 enum PaddlePrefetchOutcome {
     case ready(
         bandit: PaddleCreateTransactionForPaywallResponse,
@@ -389,6 +398,17 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
+    nonisolated static func nonUSBuyerBlockedError(
+        in outcomes: [String: PaddlePrefetchOutcome]
+    ) -> PaddleNonUSBuyerBlocked? {
+        for outcome in outcomes.values {
+            if case let .failed(error) = outcome, let blocked = error as? PaddleNonUSBuyerBlocked {
+                return blocked
+            }
+        }
+        return nil
+    }
+
     // MARK: - Composite key helpers
 
     /// "pro_xxx:pri_yyy" → "pri_yyy". Returns nil for malformed input.
@@ -480,6 +500,10 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
+            if !isPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
+                return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
+            }
             // While the consent modal is disabled, block California buyers by ip_geo
             // ZIP before checkout. When the flag is on, they proceed to the modal.
             // Previews always proceed so testers can exercise the modal and checkout.
@@ -496,12 +520,26 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
     }
 
+    nonisolated static func isUSBuyer(in rawBody: Data) -> Bool {
+        return ipGeoCountryCode(in: rawBody)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() == "US"
+    }
+
+    nonisolated static func ipGeoCountryCode(in rawBody: Data) -> String? {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any] else {
+            return nil
+        }
+        return data["ip_geo_country_code"] as? String
+    }
+
     /// Returns the postal code when the response's IP-geo is a US California
     /// ZIP (90001–96162, contiguous; HI starts at 96701). Nil otherwise.
     nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
         guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
               let data = parsed["data"] as? [String: Any],
-              (data["ip_geo_country_code"] as? String) == "US",
+              isUSBuyer(in: rawBody),
               let postal = data["ip_geo_postal_code"] as? String,
               let zip = Int(postal.prefix(5)),
               (90001...96162).contains(zip) else {

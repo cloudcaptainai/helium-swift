@@ -11,6 +11,7 @@ extension PaddleCheckoutPrefetchCoordinator {
     enum PrefetchBffStep {
         case success(rawBody: Data)
         case caBlocked(rawBody: Data)
+        case nonUSBlocked(rawBody: Data)
         case failed(Error)
     }
 
@@ -120,6 +121,15 @@ extension PaddleCheckoutPrefetchCoordinator {
             )
             outcome = .caBlocked
             errorClass = "PaddleCaliforniaBlocked"
+            ipGeo = ipGeoFields(in: rawBody)
+            californiaDetected = PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: rawBody) != nil
+            consentRequired = consentRequiredField(in: rawBody)
+        case let .nonUSBlocked(rawBody):
+            endpointCall = EndpointCallTelemetry(
+                durationMs: msSince(startedAt), success: true
+            )
+            outcome = .nonUSBlocked
+            errorClass = "PaddleNonUSBuyerBlocked"
             ipGeo = ipGeoFields(in: rawBody)
             californiaDetected = PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: rawBody) != nil
             consentRequired = consentRequiredField(in: rawBody)

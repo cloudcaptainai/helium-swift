@@ -125,7 +125,7 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
 }
 
 enum PaddlePrefetchOutcomeKind: String {
-    case ready, alreadyEntitled, caBlocked, failed
+    case ready, alreadyEntitled, caBlocked, nonUSBlocked, failed
 }
 
 struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
@@ -166,6 +166,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
     let alreadyEntitledCount: Int
     let failedCount: Int
     let caBlockedCount: Int
+    let nonUSBlockedCount: Int
     let timedOutCount: Int
     let notStartedCount: Int
     let shortCircuited: Bool
@@ -179,6 +180,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
             "alreadyEntitledCount": alreadyEntitledCount,
             "failedCount": failedCount,
             "caBlockedCount": caBlockedCount,
+            "nonUSBlockedCount": nonUSBlockedCount,
             "timedOutCount": timedOutCount,
             "notStartedCount": notStartedCount,
             "shortCircuited": shortCircuited,
