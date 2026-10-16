@@ -68,7 +68,8 @@ public class HeliumFallbackViewManager {
                         HeliumLogger.log(.warn, category: .fallback, "👷 Your fallbacks are outdated! ⚠️ Consider updating them\nhttps://docs.tryhelium.com/guides/fallback-bundle")
                     }
 
-                    if FallbackBundleFingerprint.markConfigured(decodedConfig) {
+                    if ObservabilitySampling.includesThisDevice(rate: ObservabilitySampling.fallbackBundleRate),
+                       FallbackBundleFingerprint.markConfigured(decodedConfig) {
                         HeliumObservabilityManager.shared.track(
                             FallbackPaywallsConfigured(
                                 generatedAt: decodedConfig.generatedAt,
