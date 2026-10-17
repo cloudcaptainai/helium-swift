@@ -972,4 +972,301 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertEqual(banditCalls.count, 2, "Expected 2 bandit calls (one per priceId)")
         XCTAssertEqual(bffCalls.count, 2, "Expected 2 BFF calls (one per priceId)")
     }
+
+    // MARK: - Web second try
+
+    /// Answers each price's prefetch on its own: bandit mints `txn_<priceId>` (or fails it, or
+    /// holds it until `release` is signaled), and the BFF response for that transaction can carry
+    /// a California ip_geo postal.
+    private func perPriceHandler(
+        failingBanditPriceIds: Set<String> = [],
+        californiaPriceIds: Set<String> = [],
+        heldBanditPriceIds: Set<String> = [],
+        release: DispatchSemaphore? = nil
+    ) -> ((URLRequest) throws -> (HTTPURLResponse, Data?)) {
+        return { request in
+            let url = request.url!.absoluteString
+            let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+            if url.contains("/paddle/create-transaction-for-paywall") {
+                let priceId = body["priceId"] as? String ?? ""
+                if heldBanditPriceIds.contains(priceId) {
+                    _ = release?.wait(timeout: .now() + 10)
+                }
+                if failingBanditPriceIds.contains(priceId) {
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+                    return (response, Data("{}".utf8))
+                }
+                let bandit: [String: Any] = [
+                    "transactionId": "txn_\(priceId)", "isKnownCustomer": false, "requestId": "req_\(priceId)",
+                ]
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, try JSONSerialization.data(withJSONObject: bandit))
+            } else if url.contains("/transaction-checkout") {
+                let transactionId = (body["data"] as? [String: Any])?["transaction_id"] as? String ?? ""
+                var data: [String: Any] = ["id": "che_\(transactionId)", "transaction_id": transactionId, "status": "draft"]
+                if californiaPriceIds.contains(where: { "txn_\($0)" == transactionId }) {
+                    data["ip_geo_country_code"] = "US"
+                    data["ip_geo_postal_code"] = "90210"
+                }
+                let response = HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
+                return (response, try JSONSerialization.data(withJSONObject: ["data": data]))
+            }
+            throw NSError(domain: "PaddleCheckoutPrefetchCoordinatorTests", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Unexpected URL: \(url)"])
+        }
+    }
+
+    private let secondTryInfo = WebSecondTryInfo(
+        paywallUUID: "pw-uuid",
+        paywallVersionUUID: "pwv-uuid",
+        productsOfferedPaddle: ["pro_st:pri_st"]
+    )
+
+    private func secondTryPaywallSession(secondTryProducts: [String]) -> PaywallSession {
+        var paywallInfo = makeTestPaywallInfo()
+        paywallInfo.webProductsOfferedPaddle = ["pro_main:pri_main"]
+        paywallInfo.webSecondTry = WebSecondTryInfo(
+            paywallUUID: "pw-uuid",
+            paywallVersionUUID: "pwv-uuid",
+            productsOfferedPaddle: secondTryProducts
+        )
+        return makeTestSession(paywallInfo: paywallInfo)
+    }
+
+    private func injectPaddleConfig(webSecondTryEnabled: Bool) throws {
+        var config = makeTestConfig(triggers: [:])
+        config.paddleClientToken = "test_xyz"
+        config.paddleProducts = [
+            "pro_st:pri_st": try JSONDecoder().decode(
+                ServerProductPrice.self, from: Data(#"{"defaultDiscountId": "dsc_st"}"#.utf8)
+            ),
+        ]
+        injectConfig(config)
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["webSecondTry": webSecondTryEnabled]))
+    }
+
+    private func banditRequestBodies() -> [[String: Any]] {
+        MockURLProtocol.capturedRequests
+            .filter { $0.url?.absoluteString.contains("/paddle/create-transaction-for-paywall") == true }
+            .compactMap { $0.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } }
+    }
+
+    func testHandlePaywallOpen_prefetchesTheWebSecondTrysPricesWhileTheFlagIsOn() async throws {
+        try injectPaddleConfig(webSecondTryEnabled: true)
+        MockURLProtocol.requestHandler = perPriceHandler()
+        let session = secondTryPaywallSession(secondTryProducts: ["pro_st:pri_st", "pro_main:pri_main"])
+
+        coordinator.handlePaywallOpen(paywallSession: session)
+        let outcomes = await coordinator.collectPrefetchOutcomes(sessionId: session.sessionId, priceIds: ["pri_main", "pri_st"])
+
+        for priceId in ["pri_main", "pri_st"] {
+            guard case .ready = outcomes[priceId] else {
+                XCTFail("Expected \(priceId) to be .ready, got \(String(describing: outcomes[priceId]))")
+                return
+            }
+        }
+        let bodies = banditRequestBodies()
+        XCTAssertEqual(
+            bodies.compactMap { $0["priceId"] as? String }.sorted(), ["pri_main", "pri_st"],
+            "A price both paywalls offer is prefetched once"
+        )
+        XCTAssertEqual(bodies.first { $0["priceId"] as? String == "pri_st" }?["discountId"] as? String, "dsc_st")
+    }
+
+    func testHandlePaywallOpen_skipsTheWebSecondTrysPricesWhileTheFlagIsOff() async throws {
+        try injectPaddleConfig(webSecondTryEnabled: false)
+        MockURLProtocol.requestHandler = perPriceHandler()
+        let session = secondTryPaywallSession(secondTryProducts: ["pro_st:pri_st"])
+
+        coordinator.handlePaywallOpen(paywallSession: session)
+        _ = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_main")
+        let secondTryOutcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_st")
+
+        guard case .notStarted = secondTryOutcome else {
+            XCTFail("Expected pri_st not to be prefetched, got \(secondTryOutcome)")
+            return
+        }
+        XCTAssertEqual(banditRequestBodies().compactMap { $0["priceId"] as? String }, ["pri_main"])
+    }
+
+    /// Lets a second-try prefetch finish on its own, as it does while the user is still on the
+    /// paywall.
+    private func waitUntilSettled(_ priceId: String) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while coordinator.settledOutcome(sessionId: testSessionId, priceId: priceId) == nil && Date() < deadline {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
+    /// Checkout never waits on the second try: once the paywall's own prices are in, a second-try
+    /// price still in flight counts as not ready.
+    func testCollectCheckoutOutcomes_secondTryPriceInFlight_doesNotHoldTheCheckout() async throws {
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        MockURLProtocol.requestHandler = perPriceHandler(heldBanditPriceIds: ["pri_st"], release: release)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_main"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        _ = await coordinator.awaitOutcome(sessionId: testSessionId, priceId: "pri_main")
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_st"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        let start = Date()
+        let (paywall, secondTry) = await coordinator.collectCheckoutOutcomes(
+            sessionId: testSessionId,
+            paywallPriceIds: ["pri_main"],
+            secondTryPriceIds: ["pri_st"]
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        guard case .ready = paywall["pri_main"] else {
+            XCTFail("Expected pri_main to be .ready, got \(String(describing: paywall["pri_main"]))")
+            return
+        }
+        XCTAssertNil(secondTry["pri_st"])
+        XCTAssertLessThan(elapsed, 1, "Checkout waited \(elapsed)s on a second-try price still in flight")
+        XCTAssertFalse(WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: secondTry).enabled)
+    }
+
+    func testSettledOutcome_isRecordedWhenAPrefetchFinishes_andDroppedWithItsSession() async throws {
+        MockURLProtocol.requestHandler = perPriceHandler()
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_st"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        try await waitUntilSettled("pri_st")
+        guard case .ready = coordinator.settledOutcome(sessionId: testSessionId, priceId: "pri_st") else {
+            XCTFail("Expected pri_st's settled outcome to be .ready")
+            return
+        }
+        XCTAssertNil(coordinator.settledOutcome(sessionId: makeTestSession().sessionId, priceId: "pri_st"))
+
+        coordinator.cancelForSession(sessionId: testSessionId)
+        XCTAssertNil(coordinator.settledOutcome(sessionId: testSessionId, priceId: "pri_st"))
+    }
+
+    /// The checkout's own guards read only the paywall's outcomes, so a second-try price that
+    /// failed costs the second try and never the checkout.
+    func testCollectCheckoutOutcomes_failedSecondTryPrice_leavesTheCheckoutReadyAndTheSecondTryOff() async throws {
+        MockURLProtocol.requestHandler = perPriceHandler(failingBanditPriceIds: ["pri_st"])
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_main", "pri_st"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        try await waitUntilSettled("pri_st")
+
+        let (paywall, secondTry) = await coordinator.collectCheckoutOutcomes(
+            sessionId: testSessionId,
+            paywallPriceIds: ["pri_main"],
+            secondTryPriceIds: ["pri_st"]
+        )
+
+        XCTAssertEqual(Array(paywall.keys), ["pri_main"])
+        guard case .ready = paywall["pri_main"] else {
+            XCTFail("Expected pri_main to be .ready, got \(String(describing: paywall["pri_main"]))")
+            return
+        }
+        guard case .failed = secondTry["pri_st"] else {
+            XCTFail("Expected pri_st to be .failed, got \(String(describing: secondTry["pri_st"]))")
+            return
+        }
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(in: paywall, tappedPriceId: "pri_main"))
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: paywall))
+
+        let checkout = WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: secondTry)
+        XCTAssertFalse(checkout.enabled)
+        XCTAssertEqual(checkout.ctx["enabled"] as? Bool, false)
+        XCTAssertTrue(checkout.paddleBootstrapOutcomes.isEmpty)
+    }
+
+    func testCollectCheckoutOutcomes_californiaBlockedSecondTryPrice_doesNotBlockTheCheckout() async throws {
+        MockURLProtocol.requestHandler = perPriceHandler(californiaPriceIds: ["pri_st"])
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_main", "pri_st"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        try await waitUntilSettled("pri_st")
+
+        let (paywall, secondTry) = await coordinator.collectCheckoutOutcomes(
+            sessionId: testSessionId,
+            paywallPriceIds: ["pri_main"],
+            secondTryPriceIds: ["pri_st"]
+        )
+
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: paywall))
+        XCTAssertEqual(PaddleCheckoutPrefetchCoordinator.californiaBlockedPostalCode(in: secondTry), "90210")
+        XCTAssertFalse(WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: secondTry).enabled)
+    }
+
+    func testCollectCheckoutOutcomes_readySecondTry_bootstrapsJoinThePaywallsByPrice() async throws {
+        MockURLProtocol.requestHandler = perPriceHandler()
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_main", "pri_st"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        try await waitUntilSettled("pri_st")
+
+        let (paywall, secondTry) = await coordinator.collectCheckoutOutcomes(
+            sessionId: testSessionId,
+            paywallPriceIds: ["pri_main"],
+            secondTryPriceIds: ["pri_st"]
+        )
+        let checkout = WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: secondTry)
+
+        XCTAssertTrue(checkout.enabled)
+        let bootstraps = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+            outcomesByPriceId: PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(paywall: paywall, secondTry: checkout)
+        ))
+        XCTAssertEqual(Set(bootstraps.keys), ["pri_main", "pri_st"])
+        let secondTryBandit = (bootstraps["pri_st"] as? [String: Any])?["banditResponse"] as? [String: Any]
+        XCTAssertEqual(secondTryBandit?["transactionId"] as? String, "txn_pri_st")
+    }
+
+    /// A price both paywalls offer counts for both.
+    func testCollectCheckoutOutcomes_sharedPriceIsInBothSplits() async throws {
+        MockURLProtocol.requestHandler = perPriceHandler()
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_shared"], paddleClientToken: "test_xyz", iosBundleId: nil)
+
+        let (paywall, secondTry) = await coordinator.collectCheckoutOutcomes(
+            sessionId: testSessionId,
+            paywallPriceIds: ["pri_shared"],
+            secondTryPriceIds: ["pri_shared"]
+        )
+
+        guard case .ready = paywall["pri_shared"], case .ready = secondTry["pri_shared"] else {
+            XCTFail("Expected pri_shared to be .ready in both splits; got \(paywall) and \(secondTry)")
+            return
+        }
+        XCTAssertEqual(banditRequestBodies().count, 1)
+    }
+
+    // MARK: - Checkout ctx outcomes
+
+    func testCheckoutCtxOutcomes_addTheSecondTrysOnlyWhileItIsEnabled() {
+        let paywall: [String: PaddlePrefetchOutcome] = [
+            "pri_main": .ready(bandit: makeBandit(transactionId: "txn_main"), paddle: makePaddle()),
+        ]
+        let enabled = WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: [
+            "pri_st": .ready(bandit: makeBandit(transactionId: "txn_st"), paddle: makePaddle()),
+        ])
+        let disabled = WebSecondTryCheckout(info: secondTryInfo, provider: .paddle, paddleOutcomes: [:])
+
+        XCTAssertEqual(
+            Set(PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(paywall: paywall, secondTry: enabled).keys),
+            ["pri_main", "pri_st"]
+        )
+        XCTAssertEqual(
+            Set(PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(paywall: paywall, secondTry: disabled).keys),
+            ["pri_main"]
+        )
+        XCTAssertEqual(
+            Set(PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(paywall: paywall, secondTry: nil).keys),
+            ["pri_main"]
+        )
+    }
+
+    /// A price both offer keeps the paywall's own outcome.
+    func testCheckoutCtxOutcomes_keepThePaywallsOutcomeForASharedPrice() {
+        let shared = WebSecondTryInfo(paywallUUID: "pw-uuid", paywallVersionUUID: "pwv-uuid", productsOfferedPaddle: ["pro_main:pri_main"])
+        let checkout = WebSecondTryCheckout(info: shared, provider: .paddle, paddleOutcomes: [
+            "pri_main": .ready(bandit: makeBandit(transactionId: "txn_second_try"), paddle: makePaddle()),
+        ])
+
+        let outcomes = PaddleCheckoutPrefetchCoordinator.checkoutCtxOutcomes(
+            paywall: ["pri_main": .ready(bandit: makeBandit(transactionId: "txn_paywall"), paddle: makePaddle())],
+            secondTry: checkout
+        )
+
+        guard case let .ready(bandit, _) = outcomes["pri_main"] else {
+            XCTFail("Expected pri_main to be .ready, got \(String(describing: outcomes["pri_main"]))")
+            return
+        }
+        XCTAssertEqual(bandit.transactionId, "txn_paywall")
+    }
 }

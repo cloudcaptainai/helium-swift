@@ -655,6 +655,75 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertNil(parsed["paddleAlreadyEntitled"], "Omitted when caller passes nil")
     }
 
+    // MARK: - secondTry round-trips through ctx
+
+    private func ctxFromCheckoutURL(secondTry: [String: Any]?) throws -> [String: Any] {
+        Helium.lastApiKeyUsed = "test_api_key_for_compression"
+        defer { Helium.lastApiKeyUsed = nil }
+
+        let provider: PaymentProviderConfig = .paddle
+        let manager = ExternalWebCheckoutManager(
+            provider: provider,
+            entitlementsSource: HeliumPaymentEntitlementsSource(provider: provider)
+        )
+        let templateEvent = PurchaseSucceededEvent(
+            productId: "", triggerName: "t", paywallName: "P",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+            paymentProcessor: provider.kind
+        )
+        let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
+            for: templateEvent,
+            paywallSession: PaywallSession(trigger: "t", paywallInfo: nil, fallbackType: .notFallback, presentationContext: .empty)
+        )
+
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: URL(string: "https://bundles-staging.heliumpaywall.com/o/p/bundle.html")!,
+            analyticsEvent: analyticsEvent,
+            productKey: "pro_x:pri_monthly", triggerName: "t",
+            successURL: "ok", cancelURL: "no",
+            introOfferEligible: true,
+            secondTry: secondTry
+        )
+
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let fragment = try XCTUnwrap(components.fragment, "URL must have a ctx fragment")
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let decompressed = try decompressWithAppleZlib(compressed, originalSize: 16_384)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: decompressed) as? [String: Any])
+    }
+
+    func testBuildEnrichedCheckoutURL_includesSecondTryWhenProvided() throws {
+        let checkout = WebSecondTryCheckout(
+            info: WebSecondTryInfo(
+                paywallUUID: "pw-uuid",
+                paywallVersionUUID: "pwv-uuid",
+                conditions: ["dismissed", "applePayCancelled"],
+                productsOfferedStripe: ["prod_x:price_y"]
+            ),
+            provider: .stripe,
+            paddleOutcomes: [:]
+        )
+
+        let parsed = try ctxFromCheckoutURL(secondTry: checkout.ctx)
+
+        let secondTry = try XCTUnwrap(parsed["secondTry"] as? NSDictionary)
+        XCTAssertEqual(secondTry, [
+            "enabled": true,
+            "paywallUUID": "pw-uuid",
+            "paywallVersionUUID": "pwv-uuid",
+            "conditions": ["dismissed", "applePayCancelled"],
+        ])
+        // The page's kill switch is a strict boolean check.
+        let enabled = try XCTUnwrap(secondTry["enabled"] as? NSNumber)
+        XCTAssertEqual(CFGetTypeID(enabled), CFBooleanGetTypeID())
+    }
+
+    func testBuildEnrichedCheckoutURL_omitsSecondTryWhenNil() throws {
+        let parsed = try ctxFromCheckoutURL(secondTry: nil)
+
+        XCTAssertNil(parsed["secondTry"], "Omitted when caller passes nil")
+    }
+
     // MARK: - Larger realistic payload (regression test)
 
     func testDeflateRaw_roundTripsLargeRealisticPaywallCtx() throws {
