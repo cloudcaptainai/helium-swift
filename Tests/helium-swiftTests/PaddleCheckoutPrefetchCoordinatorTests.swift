@@ -1,6 +1,16 @@
 import XCTest
 @testable import Helium
 
+private final class EmptyPaddleEntitlementsSource: HeliumPaymentEntitlementsSource {
+    init() {
+        super.init(provider: .paddle)
+    }
+
+    override func purchasedHeliumProductIds() async -> Set<String> {
+        []
+    }
+}
+
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
@@ -15,6 +25,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     override func setUp() {
         super.setUp()
 
+        resetPreviewConfiguration()
         testSession = makeTestSession()
 
         let config = URLSessionConfiguration.ephemeral
@@ -37,8 +48,113 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         await coordinator.cancelAllAndAwait()
         MockURLProtocol.reset()
         HeliumFetchedConfigManager.reset()
+        resetPreviewConfiguration()
         Helium.lastApiKeyUsed = nil
         try await super.tearDown()
+    }
+
+    private func resetPreviewConfiguration() {
+        let store = HeliumPreviewConfigurationStore.shared
+        store.configureBeforeEachPreview = false
+        store.forceExternalCheckoutSimulation = true
+        store.forcePaddleCaConsentModal = false
+        store.showCaliforniaConsentModal = false
+        store.purchaseMode = .simulated
+    }
+
+    private func setPreviewPurchaseMode(_ mode: HeliumPreviewPurchaseMode) {
+        let store = HeliumPreviewConfigurationStore.shared
+        store.forceExternalCheckoutSimulation = false
+        store.purchaseMode = mode
+    }
+
+    private func checkoutFlowSession(productKeys: [String]) -> PaywallSession {
+        var paywallInfo = makeTestPaywallInfo()
+        paywallInfo.webProductsOfferedPaddle = productKeys
+        paywallInfo.additionalPaywallFields = JSON([
+            "webPaywallBundleUrl": "https://bundles.clickthrough.to/test.html",
+        ])
+        return makeTestSession(paywallInfo: paywallInfo)
+    }
+
+    private func configureSharedCheckoutFlow(
+        session: PaywallSession,
+        priceIds: [String],
+        alreadyEntitledPriceId: String? = nil
+    ) {
+        URLProtocol.registerClass(MockURLProtocol.self)
+        MockURLProtocol.reset()
+        Helium.lastApiKeyUsed = "test_api_key_for_checkout_flow"
+        Helium.config.enableExternalWebCheckout(
+            redirectURL: "myapp://checkout/return",
+            paymentProcessors: .all
+        )
+        MockURLProtocol.requestHandler = { request in
+            let response: HTTPURLResponse
+            let body: Data
+            if request.url?.path.hasSuffix("paddle/create-transaction-for-paywall") == true {
+                let requestBody = try XCTUnwrap(request.httpBody)
+                let payload = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+                )
+                let priceId = try XCTUnwrap(payload["priceId"] as? String)
+                if priceId == alreadyEntitledPriceId {
+                    response = HTTPURLResponse(
+                        url: try XCTUnwrap(request.url),
+                        statusCode: 409,
+                        httpVersion: nil,
+                        headerFields: nil
+                    )!
+                    body = self.banditDuplicateBody().data(using: .utf8)!
+                } else {
+                    response = HTTPURLResponse(
+                        url: try XCTUnwrap(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: nil
+                    )!
+                    body = self.banditSuccessBody(transactionId: "txn_\(priceId)")
+                        .data(using: .utf8)!
+                }
+                return (response, body)
+            }
+            if request.url?.path.hasSuffix("/transaction-checkout") == true {
+                let requestBody = try XCTUnwrap(request.httpBody)
+                let payload = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+                )
+                let data = try XCTUnwrap(payload["data"] as? [String: Any])
+                let transactionId = try XCTUnwrap(data["transaction_id"] as? String)
+                response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 201,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+                body = try self.bffBody(
+                    checkoutId: "che_\(transactionId)",
+                    transactionId: transactionId,
+                    countryCode: "MX"
+                ).data(using: .utf8)!
+                return (response, body)
+            }
+            throw NSError(domain: "test", code: 0)
+        }
+
+        PaddleCheckoutPrefetchCoordinator.shared.prefetch(
+            paywallSession: session,
+            priceIds: priceIds,
+            paddleClientToken: "test_xyz",
+            iosBundleId: nil
+        )
+    }
+
+    private func cleanupSharedCheckoutFlow(session: PaywallSession) {
+        PaddleCheckoutPrefetchCoordinator.shared.cancelForSession(sessionId: session.sessionId)
+        MockURLProtocol.reset()
+        URLProtocol.unregisterClass(MockURLProtocol.self)
+        Helium.config.disableExternalWebCheckout()
+        Helium.lastApiKeyUsed = nil
     }
 
     // MARK: - Response stubs
@@ -358,22 +474,15 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(nullBlocked.countryCode)
     }
 
-    func testAwaitOutcome_previewRunAllowsNonUSCountryAndNonUSBlockPrecedesCaliforniaBlock() async throws {
-        let nonUSCaliforniaBody = try bffBody(
-            checkoutId: "che_non_us_ca",
+    func testAwaitOutcome_previewRunAllowsNonUSCountry() async throws {
+        setPreviewPurchaseMode(.simulated)
+        let nonUSBody = try bffBody(
+            checkoutId: "che_preview_mx",
             transactionId: "txn_country",
-            countryCode: "MX",
-            postalCode: "90210"
+            countryCode: "MX"
         )
-        let regularOutcome = await prefetchOutcome(body: nonUSCaliforniaBody, priceId: "pri_non_us_ca")
-        guard case .failed(let regularError) = regularOutcome else {
-            XCTFail("Non-US country must be blocked; got \(regularOutcome)")
-            return
-        }
-        XCTAssertTrue(regularError is PaddleNonUSBuyerBlocked)
-
         let previewOutcome = await prefetchOutcome(
-            body: nonUSCaliforniaBody,
+            body: nonUSBody,
             trigger: "helium_preview_trigger",
             priceId: "pri_preview_mx"
         )
@@ -381,6 +490,124 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             XCTFail("Preview checkout must allow non-US country; got \(previewOutcome)")
             return
         }
+    }
+
+    func testAwaitOutcome_realModePreviewBlocksNonUSCountry() async throws {
+        setPreviewPurchaseMode(.real)
+        let body = try bffBody(
+            checkoutId: "che_real_preview_mx",
+            transactionId: "txn_country",
+            countryCode: "MX"
+        )
+
+        let outcome = await prefetchOutcome(
+            body: body,
+            trigger: "helium_preview_trigger",
+            priceId: "pri_real_preview_mx"
+        )
+
+        guard case .failed(let error) = outcome else {
+            XCTFail("Real-mode preview must block a non-US country; got \(outcome)")
+            return
+        }
+        let blocked = try XCTUnwrap(error as? PaddleNonUSBuyerBlocked)
+        XCTAssertEqual(blocked.countryCode, "MX")
+    }
+
+    func testAwaitOutcome_normalizesBlockedCountryCodeAndOmitsBlankCountries() async throws {
+        for (priceId, countryCode) in [
+            ("pri_normalized_mx", " mx "),
+            ("pri_empty_country", ""),
+            ("pri_whitespace_country", "   "),
+        ] {
+            let body = try bffBody(
+                checkoutId: "che_\(priceId)",
+                transactionId: "txn_country",
+                countryCode: countryCode
+            )
+            let outcome = await prefetchOutcome(body: body, priceId: priceId)
+
+            guard case .failed(let error) = outcome else {
+                XCTFail("\(countryCode.debugDescription) must be blocked; got \(outcome)")
+                continue
+            }
+            let blocked = try XCTUnwrap(error as? PaddleNonUSBuyerBlocked)
+            if priceId == "pri_normalized_mx" {
+                XCTAssertEqual(blocked.countryCode, "MX")
+            } else {
+                XCTAssertNil(blocked.countryCode)
+                XCTAssertEqual(
+                    blocked.localizedDescription,
+                    "Paddle prefetch blocked for non-US buyer (country unavailable)"
+                )
+            }
+        }
+    }
+
+    func testStartCheckoutFlowSurfacesNonUSBlockBeforeNotReady() async throws {
+        let productKey = "pro_nonus:pri_nonus_checkout"
+        let session = checkoutFlowSession(productKeys: [productKey])
+        configureSharedCheckoutFlow(session: session, priceIds: ["pri_nonus_checkout"])
+        defer { cleanupSharedCheckoutFlow(session: session) }
+        let manager = ExternalWebCheckoutManager(
+            provider: .paddle,
+            entitlementsSource: EmptyPaddleEntitlementsSource()
+        )
+
+        do {
+            _ = try await manager.startCheckoutFlow(
+                for: productKey,
+                triggerName: session.trigger,
+                paywallSession: session
+            )
+            XCTFail("A non-US prefetch outcome must block checkout")
+        } catch {
+            guard let checkoutError = error as? WebCheckoutError else {
+                XCTFail("Expected WebCheckoutError; got \(error)")
+                return
+            }
+            guard case .nonUSBuyerBlocked(let countryCode) = checkoutError else {
+                XCTFail("Expected nonUSBuyerBlocked, not \(checkoutError)")
+                return
+            }
+            XCTAssertEqual(countryCode, "MX")
+        }
+    }
+
+    func testStartCheckoutFlowEntitledTappedProductShortCircuitsNonUSBlock() async throws {
+        let entitledProductKey = "pro_entitled:pri_entitled"
+        let nonUSProductKey = "pro_nonus:pri_nonus_checkout"
+        let session = checkoutFlowSession(productKeys: [entitledProductKey, nonUSProductKey])
+        configureSharedCheckoutFlow(
+            session: session,
+            priceIds: ["pri_entitled", "pri_nonus_checkout"],
+            alreadyEntitledPriceId: "pri_entitled"
+        )
+        defer { cleanupSharedCheckoutFlow(session: session) }
+        let manager = ExternalWebCheckoutManager(
+            provider: .paddle,
+            entitlementsSource: EmptyPaddleEntitlementsSource()
+        )
+
+        let outcome = try await manager.startCheckoutFlow(
+            for: entitledProductKey,
+            triggerName: session.trigger,
+            paywallSession: session
+        )
+        guard case .preCheckResolved = outcome else {
+            XCTFail("The tapped already-entitled product must resolve before the non-US block")
+            return
+        }
+
+        let nonUSOutcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
+            sessionId: session.sessionId,
+            priceId: "pri_nonus_checkout"
+        )
+        guard case .failed(let error) = nonUSOutcome else {
+            XCTFail("The other offered product must have a non-US prefetch failure; got \(nonUSOutcome)")
+            return
+        }
+        XCTAssertTrue(error is PaddleNonUSBuyerBlocked)
     }
 
     // MARK: - alreadyEntitled

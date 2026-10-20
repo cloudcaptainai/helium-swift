@@ -131,7 +131,7 @@ extension PaddleCheckoutPrefetchCoordinator {
             outcome = .nonUSBlocked
             errorClass = "PaddleNonUSBuyerBlocked"
             ipGeo = ipGeoFields(in: rawBody)
-            californiaDetected = PaddleCheckoutPrefetchCoordinator.californiaPostalCode(in: rawBody) != nil
+            californiaDetected = false
             consentRequired = consentRequiredField(in: rawBody)
         case let .failed(error):
             let decomposed = decomposeError(error)
@@ -193,7 +193,7 @@ private func ipGeoFields(in rawBody: Data) -> (country: String?, region: String?
         return (nil, nil, nil)
     }
     return (
-        data["ip_geo_country_code"] as? String,
+        PaddleCheckoutPrefetchCoordinator.normalizedCountryCode(in: data),
         data["ip_geo_region"] as? String,
         data["ip_geo_postal_code"] as? String
     )

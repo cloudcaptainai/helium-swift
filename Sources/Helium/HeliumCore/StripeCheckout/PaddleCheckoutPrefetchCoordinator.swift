@@ -106,6 +106,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
+        let isSimulatedPreviewRun = isPreviewRun &&
+            HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId)
@@ -122,6 +124,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
+                    isSimulatedPreviewRun: isSimulatedPreviewRun,
                     banditClient: bandit,
                     bffClient: bff,
                     scope: scope
@@ -466,6 +469,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
+        isSimulatedPreviewRun: Bool,
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient,
         scope: PaywallObservabilityScope
@@ -500,7 +504,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if !isPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
+            if !isSimulatedPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
             }
@@ -521,9 +525,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     nonisolated static func isUSBuyer(in rawBody: Data) -> Bool {
-        return ipGeoCountryCode(in: rawBody)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased() == "US"
+        return ipGeoCountryCode(in: rawBody) == "US"
     }
 
     nonisolated static func ipGeoCountryCode(in rawBody: Data) -> String? {
@@ -531,7 +533,15 @@ final class PaddleCheckoutPrefetchCoordinator {
               let data = parsed["data"] as? [String: Any] else {
             return nil
         }
-        return data["ip_geo_country_code"] as? String
+        return normalizedCountryCode(in: data)
+    }
+
+    nonisolated static func normalizedCountryCode(in data: [String: Any]) -> String? {
+        guard let countryCode = data["ip_geo_country_code"] as? String else {
+            return nil
+        }
+        let normalized = countryCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalized.isEmpty ? nil : normalized
     }
 
     /// Returns the postal code when the response's IP-geo is a US California
@@ -539,7 +549,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     nonisolated static func californiaPostalCode(in rawBody: Data) -> String? {
         guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
               let data = parsed["data"] as? [String: Any],
-              isUSBuyer(in: rawBody),
+              normalizedCountryCode(in: data) == "US",
               let postal = data["ip_geo_postal_code"] as? String,
               let zip = Int(postal.prefix(5)),
               (90001...96162).contains(zip) else {

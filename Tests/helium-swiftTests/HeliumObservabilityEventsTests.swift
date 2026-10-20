@@ -258,7 +258,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         HeliumObservabilityManager.shared.trackObserverForTesting = { capturedEvents.append($0) }
 
         let rawBody = try JSONSerialization.data(withJSONObject: [
-            "data": ["ip_geo_country_code": "MX"],
+            "data": ["ip_geo_country_code": " mx "],
         ])
         let startedAt = Date()
         let priceId = "pri_nonus_obs_test"
@@ -295,5 +295,6 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertEqual(outcomeFinalized.outcome, .nonUSBlocked)
         XCTAssertEqual(outcomeFinalized.errorClass, "PaddleNonUSBuyerBlocked")
         XCTAssertEqual(outcomeFinalized.ipGeoCountry, "MX")
+        XCTAssertEqual(outcomeFinalized.californiaDetected, false)
     }
 }
