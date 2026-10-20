@@ -40,8 +40,9 @@ func urlForObservability(_ url: URL) -> String {
     String(url.absoluteString.prefix { $0 != "?" && $0 != "#" })
 }
 
-/// Host-authored keys describe an integration, never a user, but they are still
-/// capped so a runaway map cannot inflate the payload.
+/// Reports the trait key names only, never the trait values, since keys are fixed by the
+/// integration's code while values can carry user data; the cap keeps a large map from
+/// inflating the payload.
 func keysForObservability(_ keys: [String], maxKeys: Int = 50, maxKeyLength: Int = 64) -> String {
     keys.sorted().prefix(maxKeys).map { String($0.prefix(maxKeyLength)) }.joined(separator: ",")
 }

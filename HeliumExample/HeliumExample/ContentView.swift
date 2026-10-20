@@ -19,7 +19,7 @@ struct ContentView: View {
     @State private var errorMessage: String = ""
     @State private var trigger: String = AppConfig.triggerKey
     @State private var userId: String = Helium.identify.userId ?? "nil"
-    @AppStorage("sdkApiCoverageDone") private var sdkApiCoverageDone: Bool = false
+    @AppStorage(SdkApiCoverage.doneKey) private var sdkApiCoverageDone: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -31,7 +31,7 @@ struct ContentView: View {
     private var formContent: some View {
         Form {
             Section("Configuration") {
-                if ProcessInfo.processInfo.arguments.contains("SDK_API_COVERAGE") {
+                if ProcessInfo.processInfo.arguments.contains(SdkApiCoverage.launchArgument) {
                     Text(sdkApiCoverageDone ? "coverage done" : "coverage running")
                         .accessibilityIdentifier("sdkApiCoverageStatus")
                 }

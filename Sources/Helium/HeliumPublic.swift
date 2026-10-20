@@ -107,7 +107,7 @@ public class Helium {
         onEntitled: ((PaywallEntitledEvent) -> Void)? = nil,
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
-        presentPaywall(
+        presentPaywallFromEntryPoint(
             trigger: trigger,
             config: config,
             eventHandlers: eventHandlers,
@@ -117,7 +117,7 @@ public class Helium {
         )
     }
 
-    func presentPaywall(
+    private func presentPaywallFromEntryPoint(
         trigger: String,
         config: PaywallPresentationConfig,
         eventHandlers: PaywallEventHandlers?,
@@ -159,7 +159,7 @@ public class Helium {
         onEntitled: @escaping () -> Void,
         onPaywallNotShown: @escaping (PaywallNotShownReason) -> Void
     ) {
-        presentPaywall(
+        presentPaywallFromEntryPoint(
             trigger: trigger,
             config: config,
             eventHandlers: eventHandlers,
@@ -332,7 +332,7 @@ public class Helium {
         HeliumPaywallPresenter.shared.hideAllUpsells()
         
         HeliumLogger.log(.info, category: .core, "handleDeepLink - Presenting paywall for trigger", metadata: ["trigger": trigger])
-        presentPaywall(
+        presentPaywallFromEntryPoint(
             trigger: trigger,
             config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: false),
             eventHandlers: nil,
