@@ -31,8 +31,10 @@ struct ContentView: View {
     private var formContent: some View {
         Form {
             Section("Configuration") {
-                Text(sdkApiCoverageDone ? "coverage done" : "coverage running")
-                    .accessibilityIdentifier("sdkApiCoverageStatus")
+                if ProcessInfo.processInfo.arguments.contains("SDK_API_COVERAGE") {
+                    Text(sdkApiCoverageDone ? "coverage done" : "coverage running")
+                        .accessibilityIdentifier("sdkApiCoverageStatus")
+                }
                 LabeledContent("Trigger") {
                     TextField("Trigger key", text: $trigger)
                         .multilineTextAlignment(.trailing)

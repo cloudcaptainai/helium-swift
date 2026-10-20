@@ -28,6 +28,7 @@ final class SdkApiCoverageUITests: XCTestCase {
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 30))
         sleep(3)
         app.terminate()
+        app.launchArguments.removeAll { $0 == "SDK_API_COVERAGE" }
         app.launch()
 
         app.buttons["showPaywallEmbedded"].tap()
