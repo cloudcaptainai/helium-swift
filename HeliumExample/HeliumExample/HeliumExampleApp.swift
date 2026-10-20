@@ -66,6 +66,7 @@ struct HeliumExampleApp: App {
     }
     
     private func postInitializeTestSetup(loadStateTestTrigger: String?, fallbackTestMode: String?) {
+        SdkApiCoverage.runIfRequested()
         if let loadStateTestTrigger {
             Helium.shared.presentPaywall(trigger: loadStateTestTrigger) { reason in
                 print("[Helium Example] loadStateTestTrigger - Could not show paywall. \(reason)")

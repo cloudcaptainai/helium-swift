@@ -23,6 +23,7 @@ public class RestorePurchaseConfig {
     /// Disable the default dialog that Helium will display if a "Restore Purchases" action is not successful.
     /// You can handle this yourself if desired by listening for the PurchaseRestoreFailedEvent.
     public func disableRestoreFailedDialog() {
+        trackSdkApiCall(.disableRestoreFailedDialog)
         showHeliumDialog = false
     }
     
@@ -33,6 +34,11 @@ public class RestorePurchaseConfig {
         customMessage: String? = nil,
         customCloseButtonText: String? = nil
     ) {
+        trackSdkApiCall(.setCustomRestoreFailedStrings, restoreFailedStringsObservabilityProperties(
+            customTitle: customTitle,
+            customMessage: customMessage,
+            customCloseButtonText: customCloseButtonText
+        ))
         if let customTitle {
             restoreFailedTitle = customTitle
         }

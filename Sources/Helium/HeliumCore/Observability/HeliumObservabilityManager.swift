@@ -12,6 +12,7 @@ class HeliumObservabilityManager {
     private let queue = DispatchQueue(label: "com.helium.observabilityManager")
     private var analytics: Analytics?
     private var pendingTracks: [(Analytics) -> Void] = []
+    private let maxPendingTracks = 100
     /// Unit-test hook only. Receives every tracked event synchronously. Always nil in production; unrelated to triple-tap previews or HeliumTesting.
     var unitTestTrackObserver: ((any HeliumObservabilityEvent) -> Void)?
 
@@ -42,15 +43,24 @@ class HeliumObservabilityManager {
         unitTestTrackObserver?(event)
         let eventName = event.name
         let eventProps = event.properties
+        let tags = event.tags
+        let isMainThread = Thread.isMainThread
+        let msSinceInitialize = SdkApiCallTracker.shared.msSinceInitialize
         queue.async { [weak self] in
             guard let self else { return }
-            let enriched = enrich(eventProps: eventProps, scope: scope)
+            let enriched = enrich(
+                eventProps: eventProps,
+                tags: tags,
+                scope: scope,
+                isMainThread: isMainThread,
+                msSinceInitialize: msSinceInitialize
+            )
             let send: (Analytics) -> Void = { analytics in
                 analytics.track(name: eventName, properties: enriched)
             }
             if let analytics {
                 send(analytics)
-            } else {
+            } else if pendingTracks.count < maxPendingTracks {
                 pendingTracks.append(send)
             }
         }
@@ -58,9 +68,15 @@ class HeliumObservabilityManager {
 
     func enrich(
         eventProps: [String: Any],
-        scope: PaywallObservabilityScope?
+        tags: Set<HeliumObservabilityTag> = [],
+        scope: PaywallObservabilityScope?,
+        isMainThread: Bool = Thread.isMainThread,
+        msSinceInitialize: Int? = nil
     ) -> [String: Any] {
         var p = eventProps
+        p["tags"] = tags.map(\.rawValue).sorted()
+        p["isMainThread"] = isMainThread
+        if let msSinceInitialize { p["msSinceInitialize"] = msSinceInitialize }
         p["sdkVersion"] = BuildConstants.version
         p["sdkVersionWrapper"] = HeliumSdkConfig.shared.heliumWrapperSdkVersion
         p["wrapperSdk"] = HeliumSdkConfig.shared.heliumSdk

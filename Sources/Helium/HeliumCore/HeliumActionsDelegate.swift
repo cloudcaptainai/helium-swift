@@ -190,7 +190,7 @@ class HeliumActionsDelegate: ObservableObject {
                 lastShownSecondTryTrigger = foundTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
-            else if Helium.shared.getPaywallInfo(trigger: secondTryTrigger) != nil {
+            else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: presentationContext)
             } else {

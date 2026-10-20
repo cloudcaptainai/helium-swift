@@ -93,7 +93,7 @@ final class WebCheckoutWebViewController: WebCheckoutBrowserViewController, WKNa
             return
         }
         decisionHandler(.cancel)
-        _ = Helium.shared.handleURL(requested)
+        Helium.shared.routeCheckoutReturnURL(requested)
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
