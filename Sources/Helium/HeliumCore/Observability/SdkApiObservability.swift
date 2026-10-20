@@ -133,9 +133,12 @@ func trackSdkApiCall(
     _ method: SdkApiMethod,
     _ properties: [String: Any] = [:],
     scope: PaywallObservabilityScope? = nil,
-    wasInitialized: Bool = Helium.shared.isInitialized()
+    wasInitialized: Bool = Helium.shared.isInitialized(),
+    isProduction: Bool = AppReceiptsHelper.shared.environment == .production,
+    tracker: SdkApiCallTracker = .shared
 ) {
-    let call = SdkApiCallTracker.shared.record(method)
+    guard !isProduction else { return }
+    let call = tracker.record(method)
     guard SdkApiCallTracker.shouldEmit(callCount: call.callCountForMethod) else { return }
     HeliumObservabilityManager.shared.track(
         SdkApiCalled(

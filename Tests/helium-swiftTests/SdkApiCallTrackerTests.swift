@@ -20,6 +20,22 @@ final class SdkApiCallTrackerTests: XCTestCase {
         XCTAssertEqual([first.callCountForMethod, second.callCountForMethod, third.callCountForMethod], [1, 1, 2])
     }
 
+    func testProductionBuildsRecordNothing() {
+        let tracker = SdkApiCallTracker()
+
+        trackSdkApiCall(.hidePaywall, isProduction: true, tracker: tracker)
+
+        XCTAssertEqual(tracker.record(.hidePaywall).apiCallIndex, 1)
+    }
+
+    func testNonProductionBuildsRecordTheCall() {
+        let tracker = SdkApiCallTracker()
+
+        trackSdkApiCall(.hidePaywall, isProduction: false, tracker: tracker)
+
+        XCTAssertEqual(tracker.record(.hidePaywall).apiCallIndex, 2)
+    }
+
     func testMarkInitializedCountsAndResetOnlyClearsTiming() {
         let tracker = SdkApiCallTracker()
         XCTAssertEqual(tracker.initializeCount, 0)
