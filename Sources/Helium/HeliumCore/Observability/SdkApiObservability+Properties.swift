@@ -48,7 +48,6 @@ func presentPaywallObservabilityProperties(
     p["hasOnEntitled"] = hasOnEntitled
     p["hasOnPaywallNotShown"] = hasOnPaywallNotShown
     if let hasPaywallNotShownContent { p["hasPaywallNotShownContent"] = hasPaywallNotShownContent }
-    p["isPaywallAlreadyPresented"] = HeliumPaywallPresenter.shared.presentedPaywallCount > 0
     p.merge(config.observabilityProperties) { _, new in new }
     return p
 }
@@ -120,25 +119,6 @@ extension WebCheckoutProcessors {
         if contains(.stripe) { names.append("stripe") }
         return names.joined(separator: ",")
     }
-}
-
-struct PresenterObservabilitySnapshot {
-    let scope: PaywallObservabilityScope?
-    let presentedPaywallCount: Int
-}
-
-func presenterObservabilitySnapshot(_ presenter: HeliumPaywallPresenter) -> PresenterObservabilitySnapshot? {
-    guard sdkApiObservabilityEnabled() else { return nil }
-    return PresenterObservabilitySnapshot(
-        scope: presenter.topPresentedObservabilityScope,
-        presentedPaywallCount: presenter.presentedPaywallCount
-    )
-}
-
-func hidePaywallObservabilityProperties(_ snapshot: PresenterObservabilitySnapshot?, result: Bool? = nil) -> [String: Any] {
-    var p: [String: Any] = ["presentedPaywallCount": snapshot?.presentedPaywallCount ?? 0]
-    if let result { p["result"] = result }
-    return p
 }
 
 func resetHeliumObservabilityProperties(

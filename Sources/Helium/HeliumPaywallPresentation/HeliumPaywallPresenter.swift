@@ -32,12 +32,6 @@ class HeliumPaywallPresenter {
     }
     
     private var paywallsDisplayed: [HeliumViewController] = []
-
-    var presentedPaywallCount: Int { paywallsDisplayed.count }
-
-    var topPresentedObservabilityScope: PaywallObservabilityScope? {
-        paywallsDisplayed.last?.paywallSession.observabilityScope
-    }
     // The window keeps a presentation that never finishes from blocking every later call.
     private let pendingPresentationWindow: TimeInterval = 5
     private var activePresentationClaim: PresentationClaim?

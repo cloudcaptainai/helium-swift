@@ -173,10 +173,8 @@ public class Helium {
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
     @discardableResult
     public func hidePaywall() -> Bool {
-        let presenter = HeliumPaywallPresenter.shared
-        let snapshot = presenterObservabilitySnapshot(presenter)
-        let result = presenter.hideUpsell()
-        trackSdkApiCall(.hidePaywall, hidePaywallObservabilityProperties(snapshot, result: result), scope: snapshot?.scope)
+        let result = HeliumPaywallPresenter.shared.hideUpsell()
+        trackSdkApiCall(.hidePaywall, ["result": result])
         return result
     }
     
@@ -187,10 +185,8 @@ public class Helium {
     /// those are driven by the host view's state (flip your `isPresented` binding
     /// or remove the view from the hierarchy).
     public func hideAllPaywalls() {
-        let presenter = HeliumPaywallPresenter.shared
-        let snapshot = presenterObservabilitySnapshot(presenter)
-        presenter.hideAllUpsells()
-        trackSdkApiCall(.hideAllPaywalls, hidePaywallObservabilityProperties(snapshot), scope: snapshot?.scope)
+        HeliumPaywallPresenter.shared.hideAllUpsells()
+        trackSdkApiCall(.hideAllPaywalls)
     }
     
     /// Checks whether a paywall can be displayed for the given trigger without actually presenting it.
