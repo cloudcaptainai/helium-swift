@@ -100,10 +100,15 @@ public class HeliumPaymentAPIClient {
     /// `pri_xxx` form.
     func createPaddleTransactionForPaywall(
         priceId: String,
-        discountId: String? = nil
+        discountId: String? = nil,
+        trigger: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
         body["priceId"] = priceId
+        body["environment"] = AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        if let trigger, !trigger.isEmpty {
+            body["trigger"] = trigger
+        }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
         }
