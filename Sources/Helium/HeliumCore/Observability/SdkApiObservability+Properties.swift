@@ -38,7 +38,8 @@ func presentPaywallObservabilityProperties(
     deprecatedOverload: Bool,
     hasEventHandlers: Bool,
     hasOnEntitled: Bool,
-    hasOnPaywallNotShown: Bool
+    hasOnPaywallNotShown: Bool,
+    hasPaywallNotShownContent: Bool? = nil
 ) -> [String: Any] {
     var p = paywallLookupObservabilityProperties(trigger: trigger)
     p["entryPoint"] = entryPoint.rawValue
@@ -46,6 +47,7 @@ func presentPaywallObservabilityProperties(
     p["hasEventHandlers"] = hasEventHandlers
     p["hasOnEntitled"] = hasOnEntitled
     p["hasOnPaywallNotShown"] = hasOnPaywallNotShown
+    if let hasPaywallNotShownContent { p["hasPaywallNotShownContent"] = hasPaywallNotShownContent }
     p["isPaywallAlreadyPresented"] = HeliumPaywallPresenter.shared.presentedPaywallCount > 0
     p.merge(config.observabilityProperties) { _, new in new }
     return p

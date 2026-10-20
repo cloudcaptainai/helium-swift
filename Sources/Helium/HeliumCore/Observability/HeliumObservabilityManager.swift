@@ -12,6 +12,7 @@ class HeliumObservabilityManager {
     private let queue = DispatchQueue(label: "com.helium.observabilityManager")
     private var analytics: Analytics?
     private var pendingTracks: [(Analytics) -> Void] = []
+    private let maxPendingTracks = 100
 
     private init() {}
 
@@ -56,7 +57,7 @@ class HeliumObservabilityManager {
             }
             if let analytics {
                 send(analytics)
-            } else {
+            } else if pendingTracks.count < maxPendingTracks {
                 pendingTracks.append(send)
             }
         }

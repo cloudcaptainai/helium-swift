@@ -187,7 +187,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             deprecatedOverload: false,
             hasEventHandlers: eventHandlers != nil,
             hasOnEntitled: presentationContext.onEntitled != nil,
-            hasOnPaywallNotShown: false
+            hasOnPaywallNotShown: false,
+            hasPaywallNotShownContent: true
         ))
     }
 
