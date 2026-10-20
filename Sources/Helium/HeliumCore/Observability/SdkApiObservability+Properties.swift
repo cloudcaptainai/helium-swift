@@ -22,7 +22,8 @@ func initializeObservabilityProperties(ignoredAlreadyInitialized: Bool) -> [Stri
         "webCheckoutProcessors": config.webCheckoutProcessors.observabilityValue,
         "allowWebCheckoutWithoutUserId": config.allowWebCheckoutWithoutUserId,
         "logLevel": String(describing: config.logLevel),
-        "hasTestingHandlers": testing.purchaseHandler != nil || testing.restoreHandler != nil || testing.introOfferEligibility != nil,
+        "hasTestingHandlers": testing.purchaseHandler != nil || testing.restoreHandler != nil
+            || testing.introOfferEligibility != nil || testing.promoOfferEligibility != nil,
         "hasUserId": identity.hasCustomUserId(),
         "hasRevenueCatAppUserId": identity.revenueCatAppUserId != nil,
         "hasThirdPartyAnalyticsAnonymousId": identity.getThirdPartyAnalyticsAnonymousId() != nil,
