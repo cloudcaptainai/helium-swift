@@ -104,6 +104,7 @@ extension PaywallPresentationConfig {
             "customPaywallTraitCount": customPaywallTraits?.count ?? 0,
             "dontShowIfAlreadyEntitled": dontShowIfAlreadyEntitled,
         ]
+        if let customPaywallTraits { p["customPaywallTraitKeys"] = keysForObservability(customPaywallTraits.keys) }
         if let loadingBudget { p["loadingBudgetMs"] = Int(loadingBudget * 1000) }
         if let presentationStyle { p["presentationStyle"] = presentationStyle.rawValue }
         return p

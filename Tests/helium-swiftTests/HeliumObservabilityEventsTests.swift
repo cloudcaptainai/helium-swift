@@ -113,6 +113,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertFalse(wire.contains("SENTINEL_VALUE"))
         XCTAssertEqual(props["hasCustomPaywallTraits"] as? Bool, true)
         XCTAssertEqual(props["customPaywallTraitCount"] as? Int, 1)
+        XCTAssertEqual(props["customPaywallTraitKeys"] as? String, "email")
         XCTAssertEqual(props["entryPoint"] as? String, "present_paywall")
         XCTAssertEqual(props["trigger"] as? String, "onboarding")
     }
