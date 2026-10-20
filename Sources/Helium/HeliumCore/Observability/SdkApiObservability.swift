@@ -22,6 +22,8 @@ enum SdkApiMethod: String, CaseIterable {
     case resetPaddleEntitlements = "reset_paddle_entitlements"
     case enableExternalWebCheckout = "enable_external_web_checkout"
     case disableExternalWebCheckout = "disable_external_web_checkout"
+    case setCustomRestoreFailedStrings = "set_custom_restore_failed_strings"
+    case disableRestoreFailedDialog = "disable_restore_failed_dialog"
     case identitySetUserId = "identity_set_user_id"
     case identitySetRevenueCatAppUserId = "identity_set_revenue_cat_app_user_id"
     case identitySetThirdPartyAnalyticsAnonymousId = "identity_set_third_party_analytics_anonymous_id"
@@ -41,11 +43,14 @@ enum SdkApiMethod: String, CaseIterable {
             tags.insert(.presentation)
         case .upsellViewForTrigger, .handleDeepLink:
             tags.formUnion([.presentation, .deprecatedApi])
-        case .handleURL, .createStripePortalSession, .createPaddlePortalSession, .getStripeCustomerId,
-             .getPaddleCustomerId, .resetStripeEntitlements, .resetPaddleEntitlements:
+        case .createStripePortalSession, .createPaddlePortalSession:
+            tags.formUnion([.webCheckout, .deprecatedApi])
+        case .handleURL, .getStripeCustomerId, .getPaddleCustomerId, .resetStripeEntitlements, .resetPaddleEntitlements:
             tags.insert(.webCheckout)
         case .enableExternalWebCheckout, .disableExternalWebCheckout:
             tags.formUnion([.webCheckout, .config])
+        case .setCustomRestoreFailedStrings, .disableRestoreFailedDialog:
+            tags.insert(.config)
         case .identitySetUserId, .identitySetRevenueCatAppUserId, .identitySetThirdPartyAnalyticsAnonymousId,
              .identitySetAppAccountToken, .identitySetUserTraits, .identityAddUserTraits:
             tags.insert(.identity)
@@ -129,12 +134,16 @@ final class SdkApiCallTracker {
     }
 }
 
+func sdkApiObservabilityEnabled() -> Bool {
+    AppReceiptsHelper.shared.environment != .production
+}
+
 func trackSdkApiCall(
     _ method: SdkApiMethod,
-    _ properties: [String: Any] = [:],
-    scope: PaywallObservabilityScope? = nil,
+    _ properties: @autoclosure () -> [String: Any] = [:],
+    scope: @autoclosure () -> PaywallObservabilityScope? = nil,
     wasInitialized: Bool = Helium.shared.isInitialized(),
-    isProduction: Bool = AppReceiptsHelper.shared.environment == .production,
+    isProduction: Bool = !sdkApiObservabilityEnabled(),
     tracker: SdkApiCallTracker = .shared
 ) {
     guard !isProduction else { return }
@@ -146,8 +155,8 @@ func trackSdkApiCall(
             apiCallIndex: call.apiCallIndex,
             callCountForMethod: call.callCountForMethod,
             calledBeforeInitialize: !wasInitialized,
-            methodProperties: properties
+            methodProperties: properties()
         ),
-        scope: scope
+        scope: scope()
     )
 }

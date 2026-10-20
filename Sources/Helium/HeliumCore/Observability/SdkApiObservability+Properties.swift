@@ -119,3 +119,84 @@ extension WebCheckoutProcessors {
         return names.joined(separator: ",")
     }
 }
+
+struct PresenterObservabilitySnapshot {
+    let scope: PaywallObservabilityScope?
+    let presentedPaywallCount: Int
+}
+
+func presenterObservabilitySnapshot(_ presenter: HeliumPaywallPresenter) -> PresenterObservabilitySnapshot? {
+    guard sdkApiObservabilityEnabled() else { return nil }
+    return PresenterObservabilitySnapshot(
+        scope: presenter.topPresentedObservabilityScope,
+        presentedPaywallCount: presenter.presentedPaywallCount
+    )
+}
+
+func hidePaywallObservabilityProperties(_ snapshot: PresenterObservabilitySnapshot?, result: Bool? = nil) -> [String: Any] {
+    var p: [String: Any] = ["presentedPaywallCount": snapshot?.presentedPaywallCount ?? 0]
+    if let result { p["result"] = result }
+    return p
+}
+
+func resetHeliumObservabilityProperties(
+    clearUserId: Bool,
+    clearUserTraits: Bool,
+    clearHeliumEventListeners: Bool,
+    clearExperimentAllocations: Bool,
+    clearCachedPaywalls: Bool,
+    autoInitialize: Bool
+) -> [String: Any] {
+    [
+        "wasInitialized": Helium.shared.isInitialized(),
+        "clearUserId": clearUserId,
+        "clearUserTraits": clearUserTraits,
+        "clearHeliumEventListeners": clearHeliumEventListeners,
+        "clearExperimentAllocations": clearExperimentAllocations,
+        "clearCachedPaywalls": clearCachedPaywalls,
+        "autoInitialize": autoInitialize,
+    ]
+}
+
+func upsellViewObservabilityProperties(
+    trigger: String,
+    customPaywallTraits: HeliumUserTraits?,
+    hasEventHandlers: Bool,
+    returnedView: Bool
+) -> [String: Any] {
+    var p: [String: Any] = [
+        "trigger": trigger,
+        "hasCustomPaywallTraits": customPaywallTraits != nil,
+        "customPaywallTraitCount": customPaywallTraits?.count ?? 0,
+        "hasEventHandlers": hasEventHandlers,
+        "returnedView": returnedView,
+    ]
+    if let customPaywallTraits { p["customPaywallTraitKeys"] = keysForObservability(customPaywallTraits.keys) }
+    return p
+}
+
+func handleDeepLinkObservabilityProperties(url: URL?, handled: Bool) -> [String: Any] {
+    [
+        "hasUrl": url != nil,
+        "isHeliumTestHost": url?.host == "helium-test",
+        "handled": handled,
+    ]
+}
+
+func handleURLObservabilityProperties(url: URL, webCheckoutEnabled: Bool, redirectKind: HeliumCheckoutRedirectType?) -> [String: Any] {
+    var p: [String: Any] = [
+        "webCheckoutEnabled": webCheckoutEnabled,
+        "matched": redirectKind != nil,
+    ]
+    if let scheme = url.scheme { p["scheme"] = scheme }
+    if let redirectKind { p["redirectKind"] = redirectKind.rawValue }
+    return p
+}
+
+func restoreFailedStringsObservabilityProperties(customTitle: String?, customMessage: String?, customCloseButtonText: String?) -> [String: Any] {
+    [
+        "hasCustomTitle": customTitle != nil,
+        "hasCustomMessage": customMessage != nil,
+        "hasCustomCloseButtonText": customCloseButtonText != nil,
+    ]
+}

@@ -61,14 +61,16 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "sdk_api_remove_all_helium_event_listeners_called lifecycle,sdk_api",
             "sdk_api_handle_deep_link_called deprecated_api,presentation,sdk_api",
             "sdk_api_handle_url_called sdk_api,web_checkout",
-            "sdk_api_create_stripe_portal_session_called sdk_api,web_checkout",
-            "sdk_api_create_paddle_portal_session_called sdk_api,web_checkout",
+            "sdk_api_create_stripe_portal_session_called deprecated_api,sdk_api,web_checkout",
+            "sdk_api_create_paddle_portal_session_called deprecated_api,sdk_api,web_checkout",
             "sdk_api_get_stripe_customer_id_called sdk_api,web_checkout",
             "sdk_api_get_paddle_customer_id_called sdk_api,web_checkout",
             "sdk_api_reset_stripe_entitlements_called sdk_api,web_checkout",
             "sdk_api_reset_paddle_entitlements_called sdk_api,web_checkout",
             "sdk_api_enable_external_web_checkout_called config,sdk_api,web_checkout",
             "sdk_api_disable_external_web_checkout_called config,sdk_api,web_checkout",
+            "sdk_api_set_custom_restore_failed_strings_called config,sdk_api",
+            "sdk_api_disable_restore_failed_dialog_called config,sdk_api",
             "sdk_api_identity_set_user_id_called identity,sdk_api",
             "sdk_api_identity_set_revenue_cat_app_user_id_called identity,sdk_api",
             "sdk_api_identity_set_third_party_analytics_anonymous_id_called identity,sdk_api",
@@ -124,6 +126,15 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertEqual(props["traitCount"] as? Int, 2)
         XCTAssertEqual(props["traitKeys"] as? String, "age,plan")
         XCTAssertEqual(props["viaMap"] as? Bool, true)
+    }
+
+    func testRestoreFailedStringsPropertiesCarryPresenceFlagsOnly() {
+        let props = restoreFailedStringsObservabilityProperties(customTitle: "SENTINEL_TITLE", customMessage: nil, customCloseButtonText: "OK")
+
+        XCTAssertFalse(String(describing: props).contains("SENTINEL_TITLE"))
+        XCTAssertEqual(props["hasCustomTitle"] as? Bool, true)
+        XCTAssertEqual(props["hasCustomMessage"] as? Bool, false)
+        XCTAssertEqual(props["hasCustomCloseButtonText"] as? Bool, true)
     }
 
     func testKeysForObservabilityCapsKeyCountAndKeyLength() {

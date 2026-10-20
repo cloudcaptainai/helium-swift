@@ -174,10 +174,9 @@ public class Helium {
     @discardableResult
     public func hidePaywall() -> Bool {
         let presenter = HeliumPaywallPresenter.shared
-        let scope = presenter.topPresentedObservabilityScope
-        let presentedPaywallCount = presenter.presentedPaywallCount
+        let snapshot = presenterObservabilitySnapshot(presenter)
         let result = presenter.hideUpsell()
-        trackSdkApiCall(.hidePaywall, ["presentedPaywallCount": presentedPaywallCount, "result": result], scope: scope)
+        trackSdkApiCall(.hidePaywall, hidePaywallObservabilityProperties(snapshot, result: result), scope: snapshot?.scope)
         return result
     }
     
@@ -189,10 +188,9 @@ public class Helium {
     /// or remove the view from the hierarchy).
     public func hideAllPaywalls() {
         let presenter = HeliumPaywallPresenter.shared
-        let scope = presenter.topPresentedObservabilityScope
-        let presentedPaywallCount = presenter.presentedPaywallCount
+        let snapshot = presenterObservabilitySnapshot(presenter)
         presenter.hideAllUpsells()
-        trackSdkApiCall(.hideAllPaywalls, ["presentedPaywallCount": presentedPaywallCount], scope: scope)
+        trackSdkApiCall(.hideAllPaywalls, hidePaywallObservabilityProperties(snapshot), scope: snapshot?.scope)
     }
     
     /// Checks whether a paywall can be displayed for the given trigger without actually presenting it.
@@ -278,11 +276,7 @@ public class Helium {
     @discardableResult
     public func handleDeepLink(_ url: URL?) -> Bool {
         let handled = url.map(handleTestDeepLink) ?? false
-        trackSdkApiCall(.handleDeepLink, [
-            "hasUrl": url != nil,
-            "isHeliumTestHost": url?.host == "helium-test",
-            "handled": handled,
-        ])
+        trackSdkApiCall(.handleDeepLink, handleDeepLinkObservabilityProperties(url: url, handled: handled))
         return handled
     }
 
@@ -365,15 +359,14 @@ public class Helium {
         autoInitialize: Bool = false,
         onComplete: (() -> Void)? = nil
     ) {
-        trackSdkApiCall(.resetHelium, [
-            "wasInitialized": Helium.shared.isInitialized(),
-            "clearUserId": clearUserId,
-            "clearUserTraits": clearUserTraits,
-            "clearHeliumEventListeners": clearHeliumEventListeners,
-            "clearExperimentAllocations": clearExperimentAllocations,
-            "clearCachedPaywalls": clearCachedPaywalls,
-            "autoInitialize": autoInitialize,
-        ])
+        trackSdkApiCall(.resetHelium, resetHeliumObservabilityProperties(
+            clearUserId: clearUserId,
+            clearUserTraits: clearUserTraits,
+            clearHeliumEventListeners: clearHeliumEventListeners,
+            clearExperimentAllocations: clearExperimentAllocations,
+            clearCachedPaywalls: clearCachedPaywalls,
+            autoInitialize: autoInitialize
+        ))
         HeliumPaywallPresenter.shared.hideAllUpsells {
             if clearCachedPaywalls {
                 HeliumAssetManager.shared.clearCache()
@@ -429,13 +422,12 @@ public class Helium {
         let view = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: trigger, presentationContext: presentationContext
         ).viewAndSession?.view
-        trackSdkApiCall(.upsellViewForTrigger, [
-            "trigger": trigger,
-            "hasCustomPaywallTraits": customPaywallTraits != nil,
-            "customPaywallTraitCount": customPaywallTraits?.count ?? 0,
-            "hasEventHandlers": eventHandlers != nil,
-            "returnedView": view != nil,
-        ])
+        trackSdkApiCall(.upsellViewForTrigger, upsellViewObservabilityProperties(
+            trigger: trigger,
+            customPaywallTraits: customPaywallTraits,
+            hasEventHandlers: eventHandlers != nil,
+            returnedView: view != nil
+        ))
         return view
     }
 
@@ -449,7 +441,7 @@ public class Helium {
     /// - Returns: The portal session URL.
     @available(*, deprecated, message: "Use getStripeCustomerId() and pass the ID to your server to generate a Stripe customer portal session instead.")
     public func createStripePortalSession(returnUrl: String) async throws -> URL {
-        trackSdkApiCall(.createStripePortalSession, ["isDeprecated": true])
+        trackSdkApiCall(.createStripePortalSession)
         return try await StripeCheckoutManager.shared.createPortalSession(returnUrl: returnUrl)
     }
 
@@ -488,7 +480,7 @@ public class Helium {
     /// - Returns: The portal session URL.
     @available(*, deprecated, message: "Use getPaddleCustomerId() and pass the ID to your server to generate a Paddle customer portal session instead.")
     public func createPaddlePortalSession() async throws -> URL {
-        trackSdkApiCall(.createPaddlePortalSession, ["isDeprecated": true])
+        trackSdkApiCall(.createPaddlePortalSession)
         return try await PaddleCheckoutManager.shared.createPortalSession()
     }
 
@@ -547,13 +539,7 @@ public class Helium {
     public func handleURL(_ url: URL) -> HeliumCheckoutRedirectType? {
         let webCheckoutEnabled = Helium.config.webCheckoutEnabled
         let redirectKind = webCheckoutEnabled ? WebCheckoutRedirect.classify(url) : nil
-        var props: [String: Any] = [
-            "webCheckoutEnabled": webCheckoutEnabled,
-            "matched": redirectKind != nil,
-        ]
-        if let scheme = url.scheme { props["scheme"] = scheme }
-        if let redirectKind { props["redirectKind"] = redirectKind.rawValue }
-        trackSdkApiCall(.handleURL, props)
+        trackSdkApiCall(.handleURL, handleURLObservabilityProperties(url: url, webCheckoutEnabled: webCheckoutEnabled, redirectKind: redirectKind))
         return routeCheckoutReturnURL(url, redirectKind: redirectKind)
     }
 

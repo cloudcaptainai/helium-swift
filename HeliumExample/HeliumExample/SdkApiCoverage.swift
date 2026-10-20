@@ -28,6 +28,8 @@ enum SdkApiCoverage {
             Helium.identify.addUserTraits(HeliumUserTraits(["age": 1]))
             Helium.identify.addUserTraits(["age": 1])
             HeliumSdkConfig.shared.setWrapperSdkInfo(sdk: "coverage", version: "0")
+            Helium.config.restorePurchasesDialog.setCustomRestoreFailedStrings(customTitle: "t", customMessage: "m", customCloseButtonText: "c")
+            Helium.config.restorePurchasesDialog.disableRestoreFailedDialog()
             Helium.config.enableExternalWebCheckout(successURL: "heliumexamplestripe://openapp", cancelURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
             Helium.config.disableExternalWebCheckout()
             Helium.config.enableExternalWebCheckout(redirectURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
