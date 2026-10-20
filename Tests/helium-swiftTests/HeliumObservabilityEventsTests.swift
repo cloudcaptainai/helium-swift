@@ -11,11 +11,11 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
     }
 
     override func tearDown() {
-        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
         super.tearDown()
     }
 
@@ -255,7 +255,7 @@ final class HeliumObservabilityEventsTests: XCTestCase {
 
     func testTrackBffCompletionEmitsNonUSBlockedEventsSynchronously() throws {
         var capturedEvents: [any HeliumObservabilityEvent] = []
-        HeliumObservabilityManager.shared.trackObserverForTesting = { capturedEvents.append($0) }
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { capturedEvents.append($0) }
 
         let rawBody = try JSONSerialization.data(withJSONObject: [
             "data": ["ip_geo_country_code": " mx "],

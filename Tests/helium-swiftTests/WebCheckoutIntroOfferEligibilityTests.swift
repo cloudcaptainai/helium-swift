@@ -8,11 +8,11 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
     }
 
     override func tearDown() {
-        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
         super.tearDown()
     }
 
@@ -172,7 +172,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
     func testEmitPaddleAwaitResolvedCountsNonUSBlockedSeparately() {
         var capturedEvents: [any HeliumObservabilityEvent] = []
-        HeliumObservabilityManager.shared.trackObserverForTesting = { capturedEvents.append($0) }
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { capturedEvents.append($0) }
 
         let bandit = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_ready",
