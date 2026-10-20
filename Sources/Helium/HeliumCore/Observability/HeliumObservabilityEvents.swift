@@ -114,10 +114,12 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
     let priceId: String
     let transactionId: String?
     let endpointCall: EndpointCallTelemetry
+    let outcome: PaddlePrefetchOutcomeKind
 
     var name: String { "paddle_prefetch_bff_completed" }
     var properties: [String: Any] {
         var p = endpointCall.properties
+        p["outcome"] = outcome.rawValue
         p["priceId"] = priceId
         if let transactionId { p["transactionId"] = transactionId }
         return p
@@ -125,7 +127,7 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
 }
 
 enum PaddlePrefetchOutcomeKind: String {
-    case ready, alreadyEntitled, caBlocked, failed
+    case ready, alreadyEntitled, caBlocked, nonUSBlocked, failed
 }
 
 struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
@@ -166,6 +168,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
     let alreadyEntitledCount: Int
     let failedCount: Int
     let caBlockedCount: Int
+    let nonUSBlockedCount: Int
     let timedOutCount: Int
     let notStartedCount: Int
     let shortCircuited: Bool
@@ -179,6 +182,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
             "alreadyEntitledCount": alreadyEntitledCount,
             "failedCount": failedCount,
             "caBlockedCount": caBlockedCount,
+            "nonUSBlockedCount": nonUSBlockedCount,
             "timedOutCount": timedOutCount,
             "notStartedCount": notStartedCount,
             "shortCircuited": shortCircuited,
