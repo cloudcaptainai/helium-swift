@@ -335,7 +335,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             XCTFail("Missing country must be blocked; got \(missingOutcome)")
             return
         }
-        XCTAssertNil((missingError as? PaddleNonUSBuyerBlocked)?.countryCode)
+        guard let missingBlocked = missingError as? PaddleNonUSBuyerBlocked else {
+            XCTFail("Missing country must fail with PaddleNonUSBuyerBlocked; got \(missingError)")
+            return
+        }
+        XCTAssertNil(missingBlocked.countryCode)
 
         let nullBody = try bffBody(
             checkoutId: "che_null",
@@ -347,7 +351,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             XCTFail("Null country must be blocked; got \(nullOutcome)")
             return
         }
-        XCTAssertNil((nullError as? PaddleNonUSBuyerBlocked)?.countryCode)
+        guard let nullBlocked = nullError as? PaddleNonUSBuyerBlocked else {
+            XCTFail("Null country must fail with PaddleNonUSBuyerBlocked; got \(nullError)")
+            return
+        }
+        XCTAssertNil(nullBlocked.countryCode)
     }
 
     func testAwaitOutcome_previewRunAllowsNonUSCountryAndNonUSBlockPrecedesCaliforniaBlock() async throws {
