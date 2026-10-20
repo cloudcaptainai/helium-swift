@@ -13,6 +13,8 @@ class HeliumObservabilityManager {
     private var analytics: Analytics?
     private var pendingTracks: [(Analytics) -> Void] = []
     private let maxPendingTracks = 100
+    /// Unit-test hook only. Receives every tracked event synchronously. Always nil in production; unrelated to triple-tap previews or HeliumTesting.
+    var unitTestTrackObserver: ((any HeliumObservabilityEvent) -> Void)?
 
     private init() {}
 
@@ -38,6 +40,7 @@ class HeliumObservabilityManager {
         _ event: any HeliumObservabilityEvent,
         scope: PaywallObservabilityScope?
     ) {
+        unitTestTrackObserver?(event)
         let eventName = event.name
         let eventProps = event.properties
         let tags = event.tags

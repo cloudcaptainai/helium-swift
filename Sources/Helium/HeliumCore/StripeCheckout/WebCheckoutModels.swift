@@ -340,6 +340,7 @@ enum WebCheckoutError: LocalizedError {
     case failedToOpenEnrichedURL
     case webPaywallBundleUrlMissing
     case californiaBuyerBlocked(postalCode: String)
+    case nonUSBuyerBlocked(countryCode: String?)
     case paddlePrefetchNotReady(priceIds: [String])
 
     var errorDescription: String? {
@@ -360,6 +361,9 @@ enum WebCheckoutError: LocalizedError {
             return "No web paywall bundle URL available for this paywall."
         case .californiaBuyerBlocked(let postalCode):
             return "Checkout not available for California buyers (detected ZIP \(postalCode))."
+        case .nonUSBuyerBlocked(let countryCode):
+            let country = countryCode.map { " (detected IP country \($0))" } ?? ""
+            return "Paddle checkout is only available to US buyers\(country)."
         case .paddlePrefetchNotReady(let priceIds):
             return "Paddle prefetch did not complete successfully for offered priceIds: \(priceIds.joined(separator: ", "))."
         }
@@ -376,6 +380,7 @@ enum WebCheckoutError: LocalizedError {
         case .failedToOpenEnrichedURL: return "failedToOpenEnrichedURL"
         case .webPaywallBundleUrlMissing: return "webPaywallBundleUrlMissing"
         case .californiaBuyerBlocked: return "californiaBuyerBlocked"
+        case .nonUSBuyerBlocked: return "nonUSBuyerBlocked"
         case .paddlePrefetchNotReady: return "paddlePrefetchNotReady"
         }
     }

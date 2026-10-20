@@ -9,6 +9,16 @@ import XCTest
 /// changing Android.
 final class HeliumObservabilityEventsTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
+    }
+
+    override func tearDown() {
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
+        super.tearDown()
+    }
+
     // MARK: - Helpers
 
     /// Payload round-tripped through SegmentJSON + JSONEncoder, i.e. exactly what
@@ -326,5 +336,92 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "totalDurationMs": 7,
             "errorClass": "SomeError",
         ]))
+    }
+
+    func testOutcomeFinalizedRecordsNonUSBlockAndPaddleCountry() throws {
+        let event = PaddlePrefetchOutcomeFinalized(
+            priceId: "pri_x",
+            outcome: .nonUSBlocked,
+            errorClass: "PaddleNonUSBuyerBlocked",
+            totalDurationMs: 42,
+            ipGeoCountry: "MX",
+            ipGeoRegion: nil,
+            ipGeoPostal: nil,
+            californiaDetected: false,
+            caConsentModalEnabled: false,
+            consentRequired: nil
+        )
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "priceId": "pri_x",
+            "outcome": "nonUSBlocked",
+            "errorClass": "PaddleNonUSBuyerBlocked",
+            "totalDurationMs": 42,
+            "ipGeoCountry": "MX",
+            "californiaDetected": false,
+            "caConsentModalEnabled": false,
+        ]))
+    }
+
+    func testBffCompletedRecordsNonUSBlockedOutcome() throws {
+        let event = PaddlePrefetchBffCompleted(
+            priceId: "pri_x",
+            transactionId: "txn_x",
+            endpointCall: EndpointCallTelemetry(durationMs: 12, success: true),
+            outcome: .nonUSBlocked
+        )
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "durationMs": 12,
+            "success": true,
+            "priceId": "pri_x",
+            "transactionId": "txn_x",
+            "outcome": "nonUSBlocked",
+        ]))
+    }
+
+    func testTrackBffCompletionEmitsNonUSBlockedEventsSynchronously() throws {
+        var capturedEvents: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { capturedEvents.append($0) }
+
+        let rawBody = try JSONSerialization.data(withJSONObject: [
+            "data": ["ip_geo_country_code": " mx "],
+        ])
+        let startedAt = Date()
+        let priceId = "pri_nonus_obs_test"
+
+        PaddleCheckoutPrefetchCoordinator.trackBffCompletion(
+            priceId: priceId,
+            transactionId: "txn_nonus_obs_test",
+            scope: makeTestSession().observabilityScope,
+            startedAt: startedAt,
+            chainStartedAt: startedAt,
+            result: .nonUSBlocked(rawBody: rawBody),
+            caConsentModalEnabled: false
+        )
+
+        let bffCompletedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchBffCompleted }
+            .filter { $0.priceId == priceId }
+        let outcomeFinalizedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchOutcomeFinalized }
+            .filter { $0.priceId == priceId }
+
+        XCTAssertEqual(bffCompletedEvents.count, 1)
+        XCTAssertEqual(outcomeFinalizedEvents.count, 1)
+        guard let bffCompleted = bffCompletedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchBffCompleted event for the test price")
+            return
+        }
+        guard let outcomeFinalized = outcomeFinalizedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchOutcomeFinalized event for the test price")
+            return
+        }
+
+        XCTAssertEqual(bffCompleted.outcome, .nonUSBlocked)
+        XCTAssertEqual(outcomeFinalized.outcome, .nonUSBlocked)
+        XCTAssertEqual(outcomeFinalized.errorClass, "PaddleNonUSBuyerBlocked")
+        XCTAssertEqual(outcomeFinalized.ipGeoCountry, "MX")
+        XCTAssertEqual(outcomeFinalized.californiaDetected, false)
     }
 }

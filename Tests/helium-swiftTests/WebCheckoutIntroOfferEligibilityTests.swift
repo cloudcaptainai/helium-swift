@@ -6,6 +6,16 @@ import XCTest
 /// a field rename surfaces here.
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
+    }
+
+    override func tearDown() {
+        HeliumObservabilityManager.shared.unitTestTrackObserver = nil
+        super.tearDown()
+    }
+
     /// Price fixtures, named for what they represent and defined by the fields
     /// they carry.
     private enum Shape {
@@ -147,6 +157,64 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
         XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: ["pro_ghost:pri_missing", yearlyTrial], priceMap: priceMap))
+    }
+
+    func testNonUSPrefetchOutcomeThrowsBuyerBlockedCheckoutError() {
+        let outcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_non_us": .failed(error: PaddleNonUSBuyerBlocked(countryCode: "MX")),
+        ]
+
+        XCTAssertThrowsError(try ExternalWebCheckoutManager.throwIfNonUSBuyerBlocked(in: outcomes)) { error in
+            XCTAssertEqual((error as? WebCheckoutError)?.caseName, "nonUSBuyerBlocked")
+            XCTAssertTrue(error.localizedDescription.contains("MX"))
+        }
+    }
+
+    func testEmitPaddleAwaitResolvedCountsNonUSBlockedSeparately() {
+        var capturedEvents: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { capturedEvents.append($0) }
+
+        let bandit = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_ready",
+            paddleCustomerId: nil,
+            isKnownCustomer: false,
+            requestId: "req_ready"
+        )
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: "{}".data(using: .utf8)!,
+            checkoutId: "che_ready",
+            transactionId: "txn_ready"
+        )
+        let manager = ExternalWebCheckoutManager(
+            provider: .paddle,
+            entitlementsSource: PaddleEntitlementsSource()
+        )
+
+        manager.emitPaddleAwaitResolved(
+            tappedPriceId: "pri_a",
+            awaitDurationMs: 12,
+            outcomes: [
+                "pri_a": .failed(error: PaddleNonUSBuyerBlocked(countryCode: "MX")),
+                "pri_b": .ready(bandit: bandit, paddle: paddle),
+            ],
+            shortCircuited: false,
+            paywallSession: makeTestSession()
+        )
+
+        let awaitResolvedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchAwaitResolved }
+            .filter { $0.tappedPriceId == "pri_a" }
+
+        XCTAssertEqual(awaitResolvedEvents.count, 1)
+        guard let event = awaitResolvedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchAwaitResolved event for the tapped price")
+            return
+        }
+
+        XCTAssertEqual(event.nonUSBlockedCount, 1)
+        XCTAssertEqual(event.readyCount, 1)
+        XCTAssertEqual(event.failedCount, 0)
+        XCTAssertEqual(event.caBlockedCount, 0)
     }
 
     // MARK: - Already-owned pre-check refresh
