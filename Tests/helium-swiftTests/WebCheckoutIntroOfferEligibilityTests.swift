@@ -6,6 +6,16 @@ import XCTest
 /// a field rename surfaces here.
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+    }
+
+    override func tearDown() {
+        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        super.tearDown()
+    }
+
     /// Price fixtures, named for what they represent and defined by the fields
     /// they carry.
     private enum Shape {
@@ -158,6 +168,49 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             XCTAssertEqual((error as? WebCheckoutError)?.caseName, "nonUSBuyerBlocked")
             XCTAssertTrue(error.localizedDescription.contains("MX"))
         }
+    }
+
+    func testEmitPaddleAwaitResolvedCountsNonUSBlockedSeparately() {
+        var capturedEvents: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.trackObserverForTesting = { capturedEvents.append($0) }
+
+        let bandit = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_ready",
+            paddleCustomerId: nil,
+            isKnownCustomer: false,
+            requestId: "req_ready"
+        )
+        let paddle = PaddleTransactionCheckoutResult(
+            rawBody: "{}".data(using: .utf8)!,
+            checkoutId: "che_ready",
+            transactionId: "txn_ready"
+        )
+        let manager = ExternalWebCheckoutManager(
+            provider: .stripe,
+            entitlementsSource: HeliumPaymentEntitlementsSource(provider: .stripe)
+        )
+
+        manager.emitPaddleAwaitResolved(
+            tappedPriceId: "pri_a",
+            awaitDurationMs: 12,
+            outcomes: [
+                "pri_a": .failed(error: PaddleNonUSBuyerBlocked(countryCode: "MX")),
+                "pri_b": .ready(bandit: bandit, paddle: paddle),
+            ],
+            shortCircuited: false,
+            paywallSession: makeTestSession()
+        )
+
+        XCTAssertEqual(capturedEvents.count, 1)
+        guard let event = capturedEvents.first as? PaddlePrefetchAwaitResolved else {
+            XCTFail("Expected one PaddlePrefetchAwaitResolved event")
+            return
+        }
+
+        XCTAssertEqual(event.nonUSBlockedCount, 1)
+        XCTAssertEqual(event.readyCount, 1)
+        XCTAssertEqual(event.failedCount, 0)
+        XCTAssertEqual(event.caBlockedCount, 0)
     }
 
     // MARK: - Already-owned pre-check refresh

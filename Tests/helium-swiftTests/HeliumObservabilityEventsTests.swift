@@ -9,6 +9,16 @@ import XCTest
 /// changing Android.
 final class HeliumObservabilityEventsTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+    }
+
+    override func tearDown() {
+        HeliumObservabilityManager.shared.trackObserverForTesting = nil
+        super.tearDown()
+    }
+
     // MARK: - Helpers
 
     /// Payload round-tripped through SegmentJSON + JSONEncoder, i.e. exactly what
@@ -241,5 +251,40 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "transactionId": "txn_x",
             "outcome": "nonUSBlocked",
         ]))
+    }
+
+    func testTrackBffCompletionEmitsNonUSBlockedEventsSynchronously() throws {
+        var capturedEvents: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.trackObserverForTesting = { capturedEvents.append($0) }
+
+        let rawBody = try JSONSerialization.data(withJSONObject: [
+            "data": ["ip_geo_country_code": "MX"],
+        ])
+        let startedAt = Date()
+
+        PaddleCheckoutPrefetchCoordinator.trackBffCompletion(
+            priceId: "pri_x",
+            transactionId: "txn_x",
+            scope: makeTestSession().observabilityScope,
+            startedAt: startedAt,
+            chainStartedAt: startedAt,
+            result: .nonUSBlocked(rawBody: rawBody),
+            caConsentModalEnabled: false
+        )
+
+        XCTAssertEqual(capturedEvents.count, 2)
+        guard let bffCompleted = capturedEvents.first as? PaddlePrefetchBffCompleted else {
+            XCTFail("Expected PaddlePrefetchBffCompleted as the first event")
+            return
+        }
+        guard let outcomeFinalized = capturedEvents.dropFirst().first as? PaddlePrefetchOutcomeFinalized else {
+            XCTFail("Expected PaddlePrefetchOutcomeFinalized as the second event")
+            return
+        }
+
+        XCTAssertEqual(bffCompleted.outcome, .nonUSBlocked)
+        XCTAssertEqual(outcomeFinalized.outcome, .nonUSBlocked)
+        XCTAssertEqual(outcomeFinalized.errorClass, "PaddleNonUSBuyerBlocked")
+        XCTAssertEqual(outcomeFinalized.ipGeoCountry, "MX")
     }
 }

@@ -12,6 +12,7 @@ class HeliumObservabilityManager {
     private let queue = DispatchQueue(label: "com.helium.observabilityManager")
     private var analytics: Analytics?
     private var pendingTracks: [(Analytics) -> Void] = []
+    var trackObserverForTesting: ((any HeliumObservabilityEvent) -> Void)?
 
     private init() {}
 
@@ -37,6 +38,7 @@ class HeliumObservabilityManager {
         _ event: any HeliumObservabilityEvent,
         scope: PaywallObservabilityScope?
     ) {
+        trackObserverForTesting?(event)
         let eventName = event.name
         let eventProps = event.properties
         queue.async { [weak self] in
