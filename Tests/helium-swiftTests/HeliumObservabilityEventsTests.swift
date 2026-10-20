@@ -225,4 +225,21 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "caConsentModalEnabled": false,
         ]))
     }
+
+    func testBffCompletedRecordsNonUSBlockedOutcome() throws {
+        let event = PaddlePrefetchBffCompleted(
+            priceId: "pri_x",
+            transactionId: "txn_x",
+            endpointCall: EndpointCallTelemetry(durationMs: 12, success: true),
+            outcome: .nonUSBlocked
+        )
+
+        XCTAssertEqual(try wireProperties(for: event), NSDictionary(dictionary: [
+            "durationMs": 12,
+            "success": true,
+            "priceId": "pri_x",
+            "transactionId": "txn_x",
+            "outcome": "nonUSBlocked",
+        ]))
+    }
 }

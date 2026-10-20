@@ -153,7 +153,8 @@ extension PaddleCheckoutPrefetchCoordinator {
             PaddlePrefetchBffCompleted(
                 priceId: priceId,
                 transactionId: transactionId,
-                endpointCall: endpointCall
+                endpointCall: endpointCall,
+                outcome: outcome
             ),
             scope: scope
         )

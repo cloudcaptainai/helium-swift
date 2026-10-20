@@ -114,10 +114,12 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
     let priceId: String
     let transactionId: String?
     let endpointCall: EndpointCallTelemetry
+    let outcome: PaddlePrefetchOutcomeKind
 
     var name: String { "paddle_prefetch_bff_completed" }
     var properties: [String: Any] {
         var p = endpointCall.properties
+        p["outcome"] = outcome.rawValue
         p["priceId"] = priceId
         if let transactionId { p["transactionId"] = transactionId }
         return p
