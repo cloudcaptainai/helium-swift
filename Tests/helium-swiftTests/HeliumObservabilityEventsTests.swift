@@ -261,10 +261,11 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             "data": ["ip_geo_country_code": "MX"],
         ])
         let startedAt = Date()
+        let priceId = "pri_nonus_obs_test"
 
         PaddleCheckoutPrefetchCoordinator.trackBffCompletion(
-            priceId: "pri_x",
-            transactionId: "txn_x",
+            priceId: priceId,
+            transactionId: "txn_nonus_obs_test",
             scope: makeTestSession().observabilityScope,
             startedAt: startedAt,
             chainStartedAt: startedAt,
@@ -272,13 +273,21 @@ final class HeliumObservabilityEventsTests: XCTestCase {
             caConsentModalEnabled: false
         )
 
-        XCTAssertEqual(capturedEvents.count, 2)
-        guard let bffCompleted = capturedEvents.first as? PaddlePrefetchBffCompleted else {
-            XCTFail("Expected PaddlePrefetchBffCompleted as the first event")
+        let bffCompletedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchBffCompleted }
+            .filter { $0.priceId == priceId }
+        let outcomeFinalizedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchOutcomeFinalized }
+            .filter { $0.priceId == priceId }
+
+        XCTAssertEqual(bffCompletedEvents.count, 1)
+        XCTAssertEqual(outcomeFinalizedEvents.count, 1)
+        guard let bffCompleted = bffCompletedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchBffCompleted event for the test price")
             return
         }
-        guard let outcomeFinalized = capturedEvents.dropFirst().first as? PaddlePrefetchOutcomeFinalized else {
-            XCTFail("Expected PaddlePrefetchOutcomeFinalized as the second event")
+        guard let outcomeFinalized = outcomeFinalizedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchOutcomeFinalized event for the test price")
             return
         }
 

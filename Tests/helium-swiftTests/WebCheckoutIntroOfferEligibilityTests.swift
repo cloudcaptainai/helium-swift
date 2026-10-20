@@ -186,8 +186,8 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             transactionId: "txn_ready"
         )
         let manager = ExternalWebCheckoutManager(
-            provider: .stripe,
-            entitlementsSource: HeliumPaymentEntitlementsSource(provider: .stripe)
+            provider: .paddle,
+            entitlementsSource: PaddleEntitlementsSource()
         )
 
         manager.emitPaddleAwaitResolved(
@@ -201,9 +201,13 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             paywallSession: makeTestSession()
         )
 
-        XCTAssertEqual(capturedEvents.count, 1)
-        guard let event = capturedEvents.first as? PaddlePrefetchAwaitResolved else {
-            XCTFail("Expected one PaddlePrefetchAwaitResolved event")
+        let awaitResolvedEvents = capturedEvents
+            .compactMap { $0 as? PaddlePrefetchAwaitResolved }
+            .filter { $0.tappedPriceId == "pri_a" }
+
+        XCTAssertEqual(awaitResolvedEvents.count, 1)
+        guard let event = awaitResolvedEvents.first else {
+            XCTFail("Expected one PaddlePrefetchAwaitResolved event for the tapped price")
             return
         }
 
