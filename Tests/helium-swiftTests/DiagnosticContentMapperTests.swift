@@ -24,12 +24,20 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    /// Every authored record: both skip reasons, every unavailable reason, the nil path, and the
-    /// preview-only fallback record.
+    private func downloadFailureContent(_ fetchFailure: HeliumFetchFailureKind?) -> DiagnosticContent {
+        mapper.mapUnavailable(
+            .paywallsDownloadFail,
+            context: DiagnosticContext(trigger: trigger, fetchFailure: fetchFailure)
+        )
+    }
+
+    /// Every authored record: both skip reasons, every unavailable reason, the nil path, the
+    /// preview-only fallback record, and the per-stage download failure records.
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
             + [content(for: nil), previewFallbackContent()]
+            + [HeliumFetchFailureKind.configFetch, .invalidApiKey, .bundleFetch].map(downloadFailureContent)
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -299,11 +307,105 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     func testUnactionableFailuresCopyTheReport() {
         let errors: [PaywallUnavailableReason] = [
-            .couldNotFindBundleUrl, .webviewRenderFail, .bridgingError, .invalidResolvedConfig,
+            .bundleFetch403, .bundleFetchCannotDecodeContent, .webviewRenderFail, .bridgingError,
+            .invalidResolvedConfig,
         ]
         for reason in errors {
             XCTAssertEqual(content(for: reason).cta, .copyReport, reason.rawValue)
         }
+    }
+
+    func testRepublishableBundleProblemsOpenThePaywallEditor() {
+        let republishable: [PaywallUnavailableReason] = [
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
+            .bundleFetch404, .bundleFetch410,
+        ]
+        for reason in republishable {
+            XCTAssertEqual(
+                mapper.mapUnavailable(reason, context: context(paywallId: "abc-123")).cta,
+                .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls/abc-123"),
+                reason.rawValue
+            )
+        }
+    }
+
+    // MARK: - SDK-side skips after a served paywall
+
+    func testEachBundleProblemHasItsOwnBody() {
+        let reasons: [PaywallUnavailableReason] = [
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrl, .bundleFetch403, .bundleFetch404,
+            .bundleFetch410, .bundleFetchCannotDecodeContent,
+        ]
+        let contents = reasons.map { content(for: $0) }
+
+        XCTAssertEqual(Set(contents.map(\.title)).count, reasons.count)
+        XCTAssertEqual(Set(contents.map(\.body)).count, reasons.count)
+        for content in contents {
+            XCTAssertTrue(content.body.contains("\"\(trigger)\""), content.reasonCode)
+            XCTAssertEqual(content.category, .integrationError, content.reasonCode)
+        }
+    }
+
+    func testBothMalformedBundleUrlCodesShareTheirBody() {
+        XCTAssertEqual(
+            content(for: .bundleFetchInvalidUrlDetected).body,
+            content(for: .bundleFetchInvalidUrl).body
+        )
+    }
+
+    func testBundleHttpFailuresNameTheStatus() {
+        XCTAssertTrue(content(for: .bundleFetch403).body.contains("HTTP 403"))
+        XCTAssertTrue(content(for: .bundleFetch404).body.contains("HTTP 404"))
+        XCTAssertTrue(content(for: .bundleFetch410).body.contains("HTTP 410"))
+    }
+
+    func testEachLoadingStepHasItsOwnBody() {
+        let reasons: [PaywallUnavailableReason] = [
+            .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress,
+            .productsFetchInProgress,
+        ]
+        let contents = reasons.map { content(for: $0) }
+
+        XCTAssertEqual(Set(contents.map(\.title)).count, reasons.count)
+        XCTAssertEqual(Set(contents.map(\.body)).count, reasons.count)
+        for content in contents {
+            XCTAssertTrue(content.usersWillSee.contains("loading indication"), content.reasonCode)
+        }
+        XCTAssertTrue(content(for: .configFetchInProgress).body.contains("configuration"))
+        XCTAssertTrue(content(for: .bundlesFetchInProgress).body.contains("content"))
+        XCTAssertTrue(content(for: .productsFetchInProgress).body.contains("App Store"))
+    }
+
+    func testDownloadFailureNamesTheStageThatFailed() {
+        XCTAssertEqual(
+            downloadFailureContent(.configFetch).title,
+            "Paywall configuration failed to download"
+        )
+        XCTAssertEqual(
+            downloadFailureContent(.bundleFetch).title,
+            "Paywall content failed to download"
+        )
+        XCTAssertEqual(downloadFailureContent(.bundleFetch).cta, .copyReport)
+    }
+
+    func testRejectedApiKeyIsASetupProblemPointingAtTheProfile() {
+        let content = downloadFailureContent(.invalidApiKey)
+
+        XCTAssertEqual(content.category, .setup)
+        XCTAssertEqual(content.title, "Your Helium API key was rejected")
+        XCTAssertTrue(content.body.contains("Helium.shared.initialize(apiKey:)"))
+        XCTAssertEqual(content.cta, .openUrl(label: "Open Profile", url: "https://app.tryhelium.com/profile"))
+    }
+
+    func testDownloadFailureWithoutAKnownStageKeepsTheGenericBody() {
+        let content = downloadFailureContent(nil)
+
+        XCTAssertEqual(content.category, .network)
+        XCTAssertEqual(content.title, "Paywalls failed to download")
+        XCTAssertEqual(
+            content.body,
+            "Paywalls failed to download. Check this device's connection and your Helium API key."
+        )
     }
 
     func testTargetingSkipOpensWorkflows() {

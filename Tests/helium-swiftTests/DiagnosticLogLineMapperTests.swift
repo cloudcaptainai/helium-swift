@@ -6,10 +6,13 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
     private let contentMapper = DiagnosticContentMapper()
     private let mapper = DiagnosticLogLineMapper()
 
-    private func logLine(for reason: PaywallUnavailableReason) -> String {
+    private func logLine(
+        for reason: PaywallUnavailableReason,
+        fetchFailure: HeliumFetchFailureKind? = nil
+    ) -> String {
         let content = contentMapper.mapUnavailable(
             reason,
-            context: DiagnosticContext(trigger: "onboarding_end")
+            context: DiagnosticContext(trigger: "onboarding_end", fetchFailure: fetchFailure)
         )
         return mapper.map(content)
     }
@@ -52,5 +55,24 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
                 reason.rawValue
             )
         }
+    }
+
+    func testBundleStatusFailuresLogTheirOwnCause() {
+        let line = logLine(for: .bundleFetch404)
+
+        XCTAssertTrue(line.hasPrefix("[bundleFetch404] The paywall's content was not found."))
+        XCTAssertTrue(line.contains("HTTP 404"))
+        XCTAssertTrue(line.contains("\"onboarding_end\""))
+    }
+
+    func testDownloadFailureLineNamesTheFailedStage() {
+        XCTAssertTrue(
+            logLine(for: .paywallsDownloadFail, fetchFailure: .bundleFetch)
+                .hasPrefix("[paywallsDownloadFail] Paywall content failed to download.")
+        )
+        XCTAssertTrue(
+            logLine(for: .paywallsDownloadFail, fetchFailure: .invalidApiKey)
+                .hasSuffix("https://app.tryhelium.com/profile")
+        )
     }
 }
