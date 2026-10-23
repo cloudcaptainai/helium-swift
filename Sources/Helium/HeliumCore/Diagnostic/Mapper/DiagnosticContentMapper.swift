@@ -28,6 +28,7 @@ struct DiagnosticContentMapper {
         static let entitlements = "\(quickstart)#checking-subscription-status-%26-entitlements"
         static let workflows = "https://app.tryhelium.com/workflows"
         static let paywalls = "https://app.tryhelium.com/paywalls"
+        static let profile = "https://app.tryhelium.com/profile"
         static let fallbackGuide = "https://docs.tryhelium.com/guides/fallback-bundle"
     }
 
@@ -88,19 +89,29 @@ struct DiagnosticContentMapper {
         case .webCheckoutNotEnabled:
             return webCheckoutNotEnabled(code, context)
 
-        case .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress, .productsFetchInProgress:
+        case .paywallsNotDownloaded:
             return paywallsNotDownloaded(code)
+        case .configFetchInProgress:
+            return configFetchInProgress(code)
+        case .bundlesFetchInProgress:
+            return bundlesFetchInProgress(code)
+        case .productsFetchInProgress:
+            return productsFetchInProgress(code)
         case .paywallsDownloadFail:
-            return paywallsDownloadFail(code)
+            return paywallsDownloadFail(code, context)
 
-        case .couldNotFindBundleUrl,
-             .bundleFetchInvalidUrlDetected,
-             .bundleFetchInvalidUrl,
-             .bundleFetch403,
-             .bundleFetch404,
-             .bundleFetch410,
-             .bundleFetchCannotDecodeContent:
-            return bundleRetrieval(code)
+        case .couldNotFindBundleUrl:
+            return bundleUrlMissing(code, context)
+        case .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl:
+            return bundleUrlMalformed(code, context)
+        case .bundleFetch403:
+            return bundleFetchForbidden(code, context)
+        case .bundleFetch404:
+            return bundleFetchNotFound(code, context)
+        case .bundleFetch410:
+            return bundleFetchGone(code, context)
+        case .bundleFetchCannotDecodeContent:
+            return bundleFetchUnreadable(code, context)
         case .webviewRenderFail, .bridgingError:
             return renderFailure(code)
         case .secondTryNoMatch:
@@ -325,11 +336,49 @@ struct DiagnosticContentMapper {
     // MARK: - NETWORK
 
     private func paywallsNotDownloaded(_ code: String) -> DiagnosticContent {
+        stillLoading(
+            code,
+            title: "Paywalls haven't started downloading",
+            body: "The paywall download had not started when this trigger fired. Initialize Helium "
+                + "sooner, or raise the loading budget so the paywall has time to arrive."
+        )
+    }
+
+    private func configFetchInProgress(_ code: String) -> DiagnosticContent {
+        stillLoading(
+            code,
+            title: "Paywall configuration is still downloading",
+            body: "Helium was still fetching your paywall configuration when this trigger fired. "
+                + "Check this device's connection, and consider raising the loading budget or "
+                + "initializing Helium sooner."
+        )
+    }
+
+    private func bundlesFetchInProgress(_ code: String) -> DiagnosticContent {
+        stillLoading(
+            code,
+            title: "Paywall content is still downloading",
+            body: "Your paywall configuration arrived, but this paywall's content was still "
+                + "downloading when this trigger fired. Check this device's connection, and consider "
+                + "raising the loading budget."
+        )
+    }
+
+    private func productsFetchInProgress(_ code: String) -> DiagnosticContent {
+        stillLoading(
+            code,
+            title: "App Store products are still loading",
+            body: "Your paywall configuration and content arrived, but Helium was still loading this "
+                + "paywall's App Store in-app products and subscriptions when this trigger fired. "
+                + "Consider raising the loading budget."
+        )
+    }
+
+    private func stillLoading(_ code: String, title: String, body: String) -> DiagnosticContent {
         DiagnosticContent(
             category: .network,
-            title: "Paywalls are still downloading",
-            body: "Paywalls had not completed downloading when this trigger fired. Check your "
-                + "connection, and consider raising the loading budget or initializing Helium sooner.",
+            title: title,
+            body: body,
             usersWillSee: "Real users see a loading indication followed by no paywall. Consider "
                 + "adding a fallback paywall.",
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
@@ -338,29 +387,142 @@ struct DiagnosticContentMapper {
         )
     }
 
-    private func paywallsDownloadFail(_ code: String) -> DiagnosticContent {
+    private func paywallsDownloadFail(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        switch context.fetchFailure {
+        case .invalidApiKey:
+            return downloadFailure(
+                code,
+                category: .setup,
+                title: "Your Helium API key was rejected",
+                body: "Helium rejected the API key passed to Helium.shared.initialize(apiKey:), so no "
+                    + "paywalls could download. Copy the key from your Helium profile and pass it "
+                    + "unchanged.",
+                cta: .openUrl(label: "Open Profile", url: Url.profile)
+            )
+        case .configFetch:
+            return downloadFailure(
+                code,
+                category: .network,
+                title: "Paywall configuration failed to download",
+                body: "Helium could not download your paywall configuration after several attempts. "
+                    + "Check this device's connection and that nothing on this network blocks "
+                    + "requests to Helium.",
+                cta: .openUrl(label: "View Docs", url: Url.quickstart)
+            )
+        case .bundleFetch:
+            return downloadFailure(
+                code,
+                category: .network,
+                title: "Paywall content failed to download",
+                body: "Your paywall configuration arrived, but at least one paywall's content could not "
+                    + "be downloaded. Check this device's connection; if it keeps happening, copy the "
+                    + "diagnostic report and contact Helium.",
+                cta: .copyReport
+            )
+        case nil:
+            return downloadFailure(
+                code,
+                category: .network,
+                title: "Paywalls failed to download",
+                body: "Paywalls failed to download. Check this device's connection and your Helium API key.",
+                cta: .openUrl(label: "View Docs", url: Url.quickstart)
+            )
+        }
+    }
+
+    private func downloadFailure(
+        _ code: String,
+        category: DiagnosticCategory,
+        title: String,
+        body: String,
+        cta: DiagnosticCta
+    ) -> DiagnosticContent {
         DiagnosticContent(
-            category: .network,
-            title: "Paywalls failed to download",
-            body: "Paywalls failed to download. Check this device's connection and your Helium API key.",
+            category: category,
+            title: title,
+            body: body,
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-            cta: .openUrl(label: "View Docs", url: Url.quickstart),
+            cta: cta,
             reasonCode: code
         )
     }
 
     // MARK: - INTEGRATION ERROR
 
-    private func bundleRetrieval(_ code: String) -> DiagnosticContent {
+    private func bundleUrlMissing(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "This paywall has no content to render",
+            body: "The paywall for \"\(context.trigger)\" was served without a content bundle, so there "
+                + "is nothing to render. Save the paywall again in the editor to publish its content; "
+                + "if that does not help, copy the diagnostic report and contact Helium.",
+            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+        )
+    }
+
+    private func bundleUrlMalformed(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "The paywall's content address is malformed",
+            body: "The content bundle address Helium received for \"\(context.trigger)\" is not a valid "
+                + "web address, so its content was never downloaded. Save the paywall again in the "
+                + "editor to publish a fresh one; if it stays malformed, copy the diagnostic report "
+                + "and contact Helium.",
+            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+        )
+    }
+
+    private func bundleFetchForbidden(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "Access to the paywall's content was denied",
+            body: "The server hosting the content for \"\(context.trigger)\" refused the download "
+                + "(HTTP 403). Copy the diagnostic report and contact Helium.",
+            cta: .copyReport
+        )
+    }
+
+    private func bundleFetchNotFound(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "The paywall's content was not found",
+            body: "The content for \"\(context.trigger)\" no longer exists where its configuration "
+                + "points (HTTP 404). Save the paywall again in the editor to publish fresh content; "
+                + "if it keeps happening, copy the diagnostic report and contact Helium.",
+            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+        )
+    }
+
+    private func bundleFetchGone(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "The paywall's content was removed",
+            body: "The content for \"\(context.trigger)\" was permanently removed from hosting "
+                + "(HTTP 410), usually because the paywall was deleted or republished. Save the "
+                + "paywall again in the editor to publish fresh content.",
+            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+        )
+    }
+
+    private func bundleFetchUnreadable(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
+        bundleProblem(
+            code,
+            title: "The paywall's content is unreadable",
+            body: "The content downloaded for \"\(context.trigger)\" could not be read as text, so it "
+                + "cannot render. Copy the diagnostic report and contact Helium.",
+            cta: .copyReport
+        )
+    }
+
+    private func bundleProblem(_ code: String, title: String, body: String, cta: DiagnosticCta) -> DiagnosticContent {
         DiagnosticContent(
             category: .integrationError,
-            title: "The paywall couldn't be retrieved",
-            body: "Helium could not fetch or read this paywall's bundle. Copy the diagnostic report "
-                + "and contact Helium if this continues to be an issue.",
+            title: title,
+            body: body,
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-            cta: .copyReport,
+            cta: cta,
             reasonCode: code
         )
     }
