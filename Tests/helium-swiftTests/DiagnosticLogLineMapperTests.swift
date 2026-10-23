@@ -17,12 +17,18 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         return mapper.map(content)
     }
 
-    func testUrlCtaCarriesTheReasonCodeAndTheUrl() {
+    func testCopyLinkCtaCarriesTheReasonCodeAndTheUrl() {
         let line = logLine(for: .triggerHasNoPaywall)
 
         XCTAssertTrue(line.hasPrefix("[triggerHasNoPaywall] "))
         XCTAssertTrue(line.contains("No paywall is connected to this trigger."))
         XCTAssertTrue(line.hasSuffix("https://app.tryhelium.com/workflows"))
+    }
+
+    func testOpenUrlCtaCarriesTheUrl() {
+        XCTAssertTrue(
+            logLine(for: .notInitialized).hasSuffix("https://docs.tryhelium.com/sdk/quickstart-ios")
+        )
     }
 
     /// A copy-report reason has no CTA destination, so the line carries the remediation link.

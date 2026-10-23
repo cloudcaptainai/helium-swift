@@ -44,4 +44,19 @@ final class HeliumPaywallDiagnosticViewTests: XCTestCase {
             )
         }
     }
+
+    func testDashboardCtaIsLabelledAsACopyAction() {
+        XCTAssertEqual(
+            modal(for: .triggerHasNoPaywall, fallbackShown: false).primaryActionLabel,
+            "Copy Workflows Link"
+        )
+        XCTAssertEqual(
+            modal(for: .notInitialized, fallbackShown: false).primaryActionLabel,
+            "View Setup Docs"
+        )
+        XCTAssertEqual(
+            modal(for: .webviewRenderFail, fallbackShown: false).primaryActionLabel,
+            "Copy Diagnostic Report"
+        )
+    }
 }
