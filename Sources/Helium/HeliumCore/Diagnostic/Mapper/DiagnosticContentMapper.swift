@@ -139,7 +139,7 @@ struct DiagnosticContentMapper {
             usersWillSee: "Users matched by this targeting rule see no paywall and the app simply "
                 + "continues. Other users see the paywall normally.",
             usersWillSeeLink: nil,
-            cta: .openUrl(label: "Open Workflows", url: Url.workflows),
+            cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
             reasonCode: PaywallSkippedReason.targetingHoldout.rawValue
         )
     }
@@ -273,7 +273,7 @@ struct DiagnosticContentMapper {
                 usersWillSee: "This user sees no paywall. Other users may receive one depending on "
                     + "targeting and eligibility. Consider adding a fallback paywall.",
                 usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-                cta: .openUrl(label: "Open Workflows", url: Url.workflows),
+                cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
                 reasonCode: code
             )
         }
@@ -285,7 +285,7 @@ struct DiagnosticContentMapper {
                 + "is in a workflow. Changes to a workflow can take a few minutes to be reflected here.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-            cta: .openUrl(label: "Open Workflows", url: Url.workflows),
+            cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
             reasonCode: code
         )
     }
@@ -298,7 +298,7 @@ struct DiagnosticContentMapper {
                 + "App Store in-app products and subscriptions, then select them on this paywall.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context)),
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context)),
             reasonCode: code
         )
     }
@@ -397,7 +397,7 @@ struct DiagnosticContentMapper {
                 body: "Helium rejected the API key passed to Helium.shared.initialize(apiKey:), so no "
                     + "paywalls could download. Copy the key from your Helium profile and pass it "
                     + "unchanged.",
-                cta: .openUrl(label: "Open Profile", url: Url.profile)
+                cta: .copyUrl(label: "Copy Profile Link", url: Url.profile)
             )
         case .configFetch:
             return downloadFailure(
@@ -457,7 +457,7 @@ struct DiagnosticContentMapper {
             body: "The paywall for \"\(context.trigger)\" was served without a content bundle, so there "
                 + "is nothing to render. Save the paywall again in the editor to publish its content; "
                 + "if that does not help, copy the diagnostic report and contact Helium.",
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
         )
     }
 
@@ -469,7 +469,7 @@ struct DiagnosticContentMapper {
                 + "web address, so its content was never downloaded. Save the paywall again in the "
                 + "editor to publish a fresh one; if it stays malformed, copy the diagnostic report "
                 + "and contact Helium.",
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
         )
     }
 
@@ -490,7 +490,7 @@ struct DiagnosticContentMapper {
             body: "The content for \"\(context.trigger)\" no longer exists where its configuration "
                 + "points (HTTP 404). Save the paywall again in the editor to publish fresh content; "
                 + "if it keeps happening, copy the diagnostic report and contact Helium.",
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
         )
     }
 
@@ -501,7 +501,7 @@ struct DiagnosticContentMapper {
             body: "The content for \"\(context.trigger)\" was permanently removed from hosting "
                 + "(HTTP 410), usually because the paywall was deleted or republished. Save the "
                 + "paywall again in the editor to publish fresh content.",
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context))
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
         )
     }
 
@@ -552,7 +552,7 @@ struct DiagnosticContentMapper {
             usersWillSee: "Users who reach this step see no second try paywall — the paywall they are "
                 + "on stays on screen.",
             usersWillSeeLink: nil,
-            cta: .openUrl(label: "Open Paywall Editor", url: paywallEditorUrl(context)),
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context)),
             reasonCode: code
         )
     }

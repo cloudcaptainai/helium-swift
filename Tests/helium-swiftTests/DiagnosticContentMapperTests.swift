@@ -193,7 +193,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertTrue(content.body.contains("\"\(trigger)\""))
         XCTAssertEqual(
             content.cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls")
         )
     }
 
@@ -235,14 +235,14 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
         XCTAssertEqual(
             content.cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls/abc-123")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls/abc-123")
         )
     }
 
     func testPaywallEditorCtaUsesThePaywallListWhenTheIdIsUnknown() {
         XCTAssertEqual(
             content(for: .noProductsIOS).cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls")
         )
     }
 
@@ -315,7 +315,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         }
     }
 
-    func testRepublishableBundleProblemsOpenThePaywallEditor() {
+    func testRepublishableBundleProblemsCopyThePaywallEditorLink() {
         let republishable: [PaywallUnavailableReason] = [
             .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
             .bundleFetch404, .bundleFetch410,
@@ -323,7 +323,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         for reason in republishable {
             XCTAssertEqual(
                 mapper.mapUnavailable(reason, context: context(paywallId: "abc-123")).cta,
-                .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls/abc-123"),
+                .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls/abc-123"),
                 reason.rawValue
             )
         }
@@ -394,7 +394,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertEqual(content.category, .setup)
         XCTAssertEqual(content.title, "Your Helium API key was rejected")
         XCTAssertTrue(content.body.contains("Helium.shared.initialize(apiKey:)"))
-        XCTAssertEqual(content.cta, .openUrl(label: "Open Profile", url: "https://app.tryhelium.com/profile"))
+        XCTAssertEqual(content.cta, .copyUrl(label: "Copy Profile Link", url: "https://app.tryhelium.com/profile"))
     }
 
     func testDownloadFailureWithoutAKnownStageKeepsTheGenericBody() {
@@ -408,10 +408,10 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    func testTargetingSkipOpensWorkflows() {
+    func testTargetingSkipCopiesTheWorkflowsLink() {
         XCTAssertEqual(
             mapper.mapSkip(.targetingHoldout).cta,
-            .openUrl(label: "Open Workflows", url: "https://app.tryhelium.com/workflows")
+            .copyUrl(label: "Copy Workflows Link", url: "https://app.tryhelium.com/workflows")
         )
     }
 
@@ -431,6 +431,23 @@ final class DiagnosticContentMapperTests: XCTestCase {
             content(for: .alreadyPresented).title,
             "A Helium paywall is already being presented"
         )
+    }
+
+    func testDashboardLinksAreCopiedAndDocsLinksAreOpened() {
+        var copied = 0
+        for content in allContent() {
+            switch content.cta {
+            case let .openUrl(_, url):
+                XCTAssertFalse(url.contains("app.tryhelium.com"), "\(content.reasonCode) opens the dashboard")
+            case let .copyUrl(label, url):
+                copied += 1
+                XCTAssertTrue(url.contains("app.tryhelium.com"), "\(content.reasonCode) copies a non-dashboard link")
+                XCTAssertTrue(label.hasPrefix("Copy ") && label.hasSuffix(" Link"), "\(content.reasonCode): \(label)")
+            case .copyReport:
+                break
+            }
+        }
+        XCTAssertGreaterThan(copied, 0)
     }
 
     // MARK: - Users-will-see matrix
