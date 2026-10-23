@@ -22,16 +22,20 @@ struct DiagnosticContext {
     /// Bandit's optional explanation for why this trigger did not resolve to a paywall.
     let banditReason: String?
 
+    let fetchFailure: HeliumFetchFailureKind?
+
     init(
         trigger: String,
         paywallId: String? = nil,
         webCheckoutProcessors: WebCheckoutProcessors = [],
-        banditReason: String? = nil
+        banditReason: String? = nil,
+        fetchFailure: HeliumFetchFailureKind? = nil
     ) {
         self.trigger = trigger
         self.paywallId = paywallId
         self.webCheckoutProcessors = webCheckoutProcessors
         self.banditReason = banditReason
+        self.fetchFailure = fetchFailure
     }
 
     /// Resolves the context from live SDK state. The paywall id is best-effort: an unresolvable
@@ -41,7 +45,8 @@ struct DiagnosticContext {
             trigger: trigger,
             paywallId: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallUUID,
             webCheckoutProcessors: Helium.config.webCheckoutProcessors,
-            banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger)
+            banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger),
+            fetchFailure: HeliumFetchedConfigManager.shared.lastFetchFailure
         )
     }
 }
