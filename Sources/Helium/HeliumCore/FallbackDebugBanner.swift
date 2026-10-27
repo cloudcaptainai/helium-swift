@@ -59,7 +59,7 @@ struct FallbackDebugBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Fallback Paywall")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Tap for details")
+                Text(Self.subtitle(banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger)))
                     .font(.system(size: 12, weight: .regular))
                     .opacity(0.9)
             }
@@ -130,5 +130,10 @@ extension FallbackDebugBanner {
         diagnosticsEnabled: @autoclosure () -> Bool
     ) -> Bool {
         fallbackReason != nil && diagnosticsEnabled()
+    }
+
+    static func subtitle(banditReason: String?) -> String {
+        guard let banditReason else { return "Tap for details" }
+        return BanditReasonPresentationMapper().map(banditReason).title + " · tap for details"
     }
 }

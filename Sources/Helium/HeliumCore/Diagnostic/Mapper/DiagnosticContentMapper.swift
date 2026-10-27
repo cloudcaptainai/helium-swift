@@ -266,15 +266,22 @@ struct DiagnosticContentMapper {
 
     private func triggerHasNoPaywall(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
         if let banditReason = context.banditReason {
+            let presentation = BanditReasonPresentationMapper().map(
+                banditReason,
+                countrySignals: context.countrySignals
+            )
             return DiagnosticContent(
                 category: .setup,
-                title: "No paywall was resolved for this trigger",
-                body: banditReason,
+                title: presentation.title,
+                body: presentation.fix ?? banditReason,
                 usersWillSee: "This user sees no paywall. Other users may receive one depending on "
                     + "targeting and eligibility. Consider adding a fallback paywall.",
                 usersWillSeeLink: UsersWillSee.fallbackGuideLink,
                 cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
-                reasonCode: code
+                reasonCode: code,
+                fix: presentation.fix,
+                detail: presentation.fix == nil ? nil : banditReason,
+                checks: presentation.checks
             )
         }
 

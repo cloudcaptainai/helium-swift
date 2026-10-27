@@ -25,6 +25,20 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         XCTAssertTrue(line.hasSuffix("https://app.tryhelium.com/workflows"))
     }
 
+    func testBanditReasonLineKeepsTheServerSentenceAfterTheFix() {
+        let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
+        let content = contentMapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(trigger: "onboarding_end", banditReason: sentence)
+        )
+
+        XCTAssertEqual(
+            mapper.map(content),
+            "[triggerHasNoPaywall] Paddle needs a US buyer. Target this paywall at a US audience, or give "
+                + "the trigger a fallback rule. \(sentence) https://app.tryhelium.com/workflows"
+        )
+    }
+
     func testOpenUrlCtaCarriesTheUrl() {
         XCTAssertTrue(
             logLine(for: .notInitialized).hasSuffix("https://docs.tryhelium.com/sdk/quickstart-ios")
