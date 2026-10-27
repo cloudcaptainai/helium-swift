@@ -101,7 +101,7 @@ class AppReceiptsHelper {
     }
 
     func getEnvironment() -> String {
-        environment.rawValue
+        environment.rawValue.uppercased()
     }
     
     func getFirstInstallTime() -> Date? {

@@ -338,7 +338,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
-        ctx["environment"] = AppReceiptsHelper.shared.environment.rawValue.uppercased()
+        ctx["environment"] = AppReceiptsHelper.shared.getEnvironment()
         ctx["trigger"] = triggerName
 
         // Emit the exact traits the in-app paywall injected (frozen at display time), so a

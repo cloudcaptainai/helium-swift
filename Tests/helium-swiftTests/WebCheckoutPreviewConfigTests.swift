@@ -73,7 +73,7 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
 
         XCTAssertEqual(
             ctx["environment"] as? String,
-            AppReceiptsHelper.shared.environment.rawValue.uppercased()
+            AppReceiptsHelper.shared.getEnvironment()
         )
         XCTAssertEqual(ctx["trigger"] as? String, "onboarding")
         XCTAssertNil(ctx["forceSimulatedFlow"])
