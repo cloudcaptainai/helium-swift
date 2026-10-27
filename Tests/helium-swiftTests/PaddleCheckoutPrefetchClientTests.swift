@@ -336,6 +336,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
     func testBaseRequestBody_sendsEnvironmentForEveryProvider() throws {
         let expected = AppReceiptsHelper.shared.getEnvironment()
+        XCTAssertEqual(expected, "DEBUG")
 
         let paddleBody = try client.baseRequestBody(provider: .paddle)
         let stripeBody = try client.baseRequestBody(provider: .stripe)
