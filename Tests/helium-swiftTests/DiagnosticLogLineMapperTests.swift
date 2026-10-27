@@ -6,20 +6,43 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
     private let contentMapper = DiagnosticContentMapper()
     private let mapper = DiagnosticLogLineMapper()
 
-    private func logLine(for reason: PaywallUnavailableReason) -> String {
+    private func logLine(
+        for reason: PaywallUnavailableReason,
+        fetchFailure: HeliumFetchFailureKind? = nil
+    ) -> String {
         let content = contentMapper.mapUnavailable(
             reason,
-            context: DiagnosticContext(trigger: "onboarding_end")
+            context: DiagnosticContext(trigger: "onboarding_end", fetchFailure: fetchFailure)
         )
         return mapper.map(content)
     }
 
-    func testUrlCtaCarriesTheReasonCodeAndTheUrl() {
+    func testCopyLinkCtaCarriesTheReasonCodeAndTheUrl() {
         let line = logLine(for: .triggerHasNoPaywall)
 
         XCTAssertTrue(line.hasPrefix("[triggerHasNoPaywall] "))
         XCTAssertTrue(line.contains("No paywall is connected to this trigger."))
         XCTAssertTrue(line.hasSuffix("https://app.tryhelium.com/workflows"))
+    }
+
+    func testBanditReasonLineKeepsTheServerSentenceAfterTheFix() {
+        let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
+        let content = contentMapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(trigger: "onboarding_end", banditReason: sentence)
+        )
+
+        XCTAssertEqual(
+            mapper.map(content),
+            "[triggerHasNoPaywall] Paddle needs a US buyer. Target this paywall at a US audience, or give "
+                + "the trigger a fallback rule. \(sentence) https://app.tryhelium.com/workflows"
+        )
+    }
+
+    func testOpenUrlCtaCarriesTheUrl() {
+        XCTAssertTrue(
+            logLine(for: .notInitialized).hasSuffix("https://docs.tryhelium.com/sdk/quickstart-ios")
+        )
     }
 
     /// A copy-report reason has no CTA destination, so the line carries the remediation link.
@@ -52,5 +75,24 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
                 reason.rawValue
             )
         }
+    }
+
+    func testBundleStatusFailuresLogTheirOwnCause() {
+        let line = logLine(for: .bundleFetch404)
+
+        XCTAssertTrue(line.hasPrefix("[bundleFetch404] The paywall's content was not found."))
+        XCTAssertTrue(line.contains("HTTP 404"))
+        XCTAssertTrue(line.contains("\"onboarding_end\""))
+    }
+
+    func testDownloadFailureLineNamesTheFailedStage() {
+        XCTAssertTrue(
+            logLine(for: .paywallsDownloadFail, fetchFailure: .bundleFetch)
+                .hasPrefix("[paywallsDownloadFail] Paywall content failed to download.")
+        )
+        XCTAssertTrue(
+            logLine(for: .paywallsDownloadFail, fetchFailure: .invalidApiKey)
+                .hasSuffix("https://app.tryhelium.com/profile")
+        )
     }
 }

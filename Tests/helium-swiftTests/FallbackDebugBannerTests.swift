@@ -72,4 +72,22 @@ final class FallbackDebugBannerTests: XCTestCase {
             FallbackDebugBanner.shouldShow(fallbackReason: result.fallbackReason, diagnosticsEnabled: true)
         )
     }
+
+    func testSubtitleLeadsWithTheServerReasonHeadline() {
+        XCTAssertEqual(
+            FallbackDebugBanner.subtitle(banditReason: BanditReasonPresentationMapperTests.paddleGeoSentence),
+            "Paddle needs a US buyer · tap for details"
+        )
+    }
+
+    func testSubtitleStaysGenericWithoutAServerReason() {
+        XCTAssertEqual(FallbackDebugBanner.subtitle(banditReason: nil), "Tap for details")
+    }
+
+    func testSubtitleKeepsTheGenericHeadlineForAnUnrecognisedReason() {
+        XCTAssertEqual(
+            FallbackDebugBanner.subtitle(banditReason: "Something new."),
+            "No paywall was resolved for this trigger · tap for details"
+        )
+    }
 }
