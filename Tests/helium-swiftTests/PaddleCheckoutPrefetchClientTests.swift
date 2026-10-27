@@ -329,6 +329,19 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertNil(bodyDict["productPriceId"])
 
         XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
+        XCTAssertEqual(bodyDict["environment"] as? String, AppReceiptsHelper.shared.getEnvironment().uppercased())
+    }
+
+    // MARK: - baseRequestBody
+
+    func testBaseRequestBody_sendsEnvironmentForEveryProvider() throws {
+        let expected = AppReceiptsHelper.shared.getEnvironment().uppercased()
+
+        let paddleBody = try client.baseRequestBody(provider: .paddle)
+        let stripeBody = try client.baseRequestBody(provider: .stripe)
+
+        XCTAssertEqual(paddleBody["environment"] as? String, expected)
+        XCTAssertEqual(stripeBody["environment"] as? String, expected)
     }
 
     // MARK: - createPaddleTransactionForPaywall discountId forwarding

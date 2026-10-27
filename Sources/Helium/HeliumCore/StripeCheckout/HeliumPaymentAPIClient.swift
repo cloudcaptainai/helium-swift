@@ -70,7 +70,8 @@ public class HeliumPaymentAPIClient {
         var body: [String: Any] = [
             "apiKey": apiKey,
             "heliumPersistentId": HeliumIdentityManager.shared.getHeliumPersistentId(),
-            "userId": HeliumIdentityManager.shared.getResolvedUserId()
+            "userId": HeliumIdentityManager.shared.getResolvedUserId(),
+            "environment": AppReceiptsHelper.shared.getEnvironment().uppercased()
         ]
         if let rcUserId = Helium.identify.revenueCatAppUserId {
             body["rcUserId"] = rcUserId
