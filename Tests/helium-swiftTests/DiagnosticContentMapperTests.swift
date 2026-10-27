@@ -33,11 +33,19 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     /// Every authored record: both skip reasons, every unavailable reason, the nil path, the
     /// preview-only fallback record, and the per-stage download failure records.
+    private func banditContent(_ sentence: String) -> DiagnosticContent {
+        mapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(trigger: trigger, banditReason: sentence)
+        )
+    }
+
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
             + [content(for: nil), previewFallbackContent()]
             + [HeliumFetchFailureKind.configFetch, .invalidApiKey, .bundleFetch].map(downloadFailureContent)
+            + [banditContent(BanditReasonPresentationMapperTests.paddleGeoSentence), banditContent("Unrecognised.")]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -67,7 +75,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
     /// The CTA and the users-will-see link own every URL, so no prose field may contain one.
     func testNoProseContainsAUrl() {
         for content in allContent() {
-            for prose in [content.title, content.body, content.usersWillSee] {
+            for prose in [content.title, content.body, content.usersWillSee, content.fix ?? "", content.detail ?? ""] {
                 XCTAssertFalse(
                     prose.contains("http"),
                     "\(content.reasonCode) embeds a URL in prose: \(prose)"
@@ -265,7 +273,28 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertFalse(content.body.contains("Currently enabled"))
     }
 
-    func testTriggerWithoutPaywallUsesBanditReasonAsBodyWhenSupplied() {
+    func testTriggerWithoutPaywallHeadlinesARecognisedBanditReason() {
+        let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
+        let content = mapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(
+                trigger: trigger,
+                banditReason: sentence,
+                countrySignals: CountrySignals(deviceRegion: "US", storeCountry: "GB")
+            )
+        )
+
+        XCTAssertEqual(content.title, "Paddle needs a US buyer")
+        XCTAssertEqual(content.fix, "Target this paywall at a US audience, or give the trigger a fallback rule.")
+        XCTAssertEqual(content.body, content.fix)
+        XCTAssertEqual(content.detail, sentence)
+        XCTAssertEqual(content.checks.map(\.verdict), [.passed, .failed, .checkedByServer])
+        XCTAssertEqual(content.category, .setup)
+        XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
+        XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
+    }
+
+    func testTriggerWithoutPaywallShowsAnUnrecognisedBanditReasonAsTheBody() {
         let content = mapper.mapUnavailable(
             .triggerHasNoPaywall,
             context: DiagnosticContext(
@@ -274,14 +303,24 @@ final class DiagnosticContentMapperTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            content.body,
-            "App-to-Web paywalls are not available in this region."
-        )
         XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
-        XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
+        XCTAssertEqual(content.body, "App-to-Web paywalls are not available in this region.")
+        XCTAssertNil(content.fix)
+        XCTAssertNil(content.detail)
+        XCTAssertTrue(content.checks.isEmpty)
         XCTAssertFalse(content.body.contains("Verify the trigger is in a workflow"))
-        XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
+    }
+
+    func testFixDetailAndChecksOnlyAppearTogetherOnBanditReasons() {
+        for content in allContent() {
+            if content.fix == nil {
+                XCTAssertNil(content.detail, content.reasonCode)
+                XCTAssertTrue(content.checks.isEmpty, content.reasonCode)
+            } else {
+                XCTAssertEqual(content.reasonCode, PaywallUnavailableReason.triggerHasNoPaywall.rawValue)
+                XCTAssertNotNil(content.detail, content.reasonCode)
+            }
+        }
     }
 
     func testTriggerWithoutPaywallKeepsExistingContentWhenBanditReasonIsAbsent() {

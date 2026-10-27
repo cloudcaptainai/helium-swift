@@ -53,7 +53,9 @@ struct HeliumPaywallDiagnosticView: View {
                     if !isForPreview {
                         triggerPill
                     }
+                    checklist
                     bodyText
+                    detailText
                     usersCallout
                     primaryAction
                     secondaryAction
@@ -131,11 +133,75 @@ struct HeliumPaywallDiagnosticView: View {
     }
 
     private var bodyText: some View {
-        Text(content.body)
-            .font(.body)
-            .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 8) {
+            if content.fix != nil {
+                Text("Fix")
+                    .font(.body.weight(.bold))
+            }
+            Text(content.body)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var checklist: some View {
+        if !content.checks.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(content.checks, id: \.label) { check in
+                    checkRow(check)
+                }
+            }
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))
             .padding(.top, 20)
+        }
+    }
+
+    private func checkRow(_ check: DiagnosticCheck) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: Self.checkSymbol(check.verdict))
+                .foregroundColor(Self.checkColor(check.verdict))
+            Text(check.label)
+                .font(.body)
+                .foregroundColor(check.verdict == .failed ? .primary : .secondary)
+            if check.verdict == .checkedByServer {
+                Text("checked by the server")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private static func checkSymbol(_ verdict: DiagnosticCheck.Verdict) -> String {
+        switch verdict {
+        case .passed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .checkedByServer: return "circle.dotted"
+        }
+    }
+
+    private static func checkColor(_ verdict: DiagnosticCheck.Verdict) -> Color {
+        switch verdict {
+        case .passed: return .green
+        case .failed: return .red
+        case .checkedByServer: return .secondary
+        }
+    }
+
+    @ViewBuilder
+    private var detailText: some View {
+        if let detail = content.detail {
+            Text(detail)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 10)
+        }
     }
 
     /// The outcome this modal can honestly state, or nil when a rendered fallback paywall means the
