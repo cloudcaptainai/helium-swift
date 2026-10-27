@@ -103,7 +103,7 @@ class HeliumObservabilityManager {
         }
         p["platform"] = "ios"
         p["osVersion"] = UIDevice.current.systemVersion
-        p["appEnvironment"] = AppReceiptsHelper.shared.getEnvironment().uppercased()
+        p["appEnvironment"] = AppReceiptsHelper.shared.getEnvironment()
         p["timestamp"] = formatAsTimestamp(date: Date())
         return p
     }

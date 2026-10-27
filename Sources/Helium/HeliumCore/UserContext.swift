@@ -99,7 +99,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
         heliumSdkVersion: HeliumSdkConfig.shared.heliumSdkVersion,
         heliumWrapperSdkVersion: HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         purchaseDelegate: HeliumSdkConfig.shared.purchaseDelegate,
-        environment: AppReceiptsHelper.shared.getEnvironment().uppercased(),
+        environment: AppReceiptsHelper.shared.getEnvironment(),
         latestInstallTimestamp: latestInstallTime,
         firstInstallTimestamp: firstInstallTime,
         testingPurchaseHandlerSet: Helium.testing.purchaseHandler != nil,
