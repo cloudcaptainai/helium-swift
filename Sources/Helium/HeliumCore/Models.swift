@@ -34,6 +34,7 @@ public struct HeliumPaywallInfo: Codable {
     var productsOfferedPaddle: [String]?
     var webProductsOfferedPaddle: [String]?
     var webProductsOfferedStripe: [String]?
+    var webSecondTry: WebSecondTryInfo?
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
