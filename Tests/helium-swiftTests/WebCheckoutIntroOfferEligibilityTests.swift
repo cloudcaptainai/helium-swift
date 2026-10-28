@@ -33,6 +33,12 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         /// `introOfferEligible: false`, `introOffers` non-empty. Pins that an
         /// offer-bearing price reporting ineligible still fails the check.
         case offerButIneligible
+        /// No trial, `defaultDiscountId` set, `introOfferEligible: true`: the
+        /// server will attach the discount for this customer.
+        case eligibleDiscount
+        /// No trial, `defaultDiscountId` set, `introOfferEligible: false`: a
+        /// returning customer, or eligibility the server could not determine.
+        case ineligibleDiscount
     }
 
     private func price(_ productKey: String, _ shape: Shape) throws -> ServerProductPrice {
@@ -47,7 +53,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         if shape != .oneTime {
             var sub: [String: Any] = [
                 "period": "P1Y", "periodUnit": "year", "periodValue": 1,
-                "introOfferEligible": shape == .eligibleTrial,
+                "introOfferEligible": shape == .eligibleTrial || shape == .eligibleDiscount,
             ]
             if shape == .eligibleTrial || shape == .offerButIneligible {
                 sub["introOffers"] = [[
@@ -57,6 +63,9 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
                 ]]
             }
             json["subscription"] = sub
+        }
+        if shape == .eligibleDiscount || shape == .ineligibleDiscount {
+            json["defaultDiscountId"] = "dsc_intro"
         }
         let data = try JSONSerialization.data(withJSONObject: json)
         return try JSONDecoder().decode(ServerProductPrice.self, from: data)
@@ -135,6 +144,33 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
         XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
             products: [lifetime], priceMap: priceMap))
+    }
+
+    // MARK: - Discount-only prices
+
+    private let monthlyDiscount = "pro_monthly:pri_discounted"
+
+    func testEligibleDiscountOnlyPaywallIsTrue() throws {
+        let priceMap = try map([(monthlyDiscount, .eligibleDiscount)])
+
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
+            products: [monthlyDiscount], priceMap: priceMap))
+    }
+
+    func testIneligibleDiscountOnlyPaywallIsFalse() throws {
+        let priceMap = try map([(monthlyDiscount, .ineligibleDiscount)])
+
+        XCTAssertFalse(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
+            products: [monthlyDiscount], priceMap: priceMap))
+    }
+
+    func testIneligibleDiscountDoesNotMaskAnEligibleTrial() throws {
+        // The discount flag is also false when the server could not determine
+        // eligibility, so it must not outvote a trial that reports eligible.
+        let priceMap = try map([(yearlyTrial, .eligibleTrial), (monthlyDiscount, .ineligibleDiscount)])
+
+        XCTAssertTrue(ExternalWebCheckoutManager.blanketIntroOfferEligibility(
+            products: [monthlyDiscount, yearlyTrial], priceMap: priceMap))
     }
 
     // MARK: - Every offer-bearing product must agree

@@ -232,13 +232,21 @@ public class ExternalWebCheckoutManager: NSObject {
     /// both when it carries no trial and when the customer already consumed
     /// one, so requiring it of every offered product let a plain monthly plan
     /// sitting beside a yearly trial report the customer ineligible.
+    ///
+    /// A discount-only price counts only when it reports eligible: its flag is
+    /// also false when the server could not tell, so it adds evidence but never masks it.
     static func blanketIntroOfferEligibility(
         products: [String],
         priceMap: [String: ServerProductPrice]
     ) -> Bool {
         let offerBearing = products
-            .compactMap { priceMap[$0]?.subscription }
-            .filter { !($0.introOffers ?? []).isEmpty }
+            .compactMap { priceMap[$0] }
+            .filter { price in
+                guard let sub = price.subscription else { return false }
+                if !(sub.introOffers ?? []).isEmpty { return true }
+                return !(price.defaultDiscountId ?? "").isEmpty && sub.introOfferEligible == true
+            }
+            .compactMap { $0.subscription }
         guard !offerBearing.isEmpty else { return false }
         return offerBearing.allSatisfy { $0.introOfferEligible == true }
     }
