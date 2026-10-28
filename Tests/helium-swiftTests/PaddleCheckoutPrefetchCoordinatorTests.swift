@@ -980,7 +980,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             checkoutId: "che_a", transactionId: "txn_a")
 
         let bandit2 = PaddleCreateTransactionForPaywallResponse(
-            transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, requestId: "req_b")
+            transactionId: "txn_b", paddleCustomerId: nil, isKnownCustomer: false, verifyCustomer: true, requestId: "req_b")
         let paddle2 = PaddleTransactionCheckoutResult(
             rawBody: try paddleResponseFixtureWithCruft(checkoutId: "che_b", transactionId: "txn_b"),
             checkoutId: "che_b", transactionId: "txn_b")
@@ -999,6 +999,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(aBootstrap["priceId"], "Inner bootstrap shouldn't repeat priceId — the map key is the priceId")
         XCTAssertEqual((aBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_a")
         XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_b")
+        XCTAssertEqual((aBootstrap["banditResponse"] as? [String: Any])?["verifyCustomer"] as? Bool, false)
+        XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["verifyCustomer"] as? Bool, true)
     }
 
     func testEncodeBootstrapsToCtx_skipsNonReadyOutcomes() throws {

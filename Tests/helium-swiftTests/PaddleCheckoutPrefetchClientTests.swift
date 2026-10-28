@@ -74,6 +74,27 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.transactionId, "txn_unknown")
         XCTAssertNil(result.paddleCustomerId)
         XCTAssertFalse(result.isKnownCustomer)
+        XCTAssertNil(result.verifyCustomer)
+    }
+
+    func testCreatePaddleTransactionForPaywall_decodesVerifyCustomer() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_verify",
+            "isKnownCustomer": false,
+            "verifyCustomer": true,
+            "requestId": "req_verify"
+        }
+        """
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, bodyJSON.data(using: .utf8)!)
+        }
+
+        let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_xyz")
+
+        XCTAssertEqual(result.verifyCustomer, true)
     }
 
     // MARK: - createPaddleTransactionForPaywall — 409 alreadyEntitled handling

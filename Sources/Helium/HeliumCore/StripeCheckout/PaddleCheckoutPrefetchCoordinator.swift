@@ -277,6 +277,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         var banditDict: [String: Any] = [
             "transactionId": bandit.transactionId,
             "isKnownCustomer": bandit.isKnownCustomer,
+            "verifyCustomer": bandit.verifyCustomer == true,
             "requestId": bandit.requestId,
         ]
         if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {

@@ -198,6 +198,7 @@ struct PaddleCreateTransactionForPaywallResponse: Decodable {
     let transactionId: String
     let paddleCustomerId: String?
     let isKnownCustomer: Bool
+    var verifyCustomer: Bool? = nil
     let requestId: String
 }
 
