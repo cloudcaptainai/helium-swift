@@ -999,7 +999,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(aBootstrap["priceId"], "Inner bootstrap shouldn't repeat priceId — the map key is the priceId")
         XCTAssertEqual((aBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_a")
         XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["transactionId"] as? String, "txn_b")
-        XCTAssertEqual((aBootstrap["banditResponse"] as? [String: Any])?["verifyCustomer"] as? Bool, false)
+        XCTAssertNil((aBootstrap["banditResponse"] as? [String: Any])?["verifyCustomer"])
         XCTAssertEqual((bBootstrap["banditResponse"] as? [String: Any])?["verifyCustomer"] as? Bool, true)
     }
 
