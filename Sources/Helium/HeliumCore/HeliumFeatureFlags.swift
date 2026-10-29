@@ -18,6 +18,10 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// browser-opened paywall reads the same traits it would in-app. Off (default)
     /// omits the key while the web checkout bundle rolls out support for it.
     case webCheckoutPaywallTraits
+
+    /// Gates reporting safe-area insets relative to the paywall's own frame instead of the whole
+    /// window. Off (default) reports the window's insets, which match for full-screen paywalls.
+    case viewRelativeSafeArea
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.

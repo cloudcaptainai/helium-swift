@@ -168,6 +168,11 @@ struct DynamicWebView: View {
           if !isContentLoaded && res.object as? WKNavigationDelegate === webView?.navigationDelegate {
               isContentLoaded = true
               contentLoadedAt = Date()
+              // The bundle defines heliumUpdateSafeAreaInsets while loading, so earlier pushes from
+              // view updates may have been dropped.
+              if let webView {
+                  PaywallSafeAreaInsets.push(to: webView)
+              }
               if let reloadStartedAt = terminationReloadStartedAt {
                   terminationReloadStartedAt = nil
                   HeliumObservabilityManager.shared.track(
@@ -274,6 +279,9 @@ struct DynamicWebView: View {
             // checkout launched from this paywall sends the exact same customPaywallTraits.
             actionsDelegate.setResolvedPaywallTraits(combinedTraits)
             mergedContext["customPaywallTraits"] = JSON(try combinedTraits.jsonObject())
+            mergedContext["screenInfo"]["safeAreaInsets"] = JSON(
+                PaywallSafeAreaInsets.jsonObject(PaywallSafeAreaInsets.current(for: webView))
+            )
             
             // Get localized prices from HeliumFetchedConfigManager
             // Only fetch prices for products associated with this trigger
@@ -625,22 +633,7 @@ fileprivate struct WebViewRepresentable: UIViewRepresentable {
             ])
         }
         
-        guard let window = UIWindowHelper.findActiveWindow() else {
-            return
-        }
-        let insets = window.safeAreaInsets
-        
-        let js = """
-            if (window.heliumUpdateSafeAreaInsets) {
-                window.heliumUpdateSafeAreaInsets({
-                    top: \(insets.top),
-                    bottom: \(insets.bottom),
-                    left: \(insets.left),
-                    right: \(insets.right)
-                });
-            }
-        """
-        webView.evaluateJavaScript(js)
+        PaywallSafeAreaInsets.push(to: webView)
     }
 
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
