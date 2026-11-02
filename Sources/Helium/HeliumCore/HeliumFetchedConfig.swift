@@ -305,6 +305,7 @@ public class HeliumFetchedConfigManager {
             
             // Ensure we have data
             guard let newConfig = response.0, let newConfigJSON = response.1 else {
+                guard !Task.isCancelled else { return }
                 if attemptCounter < maxAttempts {
                     let delaySeconds = calculateBackoffDelay(attempt: attemptCounter)
                     HeliumLogger.log(.warn, category: .network, "Config fetch failed (no data), retrying", metadata: [
@@ -475,6 +476,9 @@ public class HeliumFetchedConfigManager {
                 }
             }
         } catch {
+            // resetHelium cancels the in-flight fetch; the next initialize starts a new one.
+            guard !Task.isCancelled else { return }
+
             // Extract error details
             let (errorStatusCode, errorServerMessage, errorDesc): (Int?, String?, String)
             let configError = error as? ConfigFetchError
