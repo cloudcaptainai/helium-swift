@@ -75,7 +75,7 @@ struct BanditReasonPresentationMapper {
         case .paddleGeo:
             return BanditReasonPresentation(
                 title: "Paddle needs a US buyer",
-                fix: "Target this paywall at a US audience, or give the trigger a fallback rule.",
+                fix: "Target this paywall at a US audience, or add a rule for users outside the US.",
                 checks: [
                     DiagnosticCheck(label: "Device region is US", verdict: Self.verdict(isUS: countrySignals.deviceRegion)),
                     DiagnosticCheck(label: "App Store country is US", verdict: Self.verdict(isUS: countrySignals.storeCountry)),
@@ -97,7 +97,7 @@ struct BanditReasonPresentationMapper {
         case .applePayUnavailable:
             return BanditReasonPresentation(
                 title: "Apple Pay not available",
-                fix: "Test on a device with a card in Wallet, or give the trigger a fallback rule.",
+                fix: "Test on a device with a card in Wallet, or add a rule for users without Apple Pay.",
                 checks: []
             )
         case .versionUnresolved:

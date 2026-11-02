@@ -285,7 +285,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
 
         XCTAssertEqual(content.title, "Paddle needs a US buyer")
-        XCTAssertEqual(content.fix, "Target this paywall at a US audience, or give the trigger a fallback rule.")
+        XCTAssertEqual(content.fix, "Target this paywall at a US audience, or add a rule for users outside the US.")
         XCTAssertEqual(content.body, content.fix)
         XCTAssertEqual(content.detail, sentence)
         XCTAssertEqual(content.checks.map(\.verdict), [.passed, .failed, .checkedByServer])
@@ -346,8 +346,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     func testUnactionableFailuresCopyTheReport() {
         let errors: [PaywallUnavailableReason] = [
-            .bundleFetch403, .bundleFetchCannotDecodeContent, .webviewRenderFail, .bridgingError,
-            .invalidResolvedConfig,
+            .webviewRenderFail, .bridgingError, .invalidResolvedConfig,
         ]
         for reason in errors {
             XCTAssertEqual(content(for: reason).cta, .copyReport, reason.rawValue)
@@ -357,7 +356,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
     func testRepublishableBundleProblemsCopyThePaywallEditorLink() {
         let republishable: [PaywallUnavailableReason] = [
             .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
-            .bundleFetch404, .bundleFetch410,
+            .bundleFetch403, .bundleFetch404, .bundleFetch410, .bundleFetchCannotDecodeContent,
         ]
         for reason in republishable {
             XCTAssertEqual(
@@ -370,32 +369,22 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     // MARK: - SDK-side skips after a served paywall
 
-    func testEachBundleProblemHasItsOwnBody() {
+    func testEveryBundleProblemSharesOneActionableBody() {
         let reasons: [PaywallUnavailableReason] = [
-            .couldNotFindBundleUrl, .bundleFetchInvalidUrl, .bundleFetch403, .bundleFetch404,
-            .bundleFetch410, .bundleFetchCannotDecodeContent,
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
+            .bundleFetch403, .bundleFetch404, .bundleFetch410, .bundleFetchCannotDecodeContent,
         ]
         let contents = reasons.map { content(for: $0) }
 
-        XCTAssertEqual(Set(contents.map(\.title)).count, reasons.count)
-        XCTAssertEqual(Set(contents.map(\.body)).count, reasons.count)
+        XCTAssertEqual(Set(contents.map(\.title)), ["The paywall's content couldn't be loaded"])
+        XCTAssertEqual(Set(contents.map(\.body)).count, 1)
         for content in contents {
             XCTAssertTrue(content.body.contains("\"\(trigger)\""), content.reasonCode)
+            XCTAssertTrue(content.body.contains("Save the paywall again"), content.reasonCode)
+            XCTAssertFalse(content.body.contains("HTTP"), content.reasonCode)
             XCTAssertEqual(content.category, .integrationError, content.reasonCode)
         }
-    }
-
-    func testBothMalformedBundleUrlCodesShareTheirBody() {
-        XCTAssertEqual(
-            content(for: .bundleFetchInvalidUrlDetected).body,
-            content(for: .bundleFetchInvalidUrl).body
-        )
-    }
-
-    func testBundleHttpFailuresNameTheStatus() {
-        XCTAssertTrue(content(for: .bundleFetch403).body.contains("HTTP 403"))
-        XCTAssertTrue(content(for: .bundleFetch404).body.contains("HTTP 404"))
-        XCTAssertTrue(content(for: .bundleFetch410).body.contains("HTTP 410"))
+        XCTAssertEqual(Set(contents.map(\.reasonCode)).count, reasons.count)
     }
 
     func testEachLoadingStepHasItsOwnBody() {

@@ -34,8 +34,8 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
 
         XCTAssertEqual(
             mapper.map(content),
-            "[triggerHasNoPaywall] Paddle needs a US buyer. Target this paywall at a US audience, or give "
-                + "the trigger a fallback rule. \(sentence) https://app.tryhelium.com/workflows"
+            "[triggerHasNoPaywall] Paddle needs a US buyer. Target this paywall at a US audience, or add "
+                + "a rule for users outside the US. \(sentence) https://app.tryhelium.com/workflows"
         )
     }
 
@@ -77,11 +77,10 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         }
     }
 
-    func testBundleStatusFailuresLogTheirOwnCause() {
+    func testBundleProblemsLogTheSharedCause() {
         let line = logLine(for: .bundleFetch404)
 
-        XCTAssertTrue(line.hasPrefix("[bundleFetch404] The paywall's content was not found."))
-        XCTAssertTrue(line.contains("HTTP 404"))
+        XCTAssertTrue(line.hasPrefix("[bundleFetch404] The paywall's content couldn't be loaded."))
         XCTAssertTrue(line.contains("\"onboarding_end\""))
     }
 

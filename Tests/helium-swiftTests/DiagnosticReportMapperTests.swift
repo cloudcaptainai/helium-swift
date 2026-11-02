@@ -57,4 +57,20 @@ final class DiagnosticReportMapperTests: XCTestCase {
             """
         )
     }
+
+    func testReportKeepsTheServerSentenceAfterTheFix() {
+        let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
+        let content = contentMapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(trigger: "checkout", banditReason: sentence)
+        )
+
+        let report = mapper.map(content, trigger: "checkout", sdkVersion: "9.9.9")
+
+        XCTAssertEqual(report.components(separatedBy: "\n").count, 5)
+        XCTAssertTrue(report.hasSuffix(
+            "Paddle needs a US buyer — Target this paywall at a US audience, or add a rule for users "
+                + "outside the US. \(sentence)"
+        ))
+    }
 }

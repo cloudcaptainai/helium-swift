@@ -100,18 +100,14 @@ struct DiagnosticContentMapper {
         case .paywallsDownloadFail:
             return paywallsDownloadFail(code, context)
 
-        case .couldNotFindBundleUrl:
-            return bundleUrlMissing(code, context)
-        case .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl:
-            return bundleUrlMalformed(code, context)
-        case .bundleFetch403:
-            return bundleFetchForbidden(code, context)
-        case .bundleFetch404:
-            return bundleFetchNotFound(code, context)
-        case .bundleFetch410:
-            return bundleFetchGone(code, context)
-        case .bundleFetchCannotDecodeContent:
-            return bundleFetchUnreadable(code, context)
+        case .couldNotFindBundleUrl,
+             .bundleFetchInvalidUrlDetected,
+             .bundleFetchInvalidUrl,
+             .bundleFetch403,
+             .bundleFetch404,
+             .bundleFetch410,
+             .bundleFetchCannotDecodeContent:
+            return bundleUnavailable(code, context)
         case .webviewRenderFail, .bridgingError:
             return renderFailure(code)
         case .secondTryNoMatch:
@@ -457,79 +453,16 @@ struct DiagnosticContentMapper {
 
     // MARK: - INTEGRATION ERROR
 
-    private func bundleUrlMissing(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "This paywall has no content to render",
-            body: "The paywall for \"\(context.trigger)\" was served without a content bundle, so there "
-                + "is nothing to render. Save the paywall again in the editor to publish its content; "
-                + "if that does not help, copy the diagnostic report and contact Helium.",
-            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
-        )
-    }
-
-    private func bundleUrlMalformed(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "The paywall's content address is malformed",
-            body: "The content bundle address Helium received for \"\(context.trigger)\" is not a valid "
-                + "web address, so its content was never downloaded. Save the paywall again in the "
-                + "editor to publish a fresh one; if it stays malformed, copy the diagnostic report "
-                + "and contact Helium.",
-            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
-        )
-    }
-
-    private func bundleFetchForbidden(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "Access to the paywall's content was denied",
-            body: "The server hosting the content for \"\(context.trigger)\" refused the download "
-                + "(HTTP 403). Copy the diagnostic report and contact Helium.",
-            cta: .copyReport
-        )
-    }
-
-    private func bundleFetchNotFound(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "The paywall's content was not found",
-            body: "The content for \"\(context.trigger)\" no longer exists where its configuration "
-                + "points (HTTP 404). Save the paywall again in the editor to publish fresh content; "
-                + "if it keeps happening, copy the diagnostic report and contact Helium.",
-            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
-        )
-    }
-
-    private func bundleFetchGone(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "The paywall's content was removed",
-            body: "The content for \"\(context.trigger)\" was permanently removed from hosting "
-                + "(HTTP 410), usually because the paywall was deleted or republished. Save the "
-                + "paywall again in the editor to publish fresh content.",
-            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context))
-        )
-    }
-
-    private func bundleFetchUnreadable(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        bundleProblem(
-            code,
-            title: "The paywall's content is unreadable",
-            body: "The content downloaded for \"\(context.trigger)\" could not be read as text, so it "
-                + "cannot render. Copy the diagnostic report and contact Helium.",
-            cta: .copyReport
-        )
-    }
-
-    private func bundleProblem(_ code: String, title: String, body: String, cta: DiagnosticCta) -> DiagnosticContent {
+    private func bundleUnavailable(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
         DiagnosticContent(
             category: .integrationError,
-            title: title,
-            body: body,
+            title: "The paywall's content couldn't be loaded",
+            body: "Helium could not download or read the content for \"\(context.trigger)\". Save the "
+                + "paywall again in the editor to publish fresh content; if it keeps happening, copy "
+                + "the diagnostic report and contact Helium.",
             usersWillSee: UsersWillSee.seesNothingConsiderFallback,
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-            cta: cta,
+            cta: .copyUrl(label: "Copy Paywall Editor Link", url: paywallEditorUrl(context)),
             reasonCode: code
         )
     }
