@@ -19,7 +19,9 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// omits the key while the web checkout bundle rolls out support for it.
     case webCheckoutPaywallTraits
 
-    /// Gates App-to-Web plan-change handling for external checkout. Off by default.
+    /// Gates web checkout's already-owned check across every offered web product (Paddle
+    /// and Stripe) and prefetching the tapped Paddle price at tap time. Off keeps the
+    /// tapped-price-only checks.
     case a2w
 }
 
