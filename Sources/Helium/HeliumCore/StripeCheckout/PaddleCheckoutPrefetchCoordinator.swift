@@ -64,19 +64,26 @@ final class PaddleCheckoutPrefetchCoordinator {
     func handlePaywallOpen(paywallSession: PaywallSession) {
         guard let info = paywallSession.paywallInfoWithBackups,
               let webProducts = info.webProductsOfferedPaddle,
-              !webProducts.isEmpty,
-              let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
+              !webProducts.isEmpty else {
+            return
+        }
+
+        prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+    }
+
+    func prefetch(paywallSession: PaywallSession, compositeKeys: [String]) {
+        guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
         }
-        let priceIds = Self.extractPriceIds(from: webProducts)
+        let priceIds = Self.extractPriceIds(from: compositeKeys)
         guard !priceIds.isEmpty else { return }
 
         // Map each offered price to its creator-configured discount id and
         // forward it with the prefetch. The backend decides whether to apply
         // it, so we forward whenever a discount is configured.
         let discountIdByPriceId = Self.discountIdByPriceId(
-            from: webProducts,
+            from: compositeKeys,
             priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
         )
 
@@ -394,65 +401,21 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
+    /// Returns a restorable outcome when every offered product has a restorable price, preferring the tapped one.
     nonisolated static func allOfferedShortCircuit(
         in outcomes: [String: PaddlePrefetchOutcome],
         offeredProductKeys: [String],
         tappedProductKey: String
     ) -> (code: String, message: String)? {
+        func restorable(_ key: String) -> (code: String, message: String)? {
+            extractPriceId(from: key).flatMap { tappedShortCircuit(in: outcomes, tappedPriceId: $0) }
+        }
         let requiredKeys = offeredProductKeys.isEmpty ? [tappedProductKey] : offeredProductKeys
-        let composites = offeredProductKeys + [tappedProductKey]
-        var priceIdsByProductId: [String: [String]] = [:]
-
-        for composite in composites {
-            let parts = composite.split(separator: ":", omittingEmptySubsequences: false)
-            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { continue }
-            let productId = String(parts[0])
-            let priceId = String(parts[1])
-            if priceIdsByProductId[productId, default: []].contains(priceId) {
-                continue
-            }
-            priceIdsByProductId[productId, default: []].append(priceId)
+        let ownedKeys = Set((offeredProductKeys + [tappedProductKey]).filter { restorable($0) != nil })
+        guard requiredKeys.allSatisfy({ HeliumEntitlementsManager.thirdPartyIdsContain(productId: $0, in: ownedKeys) }) else {
+            return nil
         }
-
-        var requiredProductIds: [String] = []
-        for composite in requiredKeys {
-            guard let productId = composite.split(separator: ":", maxSplits: 1).first.map(String.init),
-                  !productId.isEmpty else {
-                return nil
-            }
-            if !requiredProductIds.contains(productId) {
-                requiredProductIds.append(productId)
-            }
-        }
-        guard !requiredProductIds.isEmpty else { return nil }
-
-        func restorableOutcome(for priceId: String) -> (code: String, message: String)? {
-            guard case let .alreadyEntitled(code, message, _) = outcomes[priceId] ?? .notStarted,
-                  PaddleErrorCodes.isRestorable(code) else {
-                return nil
-            }
-            return (code, message)
-        }
-
-        for productId in requiredProductIds {
-            guard let priceIds = priceIdsByProductId[productId],
-                  priceIds.contains(where: { restorableOutcome(for: $0) != nil }) else {
-                return nil
-            }
-        }
-
-        if let tappedPriceId = extractPriceId(from: tappedProductKey),
-           let tappedOutcome = restorableOutcome(for: tappedPriceId) {
-            return tappedOutcome
-        }
-        for productId in requiredProductIds {
-            for priceId in priceIdsByProductId[productId] ?? [] {
-                if let result = restorableOutcome(for: priceId) {
-                    return result
-                }
-            }
-        }
-        return nil
+        return restorable(tappedProductKey) ?? offeredProductKeys.lazy.compactMap(restorable).first
     }
 
     nonisolated static func californiaBlockedPostalCode(
