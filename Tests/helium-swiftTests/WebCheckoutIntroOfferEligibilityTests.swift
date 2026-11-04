@@ -130,7 +130,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             products: [yearlyTrial], priceMap: [:]))
     }
 
-    func testPreCheckSkipsCheckoutUsesExactMatchWhenA2WIsOff() {
+    func testPreCheckSkipsCheckoutUsesExactMatchWhenFlagIsOff() {
         XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
             entitledIds: [yearlyTrial],
             productKey: yearlyTrial,
@@ -145,7 +145,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         ))
     }
 
-    func testPreCheckSkipsCheckoutRequiresEveryOfferedProductAtProductLevelWhenA2WIsOn() {
+    func testPreCheckSkipsCheckoutRequiresEveryOfferedProductAtProductLevelWhenFlagIsOn() {
         XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
             entitledIds: ["pro_yearly:pri_old", "pro_monthly:pri_main_monthly"],
             productKey: yearlyTrial,

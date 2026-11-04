@@ -199,7 +199,7 @@ struct PaddleCreateTransactionForPaywallResponse: Decodable {
     let paddleCustomerId: String?
     let isKnownCustomer: Bool
     let requestId: String
-    var checkoutContextData: Data? = nil
+    var banditTransactionData: Data? = nil
 
     enum CodingKeys: String, CodingKey {
         case transactionId

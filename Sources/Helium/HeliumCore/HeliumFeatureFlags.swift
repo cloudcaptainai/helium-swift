@@ -19,10 +19,9 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// omits the key while the web checkout bundle rolls out support for it.
     case webCheckoutPaywallTraits
 
-    /// Gates web checkout's already-owned check across every offered web product (Paddle
-    /// and Stripe) and prefetching the tapped Paddle price at tap time. Off keeps the
-    /// tapped-price-only checks.
-    case a2w
+    /// Gates the already-owned check across every offered Paddle and Stripe web product,
+    /// and tap-time prefetch of the tapped Paddle price.
+    case a2wAlreadyOwnedAllWebProducts
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.

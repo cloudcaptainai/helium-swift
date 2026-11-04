@@ -104,9 +104,11 @@ public class HeliumPaymentAPIClient {
         discountId: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
-        body["sdkVersion"] = BuildConstants.version
-        body["sdkVersionWrapper"] = HeliumSdkConfig.shared.heliumWrapperSdkVersion
-        body["sdkWrapper"] = HeliumSdkConfig.shared.heliumSdk
+        body["applicationInfo"] = [
+            "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
+            "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
+            "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
+        ]
         body["priceId"] = priceId
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
@@ -125,7 +127,7 @@ public class HeliumPaymentAPIClient {
 
         if 200..<300 ~= statusCode {
             var result = try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
-            result.checkoutContextData = Self.extractCheckoutContext(from: data)
+            result.banditTransactionData = Self.extractBanditTransactionData(from: data)
             return result
         }
 
@@ -145,12 +147,12 @@ public class HeliumPaymentAPIClient {
         throw genericServerError(statusCode: statusCode, body: data)
     }
 
-    static func extractCheckoutContext(from data: Data) -> Data? {
+    static func extractBanditTransactionData(from data: Data) -> Data? {
         guard let response = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let checkoutContext = response["checkoutContext"] as? [String: Any] else {
+              let banditTransactionData = response["banditTransactionData"] as? [String: Any] else {
             return nil
         }
-        return try? JSONSerialization.data(withJSONObject: checkoutContext)
+        return try? JSONSerialization.data(withJSONObject: banditTransactionData)
     }
 
     /// Best-effort extraction of the existing subscription id from a 409 body.

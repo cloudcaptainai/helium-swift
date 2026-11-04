@@ -55,42 +55,42 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.requestId, "req_test_xyz")
     }
 
-    func testCreatePaddleTransactionForPaywall_extractsCheckoutContextObject() throws {
-        let body = #"{"checkoutContext":{"planChange":{"type":"upgrade"},"enabled":true}}"#
-        let contextData = try XCTUnwrap(
-            HeliumPaymentAPIClient.extractCheckoutContext(from: Data(body.utf8))
+    func testCreatePaddleTransactionForPaywall_extractsBanditTransactionDataObject() throws {
+        let body = #"{"banditTransactionData":{"planChange":{"type":"upgrade"},"enabled":true}}"#
+        let transactionData = try XCTUnwrap(
+            HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8))
         )
-        let context = try XCTUnwrap(JSONSerialization.jsonObject(with: contextData) as? [String: Any])
+        let context = try XCTUnwrap(JSONSerialization.jsonObject(with: transactionData) as? [String: Any])
         let planChange = try XCTUnwrap(context["planChange"] as? [String: Any])
 
         XCTAssertEqual(planChange["type"] as? String, "upgrade")
         XCTAssertEqual(context["enabled"] as? Bool, true)
     }
 
-    func testCreatePaddleTransactionForPaywall_ignoresNonObjectCheckoutContext() {
+    func testCreatePaddleTransactionForPaywall_ignoresNonObjectBanditTransactionData() {
         let bodies = [
             #"{}"#,
-            #"{"checkoutContext":null}"#,
-            #"{"checkoutContext":[]}"#,
-            #"{"checkoutContext":"upgrade"}"#,
+            #"{"banditTransactionData":null}"#,
+            #"{"banditTransactionData":[]}"#,
+            #"{"banditTransactionData":"upgrade"}"#,
             "garbage",
         ]
 
         for body in bodies {
             XCTAssertNil(
-                HeliumPaymentAPIClient.extractCheckoutContext(from: Data(body.utf8)),
+                HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8)),
                 "Expected no context for \(body)"
             )
         }
     }
 
-    func testCreatePaddleTransactionForPaywall_decodes2xxWhenCheckoutContextIsNotAnObject() async throws {
+    func testCreatePaddleTransactionForPaywall_decodes2xxWhenBanditTransactionDataIsNotAnObject() async throws {
         let bodyJSON = """
         {
             "transactionId": "txn_context",
             "isKnownCustomer": false,
             "requestId": "req_context",
-            "checkoutContext": ["not": "an object"]
+            "banditTransactionData": ["not": "an object"]
         }
         """
         MockURLProtocol.requestHandler = { request in
@@ -101,10 +101,10 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_context")
 
         XCTAssertEqual(result.transactionId, "txn_context")
-        XCTAssertNil(result.checkoutContextData)
+        XCTAssertNil(result.banditTransactionData)
     }
 
-    func testCreatePaddleTransactionForPaywall_includesSDKMetadataInRequestBody() async throws {
+    func testCreatePaddleTransactionForPaywall_includesApplicationInfoInRequestBody() async throws {
         let bodyJSON = """
         {
             "transactionId": "txn_metadata",
@@ -122,9 +122,13 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
         let requestBody = try XCTUnwrap(request.httpBody)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
-        XCTAssertEqual(body["sdkVersion"] as? String, BuildConstants.version)
-        XCTAssertEqual(body["sdkVersionWrapper"] as? String, HeliumSdkConfig.shared.heliumWrapperSdkVersion)
-        XCTAssertEqual(body["sdkWrapper"] as? String, HeliumSdkConfig.shared.heliumSdk)
+        let applicationInfo = try XCTUnwrap(body["applicationInfo"] as? [String: Any])
+        XCTAssertEqual(applicationInfo["heliumSdk"] as? String, HeliumSdkConfig.shared.heliumSdk)
+        XCTAssertEqual(applicationInfo["heliumSdkVersion"] as? String, HeliumSdkConfig.shared.heliumSdkVersion)
+        XCTAssertEqual(
+            applicationInfo["heliumWrapperSdkVersion"] as? String,
+            HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        )
     }
 
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {

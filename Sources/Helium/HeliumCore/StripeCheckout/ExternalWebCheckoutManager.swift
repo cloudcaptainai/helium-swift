@@ -98,7 +98,7 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.webPaywallBundleUrlMissing
         }
 
-        let a2wEnabled = HeliumFetchedConfigManager.shared.isFeatureEnabled(.a2w)
+        let a2wEnabled = HeliumFetchedConfigManager.shared.isFeatureEnabled(.a2wAlreadyOwnedAllWebProducts)
         let offeredProductKeys: [String]
         if a2wEnabled,
            let paywallInfo = paywallSession.paywallInfoWithBackups,

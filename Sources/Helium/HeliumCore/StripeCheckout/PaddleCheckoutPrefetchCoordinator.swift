@@ -282,9 +282,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {
             banditDict["paddleCustomerId"] = customerId
         }
-        if let checkoutContextData = bandit.checkoutContextData,
-           let checkoutContext = (try? JSONSerialization.jsonObject(with: checkoutContextData)) as? [String: Any] {
-            banditDict["checkoutContext"] = checkoutContext
+        if let transactionData = bandit.banditTransactionData,
+           let banditTransactionData = (try? JSONSerialization.jsonObject(with: transactionData)) as? [String: Any] {
+            banditDict["banditTransactionData"] = banditTransactionData
         }
 
         let trimmedPaddleResponse = trimPaddleCheckoutResponse(rawBody: paddle.rawBody)

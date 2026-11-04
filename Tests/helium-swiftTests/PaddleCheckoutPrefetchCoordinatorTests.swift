@@ -615,8 +615,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertTrue(error is PaddleNonUSBuyerBlocked)
     }
 
-    func testStartCheckoutFlowA2WDoesNotShortCircuitWhenAnotherOfferedProductIsUnowned() async throws {
-        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2w": true]))
+    func testStartCheckoutFlowDoesNotShortCircuitWhenAnotherOfferedProductIsUnowned() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2wAlreadyOwnedAllWebProducts": true]))
         let entitledProductKey = "pro_entitled:pri_entitled"
         let nonUSProductKey = "pro_nonus:pri_nonus_checkout"
         let session = checkoutFlowSession(productKeys: [entitledProductKey, nonUSProductKey])
@@ -637,14 +637,14 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 triggerName: session.trigger,
                 paywallSession: session
             )
-            XCTFail("An unowned offered product must prevent the A2W short-circuit")
+            XCTFail("An unowned offered product must prevent the all-offered short-circuit")
         } catch {
             XCTAssertEqual((error as? WebCheckoutError)?.caseName, "nonUSBuyerBlocked")
         }
     }
 
-    func testStartCheckoutFlowA2WPrefetchesTappedPriceOutsideOfferedProducts() async throws {
-        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2w": true]))
+    func testStartCheckoutFlowPrefetchesTappedPriceOutsideOfferedProductsWhenFlagIsEnabled() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2wAlreadyOwnedAllWebProducts": true]))
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(
             stripeProducts: nil,
             paddleProducts: nil,
@@ -1108,32 +1108,38 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: [:]))
     }
 
-    func testEncodeBootstrapsToCtx_passesThroughCheckoutContextAndOmitsItWhenAbsent() throws {
-        let contextData = try JSONSerialization.data(withJSONObject: ["planChange": ["type": "upgrade"]])
-        let withContext = PaddleCreateTransactionForPaywallResponse(
+    func testEncodeBootstrapsToCtx_passesThroughBanditTransactionDataAndOmitsItWhenAbsent() throws {
+        let transactionData = try JSONSerialization.data(withJSONObject: ["planChange": ["type": "upgrade"]])
+        let withTransactionData = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_with_context",
             paddleCustomerId: nil,
             isKnownCustomer: false,
             requestId: "req_with_context",
-            checkoutContextData: contextData
+            banditTransactionData: transactionData
         )
-        let withoutContext = makeBandit(transactionId: "txn_without_context")
+        let withoutTransactionData = makeBandit(transactionId: "txn_without_context")
         let paddle = makePaddle()
         let bootstraps = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
             outcomesByPriceId: [
-                "pri_with_context": .ready(bandit: withContext, paddle: paddle),
-                "pri_without_context": .ready(bandit: withoutContext, paddle: paddle),
+                "pri_with_context": .ready(bandit: withTransactionData, paddle: paddle),
+                "pri_without_context": .ready(bandit: withoutTransactionData, paddle: paddle),
             ]
         ))
-        let withContextBootstrap = try XCTUnwrap(bootstraps["pri_with_context"] as? [String: Any])
-        let withContextBandit = try XCTUnwrap(withContextBootstrap["banditResponse"] as? [String: Any])
-        let withoutContextBootstrap = try XCTUnwrap(bootstraps["pri_without_context"] as? [String: Any])
-        let withoutContextBandit = try XCTUnwrap(withoutContextBootstrap["banditResponse"] as? [String: Any])
-        let context = try XCTUnwrap(withContextBandit["checkoutContext"] as? [String: Any])
-        let planChange = try XCTUnwrap(context["planChange"] as? [String: Any])
+        let withTransactionDataBootstrap = try XCTUnwrap(bootstraps["pri_with_context"] as? [String: Any])
+        let withTransactionDataBandit = try XCTUnwrap(
+            withTransactionDataBootstrap["banditResponse"] as? [String: Any]
+        )
+        let withoutTransactionDataBootstrap = try XCTUnwrap(bootstraps["pri_without_context"] as? [String: Any])
+        let withoutTransactionDataBandit = try XCTUnwrap(
+            withoutTransactionDataBootstrap["banditResponse"] as? [String: Any]
+        )
+        let transactionDataObject = try XCTUnwrap(
+            withTransactionDataBandit["banditTransactionData"] as? [String: Any]
+        )
+        let planChange = try XCTUnwrap(transactionDataObject["planChange"] as? [String: Any])
 
         XCTAssertEqual(planChange["type"] as? String, "upgrade")
-        XCTAssertNil(withoutContextBandit["checkoutContext"])
+        XCTAssertNil(withoutTransactionDataBandit["banditTransactionData"])
     }
 
     func testEncodeBootstrapsToCtx_keepsOnlyBundleNeededFieldsInPaddleResponse() throws {
