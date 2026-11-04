@@ -179,9 +179,10 @@ extension HeliumUserTraits {
     static func forPaywall(triggerName: String?, presentationTraits: HeliumUserTraits?) -> HeliumUserTraits {
         var combined = HeliumUserTraits(["trigger": triggerName ?? ""])
         if let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken, !clientToken.isEmpty {
-            let productIds = HeliumEntitlementsManager.shared.paddleEntitlementsSource.cachedHeliumProductIds()
+            let paddleSource = HeliumEntitlementsManager.shared.paddleEntitlementsSource
+            let productIds = paddleSource.cachedHeliumProductIds()
             combined.merge(HeliumUserTraits([
-                "hlm_hasActivePaddleSubscription": !productIds.isEmpty,
+                "hlm_hasActivePaddleSubscription": !paddleSource.cachedSubscriptionHeliumProductIds().isEmpty,
                 "hlm_activePaddleProductIds": productIds.sorted(),
             ]))
         }

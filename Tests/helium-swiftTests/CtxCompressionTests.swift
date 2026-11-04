@@ -362,18 +362,14 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertNil(unconfigured["hlm_activePaddleProductIds"])
 
         config.setPreviewServerProducts(stripeProducts: nil, paddleProducts: nil, paddleClientToken: "pdl_test")
-        source.didCompletePurchase(productId: "pro_b", priceId: "pri_b", subscriptionExpiresAt: nil)
-        source.didCompletePurchase(productId: "pro_a", priceId: "pri_a", subscriptionExpiresAt: nil)
+        source.didCompletePurchase(productId: "lifetime", priceId: "pri_lifetime", subscriptionExpiresAt: nil)
 
         let configured = try HeliumUserTraits.forPaywall(
             triggerName: "onboarding",
             presentationTraits: nil
         ).jsonObject()
-        XCTAssertEqual(configured["hlm_hasActivePaddleSubscription"] as? Bool, true)
-        XCTAssertEqual(configured["hlm_activePaddleProductIds"] as? [String], [
-            "pro_a:pri_a",
-            "pro_b:pri_b",
-        ])
+        XCTAssertEqual(configured["hlm_hasActivePaddleSubscription"] as? Bool, false)
+        XCTAssertEqual(configured["hlm_activePaddleProductIds"] as? [String], ["lifetime:pri_lifetime"])
 
         HeliumIdentityManager.shared.setCustomUserTraits(
             HeliumUserTraits(["hlm_hasActivePaddleSubscription": false])
