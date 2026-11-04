@@ -637,7 +637,7 @@ actor HeliumEntitlementsManager {
 
     /// Third-party IDs (e.g. Stripe) use helium format ("prod_id:price_id"), but callers could in theory
     /// just pass a product ID. Prefix match so both "prod_123" and "prod_123:price_456" work.
-    private static func thirdPartyIdsContain(productId: String, in ids: Set<String>) -> Bool {
+    static func thirdPartyIdsContain(productId: String, in ids: Set<String>) -> Bool {
         let prefix = String(productId.prefix(while: { $0 != ":" }))
         return ids.contains(where: { String($0.prefix(while: { $0 != ":" })) == prefix })
     }
@@ -722,4 +722,3 @@ actor HeliumEntitlementsManager {
         }
     }
 }
-

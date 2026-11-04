@@ -98,8 +98,34 @@ public class ExternalWebCheckoutManager: NSObject {
             throw WebCheckoutError.webPaywallBundleUrlMissing
         }
 
-        let entitledBefore = await entitledProductIdsBeforeCheckout(productKey: productKey)
-        if entitledBefore.contains(productKey) {
+        let a2wEnabled = HeliumFetchedConfigManager.shared.isFeatureEnabled(.a2w)
+        let offeredProductKeys: [String]
+        if a2wEnabled,
+           let paywallInfo = paywallSession.paywallInfoWithBackups,
+           let offeredProducts = provider.getOfferedProducts(paywallInfo, false),
+           !offeredProducts.isEmpty {
+            offeredProductKeys = offeredProducts
+        } else {
+            offeredProductKeys = [productKey]
+        }
+        let wouldSkipCheckout: ((Set<String>) -> Bool)? = a2wEnabled ? { entitledIds in
+            Self.preCheckSkipsCheckout(
+                entitledIds: entitledIds,
+                productKey: productKey,
+                offeredProductKeys: offeredProductKeys,
+                a2wEnabled: true
+            )
+        } : nil
+        let entitledBefore = await entitledProductIdsBeforeCheckout(
+            productKey: productKey,
+            wouldSkipCheckout: wouldSkipCheckout
+        )
+        if Self.preCheckSkipsCheckout(
+            entitledIds: entitledBefore,
+            productKey: productKey,
+            offeredProductKeys: offeredProductKeys,
+            a2wEnabled: a2wEnabled
+        ) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: user already entitled to \(productKey) — skipping browser")
             return .preCheckResolved
         }
@@ -126,6 +152,22 @@ public class ExternalWebCheckoutManager: NSObject {
             )
             let priceIdsToAwait = Array(Set(allPriceIds + [tappedPriceId]))
 
+            if a2wEnabled,
+               let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
+               !clientToken.isEmpty {
+                let discountIdByPriceId = PaddleCheckoutPrefetchCoordinator.discountIdByPriceId(
+                    from: [productKey],
+                    priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
+                )
+                PaddleCheckoutPrefetchCoordinator.shared.prefetch(
+                    paywallSession: paywallSession,
+                    priceIds: [tappedPriceId],
+                    discountIdByPriceId: discountIdByPriceId,
+                    paddleClientToken: clientToken,
+                    iosBundleId: Bundle.main.bundleIdentifier
+                )
+            }
+
             let awaitStart = Date()
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
@@ -133,9 +175,16 @@ public class ExternalWebCheckoutManager: NSObject {
             )
             let awaitDurationMs = msSince(awaitStart)
 
-            let shortCircuit = PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
-                in: outcomes, tappedPriceId: tappedPriceId
-            )
+            let shortCircuit = a2wEnabled
+                ? PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+                    in: outcomes,
+                    offeredProductKeys: offeredProductKeys,
+                    tappedProductKey: productKey
+                )
+                : PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
+                    in: outcomes,
+                    tappedPriceId: tappedPriceId
+                )
             emitPaddleAwaitResolved(
                 tappedPriceId: tappedPriceId,
                 awaitDurationMs: awaitDurationMs,
@@ -440,14 +489,16 @@ public class ExternalWebCheckoutManager: NSObject {
 
     func entitledProductIdsBeforeCheckout(
         productKey: String,
-        refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds
+        refreshTimeoutMilliseconds: UInt64 = ExternalWebCheckoutManager.preCheckRefreshTimeoutMilliseconds,
+        wouldSkipCheckout: ((Set<String>) -> Bool)? = nil
     ) async -> Set<String> {
         let source = entitlementsSource
+        let shouldSkipCheckout = wouldSkipCheckout ?? { $0.contains(productKey) }
         guard source.hasEntitlementsSnapshot else {
             return await source.purchasedHeliumProductIds()
         }
         let cachedIds = source.cachedHeliumProductIds()
-        guard !source.hasFreshEntitlementsCache || cachedIds.contains(productKey) else { return cachedIds }
+        guard !source.hasFreshEntitlementsCache || shouldSkipCheckout(cachedIds) else { return cachedIds }
 
         let refreshedIds = await withTimeoutAbandoningOperation(milliseconds: refreshTimeoutMilliseconds) {
             await source.refreshEntitlementsJoiningInFlightFetch()
@@ -457,10 +508,23 @@ public class ExternalWebCheckoutManager: NSObject {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: entitlement refresh for \(productKey) timed out — keeping cached answer")
             return cachedIds
         }
-        if !refreshedIds.contains(productKey) {
+        if !shouldSkipCheckout(refreshedIds) {
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) pre-checkout: refresh shows \(productKey) no longer owned — continuing to checkout")
         }
         return refreshedIds
+    }
+
+    static func preCheckSkipsCheckout(
+        entitledIds: Set<String>,
+        productKey: String,
+        offeredProductKeys: [String],
+        a2wEnabled: Bool
+    ) -> Bool {
+        guard a2wEnabled else { return entitledIds.contains(productKey) }
+        let requiredProductKeys = offeredProductKeys.isEmpty ? [productKey] : offeredProductKeys
+        return requiredProductKeys.allSatisfy {
+            HeliumEntitlementsManager.thirdPartyIdsContain(productId: $0, in: entitledIds)
+        }
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without

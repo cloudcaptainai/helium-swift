@@ -341,6 +341,50 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(dict["trigger"] as? String, "custom")  // presentation wins over the default trigger
     }
 
+    func testForPaywallIncludesPaddleTraitsOnlyWhenConfiguredAndCustomerTraitsWin() throws {
+        let config = HeliumFetchedConfigManager.shared
+        let source = HeliumEntitlementsManager.shared.paddleEntitlementsSource
+        let originalUserTraits = HeliumIdentityManager.shared.getUserTraits()
+        HeliumFetchedConfigManager.reset()
+        source.clearEntitlements()
+        HeliumIdentityManager.shared.setCustomUserTraits(.empty)
+        defer {
+            HeliumFetchedConfigManager.reset()
+            source.clearEntitlements()
+            HeliumIdentityManager.shared.setCustomUserTraits(originalUserTraits)
+        }
+
+        let unconfigured = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertNil(unconfigured["hlm_hasActivePaddleSubscription"])
+        XCTAssertNil(unconfigured["hlm_activePaddleProductIds"])
+
+        config.setPreviewServerProducts(stripeProducts: nil, paddleProducts: nil, paddleClientToken: "pdl_test")
+        source.didCompletePurchase(productId: "pro_b", priceId: "pri_b", subscriptionExpiresAt: nil)
+        source.didCompletePurchase(productId: "pro_a", priceId: "pri_a", subscriptionExpiresAt: nil)
+
+        let configured = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertEqual(configured["hlm_hasActivePaddleSubscription"] as? Bool, true)
+        XCTAssertEqual(configured["hlm_activePaddleProductIds"] as? [String], [
+            "pro_a:pri_a",
+            "pro_b:pri_b",
+        ])
+
+        HeliumIdentityManager.shared.setCustomUserTraits(
+            HeliumUserTraits(["hlm_hasActivePaddleSubscription": false])
+        )
+        let overridden = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertEqual(overridden["hlm_hasActivePaddleSubscription"] as? Bool, false)
+    }
+
     func testJsonObject_preservesJSONValueTypes() throws {
         let traits = HeliumUserTraits([
             "plan": "gold",           // String

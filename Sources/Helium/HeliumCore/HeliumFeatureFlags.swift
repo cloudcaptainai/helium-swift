@@ -18,6 +18,9 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// browser-opened paywall reads the same traits it would in-app. Off (default)
     /// omits the key while the web checkout bundle rolls out support for it.
     case webCheckoutPaywallTraits
+
+    /// Gates App-to-Web plan-change handling for external checkout. Off by default.
+    case a2w
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.

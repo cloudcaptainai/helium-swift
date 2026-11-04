@@ -54,4 +54,10 @@ final class HeliumFeatureFlagsTests: XCTestCase {
         XCTAssertFalse(HeliumFeatureFlags.from(JSON(["caConsentModalEnabled": false])).isEnabled(.caConsentModalEnabled))
         XCTAssertFalse(HeliumFeatureFlags.empty.isEnabled(.caConsentModalEnabled))
     }
+
+    func testA2WParsesAndDefaultsOff() {
+        XCTAssertTrue(HeliumFeatureFlags.from(JSON(["a2w": true])).isEnabled(.a2w))
+        XCTAssertFalse(HeliumFeatureFlags.from(JSON(["a2w": false])).isEnabled(.a2w))
+        XCTAssertFalse(HeliumFeatureFlags.empty.isEnabled(.a2w))
+    }
 }

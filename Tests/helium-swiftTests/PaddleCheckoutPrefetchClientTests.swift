@@ -55,6 +55,78 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.requestId, "req_test_xyz")
     }
 
+    func testCreatePaddleTransactionForPaywall_extractsCheckoutContextObject() throws {
+        let body = #"{"checkoutContext":{"planChange":{"type":"upgrade"},"enabled":true}}"#
+        let contextData = try XCTUnwrap(
+            HeliumPaymentAPIClient.extractCheckoutContext(from: Data(body.utf8))
+        )
+        let context = try XCTUnwrap(JSONSerialization.jsonObject(with: contextData) as? [String: Any])
+        let planChange = try XCTUnwrap(context["planChange"] as? [String: Any])
+
+        XCTAssertEqual(planChange["type"] as? String, "upgrade")
+        XCTAssertEqual(context["enabled"] as? Bool, true)
+    }
+
+    func testCreatePaddleTransactionForPaywall_ignoresNonObjectCheckoutContext() {
+        let bodies = [
+            #"{}"#,
+            #"{"checkoutContext":null}"#,
+            #"{"checkoutContext":[]}"#,
+            #"{"checkoutContext":"upgrade"}"#,
+            "garbage",
+        ]
+
+        for body in bodies {
+            XCTAssertNil(
+                HeliumPaymentAPIClient.extractCheckoutContext(from: Data(body.utf8)),
+                "Expected no context for \(body)"
+            )
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_decodes2xxWhenCheckoutContextIsNotAnObject() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_context",
+            "isKnownCustomer": false,
+            "requestId": "req_context",
+            "checkoutContext": ["not": "an object"]
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_context")
+
+        XCTAssertEqual(result.transactionId, "txn_context")
+        XCTAssertNil(result.checkoutContextData)
+    }
+
+    func testCreatePaddleTransactionForPaywall_includesSDKMetadataInRequestBody() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_metadata",
+            "isKnownCustomer": false,
+            "requestId": "req_metadata"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_metadata")
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        XCTAssertEqual(body["sdkVersion"] as? String, BuildConstants.version)
+        XCTAssertEqual(body["sdkVersionWrapper"] as? String, HeliumSdkConfig.shared.heliumWrapperSdkVersion)
+        XCTAssertEqual(body["sdkWrapper"] as? String, HeliumSdkConfig.shared.heliumSdk)
+    }
+
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {
         let bodyJSON = """
         {

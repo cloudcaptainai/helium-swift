@@ -104,6 +104,9 @@ public class HeliumPaymentAPIClient {
         discountId: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
+        body["sdkVersion"] = BuildConstants.version
+        body["sdkVersionWrapper"] = HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        body["sdkWrapper"] = HeliumSdkConfig.shared.heliumSdk
         body["priceId"] = priceId
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
@@ -121,7 +124,9 @@ public class HeliumPaymentAPIClient {
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if 200..<300 ~= statusCode {
-            return try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
+            var result = try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
+            result.checkoutContextData = Self.extractCheckoutContext(from: data)
+            return result
         }
 
         if statusCode == 409,
@@ -138,6 +143,14 @@ public class HeliumPaymentAPIClient {
             )
         }
         throw genericServerError(statusCode: statusCode, body: data)
+    }
+
+    static func extractCheckoutContext(from data: Data) -> Data? {
+        guard let response = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let checkoutContext = response["checkoutContext"] as? [String: Any] else {
+            return nil
+        }
+        return try? JSONSerialization.data(withJSONObject: checkoutContext)
     }
 
     /// Best-effort extraction of the existing subscription id from a 409 body.

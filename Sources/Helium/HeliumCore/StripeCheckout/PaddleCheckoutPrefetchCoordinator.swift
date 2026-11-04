@@ -282,6 +282,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {
             banditDict["paddleCustomerId"] = customerId
         }
+        if let checkoutContextData = bandit.checkoutContextData,
+           let checkoutContext = (try? JSONSerialization.jsonObject(with: checkoutContextData)) as? [String: Any] {
+            banditDict["checkoutContext"] = checkoutContext
+        }
 
         let trimmedPaddleResponse = trimPaddleCheckoutResponse(rawBody: paddle.rawBody)
 
@@ -386,6 +390,67 @@ final class PaddleCheckoutPrefetchCoordinator {
         if case let .alreadyEntitled(code, message, _) = outcomes[tappedPriceId] ?? .notStarted,
            PaddleErrorCodes.isRestorable(code) {
             return (code, message)
+        }
+        return nil
+    }
+
+    nonisolated static func allOfferedShortCircuit(
+        in outcomes: [String: PaddlePrefetchOutcome],
+        offeredProductKeys: [String],
+        tappedProductKey: String
+    ) -> (code: String, message: String)? {
+        let requiredKeys = offeredProductKeys.isEmpty ? [tappedProductKey] : offeredProductKeys
+        let composites = offeredProductKeys + [tappedProductKey]
+        var priceIdsByProductId: [String: [String]] = [:]
+
+        for composite in composites {
+            let parts = composite.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { continue }
+            let productId = String(parts[0])
+            let priceId = String(parts[1])
+            if priceIdsByProductId[productId, default: []].contains(priceId) {
+                continue
+            }
+            priceIdsByProductId[productId, default: []].append(priceId)
+        }
+
+        var requiredProductIds: [String] = []
+        for composite in requiredKeys {
+            guard let productId = composite.split(separator: ":", maxSplits: 1).first.map(String.init),
+                  !productId.isEmpty else {
+                return nil
+            }
+            if !requiredProductIds.contains(productId) {
+                requiredProductIds.append(productId)
+            }
+        }
+        guard !requiredProductIds.isEmpty else { return nil }
+
+        func restorableOutcome(for priceId: String) -> (code: String, message: String)? {
+            guard case let .alreadyEntitled(code, message, _) = outcomes[priceId] ?? .notStarted,
+                  PaddleErrorCodes.isRestorable(code) else {
+                return nil
+            }
+            return (code, message)
+        }
+
+        for productId in requiredProductIds {
+            guard let priceIds = priceIdsByProductId[productId],
+                  priceIds.contains(where: { restorableOutcome(for: $0) != nil }) else {
+                return nil
+            }
+        }
+
+        if let tappedPriceId = extractPriceId(from: tappedProductKey),
+           let tappedOutcome = restorableOutcome(for: tappedPriceId) {
+            return tappedOutcome
+        }
+        for productId in requiredProductIds {
+            for priceId in priceIdsByProductId[productId] ?? [] {
+                if let result = restorableOutcome(for: priceId) {
+                    return result
+                }
+            }
         }
         return nil
     }

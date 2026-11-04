@@ -199,6 +199,14 @@ struct PaddleCreateTransactionForPaywallResponse: Decodable {
     let paddleCustomerId: String?
     let isKnownCustomer: Bool
     let requestId: String
+    var checkoutContextData: Data? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case transactionId
+        case paddleCustomerId
+        case isKnownCustomer
+        case requestId
+    }
 }
 
 // MARK: - Entitlement Response Types

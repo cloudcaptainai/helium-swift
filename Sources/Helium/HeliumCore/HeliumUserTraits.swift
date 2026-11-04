@@ -178,6 +178,13 @@ extension HeliumUserTraits {
     /// conflicts. These are the keys a Helium customer can wire the paywall editor to read.
     static func forPaywall(triggerName: String?, presentationTraits: HeliumUserTraits?) -> HeliumUserTraits {
         var combined = HeliumUserTraits(["trigger": triggerName ?? ""])
+        if let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken, !clientToken.isEmpty {
+            let productIds = HeliumEntitlementsManager.shared.paddleEntitlementsSource.cachedHeliumProductIds()
+            combined.merge(HeliumUserTraits([
+                "hlm_hasActivePaddleSubscription": !productIds.isEmpty,
+                "hlm_activePaddleProductIds": productIds.sorted(),
+            ]))
+        }
         combined.merge(HeliumIdentityManager.shared.getUserTraits())
         if let presentationTraits {
             combined.merge(presentationTraits)
