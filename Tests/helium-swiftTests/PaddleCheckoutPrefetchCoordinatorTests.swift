@@ -1386,7 +1386,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
         let siblingResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
             in: siblingPriceOutcomes,
-            offeredProductKeys: ["pro_a:pri_current", "pro_b:pri_other"],
+            offeredProductKeys: ["pro_a:pri_current", "pro_a:pri_sibling", "pro_b:pri_other"],
             tappedProductKey: "pro_a:pri_tapped"
         )
         XCTAssertEqual(siblingResult?.message, "sibling")
@@ -1399,7 +1399,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         )
         let tappedResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
             in: tappedPriceOutcomes,
-            offeredProductKeys: ["pro_a:pri_current", "pro_b:pri_other"],
+            offeredProductKeys: ["pro_a:pri_current", "pro_a:pri_sibling", "pro_b:pri_other"],
             tappedProductKey: "pro_a:pri_tapped"
         )
         XCTAssertEqual(tappedResult?.code, "duplicate_subscription")

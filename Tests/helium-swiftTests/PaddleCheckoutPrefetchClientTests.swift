@@ -90,7 +90,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
             "transactionId": "txn_context",
             "isKnownCustomer": false,
             "requestId": "req_context",
-            "banditTransactionData": ["not": "an object"]
+            "banditTransactionData": ["not", "an object"]
         }
         """
         MockURLProtocol.requestHandler = { request in
