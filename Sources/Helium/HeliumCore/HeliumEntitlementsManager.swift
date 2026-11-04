@@ -7,10 +7,32 @@
 
 import StoreKit
 
+final class StoreKitEntitlementsSnapshot: @unchecked Sendable {
+    private let lock = NSLock()
+    private var productIds: Set<String> = []
+    private var subscriptionProductIds: Set<String> = []
+
+    func update(productIds: Set<String>, subscriptionProductIds: Set<String>) {
+        lock.withLock {
+            self.productIds = productIds
+            self.subscriptionProductIds = subscriptionProductIds
+        }
+    }
+
+    func cachedProductIds() -> Set<String> {
+        lock.withLock { productIds }
+    }
+
+    func cachedSubscriptionProductIds() -> Set<String> {
+        lock.withLock { subscriptionProductIds }
+    }
+}
+
 actor HeliumEntitlementsManager {
     
     static let shared = HeliumEntitlementsManager()
     
+    nonisolated let storeKitSnapshot = StoreKitEntitlementsSnapshot()
     nonisolated let paddleEntitlementsSource = PaddleEntitlementsSource()
     nonisolated let stripeEntitlementsSource = StripeEntitlementsSource()
 
@@ -78,7 +100,22 @@ actor HeliumEntitlementsManager {
     // MARK: - Persistence Constants
 
     private let entitlementsFileName = "helium_entitlements.json"
-    private var cache = EntitlementsCache()
+    private var cache = EntitlementsCache() {
+        didSet {
+            let persisted = cache.persistedEntitlements.filter { $0.appearsValid() }
+            if cache.lastTransactionsLoadedTime == nil, !persisted.isEmpty {
+                storeKitSnapshot.update(
+                    productIds: Set(persisted.map(\.productID)),
+                    subscriptionProductIds: Set(persisted.filter(\.isAutoRenewable).map(\.productID))
+                )
+            } else {
+                storeKitSnapshot.update(
+                    productIds: Set(cache.transactions.map(\.productID)),
+                    subscriptionProductIds: Set(cache.transactions.filter { $0.productType == .autoRenewable }.map(\.productID))
+                )
+            }
+        }
+    }
     private var updateListenerTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var configDownloadObserver: NSObjectProtocol?

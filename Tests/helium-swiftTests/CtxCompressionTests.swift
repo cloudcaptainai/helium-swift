@@ -4,6 +4,11 @@ import Compression
 
 final class CtxCompressionTests: XCTestCase {
 
+    override func tearDown() {
+        HeliumEntitlementsManager.shared.storeKitSnapshot.update(productIds: [], subscriptionProductIds: [])
+        super.tearDown()
+    }
+
     // MARK: - Round-trip
 
     func testDeflateRaw_roundTripsThroughAppleDecoder() throws {
@@ -379,6 +384,40 @@ final class CtxCompressionTests: XCTestCase {
             presentationTraits: nil
         ).jsonObject()
         XCTAssertEqual(overridden["hlm_hasActivePaddleSubscription"] as? Bool, false)
+    }
+
+    func testForPaywallIncludesStoreKitTraitsAndCustomerTraitsWin() throws {
+        let originalUserTraits = HeliumIdentityManager.shared.getUserTraits()
+        HeliumIdentityManager.shared.setCustomUserTraits(.empty)
+        defer { HeliumIdentityManager.shared.setCustomUserTraits(originalUserTraits) }
+
+        let snapshot = HeliumEntitlementsManager.shared.storeKitSnapshot
+        snapshot.update(productIds: ["app_b", "app_a"], subscriptionProductIds: ["app_a"])
+
+        let subscriptionTraits = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertEqual(subscriptionTraits["hlm_hasActiveAppStoreSubscription"] as? Bool, true)
+        XCTAssertEqual(subscriptionTraits["hlm_activeAppStoreProductIds"] as? [String], ["app_a", "app_b"])
+
+        snapshot.update(productIds: ["lifetime"], subscriptionProductIds: [])
+        let nonSubscriptionTraits = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertEqual(nonSubscriptionTraits["hlm_hasActiveAppStoreSubscription"] as? Bool, false)
+        XCTAssertEqual(nonSubscriptionTraits["hlm_activeAppStoreProductIds"] as? [String], ["lifetime"])
+
+        snapshot.update(productIds: ["app_a"], subscriptionProductIds: ["app_a"])
+        HeliumIdentityManager.shared.setCustomUserTraits(
+            HeliumUserTraits(["hlm_hasActiveAppStoreSubscription": false])
+        )
+        let overriddenTraits = try HeliumUserTraits.forPaywall(
+            triggerName: "onboarding",
+            presentationTraits: nil
+        ).jsonObject()
+        XCTAssertEqual(overriddenTraits["hlm_hasActiveAppStoreSubscription"] as? Bool, false)
     }
 
     func testJsonObject_preservesJSONValueTypes() throws {
