@@ -12,12 +12,15 @@ import Foundation
 struct DiagnosticReportMapper {
 
     func map(_ content: DiagnosticContent, trigger: String, sdkVersion: String) -> String {
-        """
+        let explanation = [content.body, content.detail]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        return """
         Helium paywall diagnostic
         trigger: \(escapingLineBreaks(in: trigger))
         reason: \(content.reasonCode) (\(content.category.reportName))
         sdk: helium-swift \(sdkVersion)
-        \(escapingLineBreaks(in: content.title)) — \(escapingLineBreaks(in: content.body))
+        \(escapingLineBreaks(in: content.title)) — \(escapingLineBreaks(in: explanation))
         """
     }
 

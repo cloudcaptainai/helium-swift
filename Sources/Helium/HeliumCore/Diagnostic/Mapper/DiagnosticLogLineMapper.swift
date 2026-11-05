@@ -14,7 +14,10 @@ struct DiagnosticLogLineMapper {
 
     func map(_ content: DiagnosticContent) -> String {
         var line = "[\(content.reasonCode)] \(content.title). \(content.body)"
-        if case let .openUrl(_, url) = content.cta {
+        if let detail = content.detail {
+            line += " \(detail)"
+        }
+        if let url = content.cta.url {
             line += " \(url)"
         } else if let link = content.usersWillSeeLink {
             line += " \(link.url)"

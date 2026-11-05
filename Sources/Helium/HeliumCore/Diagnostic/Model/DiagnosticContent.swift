@@ -24,4 +24,31 @@ struct DiagnosticContent: Equatable {
     let usersWillSeeLink: DiagnosticLink?
     let cta: DiagnosticCta
     let reasonCode: String
+    let fix: String?
+    let detail: String?
+    let checks: [DiagnosticCheck]
+
+    init(
+        category: DiagnosticCategory,
+        title: String,
+        body: String,
+        usersWillSee: String,
+        usersWillSeeLink: DiagnosticLink?,
+        cta: DiagnosticCta,
+        reasonCode: String,
+        fix: String? = nil,
+        detail: String? = nil,
+        checks: [DiagnosticCheck] = []
+    ) {
+        self.category = category
+        self.title = title
+        self.body = body
+        self.usersWillSee = usersWillSee
+        self.usersWillSeeLink = usersWillSeeLink
+        self.cta = cta
+        self.reasonCode = reasonCode
+        self.fix = fix
+        self.detail = detail
+        self.checks = checks
+    }
 }

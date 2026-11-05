@@ -24,6 +24,8 @@ struct HeliumPaywallDiagnosticView: View {
     let onDismiss: () -> Void
 
     @State private var doNotShowAgain: Bool = UserDefaults.standard.bool(forKey: HeliumDiagnosticGate.doNotShowAgainKey)
+    @State private var linkCopied = false
+    @State private var linkCopiedReset: DispatchWorkItem?
 
     private let styleMapper = DiagnosticCategoryStyleMapper()
     private let reportMapper = DiagnosticReportMapper()
@@ -51,7 +53,9 @@ struct HeliumPaywallDiagnosticView: View {
                     if !isForPreview {
                         triggerPill
                     }
+                    checklist
                     bodyText
+                    detailText
                     usersCallout
                     primaryAction
                     secondaryAction
@@ -129,11 +133,75 @@ struct HeliumPaywallDiagnosticView: View {
     }
 
     private var bodyText: some View {
-        Text(content.body)
-            .font(.body)
-            .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 8) {
+            if content.fix != nil {
+                Text("Fix")
+                    .font(.body.weight(.bold))
+            }
+            Text(content.body)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var checklist: some View {
+        if !content.checks.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(content.checks, id: \.label) { check in
+                    checkRow(check)
+                }
+            }
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))
             .padding(.top, 20)
+        }
+    }
+
+    private func checkRow(_ check: DiagnosticCheck) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: Self.checkSymbol(check.verdict))
+                .foregroundColor(Self.checkColor(check.verdict))
+            Text(check.label)
+                .font(.body)
+                .foregroundColor(check.verdict == .failed ? .primary : .secondary)
+            if check.verdict == .checkedByServer {
+                Text("checked by the server")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private static func checkSymbol(_ verdict: DiagnosticCheck.Verdict) -> String {
+        switch verdict {
+        case .passed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .checkedByServer: return "circle.dotted"
+        }
+    }
+
+    private static func checkColor(_ verdict: DiagnosticCheck.Verdict) -> Color {
+        switch verdict {
+        case .passed: return .green
+        case .failed: return .red
+        case .checkedByServer: return .secondary
+        }
+    }
+
+    @ViewBuilder
+    private var detailText: some View {
+        if let detail = content.detail {
+            Text(detail)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 10)
+        }
     }
 
     /// The outcome this modal can honestly state, or nil when a rendered fallback paywall means the
@@ -193,12 +261,23 @@ struct HeliumPaywallDiagnosticView: View {
         }
     }
 
+    var primaryActionLabel: String {
+        switch content.cta {
+        case let .openUrl(label, _):
+            return label
+        case let .copyUrl(label, _):
+            return linkCopied ? "Link Copied" : label
+        case .copyReport:
+            return "Copy Diagnostic Report"
+        }
+    }
+
     @ViewBuilder
     private var primaryAction: some View {
         switch content.cta {
-        case let .openUrl(label, urlString):
+        case let .openUrl(_, urlString):
             HStack(spacing: 12) {
-                filledCtaButton(label) { open(urlString) }
+                filledCtaButton(primaryActionLabel) { open(urlString) }
                 Button(action: { UIPasteboard.general.string = urlString }) {
                     Image(systemName: "doc.on.doc")
                         .font(.body)
@@ -210,9 +289,13 @@ struct HeliumPaywallDiagnosticView: View {
             }
             .padding(.top, 24)
 
+        case let .copyUrl(_, urlString):
+            filledCtaButton(primaryActionLabel) { copyLink(urlString) }
+                .padding(.top, 24)
+
         // The report is the only action worth offering — no support URL is invented for it.
         case .copyReport:
-            filledCtaButton("Copy Diagnostic Report", action: copyReport)
+            filledCtaButton(primaryActionLabel, action: copyReport)
                 .padding(.top, 24)
         }
     }
@@ -220,7 +303,7 @@ struct HeliumPaywallDiagnosticView: View {
     /// Hidden when copying the report is already the primary CTA.
     @ViewBuilder
     private var secondaryAction: some View {
-        if case .openUrl = content.cta {
+        if content.cta != .copyReport {
             Button(action: copyReport) {
                 Text("Copy Diagnostic Report")
                     .font(.subheadline)
@@ -246,6 +329,15 @@ struct HeliumPaywallDiagnosticView: View {
 
     private func copyReport() {
         UIPasteboard.general.string = report
+    }
+
+    private func copyLink(_ urlString: String) {
+        UIPasteboard.general.string = urlString
+        linkCopied = true
+        linkCopiedReset?.cancel()
+        let reset = DispatchWorkItem { linkCopied = false }
+        linkCopiedReset = reset
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: reset)
     }
 
     private var doNotShowAgainToggle: some View {
