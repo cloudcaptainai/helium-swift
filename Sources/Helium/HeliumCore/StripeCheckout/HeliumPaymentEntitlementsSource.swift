@@ -81,6 +81,10 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
         lock.withLock { currentHeliumProductIds }
     }
 
+    func cachedSubscriptionHeliumProductIds() -> Set<String> {
+        lock.withLock { currentSubscriptionHeliumProductIds }
+    }
+
     func cachedIntroOfferEligible() -> Bool? {
         lock.withLock { cached?.introOfferEligible }
     }

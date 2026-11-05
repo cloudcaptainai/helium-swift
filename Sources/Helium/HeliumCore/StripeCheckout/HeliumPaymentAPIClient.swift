@@ -101,9 +101,26 @@ public class HeliumPaymentAPIClient {
     /// `pri_xxx` form.
     func createPaddleTransactionForPaywall(
         priceId: String,
-        discountId: String? = nil
+        discountId: String? = nil,
+        paywallUUID: String? = nil,
+        triggerName: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
+        body["applicationInfo"] = [
+            "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
+            "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
+            "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
+        ]
+        var paywallInfo: [String: String] = [:]
+        if let paywallUUID, !paywallUUID.isEmpty {
+            paywallInfo["paywallUUID"] = paywallUUID
+        }
+        if let triggerName, !triggerName.isEmpty {
+            paywallInfo["triggerName"] = triggerName
+        }
+        if !paywallInfo.isEmpty {
+            body["paywallInfo"] = paywallInfo
+        }
         body["priceId"] = priceId
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
@@ -121,7 +138,9 @@ public class HeliumPaymentAPIClient {
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if 200..<300 ~= statusCode {
-            return try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
+            var result = try JSONDecoder().decode(PaddleCreateTransactionForPaywallResponse.self, from: data)
+            result.banditTransactionData = Self.extractBanditTransactionData(from: data)
+            return result
         }
 
         if statusCode == 409,
@@ -138,6 +157,14 @@ public class HeliumPaymentAPIClient {
             )
         }
         throw genericServerError(statusCode: statusCode, body: data)
+    }
+
+    static func extractBanditTransactionData(from data: Data) -> Data? {
+        guard let response = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let banditTransactionData = response["banditTransactionData"] as? [String: Any] else {
+            return nil
+        }
+        return try? JSONSerialization.data(withJSONObject: banditTransactionData)
     }
 
     /// Best-effort extraction of the existing subscription id from a 409 body.

@@ -64,19 +64,26 @@ final class PaddleCheckoutPrefetchCoordinator {
     func handlePaywallOpen(paywallSession: PaywallSession) {
         guard let info = paywallSession.paywallInfoWithBackups,
               let webProducts = info.webProductsOfferedPaddle,
-              !webProducts.isEmpty,
-              let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
+              !webProducts.isEmpty else {
+            return
+        }
+
+        prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+    }
+
+    func prefetch(paywallSession: PaywallSession, compositeKeys: [String]) {
+        guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
         }
-        let priceIds = Self.extractPriceIds(from: webProducts)
+        let priceIds = Self.extractPriceIds(from: compositeKeys)
         guard !priceIds.isEmpty else { return }
 
         // Map each offered price to its creator-configured discount id and
         // forward it with the prefetch. The backend decides whether to apply
         // it, so we forward whenever a discount is configured.
         let discountIdByPriceId = Self.discountIdByPriceId(
-            from: webProducts,
+            from: compositeKeys,
             priceMap: HeliumFetchedConfigManager.shared.getPaddleProductsPriceMap() ?? [:]
         )
 
@@ -105,6 +112,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
+        let paywallUUID = paywallSession.paywallInfoWithBackups?.paywallUUID
+        let triggerName = paywallSession.trigger
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
@@ -121,6 +130,8 @@ final class PaddleCheckoutPrefetchCoordinator {
                 await Self.runPrefetchChain(
                     priceId: priceId,
                     discountId: discountId,
+                    paywallUUID: paywallUUID,
+                    triggerName: triggerName,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
@@ -282,6 +293,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let customerId = bandit.paddleCustomerId, !customerId.isEmpty {
             banditDict["paddleCustomerId"] = customerId
         }
+        if let transactionData = bandit.banditTransactionData,
+           let banditTransactionData = (try? JSONSerialization.jsonObject(with: transactionData)) as? [String: Any] {
+            banditDict["banditTransactionData"] = banditTransactionData
+        }
 
         let trimmedPaddleResponse = trimPaddleCheckoutResponse(rawBody: paddle.rawBody)
 
@@ -390,6 +405,20 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
+    /// Returns the tapped price's restorable outcome only when it and every offered price have one.
+    nonisolated static func allOfferedShortCircuit(
+        in outcomes: [String: PaddlePrefetchOutcome],
+        offeredProductKeys: [String],
+        tappedProductKey: String
+    ) -> (code: String, message: String)? {
+        func restorable(_ key: String) -> (code: String, message: String)? {
+            extractPriceId(from: key).flatMap { tappedShortCircuit(in: outcomes, tappedPriceId: $0) }
+        }
+        let requiredKeys = offeredProductKeys + [tappedProductKey]
+        guard requiredKeys.allSatisfy({ restorable($0) != nil }) else { return nil }
+        return restorable(tappedProductKey)
+    }
+
     nonisolated static func californiaBlockedPostalCode(
         in outcomes: [String: PaddlePrefetchOutcome]
     ) -> String? {
@@ -466,6 +495,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     private nonisolated static func runPrefetchChain(
         priceId: String,
         discountId: String?,
+        paywallUUID: String?,
+        triggerName: String,
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
@@ -480,7 +511,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(
                 priceId: priceId,
-                discountId: discountId
+                discountId: discountId,
+                paywallUUID: paywallUUID,
+                triggerName: triggerName
             )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)

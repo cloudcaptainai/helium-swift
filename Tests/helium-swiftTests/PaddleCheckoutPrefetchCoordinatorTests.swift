@@ -68,9 +68,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         store.purchaseMode = mode
     }
 
-    private func checkoutFlowSession(productKeys: [String]) -> PaywallSession {
+    private func checkoutFlowSession(
+        productKeys: [String],
+        browserStyle: WebCheckoutBrowserStyle? = nil
+    ) -> PaywallSession {
         var paywallInfo = makeTestPaywallInfo()
         paywallInfo.webProductsOfferedPaddle = productKeys
+        paywallInfo.webCheckoutBrowserStyle = browserStyle
         paywallInfo.additionalPaywallFields = JSON([
             "webPaywallBundleUrl": "https://bundles.clickthrough.to/test.html",
         ])
@@ -80,7 +84,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     private func configureSharedCheckoutFlow(
         session: PaywallSession,
         priceIds: [String],
-        alreadyEntitledPriceId: String? = nil
+        alreadyEntitledPriceId: String? = nil,
+        countryCode: Any = "MX"
     ) {
         URLProtocol.registerClass(MockURLProtocol.self)
         MockURLProtocol.reset()
@@ -134,7 +139,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 body = try self.bffBody(
                     checkoutId: "che_\(transactionId)",
                     transactionId: transactionId,
-                    countryCode: "MX"
+                    countryCode: countryCode
                 ).data(using: .utf8)!
                 return (response, body)
             }
@@ -610,6 +615,80 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertTrue(error is PaddleNonUSBuyerBlocked)
     }
 
+    func testStartCheckoutFlowDoesNotShortCircuitWhenAnotherOfferedProductIsUnowned() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2wAlreadyOwnedAllWebProducts": true]))
+        let entitledProductKey = "pro_entitled:pri_entitled"
+        let nonUSProductKey = "pro_nonus:pri_nonus_checkout"
+        let session = checkoutFlowSession(productKeys: [entitledProductKey, nonUSProductKey])
+        configureSharedCheckoutFlow(
+            session: session,
+            priceIds: ["pri_entitled", "pri_nonus_checkout"],
+            alreadyEntitledPriceId: "pri_entitled"
+        )
+        defer { cleanupSharedCheckoutFlow(session: session) }
+        let manager = ExternalWebCheckoutManager(
+            provider: .paddle,
+            entitlementsSource: EmptyPaddleEntitlementsSource()
+        )
+
+        do {
+            _ = try await manager.startCheckoutFlow(
+                for: entitledProductKey,
+                triggerName: session.trigger,
+                paywallSession: session
+            )
+            XCTFail("An unowned offered product must prevent the all-offered short-circuit")
+        } catch {
+            XCTAssertEqual((error as? WebCheckoutError)?.caseName, "nonUSBuyerBlocked")
+        }
+    }
+
+    func testStartCheckoutFlowPrefetchesTappedPriceOutsideOfferedProductsWhenFlagIsEnabled() async throws {
+        HeliumFetchedConfigManager.shared.setFeatureFlagsForTesting(JSON(["a2wAlreadyOwnedAllWebProducts": true]))
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(
+            stripeProducts: nil,
+            paddleProducts: nil,
+            paddleClientToken: "test_xyz"
+        )
+        let session = checkoutFlowSession(
+            productKeys: ["pro_offered:pri_offered"],
+            browserStyle: .inAppWebView
+        )
+        configureSharedCheckoutFlow(
+            session: session,
+            priceIds: ["pri_offered"],
+            countryCode: "US"
+        )
+        defer { cleanupSharedCheckoutFlow(session: session) }
+        let manager = ExternalWebCheckoutManager(
+            provider: .paddle,
+            entitlementsSource: EmptyPaddleEntitlementsSource()
+        )
+
+        do {
+            _ = try await manager.startCheckoutFlow(
+                for: "pro_tapped:pri_tapped",
+                triggerName: session.trigger,
+                paywallSession: session
+            )
+        } catch {
+            XCTAssertEqual((error as? WebCheckoutError)?.caseName, "failedToOpenEnrichedURL")
+        }
+
+        let tappedOutcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(
+            sessionId: session.sessionId,
+            priceId: "pri_tapped"
+        )
+        guard case .ready = tappedOutcome else {
+            XCTFail("The tapped price must be prefetched even when it is not offered; got \(tappedOutcome)")
+            return
+        }
+        let bootstraps = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+            outcomesByPriceId: ["pri_tapped": tappedOutcome]
+        ))
+        XCTAssertNotNil(bootstraps["pri_tapped"])
+    }
+
     // MARK: - alreadyEntitled
 
     func testAwaitOutcome_returnsAlreadyEntitled_whenBanditReturns409Duplicate_andSkipsBFFCall() async throws {
@@ -1029,6 +1108,40 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: [:]))
     }
 
+    func testEncodeBootstrapsToCtx_passesThroughBanditTransactionDataAndOmitsItWhenAbsent() throws {
+        let transactionData = try JSONSerialization.data(withJSONObject: ["planChange": ["type": "upgrade"]])
+        let withTransactionData = PaddleCreateTransactionForPaywallResponse(
+            transactionId: "txn_with_context",
+            paddleCustomerId: nil,
+            isKnownCustomer: false,
+            requestId: "req_with_context",
+            banditTransactionData: transactionData
+        )
+        let withoutTransactionData = makeBandit(transactionId: "txn_without_context")
+        let paddle = makePaddle()
+        let bootstraps = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+            outcomesByPriceId: [
+                "pri_with_context": .ready(bandit: withTransactionData, paddle: paddle),
+                "pri_without_context": .ready(bandit: withoutTransactionData, paddle: paddle),
+            ]
+        ))
+        let withTransactionDataBootstrap = try XCTUnwrap(bootstraps["pri_with_context"] as? [String: Any])
+        let withTransactionDataBandit = try XCTUnwrap(
+            withTransactionDataBootstrap["banditResponse"] as? [String: Any]
+        )
+        let withoutTransactionDataBootstrap = try XCTUnwrap(bootstraps["pri_without_context"] as? [String: Any])
+        let withoutTransactionDataBandit = try XCTUnwrap(
+            withoutTransactionDataBootstrap["banditResponse"] as? [String: Any]
+        )
+        let transactionDataObject = try XCTUnwrap(
+            withTransactionDataBandit["banditTransactionData"] as? [String: Any]
+        )
+        let planChange = try XCTUnwrap(transactionDataObject["planChange"] as? [String: Any])
+
+        XCTAssertEqual(planChange["type"] as? String, "upgrade")
+        XCTAssertNil(withoutTransactionDataBandit["banditTransactionData"])
+    }
+
     func testEncodeBootstrapsToCtx_keepsOnlyBundleNeededFieldsInPaddleResponse() throws {
         let bandit = PaddleCreateTransactionForPaywallResponse(
             transactionId: "txn_test", paddleCustomerId: "ctm_x", isKnownCustomer: true, requestId: "req_test")
@@ -1262,6 +1375,131 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         ]
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.tappedShortCircuit(
             in: outcomes, tappedPriceId: "pri_tapped"
+        ))
+    }
+
+    func testAllOfferedShortCircuitRequiresTappedAndEveryOfferedPriceAndPrefersTappedPrice() {
+        let siblingPriceOutcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_sibling": .alreadyEntitled(code: "duplicate_subscription", message: "sibling", existingSubscriptionId: nil),
+            "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "other", existingSubscriptionId: nil),
+        ]
+
+        let offeredKeys = ["pro_a:pri_current", "pro_a:pri_sibling", "pro_b:pri_other"]
+        XCTAssertNil(PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: siblingPriceOutcomes,
+            offeredProductKeys: offeredKeys,
+            tappedProductKey: "pro_a:pri_tapped"
+        ))
+
+        var completePriceOutcomes = siblingPriceOutcomes
+        completePriceOutcomes["pri_current"] = .alreadyEntitled(
+            code: "duplicate_subscription",
+            message: "current",
+            existingSubscriptionId: nil
+        )
+        let offeredResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: completePriceOutcomes,
+            offeredProductKeys: offeredKeys,
+            tappedProductKey: "pro_a:pri_tapped"
+        )
+        XCTAssertNil(offeredResult)
+
+        var tappedPriceOutcomes = completePriceOutcomes
+        tappedPriceOutcomes["pri_tapped"] = .alreadyEntitled(
+            code: "duplicate_subscription",
+            message: "tapped",
+            existingSubscriptionId: nil
+        )
+        let tappedResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: tappedPriceOutcomes,
+            offeredProductKeys: offeredKeys,
+            tappedProductKey: "pro_a:pri_tapped"
+        )
+        XCTAssertEqual(tappedResult?.code, "duplicate_subscription")
+        XCTAssertEqual(tappedResult?.message, "tapped")
+    }
+
+    func testAllOfferedShortCircuitRequiresEverySameProductPriceAndRestorableOutcome() {
+        let weekly = "pro_a:pri_weekly"
+        let annual = "pro_a:pri_annual"
+        let weeklyDuplicateAndAnnualReady: [String: PaddlePrefetchOutcome] = [
+            "pri_weekly": .alreadyEntitled(
+                code: "duplicate_subscription",
+                message: "weekly",
+                existingSubscriptionId: nil
+            ),
+            "pri_annual": .ready(bandit: makeBandit(), paddle: makePaddle()),
+        ]
+        XCTAssertNil(
+            PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+                in: weeklyDuplicateAndAnnualReady,
+                offeredProductKeys: [weekly, annual],
+                tappedProductKey: weekly
+            )
+        )
+
+        XCTAssertNil(
+            PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+                in: [
+                    "pri_trial": .alreadyEntitled(
+                        code: "trial_already_used",
+                        message: "trial",
+                        existingSubscriptionId: nil
+                    ),
+                    "pri_annual": .alreadyEntitled(
+                        code: "duplicate_subscription",
+                        message: "annual",
+                        existingSubscriptionId: nil
+                    ),
+                ],
+                offeredProductKeys: ["pro_a:pri_trial", annual],
+                tappedProductKey: annual
+            )
+        )
+
+        let multiPriceOutcomes: [String: PaddlePrefetchOutcome] = [
+            "pri_trial": .alreadyEntitled(
+                code: "duplicate_subscription",
+                message: "trial",
+                existingSubscriptionId: nil
+            ),
+            "pri_annual": .alreadyEntitled(
+                code: "duplicate_subscription",
+                message: "tapped",
+                existingSubscriptionId: nil
+            ),
+        ]
+        let multiPriceResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: multiPriceOutcomes,
+            offeredProductKeys: ["pro_a:pri_trial", annual],
+            tappedProductKey: annual
+        )
+        XCTAssertEqual(multiPriceResult?.message, "tapped")
+
+        XCTAssertNil(
+            PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+                in: [
+                    "pri_annual": .alreadyEntitled(
+                        code: "duplicate_subscription",
+                        message: "annual",
+                        existingSubscriptionId: nil
+                    ),
+                ],
+                offeredProductKeys: ["malformed", annual],
+                tappedProductKey: annual
+            )
+        )
+
+        XCTAssertNotNil(PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: [
+                "pri_tapped": .alreadyEntitled(
+                    code: "duplicate_subscription",
+                    message: "tapped",
+                    existingSubscriptionId: nil
+                ),
+            ],
+            offeredProductKeys: [],
+            tappedProductKey: "pro_a:pri_tapped"
         ))
     }
 

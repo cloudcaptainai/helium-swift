@@ -55,6 +55,110 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.requestId, "req_test_xyz")
     }
 
+    func testCreatePaddleTransactionForPaywall_extractsBanditTransactionDataObject() throws {
+        let body = #"{"banditTransactionData":{"planChange":{"type":"upgrade"},"enabled":true}}"#
+        let transactionData = try XCTUnwrap(
+            HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8))
+        )
+        let context = try XCTUnwrap(JSONSerialization.jsonObject(with: transactionData) as? [String: Any])
+        let planChange = try XCTUnwrap(context["planChange"] as? [String: Any])
+
+        XCTAssertEqual(planChange["type"] as? String, "upgrade")
+        XCTAssertEqual(context["enabled"] as? Bool, true)
+    }
+
+    func testCreatePaddleTransactionForPaywall_ignoresNonObjectBanditTransactionData() {
+        let bodies = [
+            #"{}"#,
+            #"{"banditTransactionData":null}"#,
+            #"{"banditTransactionData":[]}"#,
+            #"{"banditTransactionData":"upgrade"}"#,
+            "garbage",
+        ]
+
+        for body in bodies {
+            XCTAssertNil(
+                HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8)),
+                "Expected no context for \(body)"
+            )
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_decodes2xxWhenBanditTransactionDataIsNotAnObject() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_context",
+            "isKnownCustomer": false,
+            "requestId": "req_context",
+            "banditTransactionData": ["not", "an object"]
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_context")
+
+        XCTAssertEqual(result.transactionId, "txn_context")
+        XCTAssertNil(result.banditTransactionData)
+    }
+
+    func testCreatePaddleTransactionForPaywall_includesApplicationInfoInRequestBody() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_metadata",
+            "isKnownCustomer": false,
+            "requestId": "req_metadata"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_metadata")
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let applicationInfo = try XCTUnwrap(body["applicationInfo"] as? [String: Any])
+        XCTAssertEqual(applicationInfo["heliumSdk"] as? String, HeliumSdkConfig.shared.heliumSdk)
+        XCTAssertEqual(applicationInfo["heliumSdkVersion"] as? String, HeliumSdkConfig.shared.heliumSdkVersion)
+        XCTAssertEqual(
+            applicationInfo["heliumWrapperSdkVersion"] as? String,
+            HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        )
+        XCTAssertNil(body["paywallInfo"])
+    }
+
+    func testCreatePaddleTransactionForPaywall_includesPaywallInfoInRequestBody() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_paywall_info",
+            "isKnownCustomer": false,
+            "requestId": "req_paywall_info"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(
+            priceId: "pri_paywall_info",
+            paywallUUID: "paywall-uuid",
+            triggerName: "summer-offer"
+        )
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let paywallInfo = try XCTUnwrap(body["paywallInfo"] as? [String: Any])
+        XCTAssertEqual(paywallInfo["paywallUUID"] as? String, "paywall-uuid")
+        XCTAssertEqual(paywallInfo["triggerName"] as? String, "summer-offer")
+    }
+
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {
         let bodyJSON = """
         {

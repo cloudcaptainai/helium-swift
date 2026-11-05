@@ -130,6 +130,51 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             products: [yearlyTrial], priceMap: [:]))
     }
 
+    func testPreCheckSkipsCheckoutUsesExactMatchWhenFlagIsOff() {
+        XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [yearlyTrial],
+            productKey: yearlyTrial,
+            offeredProductKeys: [monthlyNoTrial],
+            a2wEnabled: false
+        ))
+        XCTAssertFalse(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: ["pro_yearly:pri_other"],
+            productKey: yearlyTrial,
+            offeredProductKeys: [yearlyTrial],
+            a2wEnabled: false
+        ))
+    }
+
+    func testPreCheckSkipsCheckoutRequiresEveryOfferedPriceWhenFlagIsOn() {
+        let weekly = "pro_a:pri_weekly"
+        let annual = "pro_a:pri_annual"
+
+        XCTAssertFalse(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly],
+            productKey: weekly,
+            offeredProductKeys: [weekly, annual],
+            a2wEnabled: true
+        ))
+        XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly, annual],
+            productKey: weekly,
+            offeredProductKeys: [weekly, annual],
+            a2wEnabled: true
+        ))
+        XCTAssertFalse(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly, annual],
+            productKey: "pro_a:pri_unlisted",
+            offeredProductKeys: [weekly, annual],
+            a2wEnabled: true
+        ))
+        XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly],
+            productKey: weekly,
+            offeredProductKeys: [],
+            a2wEnabled: true
+        ))
+    }
+
     func testOnlyOneTimeProductsIsFalse() throws {
         let priceMap = try map([(lifetime, .oneTime)])
 
