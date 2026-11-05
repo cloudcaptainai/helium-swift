@@ -116,13 +116,44 @@ public struct CanShowPaywallResult {
     public let paywallUnavailableReason: PaywallUnavailableReason?
 }
 
+/// Bandit's explanation for a trigger that did not resolve to a paywall: a stable `code` for
+/// analytics and a developer-facing `message` for diagnostics.
+struct BanditTriggerReason: Codable, Equatable {
+    let code: String?
+    let message: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case message
+    }
+
+    init(code: String? = nil, message: String? = nil) {
+        self.code = code
+        self.message = message
+    }
+
+    /// Never throws, so an unexpected reason shape cannot fail decoding of the whole config.
+    /// A bare string is read as the message.
+    init(from decoder: Decoder) throws {
+        if let message = try? decoder.singleValueContainer().decode(String.self) {
+            self.init(message: message)
+            return
+        }
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            code: try? container?.decodeIfPresent(String.self, forKey: .code),
+            message: try? container?.decodeIfPresent(String.self, forKey: .message)
+        )
+    }
+}
+
 public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
     /// Optional reasons supplied by Bandit when a trigger did not resolve to a paywall.
     ///
     /// This is a sibling map rather than a change to `triggerToPaywalls`, preserving the existing
     /// on-launch contract for older Bandit responses and bundled fallback files.
-    var triggerToPaywallReasons: [String: String]? = nil
+    var triggerToPaywallReasons: [String: BanditTriggerReason]? = nil
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
     var orgName: String?
