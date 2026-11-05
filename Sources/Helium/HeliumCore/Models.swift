@@ -116,8 +116,7 @@ public struct CanShowPaywallResult {
     public let paywallUnavailableReason: PaywallUnavailableReason?
 }
 
-/// Bandit's explanation for a trigger that did not resolve to a paywall: a stable `code` for
-/// analytics and a developer-facing `message` for diagnostics.
+/// `code` is a stable identifier; `message` is display copy that can change, so never branch on it.
 struct BanditTriggerReason: Codable, Equatable {
     let code: String?
     let message: String?

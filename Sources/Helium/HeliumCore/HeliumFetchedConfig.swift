@@ -1033,7 +1033,6 @@ public class HeliumFetchedConfigManager {
         nonBlank(fetchedConfig?.triggerToPaywallReasons?[trigger]?.message)
     }
 
-    /// Returns Bandit's stable reason code for why this trigger did not resolve, when supplied.
     func getBanditReasonCodeForTrigger(_ trigger: String) -> String? {
         nonBlank(fetchedConfig?.triggerToPaywallReasons?[trigger]?.code)
     }

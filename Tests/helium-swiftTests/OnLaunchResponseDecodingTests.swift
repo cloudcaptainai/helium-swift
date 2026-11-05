@@ -58,7 +58,6 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
         )
     }
 
-    /// A reason in an unexpected shape must never stop the rest of the config from decoding.
     func testUnexpectedTriggerToPaywallReasonShapesStillDecodeConfig() throws {
         let json = try makeOnLaunchJSON(extras: [
             "triggerToPaywallReasons": [

@@ -71,8 +71,8 @@ extension ProductEvent {
 
 // MARK: - Lifecycle events
 
-/// Bandit's reason code for a trigger it served no paywall for, so analytics can tell a server
-/// drop apart from an SDK-side failure.
+/// Only `triggerHasNoPaywall` means Bandit chose not to serve the trigger. Every other reason is
+/// SDK-side, and Bandit's code would mislabel it.
 private func banditFailureClass(trigger: String, reason: PaywallUnavailableReason?) -> String? {
     guard reason == .triggerHasNoPaywall else { return nil }
     return HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger(trigger)
