@@ -145,22 +145,25 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         ))
     }
 
-    func testPreCheckSkipsCheckoutRequiresEveryOfferedProductAtProductLevelWhenFlagIsOn() {
-        XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
-            entitledIds: ["pro_yearly:pri_old", "pro_monthly:pri_main_monthly"],
-            productKey: yearlyTrial,
-            offeredProductKeys: [yearlyTrial, monthlyNoTrial],
-            a2wEnabled: true
-        ))
+    func testPreCheckSkipsCheckoutRequiresEveryOfferedPriceWhenFlagIsOn() {
+        let weekly = "pro_a:pri_weekly"
+        let annual = "pro_a:pri_annual"
+
         XCTAssertFalse(ExternalWebCheckoutManager.preCheckSkipsCheckout(
-            entitledIds: ["pro_yearly:pri_old"],
-            productKey: yearlyTrial,
-            offeredProductKeys: [yearlyTrial, monthlyNoTrial],
+            entitledIds: [weekly],
+            productKey: weekly,
+            offeredProductKeys: [weekly, annual],
             a2wEnabled: true
         ))
         XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
-            entitledIds: ["pro_yearly:pri_old"],
-            productKey: yearlyTrial,
+            entitledIds: [weekly, annual],
+            productKey: weekly,
+            offeredProductKeys: [weekly, annual],
+            a2wEnabled: true
+        ))
+        XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly],
+            productKey: weekly,
             offeredProductKeys: [],
             a2wEnabled: true
         ))

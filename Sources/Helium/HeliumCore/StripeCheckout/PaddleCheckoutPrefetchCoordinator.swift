@@ -401,7 +401,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
-    /// Returns a restorable outcome when every offered product has a restorable price, preferring the tapped one.
+    /// Returns a restorable outcome only when every offered price has one, preferring the tapped price.
     nonisolated static func allOfferedShortCircuit(
         in outcomes: [String: PaddlePrefetchOutcome],
         offeredProductKeys: [String],
@@ -411,11 +411,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             extractPriceId(from: key).flatMap { tappedShortCircuit(in: outcomes, tappedPriceId: $0) }
         }
         let requiredKeys = offeredProductKeys.isEmpty ? [tappedProductKey] : offeredProductKeys
-        let ownedKeys = Set((offeredProductKeys + [tappedProductKey]).filter { restorable($0) != nil })
-        guard requiredKeys.allSatisfy({ HeliumEntitlementsManager.thirdPartyIdsContain(productId: $0, in: ownedKeys) }) else {
-            return nil
-        }
-        return restorable(tappedProductKey) ?? offeredProductKeys.lazy.compactMap(restorable).first
+        guard requiredKeys.allSatisfy({ restorable($0) != nil }) else { return nil }
+        return restorable(tappedProductKey) ?? requiredKeys.lazy.compactMap(restorable).first
     }
 
     nonisolated static func californiaBlockedPostalCode(

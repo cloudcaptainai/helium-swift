@@ -514,9 +514,7 @@ public class ExternalWebCheckoutManager: NSObject {
     ) -> Bool {
         guard a2wEnabled else { return entitledIds.contains(productKey) }
         let requiredProductKeys = offeredProductKeys.isEmpty ? [productKey] : offeredProductKeys
-        return requiredProductKeys.allSatisfy {
-            HeliumEntitlementsManager.thirdPartyIdsContain(productId: $0, in: entitledIds)
-        }
+        return requiredProductKeys.allSatisfy { entitledIds.contains($0) }
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
