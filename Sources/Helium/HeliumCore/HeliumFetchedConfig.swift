@@ -845,6 +845,7 @@ public class HeliumFetchedConfigManager {
         metrics: HeliumFetchMetrics,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
+        guard !Task.isCancelled else { return }
         completion(.success(newConfig, metrics))
         updateDownloadState(.downloadSuccess)
         
