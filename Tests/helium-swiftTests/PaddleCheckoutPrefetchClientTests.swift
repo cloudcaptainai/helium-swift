@@ -129,6 +129,34 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
             applicationInfo["heliumWrapperSdkVersion"] as? String,
             HeliumSdkConfig.shared.heliumWrapperSdkVersion
         )
+        XCTAssertNil(body["paywallInfo"])
+    }
+
+    func testCreatePaddleTransactionForPaywall_includesPaywallInfoInRequestBody() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_paywall_info",
+            "isKnownCustomer": false,
+            "requestId": "req_paywall_info"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(
+            priceId: "pri_paywall_info",
+            paywallUUID: "paywall-uuid",
+            triggerName: "summer-offer"
+        )
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let paywallInfo = try XCTUnwrap(body["paywallInfo"] as? [String: Any])
+        XCTAssertEqual(paywallInfo["paywallUUID"] as? String, "paywall-uuid")
+        XCTAssertEqual(paywallInfo["triggerName"] as? String, "summer-offer")
     }
 
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {

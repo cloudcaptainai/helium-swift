@@ -112,6 +112,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
+        let paywallUUID = paywallSession.paywallInfoWithBackups?.paywallUUID
+        let triggerName = paywallSession.trigger
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
@@ -128,6 +130,8 @@ final class PaddleCheckoutPrefetchCoordinator {
                 await Self.runPrefetchChain(
                     priceId: priceId,
                     discountId: discountId,
+                    paywallUUID: paywallUUID,
+                    triggerName: triggerName,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
@@ -491,6 +495,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     private nonisolated static func runPrefetchChain(
         priceId: String,
         discountId: String?,
+        paywallUUID: String?,
+        triggerName: String,
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
@@ -505,7 +511,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         do {
             banditResponse = try await banditClient.createPaddleTransactionForPaywall(
                 priceId: priceId,
-                discountId: discountId
+                discountId: discountId,
+                paywallUUID: paywallUUID,
+                triggerName: triggerName
             )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)
