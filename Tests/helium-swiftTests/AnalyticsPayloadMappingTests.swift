@@ -112,6 +112,61 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         )
     }
 
+    func testBanditReasonCodeIsSentAsFailureClassWhenTriggerHasNoPaywall() throws {
+        defer { HeliumFetchedConfigManager.reset() }
+        var config = makeTestConfig(triggers: [:])
+        config.triggerToPaywallReasons = [
+            "onboarding": BanditTriggerReason(
+                code: "paddle_geo_blocked",
+                message: "App-to-Web paywalls are not available in this region."
+            ),
+        ]
+        injectConfig(config)
+
+        try assertWirePayload(
+            PaywallOpenFailedEvent(
+                triggerName: "onboarding", paywallName: "", error: "No paywall for trigger",
+                paywallUnavailableReason: .triggerHasNoPaywall
+            ),
+            equals: [
+                "type": "paywallOpenFailed",
+                "triggerName": "onboarding",
+                "paywallTemplateName": "",
+                "errorDescription": "No paywall for trigger",
+                "paywallUnavailableReason": "triggerHasNoPaywall",
+                "failureClass": "paddle_geo_blocked",
+            ]
+        )
+        try assertWirePayload(
+            PaywallOpenEvent(
+                triggerName: "onboarding", paywallName: "fallback_onboarding", viewType: .presented,
+                paywallUnavailableReason: .triggerHasNoPaywall
+            ),
+            equals: [
+                "type": "paywallOpen",
+                "triggerName": "onboarding",
+                "paywallTemplateName": "fallback_onboarding",
+                "viewType": "presented",
+                "paywallUnavailableReason": "triggerHasNoPaywall",
+                "failureClass": "paddle_geo_blocked",
+            ]
+        )
+        // Bandit's code only explains a missing paywall, not an SDK-side failure on the same trigger.
+        try assertWirePayload(
+            PaywallOpenFailedEvent(
+                triggerName: "onboarding", paywallName: "", error: "A paywall is already being presented.",
+                paywallUnavailableReason: .alreadyPresented
+            ),
+            equals: [
+                "type": "paywallOpenFailed",
+                "triggerName": "onboarding",
+                "paywallTemplateName": "",
+                "errorDescription": "A paywall is already being presented.",
+                "paywallUnavailableReason": "alreadyPresented",
+            ]
+        )
+    }
+
     func testPaywallClosePayload() throws {
         try assertWirePayload(
             PaywallCloseEvent(triggerName: "onboarding", paywallName: "spring_sale", secondTry: true),

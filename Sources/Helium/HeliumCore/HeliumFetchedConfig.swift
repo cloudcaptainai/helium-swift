@@ -1030,12 +1030,19 @@ public class HeliumFetchedConfigManager {
 
     /// Returns Bandit's explanation for why this trigger did not resolve, when supplied.
     func getBanditReasonForTrigger(_ trigger: String) -> String? {
-        guard let reason = fetchedConfig?.triggerToPaywallReasons?[trigger]?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !reason.isEmpty else {
+        nonBlank(fetchedConfig?.triggerToPaywallReasons?[trigger]?.message)
+    }
+
+    func getBanditReasonCodeForTrigger(_ trigger: String) -> String? {
+        nonBlank(fetchedConfig?.triggerToPaywallReasons?[trigger]?.code)
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
             return nil
         }
-        return reason
+        return trimmed
     }
     
     /// Extract experiment info for a specific trigger
