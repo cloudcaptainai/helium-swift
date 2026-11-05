@@ -405,7 +405,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         return nil
     }
 
-    /// Returns a restorable outcome only when every offered price has one, preferring the tapped price.
+    /// Returns the tapped price's restorable outcome only when it and every offered price have one.
     nonisolated static func allOfferedShortCircuit(
         in outcomes: [String: PaddlePrefetchOutcome],
         offeredProductKeys: [String],
@@ -414,9 +414,9 @@ final class PaddleCheckoutPrefetchCoordinator {
         func restorable(_ key: String) -> (code: String, message: String)? {
             extractPriceId(from: key).flatMap { tappedShortCircuit(in: outcomes, tappedPriceId: $0) }
         }
-        let requiredKeys = offeredProductKeys.isEmpty ? [tappedProductKey] : offeredProductKeys
+        let requiredKeys = offeredProductKeys + [tappedProductKey]
         guard requiredKeys.allSatisfy({ restorable($0) != nil }) else { return nil }
-        return restorable(tappedProductKey) ?? requiredKeys.lazy.compactMap(restorable).first
+        return restorable(tappedProductKey)
     }
 
     nonisolated static func californiaBlockedPostalCode(

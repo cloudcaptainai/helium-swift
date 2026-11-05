@@ -1378,7 +1378,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         ))
     }
 
-    func testAllOfferedShortCircuitRequiresEveryOfferedPriceAndPrefersTappedPrice() {
+    func testAllOfferedShortCircuitRequiresTappedAndEveryOfferedPriceAndPrefersTappedPrice() {
         let siblingPriceOutcomes: [String: PaddlePrefetchOutcome] = [
             "pri_sibling": .alreadyEntitled(code: "duplicate_subscription", message: "sibling", existingSubscriptionId: nil),
             "pri_other": .alreadyEntitled(code: "duplicate_subscription", message: "other", existingSubscriptionId: nil),
@@ -1402,7 +1402,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             offeredProductKeys: offeredKeys,
             tappedProductKey: "pro_a:pri_tapped"
         )
-        XCTAssertEqual(offeredResult?.message, "current")
+        XCTAssertNil(offeredResult)
 
         var tappedPriceOutcomes = completePriceOutcomes
         tappedPriceOutcomes["pri_tapped"] = .alreadyEntitled(

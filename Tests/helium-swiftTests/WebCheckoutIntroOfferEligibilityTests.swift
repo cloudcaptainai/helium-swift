@@ -161,6 +161,12 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             offeredProductKeys: [weekly, annual],
             a2wEnabled: true
         ))
+        XCTAssertFalse(ExternalWebCheckoutManager.preCheckSkipsCheckout(
+            entitledIds: [weekly, annual],
+            productKey: "pro_a:pri_unlisted",
+            offeredProductKeys: [weekly, annual],
+            a2wEnabled: true
+        ))
         XCTAssertTrue(ExternalWebCheckoutManager.preCheckSkipsCheckout(
             entitledIds: [weekly],
             productKey: weekly,

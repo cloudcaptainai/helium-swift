@@ -513,8 +513,7 @@ public class ExternalWebCheckoutManager: NSObject {
         a2wEnabled: Bool
     ) -> Bool {
         guard a2wEnabled else { return entitledIds.contains(productKey) }
-        let requiredProductKeys = offeredProductKeys.isEmpty ? [productKey] : offeredProductKeys
-        return requiredProductKeys.allSatisfy { entitledIds.contains($0) }
+        return (offeredProductKeys + [productKey]).allSatisfy { entitledIds.contains($0) }
     }
 
     /// Server-controlled only, so checkout presentation can be changed or reverted without
