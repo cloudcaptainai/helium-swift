@@ -1457,7 +1457,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             )
         )
 
-        let humeStyleOutcomes: [String: PaddlePrefetchOutcome] = [
+        let multiPriceOutcomes: [String: PaddlePrefetchOutcome] = [
             "pri_trial": .alreadyEntitled(
                 code: "duplicate_subscription",
                 message: "trial",
@@ -1469,12 +1469,12 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 existingSubscriptionId: nil
             ),
         ]
-        let humeStyleResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
-            in: humeStyleOutcomes,
+        let multiPriceResult = PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
+            in: multiPriceOutcomes,
             offeredProductKeys: ["pro_a:pri_trial", annual],
             tappedProductKey: annual
         )
-        XCTAssertEqual(humeStyleResult?.message, "tapped")
+        XCTAssertEqual(multiPriceResult?.message, "tapped")
 
         XCTAssertNil(
             PaddleCheckoutPrefetchCoordinator.allOfferedShortCircuit(
