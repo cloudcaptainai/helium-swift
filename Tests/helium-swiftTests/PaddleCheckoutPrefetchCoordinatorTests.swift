@@ -205,7 +205,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         transactionId: String,
         countryCode: Any = "US",
         includesCountryCode: Bool = true,
-        postalCode: String? = nil
+        postalCode: String? = nil,
+        applePayStripeKey: String? = nil
     ) throws -> String {
         var data: [String: Any] = [
             "id": checkoutId,
@@ -217,6 +218,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
         if let postalCode {
             data["ip_geo_postal_code"] = postalCode
+        }
+        if let applePayStripeKey {
+            data["payments"] = ["methods_available": [
+                ["type": "PI_APPLE_PAY", "stripe_options": ["api_key": applePayStripeKey]],
+            ]]
         }
         let body = try JSONSerialization.data(withJSONObject: ["data": data])
         return String(data: body, encoding: .utf8)!
@@ -517,6 +523,60 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
         let blocked = try XCTUnwrap(error as? PaddleNonUSBuyerBlocked)
         XCTAssertEqual(blocked.countryCode, "MX")
+    }
+
+    func testAwaitOutcome_sandboxCheckoutSkipsNonUSBlock_liveCheckoutStaysBlocked() async throws {
+        let sandboxBody = try bffBody(
+            checkoutId: "che_sandbox_mx",
+            transactionId: "txn_country",
+            countryCode: "MX",
+            applePayStripeKey: "pk_test_abc"
+        )
+        let sandboxOutcome = await prefetchOutcome(body: sandboxBody, priceId: "pri_sandbox_mx")
+        guard case .ready = sandboxOutcome else {
+            XCTFail("Sandbox checkout must allow a non-US country; got \(sandboxOutcome)")
+            return
+        }
+
+        let liveBody = try bffBody(
+            checkoutId: "che_live_mx",
+            transactionId: "txn_country",
+            countryCode: "MX",
+            applePayStripeKey: "pk_live_abc"
+        )
+        let liveOutcome = await prefetchOutcome(body: liveBody, priceId: "pri_live_mx")
+        guard case .failed(let error) = liveOutcome else {
+            XCTFail("Live checkout must block a non-US country; got \(liveOutcome)")
+            return
+        }
+        XCTAssertEqual(try XCTUnwrap(error as? PaddleNonUSBuyerBlocked).countryCode, "MX")
+    }
+
+    func testAwaitOutcome_sandboxCheckoutSkipsCaliforniaBlock_liveCheckoutStaysBlocked() async throws {
+        let sandboxBody = try bffBody(
+            checkoutId: "che_sandbox_ca",
+            transactionId: "txn_country",
+            postalCode: "90210",
+            applePayStripeKey: "pk_test_abc"
+        )
+        let sandboxOutcome = await prefetchOutcome(body: sandboxBody, priceId: "pri_sandbox_ca")
+        guard case .ready = sandboxOutcome else {
+            XCTFail("Sandbox checkout must allow a California postal; got \(sandboxOutcome)")
+            return
+        }
+
+        let liveBody = try bffBody(
+            checkoutId: "che_live_ca",
+            transactionId: "txn_country",
+            postalCode: "90210",
+            applePayStripeKey: "pk_live_abc"
+        )
+        let liveOutcome = await prefetchOutcome(body: liveBody, priceId: "pri_live_ca")
+        guard case .failed(let error) = liveOutcome else {
+            XCTFail("Live checkout must block a California postal; got \(liveOutcome)")
+            return
+        }
+        XCTAssertEqual(try XCTUnwrap(error as? PaddleCaliforniaBlocked).postalCode, "90210")
     }
 
     func testAwaitOutcome_normalizesBlockedCountryCodeAndOmitsBlankCountries() async throws {
