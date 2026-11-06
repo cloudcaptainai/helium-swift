@@ -1159,6 +1159,20 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: [:]))
     }
 
+    func testEncodeBootstrapsToCtx_tellsTheBundleWhichPaddleAccountAnswered() throws {
+        let sandboxPaddle = PaddleTransactionCheckoutResult(
+            rawBody: "{}".data(using: .utf8)!, checkoutId: "che_s", transactionId: "txn_s", sandbox: true)
+        let bootstraps = try XCTUnwrap(PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(
+            outcomesByPriceId: [
+                "pri_sandbox": .ready(bandit: makeBandit(), paddle: sandboxPaddle),
+                "pri_live": .ready(bandit: makeBandit(), paddle: makePaddle()),
+            ]
+        ))
+
+        XCTAssertEqual((bootstraps["pri_sandbox"] as? [String: Any])?["sandbox"] as? Bool, true)
+        XCTAssertEqual((bootstraps["pri_live"] as? [String: Any])?["sandbox"] as? Bool, false)
+    }
+
     func testEncodeBootstrapsToCtx_passesThroughBanditTransactionDataAndOmitsItWhenAbsent() throws {
         let transactionData = try JSONSerialization.data(withJSONObject: ["planChange": ["type": "upgrade"]])
         let withTransactionData = PaddleCreateTransactionForPaywallResponse(

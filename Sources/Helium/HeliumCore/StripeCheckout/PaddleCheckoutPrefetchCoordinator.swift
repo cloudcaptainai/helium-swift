@@ -303,6 +303,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         return [
             "banditResponse": banditDict,
             "paddleCheckoutResponse": trimmedPaddleResponse,
+            "sandbox": paddle.sandbox,
         ]
     }
 
@@ -537,7 +538,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            let isSandboxCheckout = PaddleBFFClient.isSandboxClientToken(paddleClientToken)
+            let isSandboxCheckout = paddleResult.sandbox
             if !isSimulatedPreviewRun, !isSandboxCheckout, !Self.isUSBuyer(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
