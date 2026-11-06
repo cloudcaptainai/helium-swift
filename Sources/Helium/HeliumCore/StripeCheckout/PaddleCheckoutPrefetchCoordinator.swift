@@ -537,14 +537,15 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if !isSimulatedPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
+            let isSandboxCheckout = Self.isSandboxCheckout(in: paddleResult.rawBody)
+            if !isSimulatedPreviewRun, !isSandboxCheckout, !Self.isUSBuyer(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
             }
             // While the consent modal is disabled, block California buyers by ip_geo
             // ZIP before checkout. When the flag is on, they proceed to the modal.
-            // Previews always proceed so testers can exercise the modal and checkout.
-            if !caModalEnabled, !isPreviewRun,
+            // Previews and sandbox checkouts always proceed so testers can exercise the modal and checkout.
+            if !caModalEnabled, !isPreviewRun, !isSandboxCheckout,
                let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
@@ -555,6 +556,21 @@ final class PaddleCheckoutPrefetchCoordinator {
             trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error), caConsentModalEnabled: caModalEnabled)
             return .failed(error: error)
         }
+    }
+
+    /// Whether the checkout lives on a Paddle sandbox account, read from the Stripe
+    /// key Paddle returns for Apple Pay. The paywall bundle uses the same signal.
+    nonisolated static func isSandboxCheckout(in rawBody: Data) -> Bool {
+        guard let parsed = (try? JSONSerialization.jsonObject(with: rawBody)) as? [String: Any],
+              let data = parsed["data"] as? [String: Any],
+              let payments = data["payments"] as? [String: Any],
+              let methods = payments["methods_available"] as? [[String: Any]],
+              let applePay = methods.first(where: { $0["type"] as? String == "PI_APPLE_PAY" }),
+              let stripeOptions = applePay["stripe_options"] as? [String: Any],
+              let apiKey = stripeOptions["api_key"] as? String else {
+            return false
+        }
+        return apiKey.hasPrefix("pk_test_")
     }
 
     nonisolated static func isUSBuyer(in rawBody: Data) -> Bool {
