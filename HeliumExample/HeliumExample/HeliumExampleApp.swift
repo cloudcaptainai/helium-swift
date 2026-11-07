@@ -35,11 +35,13 @@ struct HeliumExampleApp: App {
         }
         
         Helium.config.enableExternalWebCheckout(redirectURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
+        A2WDemoRig.installIfRequested()
         
         Helium.shared.initialize(
             apiKey: apiKey
         )
         
+        A2WDemoRig.postInitialize()
         postInitializeTestSetup(loadStateTestTrigger: loadStateTestTrigger, fallbackTestMode: fallbackTestMode)
     }
     

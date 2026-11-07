@@ -87,6 +87,10 @@ class AppReceiptsHelper {
     
     var environment: Environment {
 #if DEBUG || targetEnvironment(simulator)
+        // A2W demo rig only: lets the simulator demo force a build environment.
+        if let forced = ProcessInfo.processInfo.environment["HELIUM_DEMO_FORCE_ENVIRONMENT"].flatMap(Environment.init(rawValue:)) {
+            return forced
+        }
         return .debug
 #else
         if let appTransactionEnvironment {
