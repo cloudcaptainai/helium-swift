@@ -77,10 +77,6 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let secondTry = info.webSecondTryConfig, !secondTry.productsOfferedPaddle.isEmpty {
             prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
         }
-        if let secondTry = info.webSecondTryConfig, !secondTry.productsOfferedStripe.isEmpty {
-            let source = PaymentProviderConfig.stripe.getEntitlementsSource()
-            Task { await source.refreshIfNeeded() }
-        }
     }
 
     func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary) {

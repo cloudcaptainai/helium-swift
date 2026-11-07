@@ -60,18 +60,19 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             defaultDiscountId: nil
         )
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [key: price], paddleClientToken: "test_xyz")
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession))
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
         configureSharedCheckoutFlow(session: paywallSession, priceIds: [], countryCode: "US")
         defer { cleanupSharedCheckoutFlow(session: paywallSession) }
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second", surface: .secondTry)
         guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
-        let second = try XCTUnwrap(manager.readySecondTry(paywallSession: paywallSession))
+        let second = try XCTUnwrap(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
         let context = try XCTUnwrap(second.context["perPaywallCtx"] as? [String: Any])
         XCTAssertEqual(context["initialPaddleProduct"] as? String, key)
         XCTAssertEqual(context["productsOfferedPaddle"] as? [String], [key])
         let bootstraps = try XCTUnwrap(context["paddleBootstraps"] as? [String: Any])
         XCTAssertNotNil(bootstraps["pri_second"])
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: ["pro_second:pri_other"]))
     }
 
     func testSecondTryContextOmitsAlreadyEntitledProduct() async throws {
@@ -89,7 +90,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second_owned", surface: .secondTry)
         guard case .alreadyEntitled = outcome else { return XCTFail("Expected already-entitled outcome") }
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession))
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
     }
 
     func testSecondTryContextOmitsFailedPrefetch() async throws {
@@ -108,7 +109,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_error", surface: .secondTry)
         guard case .failed = outcome else { return XCTFail("Expected failed outcome") }
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession))
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
     }
 
     private var testSession: PaywallSession!

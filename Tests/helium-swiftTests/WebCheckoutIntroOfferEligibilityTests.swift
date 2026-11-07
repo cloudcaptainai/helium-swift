@@ -19,6 +19,43 @@ private final class FixedWebEntitlementsSource: HeliumPaymentEntitlementsSource,
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
     @MainActor
+    func testSecondTryRejectsOtherProviderProducts() {
+        for provider in [PaymentProviderConfig.paddle, .stripe] {
+            let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: FixedWebEntitlementsSource(provider: provider, productKeys: []))
+            for includesOwnProduct in [false, true] {
+                var info = makeTestPaywallInfo()
+                info.webSecondTryConfig = WebSecondTryConfig(
+                    paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+                    productsOfferedPaddle: provider.kind == .stripe || includesOwnProduct ? ["pro_b:pri_b"] : [],
+                    productsOfferedStripe: provider.kind == .paddle || includesOwnProduct ? ["prod_b:price_b"] : [],
+                    triggers: ["dismissed"]
+                )
+                XCTAssertNil(manager.readySecondTry(paywallSession: makeTestSession(paywallInfo: info), entitledBefore: []))
+            }
+        }
+    }
+
+    @MainActor
+    func testStripeSecondTryUsesCheckoutEntitlements() throws {
+        let key = "prod_b:price_b"
+        let manager = ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: FixedWebEntitlementsSource(provider: .stripe, productKeys: []))
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [], productsOfferedStripe: [key], triggers: ["dismissed"]
+        )
+        let session = makeTestSession(paywallInfo: info)
+        let config = HeliumFetchedConfigManager.shared
+        defer { HeliumFetchedConfigManager.reset() }
+        config.setPreviewServerProducts(stripeProducts: [key: try price(key, .eligibleTrial)], paddleProducts: nil, paddleClientToken: nil)
+        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: []))
+        let context = try XCTUnwrap(ready.context["perPaywallCtx"] as? [String: Any])
+        XCTAssertEqual(context["initialStripeSelection"] as? String, key)
+        XCTAssertNotNil((context["stripeOfferTerms"] as? [String: Any])?[key])
+        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"]))
+    }
+
+    @MainActor
     func testSecondTryPurchaseIsDetectedOnlyWhenSecondTryWasPresented() async {
         for provider in [PaymentProviderConfig.paddle, .stripe] {
             let key = provider.kind == .paddle ? "pro_b:pri_b" : "prod_b:price_b"
