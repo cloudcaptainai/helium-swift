@@ -8,32 +8,7 @@ enum PaywallSafeAreaInsets {
 
     @MainActor
     static func current(for view: UIView?) -> UIEdgeInsets {
-        guard let window = view?.window ?? UIWindowHelper.findActiveWindow() else {
-            return .zero
-        }
-        guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.viewRelativeSafeArea),
-              let view, view.window === window, !view.bounds.isEmpty else {
-            return window.safeAreaInsets
-        }
-        return clipped(
-            windowInsets: window.safeAreaInsets,
-            windowBounds: window.bounds,
-            viewFrame: view.convert(view.bounds, to: window)
-        )
-    }
-
-    /// Keeps only the part of each window inset that the view actually overlaps, so a paywall that
-    /// doesn't reach a screen edge (e.g. embedded below a header) gets 0 on that edge.
-    static func clipped(windowInsets: UIEdgeInsets, windowBounds: CGRect, viewFrame: CGRect) -> UIEdgeInsets {
-        func overlap(_ inset: CGFloat, _ distanceFromEdge: CGFloat) -> CGFloat {
-            min(inset, max(0, inset - distanceFromEdge))
-        }
-        return UIEdgeInsets(
-            top: overlap(windowInsets.top, viewFrame.minY - windowBounds.minY),
-            left: overlap(windowInsets.left, viewFrame.minX - windowBounds.minX),
-            bottom: overlap(windowInsets.bottom, windowBounds.maxY - viewFrame.maxY),
-            right: overlap(windowInsets.right, windowBounds.maxX - viewFrame.maxX)
-        )
+        (view?.window ?? UIWindowHelper.findActiveWindow())?.safeAreaInsets ?? .zero
     }
 
     static func jsonObject(_ insets: UIEdgeInsets) -> [String: Double] {
@@ -61,5 +36,29 @@ enum PaywallSafeAreaInsets {
     @MainActor
     static func push(to webView: WKWebView) {
         webView.evaluateJavaScript(updateScript(current(for: webView)))
+    }
+}
+
+/// Re-reports insets when its safe area or layout changes (rotation, window resizes), which
+/// SwiftUI doesn't surface through `updateUIView`.
+final class PaywallWebView: WKWebView {
+    private var lastReportedInsets: UIEdgeInsets?
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        reportSafeAreaIfChanged()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        reportSafeAreaIfChanged()
+    }
+
+    private func reportSafeAreaIfChanged() {
+        guard window != nil else { return }
+        let insets = PaywallSafeAreaInsets.current(for: self)
+        guard insets != lastReportedInsets else { return }
+        lastReportedInsets = insets
+        evaluateJavaScript(PaywallSafeAreaInsets.updateScript(insets))
     }
 }

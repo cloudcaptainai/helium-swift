@@ -711,7 +711,7 @@ class WebViewManager {
         config.userContentController = contentController
         config.websiteDataStore = WKWebsiteDataStore.default()
         
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = PaywallWebView(frame: .zero, configuration: config)
         
         return PaywallWebViewHolder(
             filePath: filePath, webView: webView, msgHandler: messageHandler
