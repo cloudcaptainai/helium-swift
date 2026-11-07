@@ -10,6 +10,9 @@ import UIKit
 import SwiftUI
 
 extension KeyedDecodingContainer {
+    func decodeIfPresent(_ type: WebSecondTryConfig.Type, forKey key: Key) throws -> WebSecondTryConfig? {
+        try? decode(type, forKey: key)
+    }
     /// A style this SDK version does not recognize is treated as unset. Synthesized decoding would
     /// otherwise throw, and this field decodes alongside `resolvedConfig`, so one bad value would
     /// fail the entire config and take every trigger down with it rather than just the animation.
@@ -24,6 +27,43 @@ extension KeyedDecodingContainer {
     }
 }
 
+struct WebSecondTryConfig: Codable {
+    let paywallId: String
+    let versionId: String
+    let bundleUrl: String
+    let productsOfferedPaddle: [String]
+    let productsOfferedStripe: [String]
+    let triggers: [String]
+
+    init(paywallId: String, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], triggers: [String]) {
+        self.paywallId = paywallId
+        self.versionId = versionId
+        self.bundleUrl = bundleUrl
+        self.productsOfferedPaddle = productsOfferedPaddle
+        self.productsOfferedStripe = productsOfferedStripe
+        self.triggers = triggers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let paywallId = try container.decode(String.self, forKey: .paywallId)
+        let versionId = try container.decode(String.self, forKey: .versionId)
+        let bundleUrl = try container.decode(String.self, forKey: .bundleUrl)
+        guard !paywallId.isEmpty, !versionId.isEmpty,
+              let url = URL(string: bundleUrl), url.scheme != nil, url.host != nil else {
+            throw DecodingError.dataCorruptedError(forKey: .bundleUrl, in: container, debugDescription: "Invalid web second try configuration")
+        }
+        self.init(
+            paywallId: paywallId,
+            versionId: versionId,
+            bundleUrl: bundleUrl,
+            productsOfferedPaddle: try container.decode([String].self, forKey: .productsOfferedPaddle),
+            productsOfferedStripe: try container.decode([String].self, forKey: .productsOfferedStripe),
+            triggers: try container.decode([String].self, forKey: .triggers)
+        )
+    }
+}
+
 public struct HeliumPaywallInfo: Codable {
     var paywallID: Int
     var paywallUUID: String?
@@ -34,6 +74,7 @@ public struct HeliumPaywallInfo: Codable {
     var productsOfferedPaddle: [String]?
     var webProductsOfferedPaddle: [String]?
     var webProductsOfferedStripe: [String]?
+    var webSecondTryConfig: WebSecondTryConfig? = nil
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?

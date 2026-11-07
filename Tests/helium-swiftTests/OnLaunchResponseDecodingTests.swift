@@ -4,6 +4,18 @@ import XCTest
 /// Locks the JSON contract for on-launch response fields the SDK depends on.
 final class OnLaunchResponseDecodingTests: XCTestCase {
 
+    func testMalformedWebSecondTryDoesNotInvalidateOnLaunch() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "triggerToPaywalls": ["checkout": [
+                "paywallID": 1, "paywallTemplateName": "A", "resolvedConfig": [String: Any](),
+                "webSecondTryConfig": ["paywallId": 1],
+            ]],
+        ])
+        let config = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+        XCTAssertNotNil(config.triggerToPaywalls["checkout"])
+        XCTAssertNil(config.triggerToPaywalls["checkout"]?.webSecondTryConfig)
+    }
+
     private func makeOnLaunchJSON(extras: [String: Any] = [:]) throws -> Data {
         var dict: [String: Any] = [
             "triggerToPaywalls": [:],

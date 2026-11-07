@@ -217,6 +217,7 @@ public class HeliumFetchedConfigManager {
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
+        shared.localizedIOSProductKeys = []
         shared.previewServerProducts = PreviewServerProducts()
         HeliumControlPanelService.shared.isFallbackPreviewArmed = false
     }
@@ -243,6 +244,7 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic var localizedPriceMap: [String: LocalizedPrice] = [:]
+    @HeliumAtomic private var localizedIOSProductKeys: Set<String> = []
     @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
 
     func fetchConfig(
@@ -934,6 +936,7 @@ public class HeliumFetchedConfigManager {
     }
 
     func buildLocalizedPriceMap(_ productIds: [String]) async {
+        registerLocalizedIOSProductKeys(productIds)
         if !productIds.isEmpty {
             let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
 
@@ -943,6 +946,10 @@ public class HeliumFetchedConfigManager {
             }
         }
     }
+
+    func registerLocalizedIOSProductKeys(_ productIds: [String]) {
+        _localizedIOSProductKeys.withValue { $0.formUnion(productIds) }
+    }
     
     /// Product keys of a paywall that have no entry in the localized price map yet.
     func productIdsMissingLocalizedPrices(_ productIds: [String]) -> [String] {
@@ -951,8 +958,12 @@ public class HeliumFetchedConfigManager {
     }
 
     func refreshLocalizedPriceMap() async {
-        let productIds = Array(localizedPriceMap.keys)
+        let productIds = localizedProductKeysToRefresh()
         await buildLocalizedPriceMap(productIds)
+    }
+
+    func localizedProductKeysToRefresh() -> [String] {
+        Array(localizedIOSProductKeys)
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use
@@ -1376,6 +1387,7 @@ public class HeliumFetchedConfigManager {
         previewPaywallInfo.productsOfferedPaddle = productIdsPaddle
         previewPaywallInfo.webProductsOfferedPaddle = productIdsPaddleWeb
         previewPaywallInfo.webProductsOfferedStripe = productIdsStripeWeb
+        previewPaywallInfo.webSecondTryConfig = nil
 
         // Inherited from the source trigger, where it would send the preview to a fallback paywall
         // instead of the version the developer picked.
@@ -1412,6 +1424,7 @@ public class HeliumFetchedConfigManager {
         var entryJSON = sourceJSON
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
+        entryJSON["webSecondTryConfig"] = JSON.null
         return entryJSON
     }
 }

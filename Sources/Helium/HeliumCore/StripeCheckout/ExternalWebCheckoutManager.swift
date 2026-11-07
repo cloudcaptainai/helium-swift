@@ -46,6 +46,8 @@ public class ExternalWebCheckoutManager: NSObject {
     private struct CheckoutObservation {
         let paywallSession: PaywallSession
         let entitledProductIdsBeforeCheckout: Set<String>
+        let secondTry: WebSecondTryConfig?
+        let otherProviderEntitledIds: Set<String>
         let addedAt: Date
     }
     // Usually there will only be one checkout per paywall but second try paywall would have
@@ -213,6 +215,7 @@ public class ExternalWebCheckoutManager: NSObject {
             )
         }
 
+        let secondTry = readySecondTry(paywallSession: paywallSession)
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -224,10 +227,75 @@ public class ExternalWebCheckoutManager: NSObject {
             stripeOfferTerms: buildStripeOfferTerms(paywallInfo: paywallSession.paywallInfoWithBackups),
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
-            paywallTraits: paywallTraits
+            paywallTraits: paywallTraits,
+            webSecondTryConfig: secondTry.map { $0.context },
+            offeredPaddle: secondTry.map { _ in paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? [] },
+            offeredStripe: secondTry.map { _ in paywallSession.paywallInfoWithBackups?.webProductsOfferedStripe ?? [] }
         )
 
-        return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession)
+        return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession, secondTry: secondTry?.config)
+    }
+
+    @MainActor
+    func readySecondTry(paywallSession: PaywallSession) -> (config: WebSecondTryConfig, context: [String: Any])? {
+        guard let original = paywallSession.paywallInfoWithBackups,
+              let second = original.webSecondTryConfig,
+              !second.bundleUrl.isEmpty, URL(string: second.bundleUrl) != nil,
+              !second.productsOfferedPaddle.isEmpty || !second.productsOfferedStripe.isEmpty else { return nil }
+
+        let paddleKeys = second.productsOfferedPaddle
+        let stripeKeys = second.productsOfferedStripe
+        let paddlePriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: paddleKeys)
+        guard paddlePriceIds.count == paddleKeys.count else { return nil }
+        let outcomes = PaddleCheckoutPrefetchCoordinator.shared.completedOutcomes(
+            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds, surface: .secondTry
+        )
+        for priceId in paddlePriceIds {
+            guard case .ready = outcomes[priceId] ?? .notStarted else { return nil }
+        }
+
+        let selectedProvider: PaymentProviderConfig = !paddleKeys.isEmpty ? .paddle : .stripe
+        let manager = selectedProvider.kind == .paddle ? PaddleCheckoutManager.shared : StripeCheckoutManager.shared
+        let source = selectedProvider.getEntitlementsSource()
+        if !stripeKeys.isEmpty {
+            let stripeSource = PaymentProviderConfig.stripe.getEntitlementsSource()
+            guard stripeSource.hasFreshEntitlementsCache,
+                  !Self.containsEntitledProduct(stripeKeys, entitledIds: stripeSource.cachedHeliumProductIds()) else { return nil }
+        }
+        if !paddleKeys.isEmpty, source.hasEntitlementsSnapshot,
+           Self.containsEntitledProduct(paddleKeys, entitledIds: source.cachedHeliumProductIds()) { return nil }
+        let paddlePrices = PaymentProviderConfig.paddle.getProductsPriceMap() ?? [:]
+        let stripePrices = PaymentProviderConfig.stripe.getProductsPriceMap() ?? [:]
+        guard paddleKeys.allSatisfy({ paddlePrices[$0] != nil }),
+              stripeKeys.allSatisfy({ stripePrices[$0] != nil }) else { return nil }
+
+        var info = original
+        info.webProductsOfferedPaddle = paddleKeys
+        info.webProductsOfferedStripe = stripeKeys
+        let selected = selectedProvider.kind == .paddle ? paddleKeys.first : stripeKeys.first
+        guard let selected else { return nil }
+        let terms = StripeCheckoutManager.shared.buildStripeOfferTerms(paywallInfo: info)
+        let perPaywall = manager.perPaywallContext(
+            productKey: selected,
+            introOfferEligible: manager.isIntroOfferEligibleForWebCheckout(paywallInfo: info),
+            stripeOfferTerms: terms,
+            paddleBootstraps: PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: outcomes),
+            paddleAlreadyEntitled: nil,
+            offeredPaddle: paddleKeys,
+            offeredStripe: stripeKeys,
+            completeForChild: true
+        )
+        return (second, ["bundleUrl": second.bundleUrl, "triggers": second.triggers,
+                         "paywallId": second.paywallId, "versionId": second.versionId,
+                         "perPaywallCtx": perPaywall])
+    }
+
+    private static func containsEntitledProduct(_ offered: [String], entitledIds: Set<String>) -> Bool {
+        let entitledProducts = Set(entitledIds.map { $0.split(separator: ":", maxSplits: 1).first.map { String($0) } ?? "" })
+        return offered.contains { key in
+            guard let product = key.split(separator: ":", maxSplits: 1).first else { return false }
+            return entitledProducts.contains(String(product))
+        }
     }
 
     static func throwIfNonUSBuyerBlocked(in outcomes: [String: PaddlePrefetchOutcome]) throws {
@@ -322,6 +390,32 @@ public class ExternalWebCheckoutManager: NSObject {
         return byProductKey.isEmpty ? nil : byProductKey
     }
 
+    private func perPaywallContext(
+        productKey: String,
+        introOfferEligible: Bool,
+        stripeOfferTerms: [String: Any]?,
+        paddleBootstraps: [String: Any]?,
+        paddleAlreadyEntitled: [String: Any]?,
+        offeredPaddle: [String]?,
+        offeredStripe: [String]?,
+        completeForChild: Bool = false
+    ) -> [String: Any] {
+        var fields: [String: Any] = [provider.initialProductKey: productKey, "introOfferEligible": introOfferEligible]
+        if let stripeOfferTerms { fields["stripeOfferTerms"] = stripeOfferTerms }
+        if let paddleBootstraps { fields["paddleBootstraps"] = paddleBootstraps }
+        if let paddleAlreadyEntitled { fields["paddleAlreadyEntitled"] = paddleAlreadyEntitled }
+        if let offeredPaddle { fields["productsOfferedPaddle"] = offeredPaddle }
+        if let offeredStripe { fields["productsOfferedStripe"] = offeredStripe }
+        if completeForChild {
+            fields["initialPaddleProduct"] = (offeredPaddle?.first).map { $0 as Any } ?? NSNull()
+            fields["initialStripeSelection"] = (offeredStripe?.first).map { $0 as Any } ?? NSNull()
+            fields["stripeOfferTerms"] = stripeOfferTerms.map { $0 as Any } ?? NSNull()
+            fields["paddleBootstraps"] = paddleBootstraps.map { $0 as Any } ?? NSNull()
+            fields["paddleAlreadyEntitled"] = paddleAlreadyEntitled.map { $0 as Any } ?? NSNull()
+        }
+        return fields
+    }
+
     /// Builds the enriched checkout URL: existing query items are preserved,
     /// the compressed `ctx` payload is written to the URL fragment.
     func buildEnrichedCheckoutURL(
@@ -335,7 +429,10 @@ public class ExternalWebCheckoutManager: NSObject {
         stripeOfferTerms: [String: Any]? = nil,
         paddleBootstraps: [String: Any]? = nil,
         paddleAlreadyEntitled: [String: Any]? = nil,
-        paywallTraits: HeliumUserTraits? = nil
+        paywallTraits: HeliumUserTraits? = nil,
+        webSecondTryConfig: [String: Any]? = nil,
+        offeredPaddle: [String]? = nil,
+        offeredStripe: [String]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.invalidBaseURLForComponents
@@ -357,18 +454,17 @@ public class ExternalWebCheckoutManager: NSObject {
         analyticsTopFields["context"] = SegmentContext.staticContextData()
         ctx["analyticsTopFields"] = analyticsTopFields
 
-        ctx[provider.initialProductKey] = productKey
+        ctx.merge(perPaywallContext(productKey: productKey, introOfferEligible: introOfferEligible,
+                                    stripeOfferTerms: stripeOfferTerms, paddleBootstraps: paddleBootstraps,
+                                    paddleAlreadyEntitled: paddleAlreadyEntitled, offeredPaddle: offeredPaddle,
+                                    offeredStripe: offeredStripe)) { _, new in new }
+        if let webSecondTryConfig { ctx["webSecondTryConfig"] = webSecondTryConfig }
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
         ctx["paymentFailureUrl"] = cancelURL // We currently do nothing special with paymentFailureUrl
         if let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() {
             ctx["organizationId"] = organizationId
         }
-        ctx["introOfferEligible"] = introOfferEligible
-
-        // Per-price offer terms, additive to the blanket `introOfferEligible` above.
-        if let stripeOfferTerms { ctx["stripeOfferTerms"] = stripeOfferTerms }
-
         ctx["iosBundleId"] = Bundle.main.bundleIdentifier ?? "unknown"
 
         ctx["environment"] = AppReceiptsHelper.shared.getEnvironment()
@@ -393,12 +489,13 @@ public class ExternalWebCheckoutManager: NSObject {
                 ctx[key] = stringValue
             }
         }
-
-        if let paddleBootstraps = paddleBootstraps {
-            ctx["paddleBootstraps"] = paddleBootstraps
-        }
-        if let paddleAlreadyEntitled = paddleAlreadyEntitled {
-            ctx["paddleAlreadyEntitled"] = paddleAlreadyEntitled
+        if webSecondTryConfig != nil {
+            if let customer = PaymentProviderConfig.paddle.getCustomerId(), !customer.isEmpty {
+                ctx["paddleCustomerId"] = customer
+            }
+            if let customer = PaymentProviderConfig.stripe.getCustomerId(), !customer.isEmpty {
+                ctx["stripeCustomerId"] = customer
+            }
         }
 
         let ctxData = try JSONSerialization.data(withJSONObject: ctx)
@@ -438,13 +535,8 @@ public class ExternalWebCheckoutManager: NSObject {
     /// Opens the enriched checkout URL in the configured browser and starts observing
     /// for purchase completion via entitlements when the user returns to the app.
     @MainActor
-    func openEnrichedCheckoutURL(_ url: URL, entitledProductIdsBeforeCheckout: Set<String>, paywallSession: PaywallSession) async throws -> WebCheckoutOutcome {
-        let observation = CheckoutObservation(
-            paywallSession: paywallSession,
-            entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout,
-            addedAt: Date()
-        )
-        activeCheckoutObservations[paywallSession.sessionId] = observation
+    func openEnrichedCheckoutURL(_ url: URL, entitledProductIdsBeforeCheckout: Set<String>, paywallSession: PaywallSession, secondTry: WebSecondTryConfig? = nil) async throws -> WebCheckoutOutcome {
+        observeCheckout(paywallSession: paywallSession, entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout, secondTry: secondTry)
 
         let browserStyle = resolvedBrowserStyle(for: paywallSession)
         let opened = await WebCheckoutPresenter.present(
@@ -469,6 +561,20 @@ public class ExternalWebCheckoutManager: NSObject {
         isShowingInAppBrowser = browserStyle != .externalBrowser
         startForegroundObserver()
         return .opened
+    }
+
+    @MainActor
+    func observeCheckout(paywallSession: PaywallSession, entitledProductIdsBeforeCheckout: Set<String>, secondTry: WebSecondTryConfig?) {
+        let otherProvider: PaymentProviderConfig = provider.kind == .paddle ? .stripe : .paddle
+        let otherEntitled = secondTry.map { _ in otherProvider.getEntitlementsSource().cachedHeliumProductIds() } ?? []
+        let observation = CheckoutObservation(
+            paywallSession: paywallSession,
+            entitledProductIdsBeforeCheckout: entitledProductIdsBeforeCheckout,
+            secondTry: secondTry,
+            otherProviderEntitledIds: otherEntitled,
+            addedAt: Date()
+        )
+        activeCheckoutObservations[paywallSession.sessionId] = observation
     }
 
     func entitledProductIdsBeforeCheckout(
@@ -537,6 +643,10 @@ public class ExternalWebCheckoutManager: NSObject {
         // sit behind a stale cache. Force the next read to refetch.
         if removed != nil {
             entitlementsSource.invalidateCache()
+            if removed?.secondTry != nil {
+                let otherProvider: PaymentProviderConfig = provider.kind == .paddle ? .stripe : .paddle
+                otherProvider.getEntitlementsSource().invalidateCache()
+            }
         }
     }
 
@@ -723,7 +833,7 @@ public class ExternalWebCheckoutManager: NSObject {
     /// offered on the same paywall. In either case, observations are cleared
     /// and paywalls hidden. Succeeded wins over Restored across all sessions.
     @MainActor
-    private func checkForNewPurchase(fromSuccessRedirect: Bool = false, retryAttempt: Int = 1) async -> Bool {
+    func checkForNewPurchase(fromSuccessRedirect: Bool = false, retryAttempt: Int = 1) async -> Bool {
         await entitlementsSource.refreshEntitlements()
         let currentEntitledIds = await entitlementsSource.purchasedHeliumProductIds()
         HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase", metadata: [
@@ -734,65 +844,79 @@ public class ExternalWebCheckoutManager: NSObject {
         let observationsSnapshot = activeCheckoutObservations
             .sorted { $0.value.addedAt > $1.value.addedAt }
 
-        var restoredCandidate: (productId: String, observation: CheckoutObservation)?
+        let otherProvider: PaymentProviderConfig = provider.kind == .paddle ? .stripe : .paddle
+        let needsOtherProvider = observationsSnapshot.contains { _, observation in
+            guard let second = observation.secondTry else { return false }
+            return otherProvider.kind == .paddle ? !second.productsOfferedPaddle.isEmpty : !second.productsOfferedStripe.isEmpty
+        }
+        var otherEntitledIds = Set<String>()
+        if needsOtherProvider {
+            let otherSource = otherProvider.getEntitlementsSource()
+            await otherSource.refreshEntitlements()
+            otherEntitledIds = await otherSource.purchasedHeliumProductIds()
+        }
+        var restoredCandidate: (productId: String, observation: CheckoutObservation, provider: PaymentProviderConfig)?
 
         for (sessionId, observation) in observationsSnapshot {
-            guard let offeredProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) else {
-                // Skip, don't remove. Offered-products is static for the
-                // observation's lifetime, so removing here would also kill the
-                // redirect path where the in-app-set safety net would match.
-                continue
-            }
+            let primaryProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
+            let second = observation.secondTry
+            let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
+            let otherSecond = otherProvider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
+            let candidates = [
+                (provider: provider, offered: primaryProducts + ownSecond, current: currentEntitledIds, before: observation.entitledProductIdsBeforeCheckout),
+                (provider: otherProvider, offered: otherSecond, current: otherEntitledIds, before: observation.otherProviderEntitledIds),
+            ]
+            for candidate in candidates where !candidate.offered.isEmpty {
+                let offeredProducts = candidate.offered
+                let newlyEntitledIds = candidate.current.subtracting(candidate.before)
+                HeliumLogger.log(.debug, category: .entitlements, "\(candidate.provider.displayName) checkForNewPurchase session", metadata: [
+                    "sessionId": sessionId,
+                    "offered": "\(offeredProducts)",
+                    "newlyEntitled": "\(newlyEntitledIds)"
+                ])
 
-            let newlyEntitledIds = currentEntitledIds
-                .subtracting(observation.entitledProductIdsBeforeCheckout)
-            HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase session", metadata: [
-                "sessionId": sessionId,
-                "offered": "\(offeredProducts)",
-                "newlyEntitled": "\(newlyEntitledIds)"
-            ])
+                // If multiple sessions offer the same product, attribute to the most
+                // recently added session (likely the one the user just interacted with).
+                // In practice, second-try paywalls offer different products.
+                if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
+                    HeliumPaywallDelegateWrapper.shared.fireEvent(
+                        PurchaseSucceededEvent(
+                            productId: purchasedProductId,
+                            triggerName: observation.paywallSession.trigger,
+                            paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                            storeKitTransactionId: nil,
+                            storeKitOriginalTransactionId: nil,
+                            paymentProcessor: candidate.provider.kind
+                        ),
+                        paywallSession: observation.paywallSession,
+                        sendToAnalytics: false
+                    )
+                    HeliumObservabilityManager.shared.track(
+                        WebCheckoutPurchaseDetected(
+                            provider: candidate.provider.providerSlug,
+                            productId: purchasedProductId,
+                            source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
+                            retryAttempt: retryAttempt,
+                            msSinceOpen: msSince(observation.addedAt),
+                            wasRestore: false,
+                            browserStyle: resolvedBrowserStyle(for: observation.paywallSession).rawValue
+                        ),
+                        scope: observation.paywallSession.observabilityScope
+                    )
+                    activeCheckoutObservations.removeAll()
+                    HeliumPaywallPresenter.shared.hideAllUpsells()
+                    InlinePaywallDismissRegistry.dismissAll()
+                    return true
+                }
 
-            // If multiple sessions offer the same product, attribute to the most
-            // recently added session (likely the one the user just interacted with).
-            // In practice, second-try paywalls offer different products.
-            if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PurchaseSucceededEvent(
-                        productId: purchasedProductId,
-                        triggerName: observation.paywallSession.trigger,
-                        paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                        storeKitTransactionId: nil,
-                        storeKitOriginalTransactionId: nil,
-                        paymentProcessor: provider.kind
-                    ),
-                    paywallSession: observation.paywallSession,
-                    sendToAnalytics: false
-                )
-                HeliumObservabilityManager.shared.track(
-                    WebCheckoutPurchaseDetected(
-                        provider: provider.providerSlug,
-                        productId: purchasedProductId,
-                        source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
-                        retryAttempt: retryAttempt,
-                        msSinceOpen: msSince(observation.addedAt),
-                        wasRestore: false,
-                        browserStyle: resolvedBrowserStyle(for: observation.paywallSession).rawValue
-                    ),
-                    scope: observation.paywallSession.observabilityScope
-                )
-                activeCheckoutObservations.removeAll()
-                HeliumPaywallPresenter.shared.hideAllUpsells()
-                InlinePaywallDismissRegistry.dismissAll()
-                return true
-            }
-
-            // Record newest session with an already-entitled offered product as a
-            // restored candidate. Only fires if no session produces a Succeeded match
-            // and the caller has positive evidence of checkout completion.
-            if fromSuccessRedirect,
-               restoredCandidate == nil,
-               let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) })  {
-                restoredCandidate = (entitledProductId, observation)
+                // Record newest session with an already-entitled offered product as a
+                // restored candidate. Only fires if no session produces a Succeeded match
+                // and the caller has positive evidence of checkout completion.
+                if fromSuccessRedirect,
+                   restoredCandidate == nil,
+                   let entitledProductId = candidate.current.first(where: { offeredProducts.contains($0) }) {
+                    restoredCandidate = (entitledProductId, observation, candidate.provider)
+                }
             }
         }
 
@@ -803,14 +927,14 @@ public class ExternalWebCheckoutManager: NSObject {
                     triggerName: restored.observation.paywallSession.trigger,
                     paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                     restoreOrigin: .detectedPostWebCheckout,
-                    paymentProcessor: provider.kind
+                    paymentProcessor: restored.provider.kind
                 ),
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false
             )
             HeliumObservabilityManager.shared.track(
                 WebCheckoutPurchaseDetected(
-                    provider: provider.providerSlug,
+                    provider: restored.provider.providerSlug,
                     productId: restored.productId,
                     source: fromSuccessRedirect ? .successRedirect : .foregroundObserver,
                     retryAttempt: retryAttempt,

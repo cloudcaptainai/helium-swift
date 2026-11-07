@@ -185,6 +185,7 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(parsed["cancelUrl"] as? String, "myapp://cancel")
         XCTAssertEqual(parsed["introOfferEligible"] as? Bool, true)
         XCTAssertNotNil(parsed["analytics"])
+        XCTAssertNil(parsed["webSecondTryConfig"])
     }
 
     func testBuildEnrichedCheckoutURL_emitsCustomPaywallTraitsInCtx() async throws {
@@ -229,6 +230,32 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(traits["plan"] as? String, "gold")
         XCTAssertEqual(traits["trigger"] as? String, "onboarding")
         XCTAssertEqual(traits["tier"] as? String, "free")
+    }
+
+    func testBuildEnrichedCheckoutURLIncludesSecondTryContext() throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_second_try"
+        defer { Helium.lastApiKeyUsed = nil }
+        let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: HeliumPaymentEntitlementsSource(provider: .paddle))
+        let event = PurchaseSucceededEvent(productId: "", triggerName: "t", paywallName: "P", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .paddle)
+        let analytics = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: makeTestSession())
+        let second: [String: Any] = [
+            "bundleUrl": "https://example.com/b", "paywallId": "b", "versionId": "v",
+            "triggers": ["dismissed"],
+            "perPaywallCtx": ["initialPaddleProduct": "pro_b:pri_b", "paddleBootstraps": ["pri_b": ["transactionId": "txn_b"]]],
+        ]
+        let url = try manager.buildEnrichedCheckoutURL(
+            baseURL: try XCTUnwrap(URL(string: "https://example.com/a")), analyticsEvent: analytics,
+            productKey: "pro_a:pri_a", triggerName: "t", successURL: "myapp://ok", cancelURL: "myapp://cancel",
+            introOfferEligible: true, webSecondTryConfig: second
+        )
+        let fragment = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment)
+        let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+        let data = try decompressWithAppleZlib(compressed, originalSize: 8192)
+        let ctx = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(ctx["initialPaddleProduct"] as? String, "pro_a:pri_a")
+        let nested = try XCTUnwrap(ctx["webSecondTryConfig"] as? [String: Any])
+        let child = try XCTUnwrap(nested["perPaywallCtx"] as? [String: Any])
+        XCTAssertEqual(child["initialPaddleProduct"] as? String, "pro_b:pri_b")
     }
 
     func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {

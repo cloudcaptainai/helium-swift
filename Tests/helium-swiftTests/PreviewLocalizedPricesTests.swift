@@ -3,6 +3,37 @@ import XCTest
 
 final class PreviewLocalizedPricesTests: XCTestCase {
 
+    func testPreviewDoesNotInheritDonorWebSecondTry() throws {
+        var donor = makeTestPaywallInfo()
+        donor.resolvedConfig = AnyCodable(["baseStack": ["componentProps": ["bundleURL": "https://example.com/a"]]])
+        donor.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: ["pro_b:pri_b"], productsOfferedStripe: [], triggers: ["dismissed"]
+        )
+        let manager = HeliumFetchedConfigManager.shared
+        manager.injectConfigForTesting(makeTestConfig(triggers: ["donor": donor]))
+        try manager.setPreviewTriggerConfig(
+            bundleId: "preview", bundleUrl: "https://example.com/preview", bundleHtml: "",
+            productIds: [], productIdsStripe: [], productIdsPaddle: [], productIdsPaddleWeb: [], productIdsStripeWeb: []
+        )
+        XCTAssertNil(manager.getPaywallInfoForTrigger(HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)?.webSecondTryConfig)
+        XCTAssertNotNil(manager.getPaywallInfoForTrigger("donor")?.webSecondTryConfig)
+    }
+
+    func testRefreshKeysExcludeServerPricesAndKeepPromoKeys() {
+        let manager = HeliumFetchedConfigManager.shared
+        let promo = "ios.product:offer"
+        manager.registerLocalizedIOSProductKeys(["ios.product", promo, "preview.product"])
+        manager.localizedPriceMap = [
+            "ios.product": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
+            "pro_web:pri_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
+            "prod_web:price_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
+        ]
+        XCTAssertEqual(Set(manager.localizedProductKeysToRefresh()), ["ios.product", promo, "preview.product"])
+        XCTAssertNotNil(manager.localizedPriceMap["pro_web:pri_web"])
+        XCTAssertNotNil(manager.localizedPriceMap["prod_web:price_web"])
+    }
+
     override func setUp() {
         super.setUp()
         HeliumFetchedConfigManager.reset()
