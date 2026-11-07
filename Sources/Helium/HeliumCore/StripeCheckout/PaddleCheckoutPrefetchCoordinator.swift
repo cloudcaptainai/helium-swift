@@ -36,6 +36,11 @@ enum PaddlePrefetchOutcome {
     case notStarted
 }
 
+enum PaddlePrefetchSurface: Hashable, Sendable {
+    case primary
+    case secondTry
+}
+
 @MainActor
 final class PaddleCheckoutPrefetchCoordinator {
 
@@ -45,10 +50,13 @@ final class PaddleCheckoutPrefetchCoordinator {
     private let bffClient: PaddleBFFClient
 
     private var cache: [CacheKey: Task<PaddlePrefetchOutcome, Never>] = [:]
+    private var completed: [CacheKey: PaddlePrefetchOutcome] = [:]
+    private var generations: [CacheKey: UUID] = [:]
 
-    private struct CacheKey: Hashable {
+    private struct CacheKey: Hashable, Sendable {
         let sessionId: String
         let priceId: String
+        let surface: PaddlePrefetchSurface
     }
 
     init(
@@ -62,16 +70,16 @@ final class PaddleCheckoutPrefetchCoordinator {
     // MARK: - Paywall lifecycle hooks
 
     func handlePaywallOpen(paywallSession: PaywallSession) {
-        guard let info = paywallSession.paywallInfoWithBackups,
-              let webProducts = info.webProductsOfferedPaddle,
-              !webProducts.isEmpty else {
-            return
+        guard let info = paywallSession.paywallInfoWithBackups else { return }
+        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty {
+            prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
         }
-
-        prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+        if let secondTry = info.webSecondTryConfig, !secondTry.productsOfferedPaddle.isEmpty {
+            prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
+        }
     }
 
-    func prefetch(paywallSession: PaywallSession, compositeKeys: [String]) {
+    func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary) {
         guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
@@ -92,7 +100,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             priceIds: priceIds,
             discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
-            iosBundleId: Bundle.main.bundleIdentifier
+            iosBundleId: Bundle.main.bundleIdentifier,
+            surface: surface
         )
     }
 
@@ -108,26 +117,31 @@ final class PaddleCheckoutPrefetchCoordinator {
         priceIds: [String],
         discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
-        iosBundleId: String?
+        iosBundleId: String?,
+        surface: PaddlePrefetchSurface = .primary
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
-        let paywallUUID = paywallSession.paywallInfoWithBackups?.paywallUUID
+        let paywallUUID = surface == .secondTry
+            ? paywallSession.paywallInfoWithBackups?.webSecondTryConfig?.paywallId
+            : paywallSession.paywallInfoWithBackups?.paywallUUID
         let triggerName = paywallSession.trigger
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
         var startedPriceIds: [String] = []
         for priceId in priceIds {
-            let key = CacheKey(sessionId: sessionId, priceId: priceId)
+            let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
             if cache[key] != nil { continue }
 
             let bandit = banditClient
             let bff = bffClient
             let discountId = discountIdByPriceId[priceId]
+            let generation = UUID()
+            generations[key] = generation
 
-            cache[key] = Task.detached(priority: .userInitiated) {
-                await Self.runPrefetchChain(
+            let task = Task.detached(priority: .userInitiated) { [weak self] in
+                let outcome = await Self.runPrefetchChain(
                     priceId: priceId,
                     discountId: discountId,
                     paywallUUID: paywallUUID,
@@ -140,7 +154,15 @@ final class PaddleCheckoutPrefetchCoordinator {
                     bffClient: bff,
                     scope: scope
                 )
+                if surface == .secondTry {
+                    await MainActor.run {
+                        guard let self, self.generations[key] == generation else { return }
+                        self.completed[key] = outcome
+                    }
+                }
+                return outcome
             }
+            cache[key] = task
             startedPriceIds.append(priceId)
         }
         if !startedPriceIds.isEmpty {
@@ -158,9 +180,10 @@ final class PaddleCheckoutPrefetchCoordinator {
     func awaitOutcome(
         sessionId: String,
         priceId: String,
-        timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
+        timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds,
+        surface: PaddlePrefetchSurface = .primary
     ) async -> PaddlePrefetchOutcome {
-        let key = CacheKey(sessionId: sessionId, priceId: priceId)
+        let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
         guard let task = cache[key] else {
             return .notStarted
         }
@@ -218,9 +241,21 @@ final class PaddleCheckoutPrefetchCoordinator {
                 task.cancel()
             }
         }
+        completed = completed.filter { $0.key.sessionId != sessionId }
+        generations = generations.filter { $0.key.sessionId != sessionId }
+    }
+
+    func completedOutcomes(sessionId: String, priceIds: [String], surface: PaddlePrefetchSurface) -> [String: PaddlePrefetchOutcome] {
+        var result: [String: PaddlePrefetchOutcome] = [:]
+        for priceId in priceIds {
+            result[priceId] = completed[CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)] ?? .notStarted
+        }
+        return result
     }
 
     func cancelAll() {
+        completed.removeAll()
+        generations.removeAll()
         for (_, task) in cache {
             task.cancel()
         }
@@ -232,6 +267,8 @@ final class PaddleCheckoutPrefetchCoordinator {
     func cancelAllAndAwait() async {
         let tasks = Array(cache.values)
         cache.removeAll()
+        completed.removeAll()
+        generations.removeAll()
         for task in tasks {
             task.cancel()
         }

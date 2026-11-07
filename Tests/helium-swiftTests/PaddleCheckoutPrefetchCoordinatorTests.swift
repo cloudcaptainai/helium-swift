@@ -14,6 +14,104 @@ private final class EmptyPaddleEntitlementsSource: HeliumPaymentEntitlementsSour
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
+    func testSamePricePrefetchIsSeparateForEachSurface() async throws {
+        var info = makeTestPaywallInfo()
+        info.paywallUUID = "primary"
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: ["pro_x:pri_x"], productsOfferedStripe: [], triggers: ["dismissed"]
+        )
+        let testSession = makeTestSession(paywallInfo: info)
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil)
+        coordinator.prefetch(paywallSession: testSession, priceIds: ["pri_x"], paddleClientToken: "test_xyz", iosBundleId: nil, surface: .secondTry)
+        let primary = await coordinator.awaitOutcome(sessionId: testSession.sessionId, priceId: "pri_x")
+        let second = await coordinator.awaitOutcome(sessionId: testSession.sessionId, priceId: "pri_x", surface: .secondTry)
+        guard case .ready = primary, case .ready = second else {
+            XCTFail("Expected both surfaces to be ready")
+            return
+        }
+        let calls = MockURLProtocol.capturedRequests.filter {
+            ($0.url?.absoluteString ?? "").contains("paddle/create-transaction-for-paywall")
+        }
+        XCTAssertEqual(calls.count, 2)
+        let paywallIds = try calls.map { request -> String in
+            let data = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let paywall = try XCTUnwrap(body["paywallInfo"] as? [String: Any])
+            return try XCTUnwrap(paywall["paywallUUID"] as? String)
+        }
+        XCTAssertEqual(Set(paywallIds), ["primary", "second"])
+    }
+
+    func testSecondTryContextRequiresCompletedPrefetch() async throws {
+        let key = "pro_second:pri_second"
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+        )
+        let paywallSession = makeTestSession(paywallInfo: info)
+        let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
+        let price = ServerProductPrice(
+            id: "pro_second", priceId: "pri_second", formattedPrice: "$9.99", localizedTitle: "Test",
+            localizedDescription: nil, currency: "USD", value: 9.99, currencySymbol: "$",
+            duration: "Month", productType: "subscription", subscriptionPeriod: "month", subscription: nil,
+            defaultDiscountId: nil
+        )
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [key: price], paddleClientToken: "test_xyz")
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
+        configureSharedCheckoutFlow(session: paywallSession, priceIds: [], countryCode: "US")
+        defer { cleanupSharedCheckoutFlow(session: paywallSession) }
+        PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
+        let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second", surface: .secondTry)
+        guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
+        let second = try XCTUnwrap(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
+        let context = try XCTUnwrap(second.context["perPaywallCtx"] as? [String: Any])
+        XCTAssertEqual(context["initialPaddleProduct"] as? String, key)
+        XCTAssertEqual(context["productsOfferedPaddle"] as? [String], [key])
+        let bootstraps = try XCTUnwrap(context["paddleBootstraps"] as? [String: Any])
+        XCTAssertNotNil(bootstraps["pri_second"])
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: ["pro_second:pri_other"]))
+    }
+
+    func testSecondTryContextOmitsAlreadyEntitledProduct() async throws {
+        let key = "pro_second:pri_second_owned"
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+        )
+        let paywallSession = makeTestSession(paywallInfo: info)
+        let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: nil, paddleClientToken: "test_xyz")
+        configureSharedCheckoutFlow(session: paywallSession, priceIds: [], alreadyEntitledPriceId: "pri_second_owned")
+        defer { cleanupSharedCheckoutFlow(session: paywallSession) }
+        PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
+        let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second_owned", surface: .secondTry)
+        guard case .alreadyEntitled = outcome else { return XCTFail("Expected already-entitled outcome") }
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
+    }
+
+    func testSecondTryContextOmitsFailedPrefetch() async throws {
+        let key = "pro_second:pri_error"
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+        )
+        let paywallSession = makeTestSession(paywallInfo: info)
+        let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: nil, paddleClientToken: "test_xyz")
+        configureSharedCheckoutFlow(session: paywallSession, priceIds: [])
+        defer { cleanupSharedCheckoutFlow(session: paywallSession) }
+        MockURLProtocol.requestHandler = { _ in throw NSError(domain: "test", code: 1) }
+        PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
+        let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_error", surface: .secondTry)
+        guard case .failed = outcome else { return XCTFail("Expected failed outcome") }
+        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: []))
+    }
+
     private var testSession: PaywallSession!
     private var testSessionId: String { testSession.sessionId }
 

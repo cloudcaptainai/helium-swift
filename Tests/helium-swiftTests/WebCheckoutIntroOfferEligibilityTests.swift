@@ -1,10 +1,83 @@
 import XCTest
 @testable import Helium
 
+private final class FixedWebEntitlementsSource: HeliumPaymentEntitlementsSource, @unchecked Sendable {
+    let productKeys: Set<String>
+
+    init(provider: PaymentProviderConfig, productKeys: Set<String>) {
+        self.productKeys = productKeys
+        super.init(provider: provider)
+    }
+
+    override func refreshEntitlements() async {}
+    override func purchasedHeliumProductIds() async -> Set<String> { productKeys }
+}
+
 /// Covers the price-map derivation used when `/check-entitlement` returns no
 /// eligibility value. Fixtures are decoded from JSON rather than hand-built, so
 /// a field rename surfaces here.
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
+
+    @MainActor
+    func testSecondTryRejectsOtherProviderProducts() {
+        for provider in [PaymentProviderConfig.paddle, .stripe] {
+            let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: FixedWebEntitlementsSource(provider: provider, productKeys: []))
+            for includesOwnProduct in [false, true] {
+                var info = makeTestPaywallInfo()
+                info.webSecondTryConfig = WebSecondTryConfig(
+                    paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+                    productsOfferedPaddle: provider.kind == .stripe || includesOwnProduct ? ["pro_b:pri_b"] : [],
+                    productsOfferedStripe: provider.kind == .paddle || includesOwnProduct ? ["prod_b:price_b"] : [],
+                    triggers: ["dismissed"]
+                )
+                XCTAssertNil(manager.readySecondTry(paywallSession: makeTestSession(paywallInfo: info), entitledBefore: []))
+            }
+        }
+    }
+
+    @MainActor
+    func testStripeSecondTryUsesCheckoutEntitlements() throws {
+        let key = "prod_b:price_b"
+        let manager = ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: FixedWebEntitlementsSource(provider: .stripe, productKeys: []))
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [], productsOfferedStripe: [key], triggers: ["dismissed"]
+        )
+        let session = makeTestSession(paywallInfo: info)
+        let config = HeliumFetchedConfigManager.shared
+        defer { HeliumFetchedConfigManager.reset() }
+        config.setPreviewServerProducts(stripeProducts: [key: try price(key, .eligibleTrial)], paddleProducts: nil, paddleClientToken: nil)
+        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: []))
+        let context = try XCTUnwrap(ready.context["perPaywallCtx"] as? [String: Any])
+        XCTAssertEqual(context["initialStripeSelection"] as? String, key)
+        XCTAssertNotNil((context["stripeOfferTerms"] as? [String: Any])?[key])
+        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"]))
+    }
+
+    @MainActor
+    func testSecondTryPurchaseIsDetectedOnlyWhenSecondTryWasPresented() async {
+        for provider in [PaymentProviderConfig.paddle, .stripe] {
+            let key = provider.kind == .paddle ? "pro_b:pri_b" : "prod_b:price_b"
+            let source = FixedWebEntitlementsSource(provider: provider, productKeys: [key])
+            let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: source)
+            var info = makeTestPaywallInfo()
+            info.webProductsOfferedPaddle = ["pro_a:pri_a"]
+            info.webProductsOfferedStripe = ["prod_a:price_a"]
+            let session = makeTestSession(paywallInfo: info)
+            let second = WebSecondTryConfig(
+                paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+                productsOfferedPaddle: provider.kind == .paddle ? [key] : [],
+                productsOfferedStripe: provider.kind == .stripe ? [key] : [], triggers: ["dismissed"]
+            )
+            manager.observeCheckout(paywallSession: session, entitledProductIdsBeforeCheckout: [], secondTry: nil)
+            let missing = await manager.checkForNewPurchase()
+            XCTAssertFalse(missing)
+            manager.observeCheckout(paywallSession: session, entitledProductIdsBeforeCheckout: [], secondTry: second)
+            let detected = await manager.checkForNewPurchase()
+            XCTAssertTrue(detected)
+        }
+    }
 
     override func setUp() {
         super.setUp()
