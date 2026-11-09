@@ -280,7 +280,7 @@ public class ExternalWebCheckoutManager: NSObject {
             offeredStripe: stripeKeys,
             completeForChild: true
         )
-        return (second, ["bundleUrl": second.bundleUrl, "triggers": second.triggers,
+        return (second, ["bundleUrl": second.bundleUrl, "showOn": second.showOn,
                          "paywallId": second.paywallId, "versionId": second.versionId,
                          "perPaywallCtx": perPaywall])
     }

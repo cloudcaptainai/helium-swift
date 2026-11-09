@@ -12,11 +12,12 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
             "bundleUrl": "https://example.com/b",
             "productsOfferedPaddle": ["pro_b:pri_b"],
             "productsOfferedStripe": [String](),
-            "triggers": ["dismissed"],
+            "showOn": ["dismissed"],
         ]
         let decoded = try decodePaywallInfo(extras: ["webSecondTryConfig": secondTry])
         XCTAssertEqual(decoded.webSecondTryConfig?.paywallId, "paywall-b")
         XCTAssertEqual(decoded.webSecondTryConfig?.productsOfferedPaddle, ["pro_b:pri_b"])
+        XCTAssertEqual(decoded.webSecondTryConfig?.showOn, ["dismissed"])
         XCTAssertNil(try decodePaywallInfo().webSecondTryConfig)
         XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": ["paywallId": 4]]).webSecondTryConfig)
         var invalidURL = secondTry

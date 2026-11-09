@@ -28,7 +28,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
                     paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
                     productsOfferedPaddle: provider.kind == .stripe || includesOwnProduct ? ["pro_b:pri_b"] : [],
                     productsOfferedStripe: provider.kind == .paddle || includesOwnProduct ? ["prod_b:price_b"] : [],
-                    triggers: ["dismissed"]
+                    showOn: ["dismissed"]
                 )
                 XCTAssertNil(manager.readySecondTry(paywallSession: makeTestSession(paywallInfo: info), entitledBefore: []))
             }
@@ -42,7 +42,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
-            productsOfferedPaddle: [], productsOfferedStripe: [key], triggers: ["dismissed"]
+            productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
         )
         let session = makeTestSession(paywallInfo: info)
         let config = HeliumFetchedConfigManager.shared
@@ -68,7 +68,7 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             let second = WebSecondTryConfig(
                 paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
                 productsOfferedPaddle: provider.kind == .paddle ? [key] : [],
-                productsOfferedStripe: provider.kind == .stripe ? [key] : [], triggers: ["dismissed"]
+                productsOfferedStripe: provider.kind == .stripe ? [key] : [], showOn: ["dismissed"]
             )
             manager.observeCheckout(paywallSession: session, entitledProductIdsBeforeCheckout: [], secondTry: nil)
             let missing = await manager.checkForNewPurchase()

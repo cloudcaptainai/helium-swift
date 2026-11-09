@@ -33,15 +33,15 @@ struct WebSecondTryConfig: Codable {
     let bundleUrl: String
     let productsOfferedPaddle: [String]
     let productsOfferedStripe: [String]
-    let triggers: [String]
+    let showOn: [String]
 
-    init(paywallId: String, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], triggers: [String]) {
+    init(paywallId: String, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
         self.paywallId = paywallId
         self.versionId = versionId
         self.bundleUrl = bundleUrl
         self.productsOfferedPaddle = productsOfferedPaddle
         self.productsOfferedStripe = productsOfferedStripe
-        self.triggers = triggers
+        self.showOn = showOn
     }
 
     init(from decoder: Decoder) throws {
@@ -59,7 +59,7 @@ struct WebSecondTryConfig: Codable {
             bundleUrl: bundleUrl,
             productsOfferedPaddle: try container.decode([String].self, forKey: .productsOfferedPaddle),
             productsOfferedStripe: try container.decode([String].self, forKey: .productsOfferedStripe),
-            triggers: try container.decode([String].self, forKey: .triggers)
+            showOn: try container.decode([String].self, forKey: .showOn)
         )
     }
 }

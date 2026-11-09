@@ -19,7 +19,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         info.paywallUUID = "primary"
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
-            productsOfferedPaddle: ["pro_x:pri_x"], productsOfferedStripe: [], triggers: ["dismissed"]
+            productsOfferedPaddle: ["pro_x:pri_x"], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let testSession = makeTestSession(paywallInfo: info)
         MockURLProtocol.requestHandler = bothSucceedHandler()
@@ -49,7 +49,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
-            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+            productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)
         let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
@@ -80,7 +80,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
-            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+            productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)
         let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
@@ -98,7 +98,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallId: "second", versionId: "version", bundleUrl: "https://example.com/b",
-            productsOfferedPaddle: [key], productsOfferedStripe: [], triggers: ["dismissed"]
+            productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)
         let manager = ExternalWebCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
