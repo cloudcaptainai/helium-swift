@@ -29,14 +29,18 @@ extension KeyedDecodingContainer {
 
 struct WebSecondTryConfig: Codable {
     let paywallId: String
+    let paywallIntId: Int?
+    let paywallTemplateName: String?
     let versionId: String
     let bundleUrl: String
     let productsOfferedPaddle: [String]
     let productsOfferedStripe: [String]
     let showOn: [String]
 
-    init(paywallId: String, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
+    init(paywallId: String, paywallIntId: Int? = nil, paywallTemplateName: String? = nil, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
         self.paywallId = paywallId
+        self.paywallIntId = paywallIntId
+        self.paywallTemplateName = paywallTemplateName
         self.versionId = versionId
         self.bundleUrl = bundleUrl
         self.productsOfferedPaddle = productsOfferedPaddle
@@ -55,6 +59,8 @@ struct WebSecondTryConfig: Codable {
         }
         self.init(
             paywallId: paywallId,
+            paywallIntId: try container.decodeIfPresent(Int.self, forKey: .paywallIntId),
+            paywallTemplateName: try container.decodeIfPresent(String.self, forKey: .paywallTemplateName),
             versionId: versionId,
             bundleUrl: bundleUrl,
             productsOfferedPaddle: try container.decode([String].self, forKey: .productsOfferedPaddle),

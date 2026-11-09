@@ -214,7 +214,7 @@ public class ExternalWebCheckoutManager: NSObject {
             )
         }
 
-        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore)
+        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analyticsEvent: loggedEvent)
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -236,9 +236,11 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     @MainActor
-    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>) -> (config: WebSecondTryConfig, context: [String: Any])? {
+    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analyticsEvent: HeliumPaywallLoggedEvent) -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
+              let paywallIntId = second.paywallIntId, paywallIntId > 0,
+              let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty,
               !second.bundleUrl.isEmpty, URL(string: second.bundleUrl) != nil,
               !second.productsOfferedPaddle.isEmpty || !second.productsOfferedStripe.isEmpty else { return nil }
 
@@ -270,7 +272,18 @@ public class ExternalWebCheckoutManager: NSObject {
         info.webProductsOfferedStripe = stripeKeys
         guard let selected = offered.first else { return nil }
         let terms = buildStripeOfferTerms(paywallInfo: info)
-        let perPaywall = perPaywallContext(
+        guard let analyticsData = try? JSONEncoder().encode(analyticsEvent),
+              var analytics = (try? JSONSerialization.jsonObject(with: analyticsData)) as? [String: Any],
+              var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
+        analytics["paywallID"] = paywallIntId
+        analytics["paywallUUID"] = second.paywallId
+        analytics["paywallVersionUUID"] = second.versionId
+        analytics["heliumPaywallSessionId"] = UUID().uuidString
+        analytics["parentPaywallSessionId"] = paywallSession.sessionId
+        event["paywallTemplateName"] = paywallTemplateName
+        event["isSecondTry"] = true
+        analytics["heliumEvent"] = event
+        var perPaywall = perPaywallContext(
             productKey: selected,
             introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: info),
             stripeOfferTerms: terms,
@@ -280,6 +293,7 @@ public class ExternalWebCheckoutManager: NSObject {
             offeredStripe: stripeKeys,
             completeForChild: true
         )
+        perPaywall["analytics"] = analytics
         return (second, ["bundleUrl": second.bundleUrl, "showOn": second.showOn,
                          "paywallId": second.paywallId, "versionId": second.versionId,
                          "perPaywallCtx": perPaywall])

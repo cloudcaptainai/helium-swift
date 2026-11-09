@@ -25,12 +25,13 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             for includesOwnProduct in [false, true] {
                 var info = makeTestPaywallInfo()
                 info.webSecondTryConfig = WebSecondTryConfig(
-                    paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+                    paywallId: "b", paywallIntId: 42, paywallTemplateName: "Second", versionId: "v", bundleUrl: "https://example.com/b",
                     productsOfferedPaddle: provider.kind == .stripe || includesOwnProduct ? ["pro_b:pri_b"] : [],
                     productsOfferedStripe: provider.kind == .paddle || includesOwnProduct ? ["prod_b:price_b"] : [],
                     showOn: ["dismissed"]
                 )
-                XCTAssertNil(manager.readySecondTry(paywallSession: makeTestSession(paywallInfo: info), entitledBefore: []))
+                let session = makeTestSession(paywallInfo: info)
+                XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analyticsEvent: makeTestCheckoutAnalytics(session: session, provider: provider.kind)))
             }
         }
     }
@@ -41,18 +42,42 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         let manager = ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: FixedWebEntitlementsSource(provider: .stripe, productKeys: []))
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+            paywallId: "b", paywallIntId: 42, paywallTemplateName: "Second", versionId: "v", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
         )
         let session = makeTestSession(paywallInfo: info)
         let config = HeliumFetchedConfigManager.shared
         defer { HeliumFetchedConfigManager.reset() }
         config.setPreviewServerProducts(stripeProducts: [key: try price(key, .eligibleTrial)], paddleProducts: nil, paddleClientToken: nil)
-        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: []))
+        var analytics = makeTestCheckoutAnalytics(session: session, provider: .stripe)
+        analytics.experimentID = "experiment"
+        analytics.modelID = "model"
+        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: [], analyticsEvent: analytics))
         let context = try XCTUnwrap(ready.context["perPaywallCtx"] as? [String: Any])
         XCTAssertEqual(context["initialStripeSelection"] as? String, key)
         XCTAssertNotNil((context["stripeOfferTerms"] as? [String: Any])?[key])
-        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"]))
+        let child = try XCTUnwrap(context["analytics"] as? [String: Any])
+        let event = try XCTUnwrap(child["heliumEvent"] as? [String: Any])
+        XCTAssertEqual(child["paywallID"] as? Int, 42)
+        XCTAssertEqual(child["paywallUUID"] as? String, "b")
+        XCTAssertEqual(child["paywallVersionUUID"] as? String, "v")
+        XCTAssertEqual(child["parentPaywallSessionId"] as? String, session.sessionId)
+        let childSession = try XCTUnwrap(child["heliumPaywallSessionId"] as? String)
+        XCTAssertNotNil(UUID(uuidString: childSession))
+        XCTAssertNotEqual(childSession, session.sessionId)
+        XCTAssertEqual(child["experimentID"] as? String, "experiment")
+        XCTAssertEqual(child["modelID"] as? String, "model")
+        XCTAssertEqual(event["paywallTemplateName"] as? String, "Second")
+        XCTAssertEqual(event["isSecondTry"] as? Bool, true)
+        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"], analyticsEvent: analytics))
+        for (id, name) in [(nil, "Second"), (0, "Second"), (42, nil), (42, "")] as [(Int?, String?)] {
+            info.webSecondTryConfig = WebSecondTryConfig(
+                paywallId: "b", paywallIntId: id, paywallTemplateName: name, versionId: "v", bundleUrl: "https://example.com/b",
+                productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
+            )
+            let incompleteSession = makeTestSession(paywallInfo: info)
+            XCTAssertNil(manager.readySecondTry(paywallSession: incompleteSession, entitledBefore: [], analyticsEvent: analytics))
+        }
     }
 
     @MainActor

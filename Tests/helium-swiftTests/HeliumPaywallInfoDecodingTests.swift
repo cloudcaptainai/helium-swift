@@ -8,6 +8,8 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
     func testWebSecondTryConfigDecodesAndRejectsMalformedValues() throws {
         let secondTry: [String: Any] = [
             "paywallId": "paywall-b",
+            "paywallIntId": 42,
+            "paywallTemplateName": "Second",
             "versionId": "version-b",
             "bundleUrl": "https://example.com/b",
             "productsOfferedPaddle": ["pro_b:pri_b"],
@@ -16,8 +18,16 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
         ]
         let decoded = try decodePaywallInfo(extras: ["webSecondTryConfig": secondTry])
         XCTAssertEqual(decoded.webSecondTryConfig?.paywallId, "paywall-b")
+        XCTAssertEqual(decoded.webSecondTryConfig?.paywallIntId, 42)
+        XCTAssertEqual(decoded.webSecondTryConfig?.paywallTemplateName, "Second")
         XCTAssertEqual(decoded.webSecondTryConfig?.productsOfferedPaddle, ["pro_b:pri_b"])
         XCTAssertEqual(decoded.webSecondTryConfig?.showOn, ["dismissed"])
+        var older = secondTry
+        older.removeValue(forKey: "paywallIntId")
+        older.removeValue(forKey: "paywallTemplateName")
+        let oldConfig = try XCTUnwrap(decodePaywallInfo(extras: ["webSecondTryConfig": older]).webSecondTryConfig)
+        XCTAssertNil(oldConfig.paywallIntId)
+        XCTAssertNil(oldConfig.paywallTemplateName)
         XCTAssertNil(try decodePaywallInfo().webSecondTryConfig)
         XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": ["paywallId": 4]]).webSecondTryConfig)
         var invalidURL = secondTry

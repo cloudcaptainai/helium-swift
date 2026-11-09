@@ -244,3 +244,11 @@ func makeTestSession(
         presentationContext: makeTestContext(eventHandlers: eventHandlers, onEntitled: onEntitled)
     )
 }
+
+func makeTestCheckoutAnalytics(session: PaywallSession, provider: HeliumPaymentProcessor) -> HeliumPaywallLoggedEvent {
+    let event = PurchaseSucceededEvent(productId: "", triggerName: session.trigger,
+                                       paywallName: session.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                                       storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
+                                       paymentProcessor: provider)
+    return HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: session)
+}
