@@ -239,7 +239,7 @@ final class CtxCompressionTests: XCTestCase {
         let event = PurchaseSucceededEvent(productId: "", triggerName: "t", paywallName: "P", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .paddle)
         let analytics = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: makeTestSession())
         let second: [String: Any] = [
-            "bundleUrl": "https://example.com/b", "paywallId": "b", "versionId": "v",
+            "bundleUrl": "https://example.com/b", "paywallUUID": "b", "paywallVersionUUID": "v",
             "showOn": ["dismissed"],
             "perPaywallCtx": ["initialPaddleProduct": "pro_b:pri_b", "paddleBootstraps": ["pri_b": ["transactionId": "txn_b"]]],
         ]
@@ -254,6 +254,8 @@ final class CtxCompressionTests: XCTestCase {
         let ctx = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(ctx["initialPaddleProduct"] as? String, "pro_a:pri_a")
         let nested = try XCTUnwrap(ctx["webSecondTryConfig"] as? [String: Any])
+        XCTAssertEqual(nested["paywallUUID"] as? String, "b")
+        XCTAssertEqual(nested["paywallVersionUUID"] as? String, "v")
         XCTAssertEqual(nested["showOn"] as? [String], ["dismissed"])
         let child = try XCTUnwrap(nested["perPaywallCtx"] as? [String: Any])
         XCTAssertEqual(child["initialPaddleProduct"] as? String, "pro_b:pri_b")

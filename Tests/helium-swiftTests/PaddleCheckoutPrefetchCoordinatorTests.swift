@@ -18,7 +18,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         var info = makeTestPaywallInfo()
         info.paywallUUID = "primary"
         info.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "second", paywallIntId: 42, paywallTemplateName: "Second", versionId: "version", bundleUrl: "https://example.com/b",
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: ["pro_x:pri_x"], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let testSession = makeTestSession(paywallInfo: info)
@@ -48,7 +48,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let key = "pro_second:pri_second"
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "second", paywallIntId: 42, paywallTemplateName: "Second", versionId: "version", bundleUrl: "https://example.com/b",
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)
@@ -80,7 +80,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let key = "pro_second:pri_second_owned"
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "second", paywallIntId: 42, paywallTemplateName: "Second", versionId: "version", bundleUrl: "https://example.com/b",
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)
@@ -98,7 +98,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let key = "pro_second:pri_error"
         var info = makeTestPaywallInfo()
         info.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "second", paywallIntId: 42, paywallTemplateName: "Second", versionId: "version", bundleUrl: "https://example.com/b",
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: [key], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let paywallSession = makeTestSession(paywallInfo: info)

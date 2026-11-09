@@ -7,7 +7,7 @@ final class PreviewLocalizedPricesTests: XCTestCase {
         var donor = makeTestPaywallInfo()
         donor.resolvedConfig = AnyCodable(["baseStack": ["componentProps": ["bundleURL": "https://example.com/a"]]])
         donor.webSecondTryConfig = WebSecondTryConfig(
-            paywallId: "b", versionId: "v", bundleUrl: "https://example.com/b",
+            paywallUUID: "b", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: ["pro_b:pri_b"], productsOfferedStripe: [], showOn: ["dismissed"]
         )
         let manager = HeliumFetchedConfigManager.shared

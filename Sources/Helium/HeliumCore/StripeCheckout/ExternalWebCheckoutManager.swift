@@ -239,7 +239,7 @@ public class ExternalWebCheckoutManager: NSObject {
     func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analyticsEvent: HeliumPaywallLoggedEvent) -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
-              let paywallIntId = second.paywallIntId, paywallIntId > 0,
+              let paywallID = second.paywallID, paywallID > 0,
               let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty,
               !second.bundleUrl.isEmpty, URL(string: second.bundleUrl) != nil,
               !second.productsOfferedPaddle.isEmpty || !second.productsOfferedStripe.isEmpty else { return nil }
@@ -275,9 +275,9 @@ public class ExternalWebCheckoutManager: NSObject {
         guard let analyticsData = try? JSONEncoder().encode(analyticsEvent),
               var analytics = (try? JSONSerialization.jsonObject(with: analyticsData)) as? [String: Any],
               var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
-        analytics["paywallID"] = paywallIntId
-        analytics["paywallUUID"] = second.paywallId
-        analytics["paywallVersionUUID"] = second.versionId
+        analytics["paywallID"] = paywallID
+        analytics["paywallUUID"] = second.paywallUUID
+        analytics["paywallVersionUUID"] = second.paywallVersionUUID
         analytics["heliumPaywallSessionId"] = UUID().uuidString
         analytics["parentPaywallSessionId"] = paywallSession.sessionId
         event["paywallTemplateName"] = paywallTemplateName
@@ -295,7 +295,7 @@ public class ExternalWebCheckoutManager: NSObject {
         )
         perPaywall["analytics"] = analytics
         return (second, ["bundleUrl": second.bundleUrl, "showOn": second.showOn,
-                         "paywallId": second.paywallId, "versionId": second.versionId,
+                         "paywallUUID": second.paywallUUID, "paywallVersionUUID": second.paywallVersionUUID,
                          "perPaywallCtx": perPaywall])
     }
 

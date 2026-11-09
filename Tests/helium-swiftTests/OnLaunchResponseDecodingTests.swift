@@ -8,7 +8,7 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
         let json = try makeOnLaunchJSON(extras: [
             "triggerToPaywalls": ["checkout": [
                 "paywallID": 1, "paywallTemplateName": "A", "resolvedConfig": [String: Any](),
-                "webSecondTryConfig": ["paywallId": 1],
+                "webSecondTryConfig": ["paywallUUID": 1],
             ]],
         ])
         let config = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)

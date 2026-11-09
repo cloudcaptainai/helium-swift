@@ -28,20 +28,20 @@ extension KeyedDecodingContainer {
 }
 
 struct WebSecondTryConfig: Codable {
-    let paywallId: String
-    let paywallIntId: Int?
+    let paywallUUID: String
+    let paywallID: Int?
     let paywallTemplateName: String?
-    let versionId: String
+    let paywallVersionUUID: String
     let bundleUrl: String
     let productsOfferedPaddle: [String]
     let productsOfferedStripe: [String]
     let showOn: [String]
 
-    init(paywallId: String, paywallIntId: Int? = nil, paywallTemplateName: String? = nil, versionId: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
-        self.paywallId = paywallId
-        self.paywallIntId = paywallIntId
+    init(paywallUUID: String, paywallID: Int? = nil, paywallTemplateName: String? = nil, paywallVersionUUID: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
+        self.paywallUUID = paywallUUID
+        self.paywallID = paywallID
         self.paywallTemplateName = paywallTemplateName
-        self.versionId = versionId
+        self.paywallVersionUUID = paywallVersionUUID
         self.bundleUrl = bundleUrl
         self.productsOfferedPaddle = productsOfferedPaddle
         self.productsOfferedStripe = productsOfferedStripe
@@ -50,18 +50,18 @@ struct WebSecondTryConfig: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let paywallId = try container.decode(String.self, forKey: .paywallId)
-        let versionId = try container.decode(String.self, forKey: .versionId)
+        let paywallUUID = try container.decode(String.self, forKey: .paywallUUID)
+        let paywallVersionUUID = try container.decode(String.self, forKey: .paywallVersionUUID)
         let bundleUrl = try container.decode(String.self, forKey: .bundleUrl)
-        guard !paywallId.isEmpty, !versionId.isEmpty,
+        guard !paywallUUID.isEmpty, !paywallVersionUUID.isEmpty,
               let url = URL(string: bundleUrl), url.scheme != nil, url.host != nil else {
             throw DecodingError.dataCorruptedError(forKey: .bundleUrl, in: container, debugDescription: "Invalid web second try configuration")
         }
         self.init(
-            paywallId: paywallId,
-            paywallIntId: try container.decodeIfPresent(Int.self, forKey: .paywallIntId),
+            paywallUUID: paywallUUID,
+            paywallID: try container.decodeIfPresent(Int.self, forKey: .paywallID),
             paywallTemplateName: try container.decodeIfPresent(String.self, forKey: .paywallTemplateName),
-            versionId: versionId,
+            paywallVersionUUID: paywallVersionUUID,
             bundleUrl: bundleUrl,
             productsOfferedPaddle: try container.decode([String].self, forKey: .productsOfferedPaddle),
             productsOfferedStripe: try container.decode([String].self, forKey: .productsOfferedStripe),

@@ -123,7 +123,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
         let paywallUUID = surface == .secondTry
-            ? paywallSession.paywallInfoWithBackups?.webSecondTryConfig?.paywallId
+            ? paywallSession.paywallInfoWithBackups?.webSecondTryConfig?.paywallUUID
             : paywallSession.paywallInfoWithBackups?.paywallUUID
         let triggerName = paywallSession.trigger
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
