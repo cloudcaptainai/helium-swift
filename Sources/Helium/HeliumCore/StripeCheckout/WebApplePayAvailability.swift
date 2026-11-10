@@ -75,6 +75,14 @@ class WebApplePayAvailability {
         guard Self.isMeasurementEnabled else { return }
         await ApplePayHelper.shared.warmUp(timeout: ApplePayHelper.warmUpWaitBudget)
         if await deferProbeIfInBackground() { return }
+        guard ApplePayHelper.shared.canMakePaymentsIfLoaded() != nil else {
+            Task {
+                await ApplePayHelper.shared.warmUp()
+                if await self.deferProbeIfInBackground() { return }
+                self.startProbe()
+            }
+            return
+        }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()
         guard waitsForMeasurement, started else { return }
