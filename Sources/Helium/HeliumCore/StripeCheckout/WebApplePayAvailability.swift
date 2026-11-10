@@ -73,7 +73,7 @@ class WebApplePayAvailability {
     /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
         guard Self.isMeasurementEnabled else { return }
-        await ApplePayHelper.shared.warmUp()
+        await ApplePayHelper.shared.warmUp(timeout: ApplePayHelper.warmUpWaitBudget)
         if await deferProbeIfInBackground() { return }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()

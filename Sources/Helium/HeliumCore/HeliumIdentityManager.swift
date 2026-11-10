@@ -337,15 +337,19 @@ public final class ApplePayHelper: @unchecked Sendable {
     public static let shared = ApplePayHelper()
 
     typealias Availability = (canMakePayments: Bool, credit: Bool, debit: Bool)
+
+    static let warmUpWaitBudget: TimeInterval = 2
+
+    #if DEBUG
     typealias Loader = @Sendable () -> Availability
+    @HeliumAtomic var loadOverrideForTesting: Loader?
+    #endif
 
     private struct State {
         var cachedCanMakePayments: Bool?
         var cachedHasApplePayCreditCard: Bool?
         var cachedHasApplePayDebitCard: Bool?
-        var load: Task<Void, Never>?
-        var generation = UUID()
-        var loader: Loader = ApplePayHelper.loadAvailability
+        var load: DispatchGroup?
     }
 
     @HeliumAtomic private var state = State()
@@ -364,30 +368,54 @@ public final class ApplePayHelper: @unchecked Sendable {
         )
     }
 
-    func warmUp() async {
-        let load = _state.withValue { state -> Task<Void, Never> in
+    private func startLoad() -> DispatchGroup? {
+        _state.withValue { state -> DispatchGroup? in
+            if state.cachedCanMakePayments != nil { return nil }
             if let load = state.load { return load }
-            let loader = state.loader
-            let generation = state.generation
-            let load = Task<Void, Never> {
-                let availability = await withCheckedContinuation { continuation in
-                    DispatchQueue.global(qos: .utility).async {
-                        continuation.resume(returning: loader())
-                    }
-                }
+            let load = DispatchGroup()
+            load.enter()
+            state.load = load
+            DispatchQueue.global(qos: .utility).async {
+                let availability: Availability
+                #if DEBUG
+                availability = self.loadOverrideForTesting?() ?? Self.loadAvailability()
+                #else
+                availability = Self.loadAvailability()
+                #endif
                 self._state.withValue { state in
-                    guard state.generation == generation else { return }
-                    if state.cachedCanMakePayments == nil {
-                        state.cachedCanMakePayments = availability.canMakePayments
-                    }
+                    state.cachedCanMakePayments = availability.canMakePayments
                     state.cachedHasApplePayCreditCard = availability.credit
                     state.cachedHasApplePayDebitCard = availability.debit
                 }
+                load.leave()
             }
-            state.load = load
             return load
         }
-        await load.value
+    }
+
+    func warmUp(timeout: TimeInterval? = nil) async {
+        guard let load = startLoad() else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let pending = HeliumAtomic<CheckedContinuation<Void, Never>?>(wrappedValue: continuation)
+            let resume: @Sendable () -> Void = {
+                let continuation = pending.withValue { pending in
+                    let continuation = pending
+                    pending = nil
+                    return continuation
+                }
+                continuation?.resume()
+            }
+            load.notify(queue: .global(qos: .utility), execute: resume)
+            if let timeout {
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: resume)
+            }
+        }
+    }
+
+    func waitForWarmUp(timeout: TimeInterval = ApplePayHelper.warmUpWaitBudget) {
+        let load = startLoad()
+        guard !Thread.isMainThread else { return }
+        _ = load?.wait(timeout: .now() + timeout)
     }
 
     /// Checks if the device supports Apple Pay (cached)
@@ -401,20 +429,10 @@ public final class ApplePayHelper: @unchecked Sendable {
     
     func setCanMakePaymentsForTesting(_ canMakePayments: Bool?) {
         _state.withValue { state in
-            if canMakePayments == nil {
-                state.generation = UUID()
-                state.load = nil
-                state.cachedHasApplePayCreditCard = nil
-                state.cachedHasApplePayDebitCard = nil
-            }
-            state.cachedCanMakePayments = canMakePayments
-        }
-    }
-
-    func setLoaderForTesting(_ loader: Loader?) {
-        _state.withValue { state in
             state = State()
-            state.loader = loader ?? Self.loadAvailability
+            state.cachedCanMakePayments = canMakePayments
+            state.cachedHasApplePayCreditCard = canMakePayments
+            state.cachedHasApplePayDebitCard = canMakePayments
         }
     }
 

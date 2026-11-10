@@ -122,10 +122,15 @@ class HeliumAnalyticsManager {
     
     private func performIdentify(on analytics: Analytics) {
         let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
+        analytics.identify(userId: resolvedUserId, traits: buildUserContext())
+    }
+
+    func buildUserContext() -> CodableUserContext {
+        ApplePayHelper.shared.waitForWarmUp()
         var userContext = HeliumIdentityManager.shared.getUserContext()
         userContext.hasCustomUserId = HeliumIdentityManager.shared.hasCustomUserId()
         userContext.thirdPartyAnalyticsAnonymousId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId()
-        analytics.identify(userId: resolvedUserId, traits: userContext)
+        return userContext
     }
     
     // MARK: - Event Tracking
@@ -134,7 +139,8 @@ class HeliumAnalyticsManager {
     func buildLoggedEvent(
         for event: HeliumEvent,
         paywallSession: PaywallSession?,
-        overridePaywallSessionId: String? = nil
+        overridePaywallSessionId: String? = nil,
+        contextTraits: CodableUserContext? = nil
     ) -> HeliumPaywallLoggedEvent {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
@@ -186,7 +192,7 @@ class HeliumAnalyticsManager {
             heliumEvent: heliumEventPayload,
             fetchedConfigId: fetchedConfigId,
             timestamp: formatAsTimestamp(date: Date()),
-            contextTraits: HeliumIdentityManager.shared.getUserContext(),
+            contextTraits: contextTraits ?? HeliumIdentityManager.shared.getUserContext(),
             experimentID: experimentID,
             modelID: modelID,
             paywallID: paywallInfo?.paywallID,
@@ -230,7 +236,8 @@ class HeliumAnalyticsManager {
             let eventForLogging = buildLoggedEvent(
                 for: event,
                 paywallSession: paywallSession,
-                overridePaywallSessionId: overridePaywallSessionId
+                overridePaywallSessionId: overridePaywallSessionId,
+                contextTraits: buildUserContext()
             )
             
             // Track event and flush for critical events

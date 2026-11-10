@@ -262,7 +262,7 @@ public class HeliumFetchedConfigManager {
 
             // Pre-fetching
             async let storeCountryCode: Void = AppStoreCountryHelper.shared.fetchStoreCountryCode()
-            async let applePay: Void = ApplePayHelper.shared.warmUp()
+            async let applePay: Void = ApplePayHelper.shared.warmUp(timeout: ApplePayHelper.warmUpWaitBudget)
             async let webApplePayReadiness: Void = WebApplePayAvailability.shared.prepareForRequest()
             _ = await (storeCountryCode, applePay, webApplePayReadiness)
             
