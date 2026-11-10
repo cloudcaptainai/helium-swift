@@ -95,12 +95,14 @@ class HeliumPaywallDelegateWrapper {
         async let hadEntitlementLookup = withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: storeKitProductId)
         }
-        async let baselineTransactionLookup = withTimeoutOrNil(milliseconds: 500) { [lookup = storeTransactionLookup] () async -> String? in
+        async let baselineTransactionLookup = withTimeoutOrNil(milliseconds: 500) { [lookup = storeTransactionLookup] () async -> StoreTransactionBaseline? in
             guard canRecheckStore else { return nil }
-            return await lookup.latestTransaction(productId: storeKitProductId)?.ids.transactionId
+            return StoreTransactionBaseline(
+                transactionId: await lookup.latestTransaction(productId: storeKitProductId)?.ids.transactionId
+            )
         }
         let hadEntitlementBeforePurchase = await hadEntitlementLookup ?? false
-        let baselineTransactionId = await baselineTransactionLookup
+        let baseline = await baselineTransactionLookup
         let attemptStartedAt = Date()
 
         StoreKit1Listener.ensureListening()
@@ -160,7 +162,7 @@ class HeliumPaywallDelegateWrapper {
             storeCompletedTransactionIds = await storeCompletedPurchase(
                 after: transactionStatus,
                 productId: storeKitProductId,
-                baselineTransactionId: baselineTransactionId,
+                baseline: baseline,
                 attemptStartedAt: attemptStartedAt
             )
             if storeCompletedTransactionIds != nil {
@@ -270,7 +272,7 @@ class HeliumPaywallDelegateWrapper {
     private func storeCompletedPurchase(
         after status: HeliumPaywallTransactionStatus,
         productId: String,
-        baselineTransactionId: String?,
+        baseline: StoreTransactionBaseline?,
         attemptStartedAt: Date
     ) async -> HeliumTransactionIdResult? {
         switch status {
@@ -279,12 +281,15 @@ class HeliumPaywallDelegateWrapper {
         default:
             return nil
         }
+        // Without knowing what the store held before the attempt, an earlier purchase could be
+        // mistaken for this one.
+        guard let baseline else { return nil }
         let latest = await withTimeoutOrNil(milliseconds: 2000) { [lookup = storeTransactionLookup] in
             await lookup.latestTransaction(productId: productId)
         }
         guard StoreCompletedPurchaseCheck.isCompletedDuringAttempt(
             latest,
-            baselineTransactionId: baselineTransactionId,
+            baselineTransactionId: baseline.transactionId,
             attemptStartedAt: attemptStartedAt
         ), let latest else {
             return nil

@@ -6,6 +6,12 @@ struct StoreTransactionSnapshot {
     let isRevoked: Bool
 }
 
+/// The store's latest transaction for a product before a purchase attempt; `transactionId` is nil
+/// when the store held none.
+struct StoreTransactionBaseline {
+    let transactionId: String?
+}
+
 protocol StoreTransactionLookup {
     func latestTransaction(productId: String) async -> StoreTransactionSnapshot?
 }
