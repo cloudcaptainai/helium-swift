@@ -12,6 +12,7 @@ enum WebApplePayReadiness: Equatable {
     enum Reason: String {
         /// No probe has answered yet.
         case notMeasured
+        case deviceAvailabilityNotLoaded
         /// The device cannot use Apple Pay at all, so the browser is never probed.
         case deviceCannotPay
         /// The browser exposes no Apple Pay web API, so it cannot pay with Apple Pay.

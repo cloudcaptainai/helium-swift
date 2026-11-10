@@ -54,6 +54,8 @@ public class Helium {
         }
         SdkApiCallTracker.shared.markInitialized()
 
+        Task { await ApplePayHelper.shared.warmUp() }
+
         HeliumObservabilityManager.shared.setUp()
 
         // Start store country code fetch immediately

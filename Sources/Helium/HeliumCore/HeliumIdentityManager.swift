@@ -333,30 +333,89 @@ public class HeliumSdkConfig {
     }
 }
 
-public class ApplePayHelper {
+public final class ApplePayHelper: @unchecked Sendable {
     public static let shared = ApplePayHelper()
 
-    @HeliumAtomic private var cachedCanMakePayments: Bool?
-    @HeliumAtomic private var cachedHasApplePayCreditCard: Bool?
-    @HeliumAtomic private var cachedHasApplePayDebitCard: Bool?
+    typealias Availability = (canMakePayments: Bool, credit: Bool, debit: Bool)
+    typealias Loader = @Sendable () -> Availability
+
+    private struct State {
+        var cachedCanMakePayments: Bool?
+        var cachedHasApplePayCreditCard: Bool?
+        var cachedHasApplePayDebitCard: Bool?
+        var load: Task<Void, Never>?
+        var generation = UUID()
+        var loader: Loader = ApplePayHelper.loadAvailability
+    }
+
+    @HeliumAtomic private var state = State()
 
     private static let defaultPaymentNetworks: [PKPaymentNetwork] = [
         .amex, .masterCard, .visa, .discover
     ]
 
-    private init() {
-        cachedCanMakePayments = PKPaymentAuthorizationController.canMakePayments()
-        cachedHasApplePayCreditCard = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
-        cachedHasApplePayDebitCard = PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .debit)
+    private init() {}
+
+    private static func loadAvailability() -> Availability {
+        (
+            PKPaymentAuthorizationController.canMakePayments(),
+            PKPaymentAuthorizationController.canMakePayments(usingNetworks: defaultPaymentNetworks, capabilities: .credit),
+            PKPaymentAuthorizationController.canMakePayments(usingNetworks: defaultPaymentNetworks, capabilities: .debit)
+        )
+    }
+
+    func warmUp() async {
+        let load = _state.withValue { state -> Task<Void, Never> in
+            if let load = state.load { return load }
+            let loader = state.loader
+            let generation = state.generation
+            let load = Task<Void, Never> {
+                let availability = await withCheckedContinuation { continuation in
+                    DispatchQueue.global(qos: .utility).async {
+                        continuation.resume(returning: loader())
+                    }
+                }
+                self._state.withValue { state in
+                    guard state.generation == generation else { return }
+                    if state.cachedCanMakePayments == nil {
+                        state.cachedCanMakePayments = availability.canMakePayments
+                    }
+                    state.cachedHasApplePayCreditCard = availability.credit
+                    state.cachedHasApplePayDebitCard = availability.debit
+                }
+            }
+            state.load = load
+            return load
+        }
+        await load.value
     }
 
     /// Checks if the device supports Apple Pay (cached)
     func canMakePayments() -> Bool {
-        return cachedCanMakePayments ?? PKPaymentAuthorizationController.canMakePayments()
+        return canMakePaymentsIfLoaded() ?? false
+    }
+
+    func canMakePaymentsIfLoaded() -> Bool? {
+        state.cachedCanMakePayments
     }
     
     func setCanMakePaymentsForTesting(_ canMakePayments: Bool?) {
-        cachedCanMakePayments = canMakePayments
+        _state.withValue { state in
+            if canMakePayments == nil {
+                state.generation = UUID()
+                state.load = nil
+                state.cachedHasApplePayCreditCard = nil
+                state.cachedHasApplePayDebitCard = nil
+            }
+            state.cachedCanMakePayments = canMakePayments
+        }
+    }
+
+    func setLoaderForTesting(_ loader: Loader?) {
+        _state.withValue { state in
+            state = State()
+            state.loader = loader ?? Self.loadAvailability
+        }
     }
 
     @HeliumAtomic private var isStripeApplePayAvailable: Bool = false
@@ -368,11 +427,11 @@ public class ApplePayHelper {
     }
 
     func hasApplePayCreditCard() -> Bool {
-        cachedHasApplePayCreditCard ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .credit)
+        state.cachedHasApplePayCreditCard ?? false
     }
 
     func hasApplePayDebitCard() -> Bool {
-        cachedHasApplePayDebitCard ?? PKPaymentAuthorizationController.canMakePayments(usingNetworks: Self.defaultPaymentNetworks, capabilities: .debit)
+        state.cachedHasApplePayDebitCard ?? false
     }
 
     func isPaddleCheckoutEligible() -> Bool {
