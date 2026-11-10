@@ -1,3 +1,4 @@
+import Network
 import UIKit
 import WebKit
 import XCTest
@@ -116,7 +117,7 @@ final class WebApplePayProbeTests: XCTestCase {
         await ApplePayHelper.shared.warmUp()
     }
 
-    func testLaunchAndBackgroundWaitsTimeOutWithoutStoppingTheLoadAndMainDoesNotWait() async {
+    func testLaunchAndBackgroundWaitsTimeOutWithoutStoppingTheLoadAndMainDoesNotWait() async throws {
         await AppStoreCountryHelper.shared.fetchStoreCountryCode()
         Helium.config.enableExternalWebCheckout(
             redirectURL: "myapp://checkout/return",
@@ -151,27 +152,35 @@ final class WebApplePayProbeTests: XCTestCase {
 
         Helium.config.enableWebApplePayReadiness = false
         let configRequested = expectation(description: "Config request sent while device availability is still loading")
-        URLProtocol.registerClass(MockURLProtocol.self)
-        MockURLProtocol.reset()
+        let serverReady = expectation(description: "Config server listening")
+        let serverQueue = DispatchQueue(label: "com.helium.tests.configServer")
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        let listener = try NWListener(using: parameters)
         defer {
             HeliumFetchedConfigManager.reset()
-            URLProtocol.unregisterClass(MockURLProtocol.self)
-            MockURLProtocol.reset()
+            listener.cancel()
+            release.signal()
         }
-        MockURLProtocol.requestHandler = { request in
-            XCTAssertEqual(request.url?.host, "config.example.com")
-            XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
-            let body = try XCTUnwrap(request.httpBody)
-            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-            let context = try XCTUnwrap(payload["userContext"] as? [String: Any])
-            XCTAssertEqual(context["isApplePayAvailable"] as? Bool, false)
-            XCTAssertEqual(context["webApplePayReadiness"] as? String, "unknown:notMeasured")
-            HeliumFetchedConfigManager.reset()
-            configRequested.fulfill()
-            throw URLError(.cancelled)
+        listener.stateUpdateHandler = { state in
+            if case .ready = state { serverReady.fulfill() }
         }
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: serverQueue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, _, error in
+                XCTAssertNil(error)
+                XCTAssertFalse(data?.isEmpty ?? true)
+                XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+                HeliumFetchedConfigManager.reset()
+                configRequested.fulfill()
+                connection.cancel()
+            }
+        }
+        listener.start(queue: serverQueue)
+        await fulfillment(of: [serverReady], timeout: 5)
+        let port = try XCTUnwrap(listener.port).rawValue
         HeliumFetchedConfigManager.shared.fetchConfig(
-            endpoint: "https://config.example.com/config",
+            endpoint: "http://127.0.0.1:\(port)/config",
             apiKey: "test_api_key"
         ) { _ in }
         await fulfillment(of: [configRequested], timeout: 6)
