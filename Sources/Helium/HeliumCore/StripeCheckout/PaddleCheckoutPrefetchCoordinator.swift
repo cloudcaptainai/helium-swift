@@ -342,6 +342,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         return [
             "banditResponse": banditDict,
             "paddleCheckoutResponse": trimmedPaddleResponse,
+            "sandbox": paddle.sandbox,
         ]
     }
 
@@ -577,14 +578,15 @@ final class PaddleCheckoutPrefetchCoordinator {
                 paddleClientToken: paddleClientToken,
                 iosBundleId: iosBundleId
             )
-            if !isSimulatedPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
+            let isSandboxCheckout = paddleResult.sandbox
+            if !isSimulatedPreviewRun, !isSandboxCheckout, !Self.isUSBuyer(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
                 return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
             }
             // While the consent modal is disabled, block California buyers by ip_geo
             // ZIP before checkout. When the flag is on, they proceed to the modal.
-            // Previews always proceed so testers can exercise the modal and checkout.
-            if !caModalEnabled, !isPreviewRun,
+            // Previews and sandbox checkouts always proceed so testers can exercise the modal and checkout.
+            if !caModalEnabled, !isPreviewRun, !isSandboxCheckout,
                let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
                 trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))

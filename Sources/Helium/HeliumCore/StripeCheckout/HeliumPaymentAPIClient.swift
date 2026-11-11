@@ -73,6 +73,12 @@ public class HeliumPaymentAPIClient {
             "userId": HeliumIdentityManager.shared.getResolvedUserId(),
             "environment": AppReceiptsHelper.shared.getEnvironment()
         ]
+        body["applicationInfo"] = [
+            "platform": HeliumSdkConfig.shared.heliumPlatform,
+            "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
+            "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
+            "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
+        ]
         if let rcUserId = Helium.identify.revenueCatAppUserId {
             body["rcUserId"] = rcUserId
         }
@@ -106,11 +112,6 @@ public class HeliumPaymentAPIClient {
         triggerName: String? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
-        body["applicationInfo"] = [
-            "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
-            "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
-            "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
-        ]
         var paywallInfo: [String: String] = [:]
         if let paywallUUID, !paywallUUID.isEmpty {
             paywallInfo["paywallUUID"] = paywallUUID
