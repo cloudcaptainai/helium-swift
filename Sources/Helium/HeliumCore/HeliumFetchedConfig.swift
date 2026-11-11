@@ -217,7 +217,6 @@ public class HeliumFetchedConfigManager {
         shared.fetchedConfigJSON = nil
         shared.triggersWithSkippedBundleAndReason = []
         shared.localizedPriceMap = [:]
-        shared.localizedIOSProductKeys = []
         shared.previewServerProducts = PreviewServerProducts()
         HeliumControlPanelService.shared.isFallbackPreviewArmed = false
     }
@@ -244,7 +243,6 @@ public class HeliumFetchedConfigManager {
     @HeliumAtomic private(set) var fetchedConfigJSON: JSON?
     @HeliumAtomic private(set) var triggersWithSkippedBundleAndReason: [(trigger: String, reason: PaywallUnavailableReason)] = []
     @HeliumAtomic var localizedPriceMap: [String: LocalizedPrice] = [:]
-    @HeliumAtomic private var localizedIOSProductKeys: Set<String> = []
     @HeliumAtomic private var previewServerProducts = PreviewServerProducts()
 
     func fetchConfig(
@@ -936,7 +934,6 @@ public class HeliumFetchedConfigManager {
     }
 
     func buildLocalizedPriceMap(_ productIds: [String]) async {
-        registerLocalizedIOSProductKeys(productIds)
         if !productIds.isEmpty {
             let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
 
@@ -947,10 +944,6 @@ public class HeliumFetchedConfigManager {
         }
     }
 
-    func registerLocalizedIOSProductKeys(_ productIds: [String]) {
-        _localizedIOSProductKeys.withValue { $0.formUnion(productIds) }
-    }
-    
     /// Product keys of a paywall that have no entry in the localized price map yet.
     func productIdsMissingLocalizedPrices(_ productIds: [String]) -> [String] {
         let known = Set(localizedPriceMap.keys)
@@ -963,7 +956,7 @@ public class HeliumFetchedConfigManager {
     }
 
     func localizedProductKeysToRefresh() -> [String] {
-        Array(localizedIOSProductKeys)
+        localizedPriceMap.keys.filter { !HeliumPaymentProcessor.isWebProcessorCompositeKey($0) }
     }
     
     // NOTE - be careful about removing the public declaration here because this is in use

@@ -412,7 +412,6 @@ struct HeliumControlPanelView: View {
                 )
 
                 let previewProductIds = (version.productIds ?? []) + (secondTryBundle?.productIds ?? [])
-                HeliumFetchedConfigManager.shared.registerLocalizedIOSProductKeys(previewProductIds)
                 let missing = HeliumFetchedConfigManager.shared.productIdsMissingLocalizedPrices(previewProductIds)
                 await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(missing)
 

@@ -23,13 +23,13 @@ final class PreviewLocalizedPricesTests: XCTestCase {
     func testRefreshKeysExcludeServerPricesAndKeepPromoKeys() {
         let manager = HeliumFetchedConfigManager.shared
         let promo = "ios.product:offer"
-        manager.registerLocalizedIOSProductKeys(["ios.product", promo, "preview.product"])
         manager.localizedPriceMap = [
             "ios.product": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
+            promo: makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
             "pro_web:pri_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
             "prod_web:price_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
         ]
-        XCTAssertEqual(Set(manager.localizedProductKeysToRefresh()), ["ios.product", promo, "preview.product"])
+        XCTAssertEqual(Set(manager.localizedProductKeysToRefresh()), ["ios.product", promo])
         XCTAssertNotNil(manager.localizedPriceMap["pro_web:pri_web"])
         XCTAssertNotNil(manager.localizedPriceMap["prod_web:price_web"])
     }
