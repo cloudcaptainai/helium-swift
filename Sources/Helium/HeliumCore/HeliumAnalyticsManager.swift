@@ -121,16 +121,12 @@ class HeliumAnalyticsManager {
     }
     
     private func performIdentify(on analytics: Analytics) {
-        let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
-        analytics.identify(userId: resolvedUserId, traits: buildUserContext())
-    }
-
-    func buildUserContext() -> CodableUserContext {
         ApplePayHelper.shared.waitForWarmUp()
+        let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
         var userContext = HeliumIdentityManager.shared.getUserContext()
         userContext.hasCustomUserId = HeliumIdentityManager.shared.hasCustomUserId()
         userContext.thirdPartyAnalyticsAnonymousId = HeliumIdentityManager.shared.getThirdPartyAnalyticsAnonymousId()
-        return userContext
+        analytics.identify(userId: resolvedUserId, traits: userContext)
     }
     
     // MARK: - Event Tracking
@@ -139,8 +135,7 @@ class HeliumAnalyticsManager {
     func buildLoggedEvent(
         for event: HeliumEvent,
         paywallSession: PaywallSession?,
-        overridePaywallSessionId: String? = nil,
-        contextTraits: CodableUserContext? = nil
+        overridePaywallSessionId: String? = nil
     ) -> HeliumPaywallLoggedEvent {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
@@ -192,7 +187,7 @@ class HeliumAnalyticsManager {
             heliumEvent: heliumEventPayload,
             fetchedConfigId: fetchedConfigId,
             timestamp: formatAsTimestamp(date: Date()),
-            contextTraits: contextTraits ?? HeliumIdentityManager.shared.getUserContext(),
+            contextTraits: HeliumIdentityManager.shared.getUserContext(),
             experimentID: experimentID,
             modelID: modelID,
             paywallID: paywallInfo?.paywallID,
@@ -232,12 +227,12 @@ class HeliumAnalyticsManager {
         let dispatchQueue = destination == .initialize ? initQueue : queue
         dispatchQueue.async { [weak self] in
             guard let self else { return }
+            ApplePayHelper.shared.waitForWarmUp()
             
             let eventForLogging = buildLoggedEvent(
                 for: event,
                 paywallSession: paywallSession,
-                overridePaywallSessionId: overridePaywallSessionId,
-                contextTraits: buildUserContext()
+                overridePaywallSessionId: overridePaywallSessionId
             )
             
             // Track event and flush for critical events

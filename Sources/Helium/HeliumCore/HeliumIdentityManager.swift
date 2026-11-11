@@ -375,7 +375,7 @@ public final class ApplePayHelper: @unchecked Sendable {
             let load = DispatchGroup()
             load.enter()
             state.load = load
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: .userInitiated).async {
                 let availability: Availability
                 #if DEBUG
                 availability = self.loadOverrideForTesting?() ?? Self.loadAvailability()
@@ -393,21 +393,11 @@ public final class ApplePayHelper: @unchecked Sendable {
         }
     }
 
-    func warmUp(timeout: TimeInterval? = nil) async {
+    func warmUp() async {
         guard let load = startLoad() else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let pending = HeliumAtomic<CheckedContinuation<Void, Never>?>(wrappedValue: continuation)
-            let resume: @Sendable () -> Void = {
-                let continuation = pending.withValue { pending in
-                    let continuation = pending
-                    pending = nil
-                    return continuation
-                }
-                continuation?.resume()
-            }
-            load.notify(queue: .global(qos: .utility), execute: resume)
-            if let timeout {
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: resume)
+            load.notify(queue: .global(qos: .userInitiated)) {
+                continuation.resume()
             }
         }
     }

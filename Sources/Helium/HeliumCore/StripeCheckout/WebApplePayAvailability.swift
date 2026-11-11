@@ -73,20 +73,27 @@ class WebApplePayAvailability {
     /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
         guard Self.isMeasurementEnabled else { return }
-        await ApplePayHelper.shared.warmUp(timeout: ApplePayHelper.warmUpWaitBudget)
+        _ = await withTimeoutAbandoningOperation(
+            milliseconds: UInt64(ApplePayHelper.warmUpWaitBudget * 1_000)
+        ) {
+            await ApplePayHelper.shared.warmUp()
+        }
         if await deferProbeIfInBackground() { return }
         guard ApplePayHelper.shared.canMakePaymentsIfLoaded() != nil else {
-            Task {
-                await ApplePayHelper.shared.warmUp()
-                if await self.deferProbeIfInBackground() { return }
-                self.startProbe()
-            }
+            // The request has already spent its device-readiness wait budget.
+            Task { await self.startProbeAfterWarmUp() }
             return
         }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()
         guard waitsForMeasurement, started else { return }
         await awaitMeasurement(upTo: Self.launchWaitBudget)
+    }
+
+    private func startProbeAfterWarmUp() async {
+        await ApplePayHelper.shared.warmUp()
+        if await deferProbeIfInBackground() { return }
+        startProbe()
     }
 
     /// Reports whether the launch is in the background, in which case the probe is deferred to
@@ -114,10 +121,7 @@ class WebApplePayAvailability {
             ) { [weak self] _ in
                 guard let self else { return }
                 self.removePendingActiveObserver()
-                Task {
-                    await ApplePayHelper.shared.warmUp()
-                    self.startProbe()
-                }
+                Task { await self.startProbeAfterWarmUp() }
             }
         }
     }

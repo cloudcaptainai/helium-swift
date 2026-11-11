@@ -79,7 +79,15 @@ final class WebApplePayProbeTests: XCTestCase {
         XCTAssertEqual(payload["webApplePayReadiness"] as? String, "ready")
     }
 
-    func testAnalyticsContextAndIdentifyTraitsWaitForDeviceAvailability() async {
+    func testAnalyticsEventContextWaitsForDeviceAvailabilityWithoutIdentifyOnlyTraits() async {
+        let originalUserId = Helium.identify.userId
+        let originalAnalyticsId = Helium.identify.thirdPartyAnalyticsAnonymousId
+        Helium.identify.userId = "test_analytics_user"
+        Helium.identify.thirdPartyAnalyticsAnonymousId = "test_analytics_id"
+        defer {
+            Helium.identify.userId = originalUserId
+            Helium.identify.thirdPartyAnalyticsAnonymousId = originalAnalyticsId
+        }
         Helium.config.enableExternalWebCheckout(
             redirectURL: "myapp://checkout/return",
             paymentProcessors: .all
@@ -97,14 +105,21 @@ final class WebApplePayProbeTests: XCTestCase {
         let analyticsQueue = DispatchQueue(label: "com.helium.tests.analytics")
         analyticsQueue.async {
             let manager = HeliumAnalyticsManager.shared
-            let identifyTraits = manager.buildUserContext()
-            XCTAssertTrue(identifyTraits.isApplePayAvailable)
+            ApplePayHelper.shared.waitForWarmUp()
             let event = manager.buildLoggedEvent(
                 for: InitializeCalledEvent(),
-                paywallSession: nil,
-                contextTraits: manager.buildUserContext()
+                paywallSession: nil
             )
             XCTAssertEqual(event.contextTraits?.isApplePayAvailable, true)
+            do {
+                let traits = try XCTUnwrap(event.contextTraits)
+                let encoded = try JSONEncoder().encode(traits)
+                let wireTraits = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+                XCTAssertNil(wireTraits["hasCustomUserId"])
+                XCTAssertNil(wireTraits["thirdPartyAnalyticsAnonymousId"])
+            } catch {
+                XCTFail("Could not encode event context: \(error)")
+            }
             let payload = event.contextTraits?.buildRequestPayload()
             XCTAssertEqual(payload?["hasApplePayCreditCard"] as? Bool, false)
             XCTAssertEqual(payload?["hasApplePayDebitCard"] as? Bool, true)
