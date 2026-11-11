@@ -16,7 +16,30 @@ extension KeyedDecodingContainer {
             if try decodeNil(forKey: key) { return nil }
             return try decode(type, forKey: key)
         } catch {
-            HeliumObservabilityManager.shared.track(WebSecondTryConfigDecodeFailed(), scope: nil)
+            let path: [CodingKey]
+            let errorType: String
+            switch error {
+            case DecodingError.typeMismatch(_, let context):
+                path = context.codingPath
+                errorType = "typeMismatch"
+            case DecodingError.valueNotFound(_, let context):
+                path = context.codingPath
+                errorType = "valueNotFound"
+            case DecodingError.keyNotFound(let missingKey, let context):
+                path = context.codingPath + [missingKey]
+                errorType = "keyNotFound"
+            case DecodingError.dataCorrupted(let context):
+                path = context.codingPath
+                errorType = "dataCorrupted"
+            default:
+                path = codingPath + [key]
+                errorType = String(describing: Swift.type(of: error))
+            }
+            HeliumObservabilityManager.shared.track(WebSecondTryConfigDecodeFailed(
+                codingPath: path.map(\.stringValue).joined(separator: "."),
+                errorType: errorType,
+                errorDescription: String(describing: error)
+            ), scope: nil)
             return nil
         }
     }

@@ -115,9 +115,14 @@ struct EndpointCallTelemetry {
 // MARK: - Paddle prefetch
 
 struct WebSecondTryConfigDecodeFailed: HeliumObservabilityEvent {
+    let codingPath: String
+    let errorType: String
+    let errorDescription: String
     var name: String { "web_second_try_config_decode_failed" }
     var tags: Set<HeliumObservabilityTag> { [.config, .webCheckout] }
-    var properties: [String: Any] { [:] }
+    var properties: [String: Any] {
+        ["codingPath": codingPath, "errorType": errorType, "errorDescription": truncatedForObservability(errorDescription) ?? ""]
+    }
 }
 
 struct PaddlePrefetchStarted: HeliumObservabilityEvent {

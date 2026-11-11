@@ -39,6 +39,26 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
         invalidURL["bundleUrl"] = "not-a-url"
         XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": invalidURL]).webSecondTryConfig)
         XCTAssertEqual(events.map(\.name), ["web_second_try_config_decode_failed", "web_second_try_config_decode_failed"])
+        XCTAssertEqual(events[0].properties["codingPath"] as? String, "webSecondTryConfig.paywallUUID")
+        XCTAssertEqual(events[0].properties["errorType"] as? String, "typeMismatch")
+        XCTAssertTrue((events[0].properties["errorDescription"] as? String)?.contains("Expected to decode String") == true)
+        XCTAssertEqual(events[1].properties["errorType"] as? String, "dataCorrupted")
+        XCTAssertEqual(events[1].properties["codingPath"] as? String, "webSecondTryConfig.bundleUrl")
+    }
+
+    func testWebSecondTryDecodeFailureIncludesTriggerAndMissingKey() throws {
+        var events: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { events.append($0) }
+        defer { HeliumObservabilityManager.shared.unitTestTrackObserver = nil }
+        let info = try JSONSerialization.jsonObject(with: makePaywallInfoJSON(extras: ["webSecondTryConfig": ["paywallUUID": "b", "paywallVersionUUID": "v", "bundleUrl": "https://example.com/b", "productsOfferedPaddle": [], "productsOfferedStripe": []]]))
+        let data = try JSONSerialization.data(withJSONObject: ["triggerToPaywalls": ["on_open": info]])
+        let result = try JSONDecoder().decode([String: [String: HeliumPaywallInfo]].self, from: data)
+        XCTAssertNil(result["triggerToPaywalls"]?["on_open"]?.webSecondTryConfig)
+        let event = try XCTUnwrap(events.first)
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(event.properties["codingPath"] as? String, "triggerToPaywalls.on_open.webSecondTryConfig.showOn")
+        XCTAssertEqual(event.properties["errorType"] as? String, "keyNotFound")
+        XCTAssertTrue((event.properties["errorDescription"] as? String)?.contains("showOn") == true)
     }
 
     private func makePaywallInfoJSON(extras: [String: Any] = [:]) throws -> Data {
