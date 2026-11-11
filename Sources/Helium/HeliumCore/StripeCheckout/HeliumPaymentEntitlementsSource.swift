@@ -217,9 +217,7 @@ open class HeliumPaymentEntitlementsSource: ThirdPartyEntitlementsSource, @unche
                 provider.setCustomerId(customerId)
             }
 
-            let activeSubscriptions = response
-                .countedSubscriptions(buildEnvironment: AppReceiptsHelper.shared.environment)
-                .filter { $0.isActive }
+            let activeSubscriptions = response.subscriptions.filter { $0.isActive }
 
             let productEntitlements: [ProductEntitlement] = activeSubscriptions.map { sub in
                 let expiresAt = parseISODate(sub.currentPeriodEnd ?? sub.trialEnd ?? sub.trialEndsAt)

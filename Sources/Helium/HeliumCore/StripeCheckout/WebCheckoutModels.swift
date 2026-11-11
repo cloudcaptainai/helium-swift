@@ -217,15 +217,6 @@ struct PaymentEntitlementResponse: Codable, Sendable {
     let customerId: String?
     let customerExists: Bool?
     let introOfferEligibility: IntroOfferEligibility?
-    let paddleEnvironment: String?
-
-    /// A sandbox purchase is free, so a production build never counts one.
-    func countedSubscriptions(buildEnvironment: AppReceiptsHelper.Environment) -> [PaymentSubscriptionInfo] {
-        if paddleEnvironment == "sandbox" && buildEnvironment == .production {
-            return []
-        }
-        return subscriptions
-    }
 }
 
 struct IntroOfferEligibility: Codable, Sendable {
