@@ -121,6 +121,7 @@ class HeliumAnalyticsManager {
     }
     
     private func performIdentify(on analytics: Analytics) {
+        ApplePayHelper.shared.waitForWarmUp()
         let resolvedUserId = HeliumIdentityManager.shared.getResolvedUserId()
         var userContext = HeliumIdentityManager.shared.getUserContext()
         userContext.hasCustomUserId = HeliumIdentityManager.shared.hasCustomUserId()
@@ -226,6 +227,7 @@ class HeliumAnalyticsManager {
         let dispatchQueue = destination == .initialize ? initQueue : queue
         dispatchQueue.async { [weak self] in
             guard let self else { return }
+            ApplePayHelper.shared.waitForWarmUp()
             
             let eventForLogging = buildLoggedEvent(
                 for: event,

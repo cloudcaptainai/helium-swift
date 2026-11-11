@@ -1,3 +1,4 @@
+import Network
 import UIKit
 import WebKit
 import XCTest
@@ -21,11 +22,233 @@ final class WebApplePayProbeTests: XCTestCase {
         WebApplePayAvailability.shared.setReadinessForTesting(.unknown(.notMeasured), probed: false)
         WebApplePayAvailability.shared.setInBackgroundForTesting(nil)
         ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        ApplePayHelper.shared.loadOverrideForTesting = nil
         Helium.config.disableExternalWebCheckout()
         Helium.config.allowWebCheckoutWithoutUserId = false
         Helium.config.enableWebApplePayReadiness = true
         Helium.resetHelium()
         super.tearDown()
+    }
+
+    @MainActor
+    func testDeviceAvailabilityReadsDoNotWaitForWarmUpAndLaunchPayloadUsesLoadedValues() async {
+        Helium.config.enableExternalWebCheckout(
+            redirectURL: "myapp://checkout/return",
+            paymentProcessors: .all
+        )
+        let started = expectation(description: "Device availability load started")
+        let release = DispatchSemaphore(value: 0)
+        let loadCount = HeliumAtomic(wrappedValue: 0)
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        ApplePayHelper.shared.loadOverrideForTesting = {
+            loadCount.withValue { $0 += 1 }
+            started.fulfill()
+            XCTAssertFalse(Thread.isMainThread)
+            XCTAssertEqual(release.wait(timeout: .now() + 10), .success)
+            return (true, false, true)
+        }
+        defer { release.signal() }
+
+        let warmUp = Task {
+            await withTaskGroup(of: Void.self) { group in
+                for _ in 0..<12 {
+                    group.addTask { await ApplePayHelper.shared.warmUp() }
+                }
+            }
+        }
+        await fulfillment(of: [started], timeout: 1)
+
+        let shouldProbe = WebApplePayAvailability.shared.shouldProbe()
+        let readiness = WebApplePayAvailability.shared.readiness()
+        XCTAssertFalse(shouldProbe)
+        XCTAssertEqual(readiness, .unknown(.deviceAvailabilityNotLoaded))
+        XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+        XCTAssertFalse(ApplePayHelper.shared.canMakePayments())
+        XCTAssertFalse(ApplePayHelper.shared.hasApplePayCreditCard())
+        XCTAssertFalse(ApplePayHelper.shared.hasApplePayDebitCard())
+
+        release.signal()
+        await warmUp.value
+        await ApplePayHelper.shared.warmUp()
+        XCTAssertEqual(loadCount.wrappedValue, 1)
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready)
+        let payload = CodableUserContext.create(userTraits: nil).buildRequestPayload()
+        XCTAssertEqual(payload["isApplePayAvailable"] as? Bool, true)
+        XCTAssertEqual(payload["hasApplePayCreditCard"] as? Bool, false)
+        XCTAssertEqual(payload["hasApplePayDebitCard"] as? Bool, true)
+        XCTAssertEqual(payload["webApplePayReadiness"] as? String, "ready")
+    }
+
+    func testAnalyticsEventContextWaitsForDeviceAvailabilityWithoutIdentifyOnlyTraits() async {
+        let originalUserId = Helium.identify.userId
+        let originalAnalyticsId = Helium.identify.thirdPartyAnalyticsAnonymousId
+        Helium.identify.userId = "test_analytics_user"
+        Helium.identify.thirdPartyAnalyticsAnonymousId = "test_analytics_id"
+        defer {
+            Helium.identify.userId = originalUserId
+            Helium.identify.thirdPartyAnalyticsAnonymousId = originalAnalyticsId
+        }
+        Helium.config.enableExternalWebCheckout(
+            redirectURL: "myapp://checkout/return",
+            paymentProcessors: .all
+        )
+        WebApplePayAvailability.shared.setReadinessForTesting(.ready)
+        let started = expectation(description: "Device availability load started")
+        let release = DispatchSemaphore(value: 0)
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        ApplePayHelper.shared.loadOverrideForTesting = {
+            started.fulfill()
+            XCTAssertEqual(release.wait(timeout: .now() + 10), .success)
+            return (true, false, true)
+        }
+        let built = expectation(description: "Analytics traits built")
+        let analyticsQueue = DispatchQueue(label: "com.helium.tests.analytics")
+        analyticsQueue.async {
+            let manager = HeliumAnalyticsManager.shared
+            ApplePayHelper.shared.waitForWarmUp()
+            let event = manager.buildLoggedEvent(
+                for: InitializeCalledEvent(),
+                paywallSession: nil
+            )
+            XCTAssertEqual(event.contextTraits?.isApplePayAvailable, true)
+            do {
+                let traits = try XCTUnwrap(event.contextTraits)
+                let encoded = try JSONEncoder().encode(traits)
+                let wireTraits = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+                XCTAssertNil(wireTraits["hasCustomUserId"])
+                XCTAssertNil(wireTraits["thirdPartyAnalyticsAnonymousId"])
+            } catch {
+                XCTFail("Could not encode event context: \(error)")
+            }
+            let payload = event.contextTraits?.buildRequestPayload()
+            XCTAssertEqual(payload?["hasApplePayCreditCard"] as? Bool, false)
+            XCTAssertEqual(payload?["hasApplePayDebitCard"] as? Bool, true)
+            XCTAssertEqual(payload?["webApplePayReadiness"] as? String, "ready")
+            built.fulfill()
+        }
+        await fulfillment(of: [started], timeout: 1)
+        release.signal()
+        await fulfillment(of: [built], timeout: 5)
+        await ApplePayHelper.shared.warmUp()
+    }
+
+    func testLaunchAndBackgroundWaitsTimeOutWithoutStoppingTheLoadAndMainDoesNotWait() async throws {
+        await AppStoreCountryHelper.shared.fetchStoreCountryCode()
+        Helium.config.enableExternalWebCheckout(
+            redirectURL: "myapp://checkout/return",
+            paymentProcessors: .all
+        )
+        let started = expectation(description: "Device availability load started")
+        let release = DispatchSemaphore(value: 0)
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        ApplePayHelper.shared.loadOverrideForTesting = {
+            started.fulfill()
+            XCTAssertEqual(release.wait(timeout: .now() + 15), .success)
+            return (true, false, true)
+        }
+        let probeReturned = expectation(description: "Readiness preparation returned")
+        let prepare = Task {
+            await WebApplePayAvailability.shared.prepareForRequest()
+            XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown(.deviceAvailabilityNotLoaded))
+            probeReturned.fulfill()
+        }
+        await fulfillment(of: [started], timeout: 1)
+        let backgroundReturned = expectation(description: "Background wait returned")
+        DispatchQueue(label: "com.helium.tests.backgroundWait").async {
+            ApplePayHelper.shared.waitForWarmUp()
+            XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+            backgroundReturned.fulfill()
+        }
+        await MainActor.run {
+            ApplePayHelper.shared.waitForWarmUp(timeout: 30)
+            XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+        }
+        await fulfillment(of: [probeReturned, backgroundReturned], timeout: 6)
+
+        Helium.config.enableWebApplePayReadiness = false
+        let configRequested = expectation(description: "Config request sent while device availability is still loading")
+        let serverReady = expectation(description: "Config server listening")
+        let serverQueue = DispatchQueue(label: "com.helium.tests.configServer")
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        let listener = try NWListener(using: parameters)
+        defer {
+            HeliumFetchedConfigManager.reset()
+            listener.cancel()
+            release.signal()
+        }
+        listener.stateUpdateHandler = { state in
+            if case .ready = state { serverReady.fulfill() }
+        }
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: serverQueue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, _, error in
+                XCTAssertNil(error)
+                XCTAssertFalse(data?.isEmpty ?? true)
+                XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+                HeliumFetchedConfigManager.reset()
+                configRequested.fulfill()
+                connection.cancel()
+            }
+        }
+        listener.start(queue: serverQueue)
+        await fulfillment(of: [serverReady], timeout: 5)
+        let port = try XCTUnwrap(listener.port).rawValue
+        HeliumFetchedConfigManager.shared.fetchConfig(
+            endpoint: "http://127.0.0.1:\(port)/config",
+            apiKey: "test_api_key"
+        ) { _ in }
+        await fulfillment(of: [configRequested], timeout: 6)
+        release.signal()
+        await prepare.value
+        await ApplePayHelper.shared.warmUp()
+        XCTAssertTrue(ApplePayHelper.shared.canMakePayments())
+    }
+
+    func testTimedOutDeviceWarmUpStartsTheBrowserProbeOnceLoaded() async {
+        Helium.config.enableExternalWebCheckout(
+            redirectURL: "myapp://checkout/return",
+            paymentProcessors: .all
+        )
+        let availability = makeAvailability()
+        availability.setInBackgroundForTesting(false)
+        let release = DispatchSemaphore(value: 0)
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        ApplePayHelper.shared.loadOverrideForTesting = {
+            XCTAssertEqual(release.wait(timeout: .now() + 10), .success)
+            return (true, true, true)
+        }
+
+        await availability.prepareForRequest()
+
+        XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
+        XCTAssertEqual(availability.readiness(), .unknown(.deviceAvailabilityNotLoaded))
+        XCTAssertNil(availability.launchWaitMsForTesting())
+        release.signal()
+        await ApplePayHelper.shared.warmUp()
+        XCTAssertTrue(ApplePayHelper.shared.canMakePayments())
+        let probeStarted = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !availability.shouldProbe() },
+            object: nil
+        )
+        await fulfillment(of: [probeStarted], timeout: 5)
+        XCTAssertFalse(availability.shouldProbe())
+    }
+
+    func testTestAvailabilityIsLoadedWithoutStartingDeviceChecks() async {
+        ApplePayHelper.shared.loadOverrideForTesting = {
+            XCTFail("Loaded availability must not start device checks")
+            return (true, true, true)
+        }
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(false)
+
+        await ApplePayHelper.shared.warmUp()
+
+        XCTAssertEqual(ApplePayHelper.shared.canMakePaymentsIfLoaded(), false)
+        XCTAssertFalse(ApplePayHelper.shared.hasApplePayCreditCard())
+        XCTAssertFalse(ApplePayHelper.shared.hasApplePayDebitCard())
+        ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
+        XCTAssertNil(ApplePayHelper.shared.canMakePaymentsIfLoaded())
     }
 
     // MARK: - Probe origin
@@ -281,11 +504,17 @@ final class WebApplePayProbeTests: XCTestCase {
 
         await availability.prepareForRequest()
 
+        availability.setInBackgroundForTesting(false)
         await MainActor.run {
             NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
             NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
         }
 
+        let probeStarted = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !availability.shouldProbe() },
+            object: nil
+        )
+        await fulfillment(of: [probeStarted], timeout: 15)
         XCTAssertFalse(availability.shouldProbe())
     }
 
