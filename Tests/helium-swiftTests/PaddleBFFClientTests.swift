@@ -49,7 +49,7 @@ final class PaddleBFFClientTests: XCTestCase {
     func testCreateTransactionCheckout_usesSandboxURL_whenClientTokenIsSandboxToken() async throws {
         MockURLProtocol.requestHandler = okResponseHandler()
 
-        _ = try await client.createTransactionCheckout(
+        let result = try await client.createTransactionCheckout(
             transactionId: "txn_xxx",
             paddleClientToken: "test_abc123",
             iosBundleId: nil
@@ -60,12 +60,13 @@ final class PaddleBFFClientTests: XCTestCase {
             captured.url?.absoluteString,
             "https://sandbox-checkout-service.paddle.com/transaction-checkout"
         )
+        XCTAssertTrue(result.sandbox)
     }
 
     func testCreateTransactionCheckout_usesProductionURL_whenClientTokenIsProductionToken() async throws {
         MockURLProtocol.requestHandler = okResponseHandler()
 
-        _ = try await client.createTransactionCheckout(
+        let result = try await client.createTransactionCheckout(
             transactionId: "txn_xxx",
             paddleClientToken: "live_abc123",
             iosBundleId: nil
@@ -76,6 +77,7 @@ final class PaddleBFFClientTests: XCTestCase {
             captured.url?.absoluteString,
             "https://checkout-service.paddle.com/transaction-checkout"
         )
+        XCTAssertFalse(result.sandbox)
     }
 
     // MARK: - Headers
