@@ -575,6 +575,8 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
 /// Event fired when a purchase completes successfully.
 /// See `paymentProcessor` to identify which payment processor completed the purchase.
 public struct PurchaseSucceededEvent: ProductEvent {
+    var isWebSecondTry = false
+    public var isSecondTry: Bool { isWebSecondTry || HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName) }
     /// The Helium product identifier that was successfully purchased
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
@@ -782,6 +784,8 @@ public enum PurchaseRestoredOrigin: String, Codable, Sendable {
 /// (explicit restorePurchases() or makePurchase returning .restored) or by detecting an
 /// already-entitled product on return from an external web checkout.
 public struct PurchaseRestoredEvent: ProductEvent {
+    var isWebSecondTry = false
+    public var isSecondTry: Bool { isWebSecondTry || HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName) }
     /// The product identifier that was restored
     /// - Note: Set to "HELIUM_GENERIC_PRODUCT" when restoring all purchases via restorePurchases()
     public let productId: String

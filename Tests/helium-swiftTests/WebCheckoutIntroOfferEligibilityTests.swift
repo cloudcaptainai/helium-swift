@@ -19,21 +19,25 @@ private final class FixedWebEntitlementsSource: HeliumPaymentEntitlementsSource,
 final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
 
     @MainActor
-    func testSecondTryRejectsOtherProviderProducts() {
-        for provider in [PaymentProviderConfig.paddle, .stripe] {
-            let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: FixedWebEntitlementsSource(provider: provider, productKeys: []))
-            for includesOwnProduct in [false, true] {
-                var info = makeTestPaywallInfo()
-                info.webSecondTryConfig = WebSecondTryConfig(
-                    paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
-                    productsOfferedPaddle: provider.kind == .stripe || includesOwnProduct ? ["pro_b:pri_b"] : [],
-                    productsOfferedStripe: provider.kind == .paddle || includesOwnProduct ? ["prod_b:price_b"] : [],
-                    showOn: ["dismissed"]
-                )
-                let session = makeTestSession(paywallInfo: info)
-                XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analyticsEvent: makeTestCheckoutAnalytics(session: session, provider: provider.kind)))
-            }
-        }
+    func testSecondTryRejectsOtherProviderProducts() throws {
+        let manager = ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: FixedWebEntitlementsSource(provider: .stripe, productKeys: []))
+        let key = "prod_b:price_b"
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: [key: try price(key, .eligibleTrial)], paddleProducts: nil, paddleClientToken: nil)
+        defer { HeliumFetchedConfigManager.reset() }
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
+        )
+        let valid = makeTestSession(paywallInfo: info)
+        let analytics = testAnalyticsDictionary(makeTestCheckoutAnalytics(session: valid, provider: .stripe))
+        XCTAssertNotNil(manager.readySecondTry(paywallSession: valid, entitledBefore: [], analytics: analytics))
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: ["pro_b:pri_b"], productsOfferedStripe: [key], showOn: ["dismissed"]
+        )
+        let mixed = makeTestSession(paywallInfo: info)
+        XCTAssertNil(manager.readySecondTry(paywallSession: mixed, entitledBefore: [], analytics: analytics))
     }
 
     @MainActor
@@ -52,7 +56,9 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         var analytics = makeTestCheckoutAnalytics(session: session, provider: .stripe)
         analytics.experimentID = "experiment"
         analytics.modelID = "model"
-        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: [], analyticsEvent: analytics))
+        var analyticsDict = testAnalyticsDictionary(analytics)
+        analyticsDict["additionalPaywallFields"] = ["paywallBundleUrl": "https://example.com/native", "webPaywallBundleUrl": "https://example.com/a", "other": "kept"]
+        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analyticsDict))
         XCTAssertEqual(ready.context["paywallUUID"] as? String, "b")
         XCTAssertEqual(ready.context["paywallVersionUUID"] as? String, "v")
         let context = try XCTUnwrap(ready.context["perPaywallCtx"] as? [String: Any])
@@ -69,16 +75,20 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         XCTAssertNotEqual(childSession, session.sessionId)
         XCTAssertEqual(child["experimentID"] as? String, "experiment")
         XCTAssertEqual(child["modelID"] as? String, "model")
+        let fields = try XCTUnwrap(child["additionalPaywallFields"] as? [String: String])
+        XCTAssertNil(fields["paywallBundleUrl"])
+        XCTAssertNil(fields["webPaywallBundleUrl"])
+        XCTAssertEqual(fields["other"], "kept")
         XCTAssertEqual(event["paywallTemplateName"] as? String, "Second")
         XCTAssertEqual(event["isSecondTry"] as? Bool, true)
-        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"], analyticsEvent: analytics))
+        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"], analytics: analyticsDict))
         for (id, name) in [(nil, "Second"), (0, "Second"), (42, nil), (42, "")] as [(Int?, String?)] {
             info.webSecondTryConfig = WebSecondTryConfig(
                 paywallUUID: "b", paywallID: id, paywallTemplateName: name, paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
                 productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
             )
             let incompleteSession = makeTestSession(paywallInfo: info)
-            XCTAssertNil(manager.readySecondTry(paywallSession: incompleteSession, entitledBefore: [], analyticsEvent: analytics))
+            XCTAssertNil(manager.readySecondTry(paywallSession: incompleteSession, entitledBefore: [], analytics: analyticsDict))
         }
     }
 
@@ -103,6 +113,45 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
             manager.observeCheckout(paywallSession: session, entitledProductIdsBeforeCheckout: [], secondTry: second)
             let detected = await manager.checkForNewPurchase()
             XCTAssertTrue(detected)
+        }
+    }
+
+    @MainActor
+    func testWebPurchaseEventsAttributeSecondTryOnlyWhenExclusive() async throws {
+        for provider in [PaymentProviderConfig.paddle, .stripe] {
+            for shared in [false, true] {
+                for restored in [false, true] {
+                    let key = provider.kind == .paddle ? "pro_b:pri_b" : "prod_b:price_b"
+                    let source = FixedWebEntitlementsSource(provider: provider, productKeys: [key])
+                    let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: source)
+                    let received = expectation(description: "purchase event")
+                    var captured: (any PaywallContextEvent)?
+                    let handlers = PaywallEventHandlers.withHandlers(onAnyEvent: { event in
+                        if event is PurchaseSucceededEvent || event is PurchaseRestoredEvent {
+                            captured = event
+                            received.fulfill()
+                        }
+                    })
+                    var info = makeTestPaywallInfo()
+                    info.paywallTemplateName = "Primary"
+                    info.webProductsOfferedPaddle = provider.kind == .paddle && shared ? [key] : []
+                    info.webProductsOfferedStripe = provider.kind == .stripe && shared ? [key] : []
+                    let session = makeTestSession(eventHandlers: handlers, paywallInfo: info)
+                    let second = WebSecondTryConfig(
+                        paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
+                        productsOfferedPaddle: provider.kind == .paddle ? [key] : [],
+                        productsOfferedStripe: provider.kind == .stripe ? [key] : [], showOn: ["dismissed"]
+                    )
+                    manager.observeCheckout(paywallSession: session, entitledProductIdsBeforeCheckout: restored ? [key] : [], secondTry: second)
+                    let detected = await manager.checkForNewPurchase(fromSuccessRedirect: restored)
+                    XCTAssertTrue(detected)
+                    await fulfillment(of: [received], timeout: 1)
+                    let event = try XCTUnwrap(captured)
+                    XCTAssertEqual(event.paywallName, shared ? "Primary" : "Second")
+                    XCTAssertEqual(event.isSecondTry, !shared)
+                    XCTAssertEqual(event is PurchaseRestoredEvent, restored)
+                }
+            }
         }
     }
 

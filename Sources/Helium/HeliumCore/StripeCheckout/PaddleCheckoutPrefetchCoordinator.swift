@@ -74,7 +74,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty {
             prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
         }
-        if let secondTry = info.webSecondTryConfig, !secondTry.productsOfferedPaddle.isEmpty {
+        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty,
+           let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
             prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
         }
     }
@@ -138,7 +139,7 @@ final class PaddleCheckoutPrefetchCoordinator {
             let bff = bffClient
             let discountId = discountIdByPriceId[priceId]
             let generation = UUID()
-            generations[key] = generation
+            if surface == .secondTry { generations[key] = generation }
 
             let task = Task.detached(priority: .userInitiated) { [weak self] in
                 let outcome = await Self.runPrefetchChain(
@@ -152,7 +153,8 @@ final class PaddleCheckoutPrefetchCoordinator {
                     isSimulatedPreviewRun: isSimulatedPreviewRun,
                     banditClient: bandit,
                     bffClient: bff,
-                    scope: scope
+                    scope: scope,
+                    isSecondTry: surface == .secondTry
                 )
                 if surface == .secondTry {
                     await MainActor.run {
@@ -167,7 +169,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         }
         if !startedPriceIds.isEmpty {
             HeliumObservabilityManager.shared.track(
-                PaddlePrefetchStarted(priceIds: startedPriceIds),
+                PaddlePrefetchStarted(priceIds: startedPriceIds, isSecondTry: surface == .secondTry),
                 scope: scope
             )
         }
@@ -245,10 +247,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         generations = generations.filter { $0.key.sessionId != sessionId }
     }
 
-    func completedOutcomes(sessionId: String, priceIds: [String], surface: PaddlePrefetchSurface) -> [String: PaddlePrefetchOutcome] {
+    func completedOutcomes(sessionId: String, priceIds: [String]) -> [String: PaddlePrefetchOutcome] {
         var result: [String: PaddlePrefetchOutcome] = [:]
         for priceId in priceIds {
-            result[priceId] = completed[CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)] ?? .notStarted
+            result[priceId] = completed[CacheKey(sessionId: sessionId, priceId: priceId, surface: .secondTry)] ?? .notStarted
         }
         return result
     }
@@ -540,7 +542,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         isSimulatedPreviewRun: Bool,
         banditClient: HeliumPaymentAPIClient,
         bffClient: PaddleBFFClient,
-        scope: PaywallObservabilityScope
+        scope: PaywallObservabilityScope,
+        isSecondTry: Bool
     ) async -> PaddlePrefetchOutcome {
         let chainStart = Date()
         let banditStart = Date()
@@ -556,12 +559,12 @@ final class PaddleCheckoutPrefetchCoordinator {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)
             }
             
-            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success)
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .success, isSecondTry: isSecondTry)
         } catch let PaddlePrefetchError.alreadyEntitled(code, message, existingSubscriptionId) {
-            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .alreadyEntitled(code: code, message: message), isSecondTry: isSecondTry)
             return .alreadyEntitled(code: code, message: message, existingSubscriptionId: existingSubscriptionId)
         } catch {
-            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error))
+            trackBanditCompletion(priceId: priceId, discountId: discountId, scope: scope, startedAt: banditStart, chainStartedAt: chainStart, result: .failed(error), isSecondTry: isSecondTry)
             return .failed(error: error)
         }
 
@@ -575,7 +578,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                 iosBundleId: iosBundleId
             )
             if !isSimulatedPreviewRun, !Self.isUSBuyer(in: paddleResult.rawBody) {
-                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .nonUSBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
                 return .failed(error: PaddleNonUSBuyerBlocked(countryCode: Self.ipGeoCountryCode(in: paddleResult.rawBody)))
             }
             // While the consent modal is disabled, block California buyers by ip_geo
@@ -583,13 +586,13 @@ final class PaddleCheckoutPrefetchCoordinator {
             // Previews always proceed so testers can exercise the modal and checkout.
             if !caModalEnabled, !isPreviewRun,
                let caPostal = Self.californiaPostalCode(in: paddleResult.rawBody) {
-                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
+                trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .caBlocked(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
                 return .failed(error: PaddleCaliforniaBlocked(postalCode: caPostal))
             }
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled)
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .success(rawBody: paddleResult.rawBody), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
             return .ready(bandit: banditResponse, paddle: paddleResult)
         } catch {
-            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error), caConsentModalEnabled: caModalEnabled)
+            trackBffCompletion(priceId: priceId, transactionId: banditResponse.transactionId, scope: scope, startedAt: bffStart, chainStartedAt: chainStart, result: .failed(error), caConsentModalEnabled: caModalEnabled, isSecondTry: isSecondTry)
             return .failed(error: error)
         }
     }

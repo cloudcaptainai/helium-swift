@@ -11,7 +11,14 @@ import SwiftUI
 
 extension KeyedDecodingContainer {
     func decodeIfPresent(_ type: WebSecondTryConfig.Type, forKey key: Key) throws -> WebSecondTryConfig? {
-        try? decode(type, forKey: key)
+        guard contains(key) else { return nil }
+        do {
+            if try decodeNil(forKey: key) { return nil }
+            return try decode(type, forKey: key)
+        } catch {
+            HeliumObservabilityManager.shared.track(WebSecondTryConfigDecodeFailed(), scope: nil)
+            return nil
+        }
     }
     /// A style this SDK version does not recognize is treated as unset. Synthesized decoding would
     /// otherwise throw, and this field decodes alongside `resolvedConfig`, so one bad value would

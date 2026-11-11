@@ -214,7 +214,9 @@ public class ExternalWebCheckoutManager: NSObject {
             )
         }
 
-        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analyticsEvent: loggedEvent)
+        let analyticsData = try JSONEncoder().encode(loggedEvent)
+        let analytics = try JSONSerialization.jsonObject(with: analyticsData) as? [String: Any] ?? [:]
+        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analytics: analytics)
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -228,37 +230,37 @@ public class ExternalWebCheckoutManager: NSObject {
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
             paywallTraits: paywallTraits,
             webSecondTryConfig: secondTry.map { $0.context },
-            offeredPaddle: secondTry.map { _ in paywallSession.paywallInfoWithBackups?.webProductsOfferedPaddle ?? [] },
-            offeredStripe: secondTry.map { _ in paywallSession.paywallInfoWithBackups?.webProductsOfferedStripe ?? [] }
+            analytics: analytics
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession, secondTry: secondTry?.config)
     }
 
     @MainActor
-    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analyticsEvent: HeliumPaywallLoggedEvent) -> (config: WebSecondTryConfig, context: [String: Any])? {
+    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analytics: [String: Any]) -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
               let paywallID = second.paywallID, paywallID > 0,
-              let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty,
-              !second.bundleUrl.isEmpty, URL(string: second.bundleUrl) != nil,
-              !second.productsOfferedPaddle.isEmpty || !second.productsOfferedStripe.isEmpty else { return nil }
+              let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty else { return nil }
 
         let paddleKeys = second.productsOfferedPaddle
         let stripeKeys = second.productsOfferedStripe
         let offered: [String]
+        let selected: String
         if provider.kind == .paddle {
-            guard stripeKeys.isEmpty, !paddleKeys.isEmpty else { return nil }
+            guard stripeKeys.isEmpty, let first = paddleKeys.first else { return nil }
             offered = paddleKeys
+            selected = first
         } else {
-            guard paddleKeys.isEmpty, !stripeKeys.isEmpty else { return nil }
+            guard paddleKeys.isEmpty, let first = stripeKeys.first else { return nil }
             offered = stripeKeys
+            selected = first
         }
         guard !Self.containsEntitledProduct(offered, entitledIds: entitledBefore) else { return nil }
         let paddlePriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: paddleKeys)
         guard paddlePriceIds.count == paddleKeys.count else { return nil }
         let outcomes = PaddleCheckoutPrefetchCoordinator.shared.completedOutcomes(
-            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds, surface: .secondTry
+            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
         )
         for priceId in paddlePriceIds {
             guard case .ready = outcomes[priceId] ?? .notStarted else { return nil }
@@ -270,16 +272,19 @@ public class ExternalWebCheckoutManager: NSObject {
         var info = original
         info.webProductsOfferedPaddle = paddleKeys
         info.webProductsOfferedStripe = stripeKeys
-        guard let selected = offered.first else { return nil }
         let terms = buildStripeOfferTerms(paywallInfo: info)
-        guard let analyticsData = try? JSONEncoder().encode(analyticsEvent),
-              var analytics = (try? JSONSerialization.jsonObject(with: analyticsData)) as? [String: Any],
-              var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
+        var analytics = analytics
+        guard var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
         analytics["paywallID"] = paywallID
         analytics["paywallUUID"] = second.paywallUUID
         analytics["paywallVersionUUID"] = second.paywallVersionUUID
         analytics["heliumPaywallSessionId"] = UUID().uuidString
         analytics["parentPaywallSessionId"] = paywallSession.sessionId
+        if var fields = analytics["additionalPaywallFields"] as? [String: Any] {
+            fields.removeValue(forKey: "paywallBundleUrl")
+            fields.removeValue(forKey: "webPaywallBundleUrl")
+            analytics["additionalPaywallFields"] = fields
+        }
         event["paywallTemplateName"] = paywallTemplateName
         event["isSecondTry"] = true
         analytics["heliumEvent"] = event
@@ -410,17 +415,17 @@ public class ExternalWebCheckoutManager: NSObject {
         completeForChild: Bool = false
     ) -> [String: Any] {
         var fields: [String: Any] = [provider.initialProductKey: productKey, "introOfferEligible": introOfferEligible]
-        if let stripeOfferTerms { fields["stripeOfferTerms"] = stripeOfferTerms }
-        if let paddleBootstraps { fields["paddleBootstraps"] = paddleBootstraps }
-        if let paddleAlreadyEntitled { fields["paddleAlreadyEntitled"] = paddleAlreadyEntitled }
         if let offeredPaddle { fields["productsOfferedPaddle"] = offeredPaddle }
         if let offeredStripe { fields["productsOfferedStripe"] = offeredStripe }
         if completeForChild {
-            fields["initialPaddleProduct"] = (offeredPaddle?.first).map { $0 as Any } ?? NSNull()
-            fields["initialStripeSelection"] = (offeredStripe?.first).map { $0 as Any } ?? NSNull()
+            fields[provider.kind == .paddle ? "initialStripeSelection" : "initialPaddleProduct"] = NSNull()
             fields["stripeOfferTerms"] = stripeOfferTerms.map { $0 as Any } ?? NSNull()
             fields["paddleBootstraps"] = paddleBootstraps.map { $0 as Any } ?? NSNull()
             fields["paddleAlreadyEntitled"] = paddleAlreadyEntitled.map { $0 as Any } ?? NSNull()
+        } else {
+            if let stripeOfferTerms { fields["stripeOfferTerms"] = stripeOfferTerms }
+            if let paddleBootstraps { fields["paddleBootstraps"] = paddleBootstraps }
+            if let paddleAlreadyEntitled { fields["paddleAlreadyEntitled"] = paddleAlreadyEntitled }
         }
         return fields
     }
@@ -440,8 +445,7 @@ public class ExternalWebCheckoutManager: NSObject {
         paddleAlreadyEntitled: [String: Any]? = nil,
         paywallTraits: HeliumUserTraits? = nil,
         webSecondTryConfig: [String: Any]? = nil,
-        offeredPaddle: [String]? = nil,
-        offeredStripe: [String]? = nil
+        analytics: [String: Any]? = nil
     ) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw WebCheckoutError.invalidBaseURLForComponents
@@ -449,9 +453,12 @@ public class ExternalWebCheckoutManager: NSObject {
 
         var ctx: [String: Any] = [:]
 
-        let analyticsData = try JSONEncoder().encode(analyticsEvent)
-        let analyticsJSON = try JSONSerialization.jsonObject(with: analyticsData)
-        ctx["analytics"] = analyticsJSON
+        if let analytics {
+            ctx["analytics"] = analytics
+        } else {
+            let analyticsData = try JSONEncoder().encode(analyticsEvent)
+            ctx["analytics"] = try JSONSerialization.jsonObject(with: analyticsData)
+        }
         
         var analyticsTopFields: [String: Any] = [:]
         if let userId = Helium.identify.userId {
@@ -465,8 +472,8 @@ public class ExternalWebCheckoutManager: NSObject {
 
         ctx.merge(perPaywallContext(productKey: productKey, introOfferEligible: introOfferEligible,
                                     stripeOfferTerms: stripeOfferTerms, paddleBootstraps: paddleBootstraps,
-                                    paddleAlreadyEntitled: paddleAlreadyEntitled, offeredPaddle: offeredPaddle,
-                                    offeredStripe: offeredStripe)) { _, new in new }
+                                    paddleAlreadyEntitled: paddleAlreadyEntitled, offeredPaddle: nil,
+                                    offeredStripe: nil)) { _, new in new }
         if let webSecondTryConfig { ctx["webSecondTryConfig"] = webSecondTryConfig }
         ctx["successUrl"] = successURL
         ctx["cancelUrl"] = cancelURL
@@ -496,14 +503,6 @@ public class ExternalWebCheckoutManager: NSObject {
         for (key, value) in baseBody where key != "apiKey" {
             if let stringValue = value as? String {
                 ctx[key] = stringValue
-            }
-        }
-        if webSecondTryConfig != nil {
-            if let customer = PaymentProviderConfig.paddle.getCustomerId(), !customer.isEmpty {
-                ctx["paddleCustomerId"] = customer
-            }
-            if let customer = PaymentProviderConfig.stripe.getCustomerId(), !customer.isEmpty {
-                ctx["stripeCustomerId"] = customer
             }
         }
 
@@ -865,15 +864,18 @@ public class ExternalWebCheckoutManager: NSObject {
             // recently added session (likely the one the user just interacted with).
             // In practice, second-try paywalls offer different products.
             if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
+                let isWebSecondTry = ownSecond.contains(purchasedProductId) && !primaryProducts.contains(purchasedProductId)
+                var event = PurchaseSucceededEvent(
+                    productId: purchasedProductId,
+                    triggerName: observation.paywallSession.trigger,
+                    paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                    storeKitTransactionId: nil,
+                    storeKitOriginalTransactionId: nil,
+                    paymentProcessor: provider.kind
+                )
+                event.isWebSecondTry = isWebSecondTry
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
-                    PurchaseSucceededEvent(
-                        productId: purchasedProductId,
-                        triggerName: observation.paywallSession.trigger,
-                        paywallName: observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                        storeKitTransactionId: nil,
-                        storeKitOriginalTransactionId: nil,
-                        paymentProcessor: provider.kind
-                    ),
+                    event,
                     paywallSession: observation.paywallSession,
                     sendToAnalytics: false
                 )
@@ -906,14 +908,20 @@ public class ExternalWebCheckoutManager: NSObject {
         }
 
         if let restored = restoredCandidate {
+            let primaryProducts = restored.observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
+            let second = restored.observation.secondTry
+            let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
+            let isWebSecondTry = ownSecond.contains(restored.productId) && !primaryProducts.contains(restored.productId)
+            var event = PurchaseRestoredEvent(
+                productId: restored.productId,
+                triggerName: restored.observation.paywallSession.trigger,
+                paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                restoreOrigin: .detectedPostWebCheckout,
+                paymentProcessor: provider.kind
+            )
+            event.isWebSecondTry = isWebSecondTry
             HeliumPaywallDelegateWrapper.shared.fireEvent(
-                PurchaseRestoredEvent(
-                    productId: restored.productId,
-                    triggerName: restored.observation.paywallSession.trigger,
-                    paywallName: restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                    restoreOrigin: .detectedPostWebCheckout,
-                    paymentProcessor: provider.kind
-                ),
+                event,
                 paywallSession: restored.observation.paywallSession,
                 sendToAnalytics: false
             )

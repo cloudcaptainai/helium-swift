@@ -252,3 +252,8 @@ func makeTestCheckoutAnalytics(session: PaywallSession, provider: HeliumPaymentP
                                        paymentProcessor: provider)
     return HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: session)
 }
+
+func testAnalyticsDictionary(_ event: HeliumPaywallLoggedEvent) -> [String: Any] {
+    let data = try! JSONEncoder().encode(event)
+    return try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+}

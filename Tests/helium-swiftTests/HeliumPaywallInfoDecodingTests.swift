@@ -6,6 +6,9 @@ import XCTest
 final class HeliumPaywallInfoDecodingTests: XCTestCase {
 
     func testWebSecondTryConfigDecodesAndRejectsMalformedValues() throws {
+        var events: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { events.append($0) }
+        defer { HeliumObservabilityManager.shared.unitTestTrackObserver = nil }
         let secondTry: [String: Any] = [
             "paywallUUID": "paywall-b",
             "paywallID": 42,
@@ -29,10 +32,13 @@ final class HeliumPaywallInfoDecodingTests: XCTestCase {
         XCTAssertNil(oldConfig.paywallID)
         XCTAssertNil(oldConfig.paywallTemplateName)
         XCTAssertNil(try decodePaywallInfo().webSecondTryConfig)
+        XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": NSNull()]).webSecondTryConfig)
+        XCTAssertTrue(events.isEmpty)
         XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": ["paywallUUID": 4]]).webSecondTryConfig)
         var invalidURL = secondTry
         invalidURL["bundleUrl"] = "not-a-url"
         XCTAssertNil(try decodePaywallInfo(extras: ["webSecondTryConfig": invalidURL]).webSecondTryConfig)
+        XCTAssertEqual(events.map(\.name), ["web_second_try_config_decode_failed", "web_second_try_config_decode_failed"])
     }
 
     private func makePaywallInfoJSON(extras: [String: Any] = [:]) throws -> Data {

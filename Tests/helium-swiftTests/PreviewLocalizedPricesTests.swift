@@ -20,7 +20,7 @@ final class PreviewLocalizedPricesTests: XCTestCase {
         XCTAssertNotNil(manager.getPaywallInfoForTrigger("donor")?.webSecondTryConfig)
     }
 
-    func testRefreshKeysExcludeServerPricesAndKeepPromoKeys() {
+    func testRefreshKeysExcludeServerPricesAndKeepPromoKeys() async {
         let manager = HeliumFetchedConfigManager.shared
         let promo = "ios.product:offer"
         manager.localizedPriceMap = [
@@ -29,7 +29,12 @@ final class PreviewLocalizedPricesTests: XCTestCase {
             "pro_web:pri_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
             "prod_web:price_web": makeServerPrice(formattedPrice: "$9.99").toLocalizedPrice(),
         ]
-        XCTAssertEqual(Set(manager.localizedProductKeysToRefresh()), ["ios.product", promo])
+        var fetched: [String] = []
+        await manager.refreshLocalizedPriceMap { keys in
+            fetched = keys
+            return [:]
+        }
+        XCTAssertEqual(Set(fetched), ["ios.product", promo])
         XCTAssertNotNil(manager.localizedPriceMap["pro_web:pri_web"])
         XCTAssertNotNil(manager.localizedPriceMap["prod_web:price_web"])
     }

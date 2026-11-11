@@ -424,4 +424,27 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertEqual(outcomeFinalized.ipGeoCountry, "MX")
         XCTAssertEqual(outcomeFinalized.californiaDetected, false)
     }
+
+    func testSecondTryPrefetchEventsAreTagged() {
+        var events: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { events.append($0) }
+        let scope = makeTestSession().observabilityScope
+        let started = Date()
+        PaddleCheckoutPrefetchCoordinator.trackBanditCompletion(
+            priceId: "pri_b", discountId: nil, scope: scope, startedAt: started, chainStartedAt: started,
+            result: .alreadyEntitled(code: "already_entitled", message: "Already entitled"), isSecondTry: true
+        )
+        PaddleCheckoutPrefetchCoordinator.trackBffCompletion(
+            priceId: "pri_b", transactionId: "txn_b", scope: scope, startedAt: started, chainStartedAt: started,
+            result: .success(rawBody: Data()), caConsentModalEnabled: false, isSecondTry: true
+        )
+        let initial = PaddlePrefetchStarted(priceIds: ["pri_b"], isSecondTry: true)
+        XCTAssertEqual(initial.properties["isSecondTry"] as? Bool, true)
+        XCTAssertNil(PaddlePrefetchStarted(priceIds: ["pri_a"]).properties["isSecondTry"])
+        XCTAssertEqual(events.count, 4)
+        for event in events {
+            XCTAssertEqual(event.properties["isSecondTry"] as? Bool, true)
+            XCTAssertNil(event.properties["surface"])
+        }
+    }
 }

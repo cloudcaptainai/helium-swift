@@ -933,9 +933,9 @@ public class HeliumFetchedConfigManager {
             .mapValues { $0.toLocalizedPrice() }
     }
 
-    func buildLocalizedPriceMap(_ productIds: [String]) async {
+    func buildLocalizedPriceMap(_ productIds: [String], fetchPrices: ([String]) async -> [String: LocalizedPrice] = PriceFetcher.localizedPricing(for:)) async {
         if !productIds.isEmpty {
-            let newProductToPriceMap = await PriceFetcher.localizedPricing(for: productIds)
+            let newProductToPriceMap = await fetchPrices(productIds)
 
             // Merge the new prices into the existing map; atomic read-modify-write using withValue
             _localizedPriceMap.withValue { map in
@@ -950,9 +950,9 @@ public class HeliumFetchedConfigManager {
         return Array(Set(productIds)).filter { !known.contains($0) }.sorted()
     }
 
-    func refreshLocalizedPriceMap() async {
+    func refreshLocalizedPriceMap(fetchPrices: ([String]) async -> [String: LocalizedPrice] = PriceFetcher.localizedPricing(for:)) async {
         let productIds = localizedProductKeysToRefresh()
-        await buildLocalizedPriceMap(productIds)
+        await buildLocalizedPriceMap(productIds, fetchPrices: fetchPrices)
     }
 
     func localizedProductKeysToRefresh() -> [String] {
