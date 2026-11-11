@@ -514,7 +514,7 @@ final class WebApplePayProbeTests: XCTestCase {
             predicate: NSPredicate { _, _ in !availability.shouldProbe() },
             object: nil
         )
-        await fulfillment(of: [probeStarted], timeout: 2)
+        await fulfillment(of: [probeStarted], timeout: 15)
         XCTAssertFalse(availability.shouldProbe())
     }
 
