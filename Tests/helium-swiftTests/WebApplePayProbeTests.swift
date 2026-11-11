@@ -504,6 +504,7 @@ final class WebApplePayProbeTests: XCTestCase {
 
         await availability.prepareForRequest()
 
+        availability.setInBackgroundForTesting(false)
         await MainActor.run {
             NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
             NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
