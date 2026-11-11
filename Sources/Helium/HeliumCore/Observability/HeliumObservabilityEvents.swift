@@ -118,6 +118,30 @@ struct WebSecondTryConfigDecodeFailed: HeliumObservabilityEvent {
     let codingPath: String
     let errorType: String
     let errorDescription: String
+
+    init(error: Error, defaultCodingPath: [CodingKey]) {
+        let path: [CodingKey]
+        switch error {
+        case DecodingError.typeMismatch(_, let context):
+            path = context.codingPath
+            errorType = "typeMismatch"
+        case DecodingError.valueNotFound(_, let context):
+            path = context.codingPath
+            errorType = "valueNotFound"
+        case DecodingError.keyNotFound(let missingKey, let context):
+            path = context.codingPath + [missingKey]
+            errorType = "keyNotFound"
+        case DecodingError.dataCorrupted(let context):
+            path = context.codingPath
+            errorType = "dataCorrupted"
+        default:
+            path = defaultCodingPath
+            errorType = String(describing: Swift.type(of: error))
+        }
+        codingPath = path.map(\.stringValue).joined(separator: ".")
+        errorDescription = String(describing: error)
+    }
+
     var name: String { "web_second_try_config_decode_failed" }
     var tags: Set<HeliumObservabilityTag> { [.config, .webCheckout] }
     var properties: [String: Any] {
