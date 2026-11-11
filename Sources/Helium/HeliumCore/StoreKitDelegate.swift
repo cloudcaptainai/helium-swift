@@ -36,6 +36,15 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
         return try await product.heliumPurchase()
     }
 
+    /// (Advanced) Override to customize how a purchase with promotional offer options is initiated.
+    /// Promotional offer purchases go through this seam, so an override of the two-argument
+    /// variant does not receive them.
+    open func performPurchase(product: Product, productId: String, purchaseOptions: Set<Product.PurchaseOption>) async throws -> Product.PurchaseResult {
+        return try await product.heliumPurchase(options: purchaseOptions)
+    }
+
+    open var supportsPromotionalOffers: Bool { true }
+
     open func makePurchase(productId: String) async -> HeliumPaywallTransactionStatus {
         do {
             guard let product = try await ProductsCache.shared.getProduct(id: productId) else {
@@ -44,34 +53,78 @@ open class StoreKitDelegate: HeliumPaywallDelegate, HeliumDelegateReturnsTransac
             }
 
             let result = try await performPurchase(product: product, productId: productId)
-                
-            switch result {
-            case .success(let verification):
-                switch verification {
-                case .verified(let transaction):
-                    latestCompletedTransaction = transaction
-                    await transaction.finish()
-                    return .purchased
-                case .unverified(_, let error):
-                    return .failed(error)
-                }
-            case .userCancelled:
-                return .cancelled
-            case .pending:
-                return .pending
-            @unknown default:
-                return .failed(StoreKitDelegateError.unknownPurchaseResult)
-            }
+            return await mapPurchaseResult(result)
         } catch {
-            if let storeKitError = error as? StoreKitError,
-               case .userCancelled = storeKitError {
-                return .cancelled
-            }
-            HeliumLogger.log(.error, category: .core, "StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
-            return .failed(error)
+            return mapPurchaseError(error)
         }
     }
-    
+
+    open func makePurchase(productId: String, promoOfferId: String) async -> HeliumPaywallTransactionStatus {
+        do {
+            guard let product = try await ProductsCache.shared.getProduct(id: productId) else {
+                HeliumLogger.log(.error, category: .core, "StoreKitDelegate - makePurchase could not find product: \(productId)")
+                return .failed(StoreKitDelegateError.cannotFindProduct)
+            }
+            guard product.subscription?.promotionalOffers.contains(where: { $0.id == promoOfferId }) == true else {
+                HeliumLogger.log(.error, category: .core, "StoreKitDelegate - promotional offer not found: \(promoOfferId) for product: \(productId)")
+                return .failed(HeliumPurchaseError.promoOfferNotFound(offerId: promoOfferId))
+            }
+
+            let signer = resolvePromoOfferSigner()
+            let jws: String
+            do {
+                jws = try await signer.signPromoOffer(
+                    productId: productId,
+                    offerId: promoOfferId,
+                    appTransactionId: HeliumIdentityManager.shared.getAppTransactionID()
+                )
+            } catch {
+                HeliumLogger.log(.error, category: .core, "StoreKitDelegate - promo offer signing failed: \(error.localizedDescription)")
+                return .failed(HeliumPurchaseError.promoOfferSigningFailed(underlying: error))
+            }
+
+            let options = Set(Product.PurchaseOption.promotionalOffer(promoOfferId, compactJWS: jws))
+            let result = try await performPurchase(product: product, productId: productId, purchaseOptions: options)
+            return await mapPurchaseResult(result)
+        } catch {
+            return mapPurchaseError(error)
+        }
+    }
+
+    /// Customer hook when set, otherwise Helium's signing server.
+    func resolvePromoOfferSigner() -> HeliumPromoOfferSigner {
+        return Helium.config.promoOfferSigner ?? HeliumPromoOfferSigningClient.shared
+    }
+
+    func mapPurchaseResult(_ result: Product.PurchaseResult) async -> HeliumPaywallTransactionStatus {
+        switch result {
+        case .success(let verification):
+            switch verification {
+            case .verified(let transaction):
+                latestCompletedTransaction = transaction
+                await transaction.finish()
+                return .purchased
+            case .unverified(_, let error):
+                return .failed(error)
+            }
+        case .userCancelled:
+            return .cancelled
+        case .pending:
+            return .pending
+        @unknown default:
+            return .failed(StoreKitDelegateError.unknownPurchaseResult)
+        }
+    }
+
+    func mapPurchaseError(_ error: Error) -> HeliumPaywallTransactionStatus {
+        if let storeKitError = error as? StoreKitError,
+           case .userCancelled = storeKitError {
+            return .cancelled
+        }
+        HeliumLogger.log(.error, category: .core, "StoreKitDelegate - Purchase failed with error: \(error.localizedDescription)")
+        return .failed(error)
+    }
+
     open func restorePurchases() async -> Bool {
         return await Helium.entitlements.hasAny()
     }
