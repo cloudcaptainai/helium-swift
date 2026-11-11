@@ -96,6 +96,7 @@ struct HeliumPaywallPreviewVersion: Codable, Identifiable {
     let paddleProductIds: [String]?
     let webPaddleProductIds: [String]?
     let webStripeProductIds: [String]?
+    let webSecondTryConfig: WebSecondTryConfig?
     let webPaywallBundleUrl: String?
     let shouldEnableScroll: Bool?
     let lastSavedAt: String?

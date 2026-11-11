@@ -1204,6 +1204,7 @@ public class HeliumFetchedConfigManager {
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
+        webSecondTryConfig: WebSecondTryConfig? = nil,
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
         webCheckoutBrowserStyle: WebCheckoutBrowserStyle? = nil,
@@ -1226,6 +1227,7 @@ public class HeliumFetchedConfigManager {
                 productIdsPaddle: productIdsPaddle,
                 productIdsPaddleWeb: productIdsPaddleWeb,
                 productIdsStripeWeb: productIdsStripeWeb,
+                webSecondTryConfig: webSecondTryConfig,
                 webPaywallBundleUrl: webPaywallBundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
                 webCheckoutBrowserStyle: webCheckoutBrowserStyle,
@@ -1243,6 +1245,7 @@ public class HeliumFetchedConfigManager {
                 clonedFrom: sourceTrigger,
                 bundleUrl: bundleUrl,
                 shouldEnableScroll: shouldEnableScroll,
+                webSecondTryConfig: webSecondTryConfig,
                 secondTry: secondTry
             )
         }
@@ -1262,6 +1265,7 @@ public class HeliumFetchedConfigManager {
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
+        webSecondTryConfig: WebSecondTryConfig?,
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
         webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
@@ -1284,6 +1288,7 @@ public class HeliumFetchedConfigManager {
             productIdsPaddle: productIdsPaddle,
             productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
+            webSecondTryConfig: webSecondTryConfig,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll,
             webCheckoutBrowserStyle: webCheckoutBrowserStyle,
@@ -1301,6 +1306,7 @@ public class HeliumFetchedConfigManager {
                 productIdsPaddle: secondTry.productIdsPaddle,
                 productIdsPaddleWeb: [],
                 productIdsStripeWeb: [],
+                webSecondTryConfig: nil,
                 webPaywallBundleUrl: nil,
                 shouldEnableScroll: secondTry.shouldEnableScroll,
                 webCheckoutBrowserStyle: nil,
@@ -1331,6 +1337,7 @@ public class HeliumFetchedConfigManager {
         productIdsPaddle: [String],
         productIdsPaddleWeb: [String],
         productIdsStripeWeb: [String],
+        webSecondTryConfig: WebSecondTryConfig?,
         webPaywallBundleUrl: String?,
         shouldEnableScroll: Bool?,
         webCheckoutBrowserStyle: WebCheckoutBrowserStyle?,
@@ -1380,7 +1387,7 @@ public class HeliumFetchedConfigManager {
         previewPaywallInfo.productsOfferedPaddle = productIdsPaddle
         previewPaywallInfo.webProductsOfferedPaddle = productIdsPaddleWeb
         previewPaywallInfo.webProductsOfferedStripe = productIdsStripeWeb
-        previewPaywallInfo.webSecondTryConfig = nil
+        previewPaywallInfo.webSecondTryConfig = webSecondTryConfig
 
         // Inherited from the source trigger, where it would send the preview to a fallback paywall
         // instead of the version the developer picked.
@@ -1394,12 +1401,14 @@ public class HeliumFetchedConfigManager {
         clonedFrom sourceTrigger: String,
         bundleUrl: String,
         shouldEnableScroll: Bool?,
+        webSecondTryConfig: WebSecondTryConfig?,
         secondTry: PreviewSecondTryBundle?
     ) -> JSON {
         var configJSON = configJSON
         let sourceJSON = configJSON["triggerToPaywalls"][sourceTrigger]
         configJSON["triggerToPaywalls"][HELIUM_PREVIEW_TRIGGER] = previewEntryJSON(
-            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll
+            clonedFrom: sourceJSON, bundleUrl: bundleUrl, shouldEnableScroll: shouldEnableScroll,
+            webSecondTryConfig: webSecondTryConfig
         )
 
         if let secondTry {
@@ -1413,11 +1422,15 @@ public class HeliumFetchedConfigManager {
         return configJSON
     }
 
-    private static func previewEntryJSON(clonedFrom sourceJSON: JSON, bundleUrl: String, shouldEnableScroll: Bool?) -> JSON {
+    private static func previewEntryJSON(clonedFrom sourceJSON: JSON, bundleUrl: String, shouldEnableScroll: Bool?, webSecondTryConfig: WebSecondTryConfig? = nil) -> JSON {
         var entryJSON = sourceJSON
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
-        entryJSON["webSecondTryConfig"] = JSON.null
+        if let webSecondTryConfig, let data = try? JSONEncoder().encode(webSecondTryConfig), let value = try? JSON(data: data) {
+            entryJSON["webSecondTryConfig"] = value
+        } else {
+            entryJSON["webSecondTryConfig"] = JSON.null
+        }
         return entryJSON
     }
 }
