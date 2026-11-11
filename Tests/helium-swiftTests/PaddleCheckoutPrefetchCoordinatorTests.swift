@@ -95,6 +95,36 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics))
     }
 
+    func testStripeSecondTryRejectsMixedProductsEvenWithReadyPaddlePrefetch() async throws {
+        let paddleKey = "pro_second:pri_second"
+        let stripeKey = "prod_second:price_second"
+        var info = makeTestPaywallInfo()
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [paddleKey], productsOfferedStripe: [stripeKey], showOn: ["dismissed"]
+        )
+        let session = makeTestSession(paywallInfo: info)
+        let manager = ExternalWebCheckoutManager(provider: .stripe, entitlementsSource: HeliumPaymentEntitlementsSource(provider: .stripe))
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: [stripeKey: testPaddlePrice("price_second")], paddleProducts: [paddleKey: testPaddlePrice("pri_second")], paddleClientToken: "test_xyz")
+        configureSharedCheckoutFlow(session: session, priceIds: [], countryCode: "US")
+        defer {
+            cleanupSharedCheckoutFlow(session: session)
+            HeliumFetchedConfigManager.reset()
+        }
+        PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: session, compositeKeys: [paddleKey], surface: .secondTry)
+        let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: session.sessionId, priceId: "pri_second", surface: .secondTry)
+        guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
+        let analytics = testAnalyticsDictionary(makeTestCheckoutAnalytics(session: session, provider: .stripe))
+        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics))
+
+        info.webSecondTryConfig = WebSecondTryConfig(
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [], productsOfferedStripe: [stripeKey], showOn: ["dismissed"]
+        )
+        let stripeOnly = makeTestSession(paywallInfo: info)
+        XCTAssertNotNil(manager.readySecondTry(paywallSession: stripeOnly, entitledBefore: [], analytics: analytics))
+    }
+
     func testSecondTryContextOmitsAlreadyEntitledProduct() async throws {
         let key = "pro_second:pri_second_owned"
         var info = makeTestPaywallInfo()
