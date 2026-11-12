@@ -24,6 +24,7 @@ struct DiagnosticContent: Equatable {
     let usersWillSeeLink: DiagnosticLink?
     let cta: DiagnosticCta
     let reasonCode: String
+    let serverReasonCode: String?
     let fix: String?
     let detail: String?
     let checks: [DiagnosticCheck]
@@ -36,6 +37,7 @@ struct DiagnosticContent: Equatable {
         usersWillSeeLink: DiagnosticLink?,
         cta: DiagnosticCta,
         reasonCode: String,
+        serverReasonCode: String? = nil,
         fix: String? = nil,
         detail: String? = nil,
         checks: [DiagnosticCheck] = []
@@ -47,6 +49,7 @@ struct DiagnosticContent: Equatable {
         self.usersWillSeeLink = usersWillSeeLink
         self.cta = cta
         self.reasonCode = reasonCode
+        self.serverReasonCode = serverReasonCode
         self.fix = fix
         self.detail = detail
         self.checks = checks

@@ -14,6 +14,9 @@ struct DiagnosticLogLineMapper {
 
     func map(_ content: DiagnosticContent) -> String {
         var line = "[\(content.reasonCode)] \(content.title). \(content.body)"
+        if let code = content.serverReasonCode {
+            line += " [server: \(code)]"
+        }
         if let detail = content.detail {
             line += " \(detail)"
         }

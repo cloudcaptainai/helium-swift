@@ -180,7 +180,7 @@ struct HeliumPaywallDiagnosticView: View {
         switch verdict {
         case .passed: return "checkmark.circle.fill"
         case .failed: return "xmark.circle.fill"
-        case .checkedByServer: return "circle.dotted"
+        case .unknown, .checkedByServer: return "circle.dotted"
         }
     }
 
@@ -188,7 +188,7 @@ struct HeliumPaywallDiagnosticView: View {
         switch verdict {
         case .passed: return .green
         case .failed: return .red
-        case .checkedByServer: return .secondary
+        case .unknown, .checkedByServer: return .secondary
         }
     }
 
@@ -364,6 +364,11 @@ struct HeliumPaywallDiagnosticView: View {
             Text("Reason code: \(content.reasonCode)")
                 .font(.caption2.monospaced())
                 .foregroundColor(.secondary)
+            if let code = content.serverReasonCode {
+                Text("Server reason code: \(code)")
+                    .font(.caption2.monospaced())
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 28)

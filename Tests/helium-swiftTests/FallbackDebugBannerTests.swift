@@ -75,7 +75,7 @@ final class FallbackDebugBannerTests: XCTestCase {
 
     func testSubtitleLeadsWithTheServerReasonHeadline() {
         XCTAssertEqual(
-            FallbackDebugBanner.subtitle(banditReason: BanditReasonPresentationMapperTests.paddleGeoSentence),
+            FallbackDebugBanner.subtitle(banditReason: "paddle_ip_country_not_us"),
             "Paddle needs a US buyer · tap for details"
         )
     }

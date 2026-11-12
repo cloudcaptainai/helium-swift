@@ -10,6 +10,7 @@ struct DiagnosticCheck: Equatable {
         case passed
         case failed
         case checkedByServer
+        case unknown
     }
 
     let label: String

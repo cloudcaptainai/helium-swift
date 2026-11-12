@@ -18,7 +18,7 @@ struct DiagnosticReportMapper {
         return """
         Helium paywall diagnostic
         trigger: \(escapingLineBreaks(in: trigger))
-        reason: \(content.reasonCode) (\(content.category.reportName))
+        reason: \(content.reasonCode) (\(content.category.reportName))\(content.serverReasonCode.map { " [server: \(escapingLineBreaks(in: $0))]" } ?? "")
         sdk: helium-swift \(sdkVersion)
         \(escapingLineBreaks(in: content.title)) — \(escapingLineBreaks(in: explanation))
         """

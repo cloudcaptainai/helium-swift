@@ -261,35 +261,23 @@ struct DiagnosticContentMapper {
     }
 
     private func triggerHasNoPaywall(_ code: String, _ context: DiagnosticContext) -> DiagnosticContent {
-        if let banditReason = context.banditReason {
-            let presentation = BanditReasonPresentationMapper().map(
-                banditReason,
-                countrySignals: context.countrySignals
-            )
-            return DiagnosticContent(
-                category: .setup,
-                title: presentation.title,
-                body: presentation.fix ?? banditReason,
-                usersWillSee: "This user sees no paywall. Other users may receive one depending on "
-                    + "targeting and eligibility. Consider adding a fallback paywall.",
-                usersWillSeeLink: UsersWillSee.fallbackGuideLink,
-                cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
-                reasonCode: code,
-                fix: presentation.fix,
-                detail: presentation.fix == nil ? nil : banditReason,
-                checks: presentation.checks
-            )
-        }
-
+        let presentation = BanditReasonPresentationMapper().map(
+            context.banditReasonCode,
+            countrySignals: context.countrySignals
+        )
         return DiagnosticContent(
             category: .setup,
-            title: "No paywall is connected to this trigger",
-            body: "Could not find a paywall for the trigger \"\(context.trigger)\". Verify the trigger "
-                + "is in a workflow. Changes to a workflow can take a few minutes to be reflected here.",
-            usersWillSee: UsersWillSee.seesNothingConsiderFallback,
+            title: presentation.title,
+            body: presentation.fix ?? context.banditReason ?? "No server explanation was provided.",
+            usersWillSee: "This user sees no paywall. Other users may receive one depending on "
+                + "targeting and eligibility. Consider adding a fallback paywall.",
             usersWillSeeLink: UsersWillSee.fallbackGuideLink,
             cta: .copyUrl(label: "Copy Workflows Link", url: Url.workflows),
-            reasonCode: code
+            reasonCode: code,
+            serverReasonCode: context.banditReasonCode ?? "(missing)",
+            fix: presentation.fix,
+            detail: presentation.fix == nil ? nil : context.banditReason,
+            checks: presentation.checks
         )
     }
 

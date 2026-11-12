@@ -280,6 +280,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
             context: DiagnosticContext(
                 trigger: trigger,
                 banditReason: sentence,
+                banditReasonCode: "paddle_store_country_not_us",
                 countrySignals: CountrySignals(deviceRegion: "US", storeCountry: "GB")
             )
         )
@@ -288,7 +289,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertEqual(content.fix, "Target this paywall at a US audience, or add a rule for users outside the US.")
         XCTAssertEqual(content.body, content.fix)
         XCTAssertEqual(content.detail, sentence)
-        XCTAssertEqual(content.checks.map(\.verdict), [.passed, .failed, .checkedByServer])
+        XCTAssertEqual(content.checks.map(\.verdict), [.unknown, .failed, .unknown])
         XCTAssertEqual(content.category, .setup)
         XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
         XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
@@ -323,14 +324,33 @@ final class DiagnosticContentMapperTests: XCTestCase {
         }
     }
 
+    func testProductionCodeWithoutMessageHasFixAndRawCode() {
+        for code in BanditReasonPresentationMapper.presentations.keys {
+            let content = mapper.mapUnavailable(.triggerHasNoPaywall, context: DiagnosticContext(trigger: trigger, banditReasonCode: code))
+            XCTAssertNotNil(content.fix, code)
+            XCTAssertNil(content.detail, code)
+            XCTAssertEqual(content.serverReasonCode, code)
+        }
+    }
+
+    func testUnknownCodeAndLegacyMessageRemainVisibleWithoutClassification() {
+        for code in [nil, "", "new_server_code"] as [String?] {
+            let content = mapper.mapUnavailable(.triggerHasNoPaywall, context: DiagnosticContext(trigger: trigger, banditReason: "Apple Pay California", banditReasonCode: code))
+            XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
+            XCTAssertEqual(content.body, "Apple Pay California")
+            XCTAssertNil(content.fix)
+            XCTAssertEqual(content.serverReasonCode, code ?? "(missing)")
+        }
+    }
+
     func testTriggerWithoutPaywallKeepsExistingContentWhenBanditReasonIsAbsent() {
         let content = content(for: .triggerHasNoPaywall)
 
-        XCTAssertEqual(content.title, "No paywall is connected to this trigger")
-        XCTAssertTrue(content.body.contains("Verify the trigger is in a workflow"))
+        XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
+        XCTAssertEqual(content.body, "No server explanation was provided.")
         XCTAssertEqual(
             content.usersWillSee,
-            "Users hitting this trigger see nothing. Consider adding a fallback paywall."
+            "This user sees no paywall. Other users may receive one depending on targeting and eligibility. Consider adding a fallback paywall."
         )
     }
 

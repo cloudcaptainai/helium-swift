@@ -59,7 +59,7 @@ struct FallbackDebugBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Fallback Paywall")
                     .font(.system(size: 15, weight: .semibold))
-                Text(Self.subtitle(banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger)))
+                Text(Self.subtitle(banditReason: HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger(trigger)))
                     .font(.system(size: 12, weight: .regular))
                     .opacity(0.9)
             }

@@ -62,11 +62,12 @@ final class DiagnosticReportMapperTests: XCTestCase {
         let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
         let content = contentMapper.mapUnavailable(
             .triggerHasNoPaywall,
-            context: DiagnosticContext(trigger: "checkout", banditReason: sentence)
+            context: DiagnosticContext(trigger: "checkout", banditReason: sentence, banditReasonCode: "paddle_ip_country_not_us")
         )
 
         let report = mapper.map(content, trigger: "checkout", sdkVersion: "9.9.9")
 
+        XCTAssertTrue(report.contains("[server: paddle_ip_country_not_us]"))
         XCTAssertEqual(report.components(separatedBy: "\n").count, 5)
         XCTAssertTrue(report.hasSuffix(
             "Paddle needs a US buyer — Target this paywall at a US audience, or add a rule for users "

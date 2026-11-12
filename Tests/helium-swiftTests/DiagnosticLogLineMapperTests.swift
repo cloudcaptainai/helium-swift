@@ -21,7 +21,7 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         let line = logLine(for: .triggerHasNoPaywall)
 
         XCTAssertTrue(line.hasPrefix("[triggerHasNoPaywall] "))
-        XCTAssertTrue(line.contains("No paywall is connected to this trigger."))
+        XCTAssertTrue(line.contains("No paywall was resolved for this trigger."))
         XCTAssertTrue(line.hasSuffix("https://app.tryhelium.com/workflows"))
     }
 
@@ -29,14 +29,21 @@ final class DiagnosticLogLineMapperTests: XCTestCase {
         let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
         let content = contentMapper.mapUnavailable(
             .triggerHasNoPaywall,
-            context: DiagnosticContext(trigger: "onboarding_end", banditReason: sentence)
+            context: DiagnosticContext(trigger: "onboarding_end", banditReason: sentence, banditReasonCode: "paddle_ip_country_not_us")
         )
 
         XCTAssertEqual(
             mapper.map(content),
             "[triggerHasNoPaywall] Paddle needs a US buyer. Target this paywall at a US audience, or add "
-                + "a rule for users outside the US. \(sentence) https://app.tryhelium.com/workflows"
+                + "a rule for users outside the US. [server: paddle_ip_country_not_us] \(sentence) https://app.tryhelium.com/workflows"
         )
+    }
+
+    func testUnknownRawCodeIsInLogAndReportEvenWithoutMessage() {
+        let content = contentMapper.mapUnavailable(.triggerHasNoPaywall, context: DiagnosticContext(trigger: "checkout", banditReasonCode: "new_server_code"))
+        XCTAssertTrue(mapper.map(content).contains("[server: new_server_code]"))
+        XCTAssertTrue(DiagnosticReportMapper().map(content, trigger: "checkout", sdkVersion: "1").contains("[server: new_server_code]"))
+        XCTAssertNil(content.fix)
     }
 
     func testOpenUrlCtaCarriesTheUrl() {

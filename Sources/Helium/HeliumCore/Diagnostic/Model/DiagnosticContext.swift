@@ -21,6 +21,7 @@ struct DiagnosticContext {
 
     /// Bandit's optional explanation for why this trigger did not resolve to a paywall.
     let banditReason: String?
+    let banditReasonCode: String?
 
     let fetchFailure: HeliumFetchFailureKind?
 
@@ -31,6 +32,7 @@ struct DiagnosticContext {
         paywallId: String? = nil,
         webCheckoutProcessors: WebCheckoutProcessors = [],
         banditReason: String? = nil,
+        banditReasonCode: String? = nil,
         fetchFailure: HeliumFetchFailureKind? = nil,
         countrySignals: CountrySignals = CountrySignals()
     ) {
@@ -38,6 +40,7 @@ struct DiagnosticContext {
         self.paywallId = paywallId
         self.webCheckoutProcessors = webCheckoutProcessors
         self.banditReason = banditReason
+        self.banditReasonCode = banditReasonCode
         self.fetchFailure = fetchFailure
         self.countrySignals = countrySignals
     }
@@ -50,6 +53,7 @@ struct DiagnosticContext {
             paywallId: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallUUID,
             webCheckoutProcessors: Helium.config.webCheckoutProcessors,
             banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger),
+            banditReasonCode: HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger(trigger),
             fetchFailure: HeliumFetchedConfigManager.shared.lastFetchFailure,
             countrySignals: CountrySignals(
                 deviceRegion: Locale.current.regionCode,
