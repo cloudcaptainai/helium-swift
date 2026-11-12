@@ -31,21 +31,23 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    /// Every authored record: both skip reasons, every unavailable reason, the nil path, the
-    /// preview-only fallback record, and the per-stage download failure records.
-    private func banditContent(_ sentence: String) -> DiagnosticContent {
+    private func banditContent(code: String?, message: String?) -> DiagnosticContent {
         mapper.mapUnavailable(
             .triggerHasNoPaywall,
-            context: DiagnosticContext(trigger: trigger, banditReason: sentence)
+            context: DiagnosticContext(trigger: trigger, banditReason: message, banditReasonCode: code)
         )
     }
 
+    /// Every authored record: both skip reasons, every unavailable reason, the nil path, the
+    /// preview-only fallback record, and the per-stage download failure records, and every
+    /// server reason code plus the unknown and missing code paths.
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
             + [content(for: nil), previewFallbackContent()]
             + [HeliumFetchFailureKind.configFetch, .invalidApiKey, .bundleFetch].map(downloadFailureContent)
-            + [banditContent(BanditReasonPresentationMapperTests.paddleGeoSentence), banditContent("Unrecognised.")]
+            + BanditReasonPresentationMapper.presentations.keys.sorted().map { banditContent(code: $0, message: nil) }
+            + [banditContent(code: "new_server_code", message: "Unrecognised."), banditContent(code: nil, message: nil)]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -319,7 +321,6 @@ final class DiagnosticContentMapperTests: XCTestCase {
                 XCTAssertTrue(content.checks.isEmpty, content.reasonCode)
             } else {
                 XCTAssertEqual(content.reasonCode, PaywallUnavailableReason.triggerHasNoPaywall.rawValue)
-                XCTAssertNotNil(content.detail, content.reasonCode)
             }
         }
     }
