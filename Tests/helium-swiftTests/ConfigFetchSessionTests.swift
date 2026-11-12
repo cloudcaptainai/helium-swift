@@ -26,27 +26,6 @@ final class ConfigFetchSessionTests: XCTestCase {
         XCTAssertEqual(server.requestCount, 2)
         XCTAssertEqual(server.connectionCount, 1)
     }
-
-    func testCancelledConfigFetchNeverReachesTheNetwork() async throws {
-        let server = try await LoopbackHTTPServer.start()
-        defer { server.stop() }
-
-        let cancelledFetch = await Task { () -> Result<(HeliumFetchedConfig?, JSON?), Error> in
-            withUnsafeCurrentTask { $0?.cancel() }
-            do {
-                return .success(try await fetchEndpoint(endpoint: server.url, params: ["apiKey": "test_api_key"]))
-            } catch {
-                return .failure(error)
-            }
-        }.value
-        XCTAssertThrowsError(try cancelledFetch.get())
-
-        _ = try? await fetchEndpoint(endpoint: server.url, params: ["apiKey": "test_api_key"])
-        try await Task.sleep(nanoseconds: 500_000_000)
-
-        XCTAssertEqual(server.requestCount, 1)
-        XCTAssertEqual(server.connectionCount, 1)
-    }
 }
 
 private final class LoopbackHTTPServer: @unchecked Sendable {

@@ -190,7 +190,6 @@ func fetchEndpoint(
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
     
-    try Task.checkCancellation()
     let (data, response) = try await configFetchSession.data(for: request)
     
     guard let httpResponse = response as? HTTPURLResponse else {
