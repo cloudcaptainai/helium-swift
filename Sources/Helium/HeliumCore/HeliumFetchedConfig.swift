@@ -163,6 +163,12 @@ class NetworkReachability {
     }
 }
 
+private let configFetchSession: URLSession = {
+    let config = URLSessionConfiguration.default
+    config.httpMaximumConnectionsPerHost = 5
+    return URLSession(configuration: config)
+}()
+
 func fetchEndpoint(
     endpoint: String,
     params: [String: Any],
@@ -172,10 +178,6 @@ func fetchEndpoint(
     guard let url = URL(string: urlString) else {
         throw URLError(.badURL)
     }
-    
-    let config = URLSessionConfiguration.default
-    config.httpMaximumConnectionsPerHost = 5
-    let session = URLSession(configuration: config)
     
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
@@ -188,7 +190,8 @@ func fetchEndpoint(
     let jsonData = try JSONSerialization.data(withJSONObject: params, options: [])
     request.httpBody = jsonData
     
-    let (data, response) = try await session.data(for: request)
+    try Task.checkCancellation()
+    let (data, response) = try await configFetchSession.data(for: request)
     
     guard let httpResponse = response as? HTTPURLResponse else {
         throw ConfigFetchError(statusCode: nil, serverMessage: nil, underlyingError: URLError(.badServerResponse))
