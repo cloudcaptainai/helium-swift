@@ -71,6 +71,13 @@ extension ProductEvent {
 
 // MARK: - Lifecycle events
 
+/// Only `triggerHasNoPaywall` means Bandit chose not to serve the trigger. Every other reason is
+/// SDK-side, and Bandit's code would mislabel it.
+private func banditFailureClass(trigger: String, reason: PaywallUnavailableReason?) -> String? {
+    guard reason == .triggerHasNoPaywall else { return nil }
+    return HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger(trigger)
+}
+
 extension PaywallOpenEvent {
     public var analyticsEventName: String { "paywallOpen" }
 
@@ -80,6 +87,7 @@ extension PaywallOpenEvent {
         payload["loadTimeTakenMS"] = loadTimeTakenMS
         payload["loadingBudgetMS"] = loadingBudgetMS
         payload["paywallUnavailableReason"] = paywallUnavailableReason?.rawValue
+        payload["failureClass"] = banditFailureClass(trigger: triggerName, reason: paywallUnavailableReason)
         payload["newWindowCreated"] = newWindowCreated
         return payload
     }
@@ -92,6 +100,7 @@ extension PaywallOpenFailedEvent {
         var payload = contextAnalyticsPayload()
         payload["errorDescription"] = error
         payload["paywallUnavailableReason"] = paywallUnavailableReason?.rawValue
+        payload["failureClass"] = banditFailureClass(trigger: triggerName, reason: paywallUnavailableReason)
         payload["loadTimeTakenMS"] = loadTimeTakenMS
         payload["loadingBudgetMS"] = loadingBudgetMS
         payload["newWindowCreated"] = newWindowCreated

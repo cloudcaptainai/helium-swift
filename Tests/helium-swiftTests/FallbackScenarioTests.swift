@@ -41,8 +41,11 @@ final class FallbackScenarioTests: XCTestCase {
     func testBanditReasonIsResolvedForTheCurrentTrigger() {
         var config = makeTestConfig(triggers: [:])
         config.triggerToPaywallReasons = [
-            "checkout": "  App-to-Web paywalls are not available in this region.  ",
-            "other": "A different reason",
+            "checkout": BanditTriggerReason(
+                code: " paddle_geo_blocked ",
+                message: "  App-to-Web paywalls are not available in this region.  "
+            ),
+            "other": BanditTriggerReason(code: "no_workflow_connected", message: "A different reason"),
         ]
         injectConfig(config)
 
@@ -50,14 +53,19 @@ final class FallbackScenarioTests: XCTestCase {
             HeliumFetchedConfigManager.shared.getBanditReasonForTrigger("checkout"),
             "App-to-Web paywalls are not available in this region."
         )
+        XCTAssertEqual(
+            HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger("checkout"),
+            "paddle_geo_blocked"
+        )
     }
 
     func testBlankBanditReasonIsIgnored() {
         var config = makeTestConfig(triggers: [:])
-        config.triggerToPaywallReasons = ["checkout": "  \n "]
+        config.triggerToPaywallReasons = ["checkout": BanditTriggerReason(code: " ", message: "  \n ")]
         injectConfig(config)
 
         XCTAssertNil(HeliumFetchedConfigManager.shared.getBanditReasonForTrigger("checkout"))
+        XCTAssertNil(HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger("checkout"))
     }
 
     func testNoProductsIOSReturnsFallbackReason() {

@@ -114,12 +114,50 @@ struct EndpointCallTelemetry {
 
 // MARK: - Paddle prefetch
 
+struct WebSecondTryConfigDecodeFailed: HeliumObservabilityEvent {
+    let codingPath: String
+    let errorType: String
+    let errorDescription: String
+
+    init(error: Error, defaultCodingPath: [CodingKey]) {
+        let path: [CodingKey]
+        switch error {
+        case DecodingError.typeMismatch(_, let context):
+            path = context.codingPath
+            errorType = "typeMismatch"
+        case DecodingError.valueNotFound(_, let context):
+            path = context.codingPath
+            errorType = "valueNotFound"
+        case DecodingError.keyNotFound(let missingKey, let context):
+            path = context.codingPath + [missingKey]
+            errorType = "keyNotFound"
+        case DecodingError.dataCorrupted(let context):
+            path = context.codingPath
+            errorType = "dataCorrupted"
+        default:
+            path = defaultCodingPath
+            errorType = String(describing: Swift.type(of: error))
+        }
+        codingPath = path.map(\.stringValue).joined(separator: ".")
+        errorDescription = String(describing: error)
+    }
+
+    var name: String { "web_second_try_config_decode_failed" }
+    var tags: Set<HeliumObservabilityTag> { [.config, .webCheckout] }
+    var properties: [String: Any] {
+        ["codingPath": codingPath, "errorType": errorType, "errorDescription": truncatedForObservability(errorDescription) ?? ""]
+    }
+}
+
 struct PaddlePrefetchStarted: HeliumObservabilityEvent {
     let priceIds: [String]
+    var isSecondTry = false
     var name: String { "paddle_prefetch_started" }
     var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
     var properties: [String: Any] {
-        ["priceIds": priceIds, "priceCount": priceIds.count]
+        var p: [String: Any] = ["priceIds": priceIds, "priceCount": priceIds.count]
+        if isSecondTry { p["isSecondTry"] = true }
+        return p
     }
 }
 
@@ -128,6 +166,7 @@ struct PaddlePrefetchBanditCompleted: HeliumObservabilityEvent {
     let discountId: String?
     let endpointCall: EndpointCallTelemetry
     let alreadyEntitledCode: String?
+    var isSecondTry = false
 
     var name: String { "paddle_prefetch_bandit_completed" }
     var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
@@ -136,6 +175,7 @@ struct PaddlePrefetchBanditCompleted: HeliumObservabilityEvent {
         p["priceId"] = priceId
         if let discountId { p["discountId"] = discountId }
         if let alreadyEntitledCode { p["alreadyEntitledCode"] = alreadyEntitledCode }
+        if isSecondTry { p["isSecondTry"] = true }
         return p
     }
 }
@@ -145,6 +185,7 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
     let transactionId: String?
     let endpointCall: EndpointCallTelemetry
     let outcome: PaddlePrefetchOutcomeKind
+    var isSecondTry = false
 
     var name: String { "paddle_prefetch_bff_completed" }
     var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
@@ -153,6 +194,7 @@ struct PaddlePrefetchBffCompleted: HeliumObservabilityEvent {
         p["outcome"] = outcome.rawValue
         p["priceId"] = priceId
         if let transactionId { p["transactionId"] = transactionId }
+        if isSecondTry { p["isSecondTry"] = true }
         return p
     }
 }
@@ -173,6 +215,7 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
     let caConsentModalEnabled: Bool?
     // "true"/"false" as Paddle sent it, or nil when Paddle omitted the field.
     let consentRequired: String?
+    var isSecondTry = false
 
     var name: String { "paddle_prefetch_outcome_finalized" }
     var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
@@ -189,6 +232,7 @@ struct PaddlePrefetchOutcomeFinalized: HeliumObservabilityEvent {
         if let californiaDetected { p["californiaDetected"] = californiaDetected }
         if let caConsentModalEnabled { p["caConsentModalEnabled"] = caConsentModalEnabled }
         if let consentRequired { p["consentRequired"] = consentRequired }
+        if isSecondTry { p["isSecondTry"] = true }
         return p
     }
 }

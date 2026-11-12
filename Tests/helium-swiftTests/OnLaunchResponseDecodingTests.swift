@@ -4,6 +4,18 @@ import XCTest
 /// Locks the JSON contract for on-launch response fields the SDK depends on.
 final class OnLaunchResponseDecodingTests: XCTestCase {
 
+    func testMalformedWebSecondTryDoesNotInvalidateOnLaunch() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "triggerToPaywalls": ["checkout": [
+                "paywallID": 1, "paywallTemplateName": "A", "resolvedConfig": [String: Any](),
+                "webSecondTryConfig": ["paywallUUID": 1],
+            ]],
+        ])
+        let config = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+        XCTAssertNotNil(config.triggerToPaywalls["checkout"])
+        XCTAssertNil(config.triggerToPaywalls["checkout"]?.webSecondTryConfig)
+    }
+
     private func makeOnLaunchJSON(extras: [String: Any] = [:]) throws -> Data {
         var dict: [String: Any] = [
             "triggerToPaywalls": [:],
@@ -40,7 +52,10 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
     func testTriggerToPaywallReasonsDecodeFromJSON() throws {
         let json = try makeOnLaunchJSON(extras: [
             "triggerToPaywallReasons": [
-                "checkout": "App-to-Web paywalls are not available in this region.",
+                "checkout": [
+                    "code": "paddle_geo_blocked",
+                    "message": "App-to-Web paywalls are not available in this region.",
+                ],
             ],
         ])
 
@@ -48,8 +63,28 @@ final class OnLaunchResponseDecodingTests: XCTestCase {
 
         XCTAssertEqual(
             decoded.triggerToPaywallReasons?["checkout"],
-            "App-to-Web paywalls are not available in this region."
+            BanditTriggerReason(
+                code: "paddle_geo_blocked",
+                message: "App-to-Web paywalls are not available in this region."
+            )
         )
+    }
+
+    func testUnexpectedTriggerToPaywallReasonShapesStillDecodeConfig() throws {
+        let json = try makeOnLaunchJSON(extras: [
+            "triggerToPaywallReasons": [
+                "sentence_only": "App-to-Web paywalls are not available in this region.",
+                "wrong_types": ["code": 42, "message": false],
+            ],
+        ])
+
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: json)
+
+        XCTAssertEqual(
+            decoded.triggerToPaywallReasons?["sentence_only"],
+            BanditTriggerReason(message: "App-to-Web paywalls are not available in this region.")
+        )
+        XCTAssertEqual(decoded.triggerToPaywallReasons?["wrong_types"], BanditTriggerReason())
     }
 
     /// Existing Bandit responses and fallback bundles omit the field and must keep decoding.

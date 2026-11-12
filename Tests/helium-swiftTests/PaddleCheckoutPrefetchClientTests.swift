@@ -9,6 +9,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
     override func setUp() {
         super.setUp()
 
+        URLProtocol.registerClass(MockURLProtocol.self)
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
         session = URLSession(configuration: config)
@@ -21,6 +22,7 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
 
     override func tearDown() {
         MockURLProtocol.reset()
+        URLProtocol.unregisterClass(MockURLProtocol.self)
         Helium.lastApiKeyUsed = nil
         super.tearDown()
     }
@@ -53,6 +55,165 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(result.paddleCustomerId, "ctm_01k77z6m9t3rs0aw23h9gpv61e")
         XCTAssertTrue(result.isKnownCustomer)
         XCTAssertEqual(result.requestId, "req_test_xyz")
+    }
+
+    func testCreatePaddleTransactionForPaywall_extractsBanditTransactionDataObject() throws {
+        let body = #"{"banditTransactionData":{"planChange":{"type":"upgrade"},"enabled":true}}"#
+        let transactionData = try XCTUnwrap(
+            HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8))
+        )
+        let context = try XCTUnwrap(JSONSerialization.jsonObject(with: transactionData) as? [String: Any])
+        let planChange = try XCTUnwrap(context["planChange"] as? [String: Any])
+
+        XCTAssertEqual(planChange["type"] as? String, "upgrade")
+        XCTAssertEqual(context["enabled"] as? Bool, true)
+    }
+
+    func testCreatePaddleTransactionForPaywall_ignoresNonObjectBanditTransactionData() {
+        let bodies = [
+            #"{}"#,
+            #"{"banditTransactionData":null}"#,
+            #"{"banditTransactionData":[]}"#,
+            #"{"banditTransactionData":"upgrade"}"#,
+            "garbage",
+        ]
+
+        for body in bodies {
+            XCTAssertNil(
+                HeliumPaymentAPIClient.extractBanditTransactionData(from: Data(body.utf8)),
+                "Expected no context for \(body)"
+            )
+        }
+    }
+
+    func testCreatePaddleTransactionForPaywall_decodes2xxWhenBanditTransactionDataIsNotAnObject() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_context",
+            "isKnownCustomer": false,
+            "requestId": "req_context",
+            "banditTransactionData": ["not", "an object"]
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        let result = try await client.createPaddleTransactionForPaywall(priceId: "pri_context")
+
+        XCTAssertEqual(result.transactionId, "txn_context")
+        XCTAssertNil(result.banditTransactionData)
+    }
+
+    func testPaymentAPICallsIncludeApplicationInfo() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let path = request.url?.path ?? ""
+            let responseBody: [String: Any]
+            if path.hasSuffix("/check-entitlement") {
+                responseBody = ["hasActiveEntitlement": false, "subscriptions": []]
+            } else if path.hasSuffix("/update-customer-metadata") {
+                responseBody = ["updated": true]
+            } else if path.hasSuffix("/create-portal-session") {
+                responseBody = ["portalUrl": "https://example.com/portal"]
+            } else {
+                responseBody = [
+                    "transactionId": "txn_metadata",
+                    "isKnownCustomer": false,
+                    "requestId": "req_metadata",
+                ]
+            }
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, try JSONSerialization.data(withJSONObject: responseBody))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(priceId: "pri_metadata")
+
+        let providers: [PaymentProviderConfig] = [.paddle, .stripe]
+        var sources: [HeliumPaymentEntitlementsSource] = []
+        defer { sources.forEach { $0.clearEntitlements() } }
+        for provider in providers {
+            let source = HeliumPaymentEntitlementsSource(provider: provider)
+            sources.append(source)
+            await source.refreshEntitlementsJoiningInFlightFetch()
+
+            let manager = ExternalWebCheckoutManager(provider: provider, entitlementsSource: source)
+            let updated = try await manager.updateCustomerMetadata()
+            XCTAssertTrue(updated)
+            let portalURL = try await manager.createPortalSession()
+            XCTAssertEqual(portalURL.absoluteString, "https://example.com/portal")
+        }
+
+        let requests = MockURLProtocol.capturedRequests
+        let expectedPathSuffixes = [
+            "paddle/create-transaction-for-paywall",
+            "paddle/check-entitlement",
+            "paddle/update-customer-metadata",
+            "paddle/create-portal-session",
+            "stripe/check-entitlement",
+            "stripe/update-customer-metadata",
+            "stripe/create-portal-session",
+        ]
+        let requestPathSuffixes = requests.compactMap { request in
+            request.url?.path.split(separator: "/").suffix(2).joined(separator: "/")
+        }
+        XCTAssertEqual(requestPathSuffixes.count, expectedPathSuffixes.count)
+        XCTAssertEqual(Set(requestPathSuffixes), Set(expectedPathSuffixes))
+        for request in requests {
+            try assertApplicationInfo(in: request)
+        }
+        let paddleRequest = try XCTUnwrap(
+            requests.first { $0.url?.path.hasSuffix("paddle/create-transaction-for-paywall") == true }
+        )
+        let paddleBody = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: XCTUnwrap(paddleRequest.httpBody)) as? [String: Any]
+        )
+        XCTAssertNil(paddleBody["paywallInfo"])
+    }
+
+    private func assertApplicationInfo(in request: URLRequest) throws {
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let applicationInfo = try XCTUnwrap(body["applicationInfo"] as? [String: Any])
+        XCTAssertEqual(applicationInfo["platform"] as? String, "ios")
+        XCTAssertEqual(applicationInfo["heliumSdk"] as? String, HeliumSdkConfig.shared.heliumSdk)
+        XCTAssertEqual(applicationInfo["heliumSdkVersion"] as? String, BuildConstants.version)
+        XCTAssertEqual(
+            applicationInfo["heliumWrapperSdkVersion"] as? String,
+            HeliumSdkConfig.shared.heliumWrapperSdkVersion
+        )
+    }
+
+    func testCreatePaddleTransactionForPaywall_includesPaywallInfoInRequestBody() async throws {
+        let bodyJSON = """
+        {
+            "transactionId": "txn_paywall_info",
+            "isKnownCustomer": false,
+            "requestId": "req_paywall_info"
+        }
+        """
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(bodyJSON.utf8))
+        }
+
+        _ = try await client.createPaddleTransactionForPaywall(
+            priceId: "pri_paywall_info",
+            paywallUUID: "paywall-uuid",
+            triggerName: "summer-offer"
+        )
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first)
+        let requestBody = try XCTUnwrap(request.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        let paywallInfo = try XCTUnwrap(body["paywallInfo"] as? [String: Any])
+        XCTAssertEqual(paywallInfo["paywallUUID"] as? String, "paywall-uuid")
+        XCTAssertEqual(paywallInfo["triggerName"] as? String, "summer-offer")
     }
 
     func testCreatePaddleTransactionForPaywall_paddleCustomerIdOptionalForUnknownCustomer() async throws {

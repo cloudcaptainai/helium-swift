@@ -57,9 +57,12 @@ class WebApplePayAvailability {
     /// The value sent to targeting.
     func readiness() -> WebApplePayReadiness {
         guard Self.isMeasurementEnabled else { return .unknown(.notMeasured) }
+        guard let canMakePayments = ApplePayHelper.shared.canMakePaymentsIfLoaded() else {
+            return .unknown(.deviceAvailabilityNotLoaded)
+        }
         // Apple Pay being unavailable on the device outranks any browser measurement, including
         // one taken before restrictions or an iCloud sign-out removed it.
-        guard ApplePayHelper.shared.canMakePayments() else { return .unknown(.deviceCannotPay) }
+        guard canMakePayments else { return .unknown(.deviceCannotPay) }
         return cachedReadiness
     }
 
@@ -70,11 +73,27 @@ class WebApplePayAvailability {
     /// costs the budget once rather than on every launch.
     func prepareForRequest() async {
         guard Self.isMeasurementEnabled else { return }
+        _ = await withTimeoutAbandoningOperation(
+            milliseconds: UInt64(ApplePayHelper.warmUpWaitBudget * 1_000)
+        ) {
+            await ApplePayHelper.shared.warmUp()
+        }
         if await deferProbeIfInBackground() { return }
+        guard ApplePayHelper.shared.canMakePaymentsIfLoaded() != nil else {
+            // The request has already spent its device-readiness wait budget.
+            Task { await self.startProbeAfterWarmUp() }
+            return
+        }
         let waitsForMeasurement = needsMeasurementBeforeLaunch()
         let started = startProbe()
         guard waitsForMeasurement, started else { return }
         await awaitMeasurement(upTo: Self.launchWaitBudget)
+    }
+
+    private func startProbeAfterWarmUp() async {
+        await ApplePayHelper.shared.warmUp()
+        if await deferProbeIfInBackground() { return }
+        startProbe()
     }
 
     /// Reports whether the launch is in the background, in which case the probe is deferred to
@@ -102,7 +121,7 @@ class WebApplePayAvailability {
             ) { [weak self] _ in
                 guard let self else { return }
                 self.removePendingActiveObserver()
-                self.startProbe()
+                Task { await self.startProbeAfterWarmUp() }
             }
         }
     }
@@ -240,7 +259,7 @@ class WebApplePayAvailability {
     /// reported as not ready, so the value only ever reflects a real measurement.
     func shouldProbe() -> Bool {
         guard Self.isMeasurementEnabled else { return false }
-        guard ApplePayHelper.shared.canMakePayments() else { return false }
+        guard ApplePayHelper.shared.canMakePaymentsIfLoaded() == true else { return false }
         return !probeAttempted
     }
 

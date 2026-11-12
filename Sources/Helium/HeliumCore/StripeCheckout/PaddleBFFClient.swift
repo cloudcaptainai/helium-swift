@@ -15,6 +15,14 @@ public struct PaddleTransactionCheckoutResult {
     public let rawBody: Data
     public let checkoutId: String
     public let transactionId: String
+    public let sandbox: Bool
+
+    init(rawBody: Data, checkoutId: String, transactionId: String, sandbox: Bool = false) {
+        self.rawBody = rawBody
+        self.checkoutId = checkoutId
+        self.transactionId = transactionId
+        self.sandbox = sandbox
+    }
 }
 
 final class PaddleBFFClient {
@@ -75,20 +83,25 @@ final class PaddleBFFClient {
         return PaddleTransactionCheckoutResult(
             rawBody: data,
             checkoutId: envelope.data.id,
-            transactionId: envelope.data.transactionId
+            transactionId: envelope.data.transactionId,
+            sandbox: Self.isSandboxClientToken(paddleClientToken)
         )
     }
 
     // MARK: - URL/source-page helpers
 
-    private func paddleCheckoutBaseURL(for clientToken: String) -> String {
+    static func isSandboxClientToken(_ clientToken: String) -> Bool {
         return clientToken.hasPrefix("test_")
+    }
+
+    private func paddleCheckoutBaseURL(for clientToken: String) -> String {
+        return Self.isSandboxClientToken(clientToken)
             ? Self.sandboxCheckoutBaseURL
             : Self.prodCheckoutBaseURL
     }
 
     private func paddleSourcePage(for clientToken: String, iosBundleId: String?) -> String {
-        let origin = clientToken.hasPrefix("test_")
+        let origin = Self.isSandboxClientToken(clientToken)
             ? Self.sandboxSourcePageOrigin
             : Self.prodSourcePageOrigin
         guard let trimmed = iosBundleId?.trimmingCharacters(in: .whitespacesAndNewlines),

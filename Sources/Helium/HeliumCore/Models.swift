@@ -10,6 +10,18 @@ import UIKit
 import SwiftUI
 
 extension KeyedDecodingContainer {
+    func decodeIfPresent(_ type: WebSecondTryConfig.Type, forKey key: Key) throws -> WebSecondTryConfig? {
+        guard contains(key) else { return nil }
+        do {
+            if try decodeNil(forKey: key) { return nil }
+            return try decode(type, forKey: key)
+        } catch {
+            HeliumObservabilityManager.shared.track(WebSecondTryConfigDecodeFailed(
+                error: error, defaultCodingPath: codingPath + [key]
+            ), scope: nil)
+            return nil
+        }
+    }
     /// A style this SDK version does not recognize is treated as unset. Synthesized decoding would
     /// otherwise throw, and this field decodes alongside `resolvedConfig`, so one bad value would
     /// fail the entire config and take every trigger down with it rather than just the animation.
@@ -24,6 +36,49 @@ extension KeyedDecodingContainer {
     }
 }
 
+struct WebSecondTryConfig: Codable {
+    let paywallUUID: String
+    let paywallID: Int?
+    let paywallTemplateName: String?
+    let paywallVersionUUID: String
+    let bundleUrl: String
+    let productsOfferedPaddle: [String]
+    let productsOfferedStripe: [String]
+    let showOn: [String]
+
+    init(paywallUUID: String, paywallID: Int? = nil, paywallTemplateName: String? = nil, paywallVersionUUID: String, bundleUrl: String, productsOfferedPaddle: [String], productsOfferedStripe: [String], showOn: [String]) {
+        self.paywallUUID = paywallUUID
+        self.paywallID = paywallID
+        self.paywallTemplateName = paywallTemplateName
+        self.paywallVersionUUID = paywallVersionUUID
+        self.bundleUrl = bundleUrl
+        self.productsOfferedPaddle = productsOfferedPaddle
+        self.productsOfferedStripe = productsOfferedStripe
+        self.showOn = showOn
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let paywallUUID = try container.decode(String.self, forKey: .paywallUUID)
+        let paywallVersionUUID = try container.decode(String.self, forKey: .paywallVersionUUID)
+        let bundleUrl = try container.decode(String.self, forKey: .bundleUrl)
+        guard !paywallUUID.isEmpty, !paywallVersionUUID.isEmpty,
+              let url = URL(string: bundleUrl), url.scheme != nil, url.host != nil else {
+            throw DecodingError.dataCorruptedError(forKey: .bundleUrl, in: container, debugDescription: "Invalid web second try configuration")
+        }
+        self.init(
+            paywallUUID: paywallUUID,
+            paywallID: try container.decodeIfPresent(Int.self, forKey: .paywallID),
+            paywallTemplateName: try container.decodeIfPresent(String.self, forKey: .paywallTemplateName),
+            paywallVersionUUID: paywallVersionUUID,
+            bundleUrl: bundleUrl,
+            productsOfferedPaddle: try container.decode([String].self, forKey: .productsOfferedPaddle),
+            productsOfferedStripe: try container.decode([String].self, forKey: .productsOfferedStripe),
+            showOn: try container.decode([String].self, forKey: .showOn)
+        )
+    }
+}
+
 public struct HeliumPaywallInfo: Codable {
     var paywallID: Int
     var paywallUUID: String?
@@ -34,6 +89,7 @@ public struct HeliumPaywallInfo: Codable {
     var productsOfferedPaddle: [String]?
     var webProductsOfferedPaddle: [String]?
     var webProductsOfferedStripe: [String]?
+    var webSecondTryConfig: WebSecondTryConfig? = nil
     var resolvedConfig: AnyCodable
     var shouldShow: Bool?
     var fallbackPaywallName: String?
@@ -116,13 +172,43 @@ public struct CanShowPaywallResult {
     public let paywallUnavailableReason: PaywallUnavailableReason?
 }
 
+/// `code` is a stable identifier; `message` is display copy that can change, so never branch on it.
+struct BanditTriggerReason: Codable, Equatable {
+    let code: String?
+    let message: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case message
+    }
+
+    init(code: String? = nil, message: String? = nil) {
+        self.code = code
+        self.message = message
+    }
+
+    /// Never throws, so an unexpected reason shape cannot fail decoding of the whole config.
+    /// A bare string is read as the message.
+    init(from decoder: Decoder) throws {
+        if let message = try? decoder.singleValueContainer().decode(String.self) {
+            self.init(message: message)
+            return
+        }
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            code: try? container?.decodeIfPresent(String.self, forKey: .code),
+            message: try? container?.decodeIfPresent(String.self, forKey: .message)
+        )
+    }
+}
+
 public struct HeliumFetchedConfig: Codable {
     var triggerToPaywalls: [String: HeliumPaywallInfo]
     /// Optional reasons supplied by Bandit when a trigger did not resolve to a paywall.
     ///
     /// This is a sibling map rather than a change to `triggerToPaywalls`, preserving the existing
     /// on-launch contract for older Bandit responses and bundled fallback files.
-    var triggerToPaywallReasons: [String: String]? = nil
+    var triggerToPaywallReasons: [String: BanditTriggerReason]? = nil
     var segmentBrowserWriteKey: String
     var segmentAnalyticsEndpoint: String
     var orgName: String?
