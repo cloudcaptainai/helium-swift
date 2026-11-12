@@ -11,22 +11,30 @@ public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
     public static let shared = HeliumFallbackViewManager()
     static func reset() {
-        shared.loadedConfig = nil
-        shared.loadedConfigJSON = nil
+        shared._loaded.withValue { $0 = LoadedFallbacks(generation: $0.generation + 1) }
     }
 
     /// Inject fallback config for testing purposes only. Accessible via @testable import.
     func injectFallbackConfigForTesting(_ config: HeliumFetchedConfig, json: JSON? = nil) {
-        loadedConfig = config
-        loadedConfigJSON = json
+        _loaded.withValue {
+            $0.config = config
+            $0.json = json
+        }
     }
     
     // **MARK: - Properties**
     private let defaultFallbacksName = "helium-fallbacks"
     static let defaultFallbackTrigger = "hlm_ios_default_flbk"
     
-    private var loadedConfig: HeliumFetchedConfig?
-    private var loadedConfigJSON: JSON?
+    private struct LoadedFallbacks {
+        var config: HeliumFetchedConfig?
+        var json: JSON?
+        var generation = 0
+    }
+
+    @HeliumAtomic private var loaded = LoadedFallbacks()
+    private var loadedConfig: HeliumFetchedConfig? { loaded.config }
+    private var loadedConfigJSON: JSON? { loaded.json }
     
     func setUpFallbackBundle() {
         var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
@@ -45,17 +53,24 @@ public class HeliumFallbackViewManager {
             return
         }
         
+        let generation = loaded.generation
         Task {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
+                let decodedJSON = try? JSON(data: data)
 
-                loadedConfig = decodedConfig
-                if let json = try? JSON(data: data) {
-                    loadedConfigJSON = json
+                let stored = _loaded.withValue { state -> Bool in
+                    guard state.generation == generation else { return false }
+                    state.config = decodedConfig
+                    if let decodedJSON {
+                        state.json = decodedJSON
+                    }
+                    return true
                 }
+                guard stored else { return }
 
-                if let bundles = loadedConfig?.bundles, !bundles.isEmpty {
+                if let bundles = decodedConfig.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
                     let generatedAtDisplay = formatDateForDisplay(decodedConfig.generatedAt)
                     HeliumLogger.log(.info, category: .fallback, "👷 Successfully loaded paywalls from fallbacks file! 🎉", metadata: ["name": fallbackBundleURL.lastPathComponent, "generated at": generatedAtDisplay])
@@ -83,19 +98,17 @@ public class HeliumFallbackViewManager {
                     HeliumLogger.log(.error, category: .fallback, "👷 No bundles found in fallbacks file ‼️⚠️‼️")
                 }
                 
-                let triggersMissingProducts = loadedConfig?.getTriggersWithMissingProducts() ?? []
+                let triggersMissingProducts = decodedConfig.getTriggersWithMissingProducts()
                 if !triggersMissingProducts.isEmpty {
                     HeliumLogger.log(.error, category: .fallback, "👷 Some triggers in your fallbacks file have missing iOS products ‼️⚠️‼️", metadata: ["triggers": triggersMissingProducts.joined(separator: ", ")])
                 }
                 
-                if let config = loadedConfig {
-                    HeliumAnalyticsManager.shared.setUpAnalytics(
-                        writeKey: config.segmentBrowserWriteKey,
-                        endpoint: config.segmentAnalyticsEndpoint
-                    )
-                }
+                HeliumAnalyticsManager.shared.setUpAnalytics(
+                    writeKey: decodedConfig.segmentBrowserWriteKey,
+                    endpoint: decodedConfig.segmentAnalyticsEndpoint
+                )
                 
-                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: loadedConfig)
+                await HeliumFetchedConfigManager.shared.buildLocalizedPriceMap(config: decodedConfig)
             } catch {
                 HeliumLogger.log(.error, category: .fallback, "👷 Failed to load fallbacks file ‼️⚠️‼️", metadata: ["error": error.localizedDescription])
             }
