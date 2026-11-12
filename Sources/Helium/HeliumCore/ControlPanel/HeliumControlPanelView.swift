@@ -400,6 +400,7 @@ struct HeliumControlPanelView: View {
                     productIdsPaddle: version.paddleProductIds ?? [],
                     productIdsPaddleWeb: version.webPaddleProductIds ?? [],
                     productIdsStripeWeb: version.webStripeProductIds ?? [],
+                    webSecondTryConfig: version.webSecondTryConfig,
                     webPaywallBundleUrl: version.webPaywallBundleUrl,
                     shouldEnableScroll: version.shouldEnableScroll,
                     webCheckoutBrowserStyle: paywall.webCheckoutBrowserStyle,

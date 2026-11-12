@@ -21,7 +21,8 @@ extension PaddleCheckoutPrefetchCoordinator {
         scope: PaywallObservabilityScope,
         startedAt: Date,
         chainStartedAt: Date,
-        result: PrefetchBanditStep
+        result: PrefetchBanditStep,
+        isSecondTry: Bool = false
     ) {
         let endpointCall: EndpointCallTelemetry
         let alreadyEntitledCode: String?
@@ -65,7 +66,8 @@ extension PaddleCheckoutPrefetchCoordinator {
                 priceId: priceId,
                 discountId: discountId,
                 endpointCall: endpointCall,
-                alreadyEntitledCode: alreadyEntitledCode
+                alreadyEntitledCode: alreadyEntitledCode,
+                isSecondTry: isSecondTry
             ),
             scope: scope
         )
@@ -82,7 +84,8 @@ extension PaddleCheckoutPrefetchCoordinator {
                     ipGeoPostal: nil,
                     californiaDetected: nil,
                     caConsentModalEnabled: nil,
-                    consentRequired: nil
+                    consentRequired: nil,
+                    isSecondTry: isSecondTry
                 ),
                 scope: scope
             )
@@ -96,7 +99,8 @@ extension PaddleCheckoutPrefetchCoordinator {
         startedAt: Date,
         chainStartedAt: Date,
         result: PrefetchBffStep,
-        caConsentModalEnabled: Bool
+        caConsentModalEnabled: Bool,
+        isSecondTry: Bool = false
     ) {
         let endpointCall: EndpointCallTelemetry
         let outcome: PaddlePrefetchOutcomeKind
@@ -154,7 +158,8 @@ extension PaddleCheckoutPrefetchCoordinator {
                 priceId: priceId,
                 transactionId: transactionId,
                 endpointCall: endpointCall,
-                outcome: outcome
+                outcome: outcome,
+                isSecondTry: isSecondTry
             ),
             scope: scope
         )
@@ -170,7 +175,8 @@ extension PaddleCheckoutPrefetchCoordinator {
                 ipGeoPostal: ipGeo.postal,
                 californiaDetected: californiaDetected,
                 caConsentModalEnabled: caConsentModalEnabled,
-                consentRequired: consentRequired
+                consentRequired: consentRequired,
+                isSecondTry: isSecondTry
             ),
             scope: scope
         )

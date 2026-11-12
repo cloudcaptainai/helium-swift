@@ -50,6 +50,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
         productIdsPaddle: [String] = [],
         productIdsPaddleWeb: [String] = [],
         productIdsStripeWeb: [String] = [],
+        webSecondTryConfig: WebSecondTryConfig? = nil,
         webPaywallBundleUrl: String? = nil,
         shouldEnableScroll: Bool? = nil,
         identity: HeliumFetchedConfigManager.PreviewPaywallIdentity? = nil,
@@ -64,6 +65,7 @@ final class PreviewTriggerConfigTests: XCTestCase {
             productIdsPaddle: productIdsPaddle,
             productIdsPaddleWeb: productIdsPaddleWeb,
             productIdsStripeWeb: productIdsStripeWeb,
+            webSecondTryConfig: webSecondTryConfig,
             webPaywallBundleUrl: webPaywallBundleUrl,
             shouldEnableScroll: shouldEnableScroll,
             identity: identity,
@@ -428,6 +430,51 @@ final class PreviewTriggerConfigTests: XCTestCase {
     }
 
     // MARK: - /paywall-previews response decoding
+
+    func testPreviewVersionWebSecondTryDecodingAndInstallation() throws {
+        let second: [String: Any] = [
+            "paywallUUID": "b", "paywallID": 42, "paywallVersionUUID": "v-b",
+            "paywallTemplateName": "B", "bundleUrl": "https://example.com/b",
+            "productsOfferedPaddle": ["pro_b:pri_b"], "productsOfferedStripe": [],
+            "showOn": ["dismissed"]
+        ]
+        func version(_ field: Any?) throws -> HeliumPaywallPreviewVersion {
+            var entry: [String: Any] = ["versionId": "v-a", "versionStatus": "published"]
+            if let field { entry["webSecondTryConfig"] = field }
+            let response: [String: Any] = ["productIds": [], "paywalls": [[
+                "paywallUuid": "a", "paywallName": "A", "versions": [entry]
+            ]]]
+            let data = try JSONSerialization.data(withJSONObject: response)
+            return try JSONDecoder().decode(HeliumControlPanelResponse.self, from: data).paywalls[0].versions[0]
+        }
+
+        let decoded = try XCTUnwrap(version(second).webSecondTryConfig)
+        XCTAssertEqual(decoded.paywallUUID, "b")
+        XCTAssertEqual(decoded.paywallID, 42)
+        XCTAssertEqual(decoded.paywallVersionUUID, "v-b")
+        XCTAssertEqual(decoded.paywallTemplateName, "B")
+        XCTAssertEqual(decoded.bundleUrl, "https://example.com/b")
+        XCTAssertEqual(decoded.productsOfferedPaddle, ["pro_b:pri_b"])
+        XCTAssertEqual(decoded.productsOfferedStripe, [])
+        XCTAssertEqual(decoded.showOn, ["dismissed"])
+
+        var donor = makeDonorPaywallInfo()
+        donor.webSecondTryConfig = decoded
+        let config = makeTestConfig(triggers: ["a_trigger": donor])
+        injectConfig(config, json: try JSON(data: JSONEncoder().encode(config)))
+        try setPreviewConfig(webSecondTryConfig: decoded)
+        XCTAssertEqual(previewInfo?.webSecondTryConfig?.paywallUUID, "b")
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger]["webSecondTryConfig"]["paywallUUID"].string, "b")
+
+        let invalidValues: [Any?] = [nil, NSNull(), ["paywallUUID": 4]]
+        for value in invalidValues {
+            let missing = try version(value).webSecondTryConfig
+            XCTAssertNil(missing)
+            try setPreviewConfig(webSecondTryConfig: missing)
+            XCTAssertNil(previewInfo?.webSecondTryConfig)
+            XCTAssertEqual(HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger]["webSecondTryConfig"], JSON.null)
+        }
+    }
 
     /// Trimmed real staging response shape (see HEL-6146 contract doc).
     private let previewsResponseJSON = """
