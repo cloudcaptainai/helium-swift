@@ -33,6 +33,12 @@ class MockHeliumPaywallDelegate: HeliumPaywallDelegate {
     }
 }
 
+// MARK: - EmptyStoreTransactionLookup
+
+struct EmptyStoreTransactionLookup: StoreTransactionLookup {
+    func latestTransaction(productId: String) async -> StoreTransactionSnapshot? { nil }
+}
+
 // MARK: - CapturingEventListener
 
 class CapturingEventListener: HeliumEventListener {
@@ -88,6 +94,7 @@ class HeliumTestCase: XCTestCase {
         Helium.resetHelium(clearHeliumEventListeners: true)
         mockDelegate = MockHeliumPaywallDelegate()
         Helium.config.purchaseDelegate = mockDelegate
+        HeliumPaywallDelegateWrapper.shared.storeTransactionLookup = EmptyStoreTransactionLookup()
         listener = CapturingEventListener()
         Helium.shared.addHeliumEventListener(listener)
         // Give the async queue time to register the listener
