@@ -781,9 +781,14 @@ public class HeliumConfig {
         }
     }
     
+    @HeliumAtomic private var storedPurchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
+
     /// Adjust to RevenueCatDelegate() if using RevenueCat or if you want to handle your own purchase logic, create a custom implementation. You can also subclass
     /// StoreKitDelegate or RevenueCatDelegate for custom implementations.
-    public var purchaseDelegate: HeliumPaywallDelegate = StoreKitDelegate()
+    public var purchaseDelegate: HeliumPaywallDelegate {
+        get { storedPurchaseDelegate }
+        set { storedPurchaseDelegate = newValue }
+    }
     
     /// By default, Helium will look for a file named "helium-fallbacks.json". Override by setting this.
     /// See https://docs.tryhelium.com/guides/fallback-bundle
