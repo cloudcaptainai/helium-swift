@@ -130,7 +130,8 @@ public class ExternalWebCheckoutManager: NSObject {
             paywallName: paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
             storeKitTransactionId: nil,
             storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.kind
+            paymentProcessor: provider.kind,
+            secondTry: paywallSession.isSecondTry
         )
         let loggedEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,
@@ -871,7 +872,8 @@ public class ExternalWebCheckoutManager: NSObject {
                     paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                     storeKitTransactionId: nil,
                     storeKitOriginalTransactionId: nil,
-                    paymentProcessor: provider.kind
+                    paymentProcessor: provider.kind,
+                    secondTry: observation.paywallSession.isSecondTry
                 )
                 event.isWebSecondTry = isWebSecondTry
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -917,7 +919,8 @@ public class ExternalWebCheckoutManager: NSObject {
                 triggerName: restored.observation.paywallSession.trigger,
                 paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
                 restoreOrigin: .detectedPostWebCheckout,
-                paymentProcessor: provider.kind
+                paymentProcessor: provider.kind,
+                secondTry: restored.observation.paywallSession.isSecondTry
             )
             event.isWebSecondTry = isWebSecondTry
             HeliumPaywallDelegateWrapper.shared.fireEvent(

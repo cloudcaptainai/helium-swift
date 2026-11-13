@@ -36,6 +36,7 @@ struct PaywallPresentationContext {
 struct PaywallSession {
     let sessionId: String
     let trigger: String
+    let isSecondTry: Bool
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
     
@@ -58,9 +59,10 @@ struct PaywallSession {
         }
     }
     
-    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool = false) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
+        self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
         self.presentationContext = presentationContext
@@ -73,13 +75,15 @@ struct PaywallSession {
             trigger: self.trigger,
             paywallInfo: self.paywallInfo,
             fallbackType: self.fallbackType,
-            presentationContext: context
+            presentationContext: context,
+            isSecondTry: self.isSecondTry
         )
     }
 
-    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
         self.sessionId = sessionId
         self.trigger = trigger
+        self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
         self.presentationContext = presentationContext

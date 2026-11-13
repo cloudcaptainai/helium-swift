@@ -129,7 +129,8 @@ class HeliumActionsDelegate: ObservableObject {
             triggerName: trigger,
             paywallName: isFallback ? "fallback_\(paywallInfo.paywallTemplateName)" : paywallInfo.paywallTemplateName,
             webviewRenderTimeTakenMS: timeTakenMS,
-            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
+            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -148,7 +149,8 @@ class HeliumActionsDelegate: ObservableObject {
             if dispatchEvent {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
-                    paywallName: paywallInfo.paywallTemplateName
+                    paywallName: paywallInfo.paywallTemplateName,
+                    secondTry: paywallSession.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
             }
@@ -166,7 +168,8 @@ class HeliumActionsDelegate: ObservableObject {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
                     paywallName: paywallInfo.paywallTemplateName,
-                    dismissAll: true
+                    dismissAll: true,
+                    secondTry: paywallSession.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
             }
@@ -211,7 +214,8 @@ class HeliumActionsDelegate: ObservableObject {
             let event = PaywallButtonPressedEvent(
                 buttonName: contentComponentName,
                 triggerName: trigger,
-                paywallName: paywallInfo.paywallTemplateName
+                paywallName: paywallInfo.paywallTemplateName,
+                secondTry: paywallSession.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }
@@ -234,7 +238,8 @@ class HeliumActionsDelegate: ObservableObject {
             offerIdentifier: selectedParts.promoOfferId,
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId)
+            paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId),
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent, paywallSession: paywallSession)
 
@@ -297,7 +302,8 @@ class HeliumActionsDelegate: ObservableObject {
             viewType: viewType,
             loadTimeTakenMS: loadTimeTakenMS,
             loadingBudgetMS: paywallSession.presentationContext.config.loadingBudgetForAnalyticsMS,
-            paywallUnavailableReason: fallbackReason
+            paywallUnavailableReason: fallbackReason,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -309,7 +315,8 @@ class HeliumActionsDelegate: ObservableObject {
         // Use new typed event
         let event = PaywallCloseEvent(
             triggerName: trigger,
-            paywallName: paywallInfo.paywallTemplateName
+            paywallName: paywallInfo.paywallTemplateName,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -321,7 +328,8 @@ class HeliumActionsDelegate: ObservableObject {
                 actionName: actionName,
                 params: params,
                 triggerName: trigger,
-                paywallName: paywallInfo.paywallTemplateName
+                paywallName: paywallInfo.paywallTemplateName,
+                secondTry: paywallSession.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }

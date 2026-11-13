@@ -3,6 +3,13 @@ import XCTest
 
 final class EventListenerTests: HeliumTestCase {
 
+    func testSecondTryEventRetainsIdentityWhenDelivered() {
+        let event = PaywallDismissedEvent(triggerName: "retry", paywallName: "Second", secondTry: true)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
+        waitForEventDispatch { self.listener.eventsOfType(PaywallDismissedEvent.self).count == 1 }
+        XCTAssertEqual(listener.eventsOfType(PaywallDismissedEvent.self).first?.isSecondTry, true)
+    }
+
     func testAddAndRemoveListener() {
         let extra = CapturingEventListener()
         Helium.shared.addHeliumEventListener(extra)
