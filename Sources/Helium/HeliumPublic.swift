@@ -91,6 +91,9 @@ public class Helium {
     /// You must have a trigger and workflow configured in the [Helium dashboard](https://app.tryhelium.com/workflows)
     /// in order to show a paywall.
     ///
+    /// - Tip: Create a unique trigger for each location a paywall can show in your app (for example, `"onboarding"` and `"settings"`).
+    ///   This gives you more flexibility with paywall variations and experiments, letting you take full advantage of Helium.
+    ///
     /// - Parameters:
     ///   - trigger: The trigger configured in the Helium dashboard.
     ///   - config: Optional configuration for this paywall presentation. Defaults to `PaywallPresentationConfig()`.
