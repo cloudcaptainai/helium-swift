@@ -48,8 +48,7 @@ enum HeliumAnalyticsMapper {
 // MARK: - Shared payload builders
 
 extension PaywallContextEvent {
-    /// The fields uniform across every context event on the wire:
-    /// `type`, `triggerName`, `paywallTemplateName`, `isSecondTry`.
+    /// The fields uniform across every context event on the wire.
     fileprivate func contextAnalyticsPayload() -> [String: Any] {
         [
             "type": analyticsEventName,
