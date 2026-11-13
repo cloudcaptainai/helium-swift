@@ -793,7 +793,8 @@ extension HeliumPaywallPresenter {
     }
 
     private func fallbackBundleViewFor(trigger: String, fallbackReason: PaywallUnavailableReason, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
-        if let fallbackPaywallInfo = HeliumFallbackViewManager.shared.getFallbackInfo(trigger: trigger),
+        let fallback = HeliumFallbackViewManager.shared.getFallbackInfoAndResolvedConfig(trigger: trigger)
+        if let fallbackPaywallInfo = fallback.paywallInfo,
            let filePath = fallbackPaywallInfo.localBundlePath {
             do {
                 let fallbackBundlePaywallSession = PaywallSession(trigger: trigger, paywallInfo: fallbackPaywallInfo, fallbackType: .fallbackBundle, presentationContext: presentationContext)
@@ -803,7 +804,7 @@ extension HeliumPaywallPresenter {
                         fallbackReason: fallbackReason,
                         filePath: filePath,
                         backupFilePath: nil,
-                        resolvedConfig: HeliumFallbackViewManager.shared.getResolvedConfigJSONForTrigger(trigger)
+                        resolvedConfig: fallback.resolvedConfig
                     )
                 )
                 return PaywallViewResult(viewAndSession: PaywallViewAndSession(view: fallbackBundleView, paywallSession: fallbackBundlePaywallSession), fallbackReason: fallbackReason)

@@ -11,14 +11,14 @@ public class HeliumFallbackViewManager {
     // **MARK: - Singleton**
     public static let shared = HeliumFallbackViewManager()
     static func reset() {
-        shared._loaded.withValue { $0 = LoadedFallbacks(generation: $0.generation + 1) }
+        shared._loaded.withValue { $0 = LoadedFallbacks(resetCount: $0.resetCount + 1) }
     }
 
     /// Inject fallback config for testing purposes only. Accessible via @testable import.
     func injectFallbackConfigForTesting(_ config: HeliumFetchedConfig, json: JSON? = nil) {
         _loaded.withValue {
-            $0.config = config
-            $0.json = json
+            $0.loadedConfig = config
+            $0.loadedConfigJSON = json
         }
     }
     
@@ -27,14 +27,12 @@ public class HeliumFallbackViewManager {
     static let defaultFallbackTrigger = "hlm_ios_default_flbk"
     
     private struct LoadedFallbacks {
-        var config: HeliumFetchedConfig?
-        var json: JSON?
-        var generation = 0
+        var loadedConfig: HeliumFetchedConfig?
+        var loadedConfigJSON: JSON?
+        var resetCount = 0
     }
 
     @HeliumAtomic private var loaded = LoadedFallbacks()
-    private var loadedConfig: HeliumFetchedConfig? { loaded.config }
-    private var loadedConfigJSON: JSON? { loaded.json }
     
     func setUpFallbackBundle() {
         var fallbackBundleURL: URL? = Bundle.main.url(forResource: defaultFallbacksName, withExtension: "json")
@@ -53,22 +51,22 @@ public class HeliumFallbackViewManager {
             return
         }
         
-        let generation = loaded.generation
+        let resetCountAtStart = loaded.resetCount
         Task {
             do {
                 let data = try Data(contentsOf: fallbackBundleURL)
                 let decodedConfig = try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
                 let decodedJSON = try? JSON(data: data)
 
-                let stored = _loaded.withValue { state -> Bool in
-                    guard state.generation == generation else { return false }
-                    state.config = decodedConfig
+                let didStoreLoadedConfig = _loaded.withValue { state -> Bool in
+                    guard state.resetCount == resetCountAtStart else { return false }
+                    state.loadedConfig = decodedConfig
                     if let decodedJSON {
-                        state.json = decodedJSON
+                        state.loadedConfigJSON = decodedJSON
                     }
                     return true
                 }
-                guard stored else { return }
+                guard didStoreLoadedConfig else { return }
 
                 if let bundles = decodedConfig.bundles, !bundles.isEmpty {
                     HeliumAssetManager.shared.writeBundles(bundles: bundles)
@@ -116,9 +114,9 @@ public class HeliumFallbackViewManager {
     }
     
     /// Returns the trigger to use - uses default if trigger doesn't exist or has invalid resolvedConfig
-    private func resolvedTrigger(for trigger: String) -> String {
-        let fallbackPaywallInfo = loadedConfig?.triggerToPaywalls[trigger]
-        let resolvedConfigJson = loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
+    private static func resolvedTrigger(for trigger: String, in loaded: LoadedFallbacks) -> String {
+        let fallbackPaywallInfo = loaded.loadedConfig?.triggerToPaywalls[trigger]
+        let resolvedConfigJson = loaded.loadedConfigJSON?["triggerToPaywalls"][trigger]["resolvedConfig"]
         let hasResolvedConfig = resolvedConfigJson?.exists() == true && resolvedConfigJson?.type != .null
         if fallbackPaywallInfo?.hasProducts == true && hasResolvedConfig {
             return trigger
@@ -126,16 +124,25 @@ public class HeliumFallbackViewManager {
         return Self.defaultFallbackTrigger
     }
     
+    func getFallbackInfoAndResolvedConfig(trigger: String) -> (paywallInfo: HeliumPaywallInfo?, resolvedConfig: JSON?) {
+        let snapshot = loaded
+        let resolved = Self.resolvedTrigger(for: trigger, in: snapshot)
+        return (
+            snapshot.loadedConfig?.triggerToPaywalls[resolved],
+            snapshot.loadedConfigJSON?["triggerToPaywalls"][resolved]["resolvedConfig"]
+        )
+    }
+    
     func getFallbackInfo(trigger: String) -> HeliumPaywallInfo? {
-        return loadedConfig?.triggerToPaywalls[resolvedTrigger(for: trigger)]
+        return getFallbackInfoAndResolvedConfig(trigger: trigger).paywallInfo
     }
     
     func getResolvedConfigJSONForTrigger(_ trigger: String) -> JSON? {
-        return loadedConfigJSON?["triggerToPaywalls"][resolvedTrigger(for: trigger)]["resolvedConfig"]
+        return getFallbackInfoAndResolvedConfig(trigger: trigger).resolvedConfig
     }
     
     public func getConfig() -> HeliumFetchedConfig? {
-        return loadedConfig
+        return loaded.loadedConfig
     }
     
     public func getBackgroundConfigForTrigger(_ trigger: String) -> BackgroundConfig? {
