@@ -15,6 +15,7 @@ enum FallbackPaywallType {
 
 /// Presentation context for a single paywall presentation
 struct PaywallPresentationContext {
+    var isSecondTry: Bool = false
     let config: PaywallPresentationConfig
     let eventHandlers: PaywallEventHandlers?
     let onEntitled: ((PaywallEntitledEvent) -> Void)?
@@ -59,10 +60,10 @@ struct PaywallSession {
         }
     }
     
-    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool = false) {
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
-        self.isSecondTry = isSecondTry
+        self.isSecondTry = presentationContext.isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
         self.presentationContext = presentationContext
