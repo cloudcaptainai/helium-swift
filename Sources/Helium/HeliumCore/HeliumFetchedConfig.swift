@@ -209,15 +209,18 @@ func fetchEndpoint(
 public class HeliumFetchedConfigManager {
     public static let shared = HeliumFetchedConfigManager()
     static func reset() {
-        shared.fetchTask?.cancel()
-        shared.fetchTask = nil
-        shared._downloadStatus = .notDownloadedYet
-        shared.downloadStep = .config
-        shared.fetchedConfig = nil
-        shared.fetchedConfigJSON = nil
-        shared.triggersWithSkippedBundleAndReason = []
-        shared.localizedPriceMap = [:]
-        shared.previewServerProducts = PreviewServerProducts()
+        shared._fetchLifecycle.withValue { lifecycle in
+            lifecycle.resetCount += 1
+            lifecycle.task?.cancel()
+            lifecycle.task = nil
+            shared._downloadStatus = .notDownloadedYet
+            shared.downloadStep = .config
+            shared.fetchedConfig = nil
+            shared.fetchedConfigJSON = nil
+            shared.triggersWithSkippedBundleAndReason = []
+            shared.localizedPriceMap = [:]
+            shared.previewServerProducts = PreviewServerProducts()
+        }
         HeliumControlPanelService.shared.isFallbackPreviewArmed = false
     }
 
@@ -230,7 +233,12 @@ public class HeliumFetchedConfigManager {
 
     private init() {}
     
-    private var fetchTask: Task<Void, Never>?
+    private struct FetchLifecycle {
+        var resetCount = 0
+        var task: Task<Void, Never>?
+    }
+
+    @HeliumAtomic private var fetchLifecycle = FetchLifecycle()
     
     @HeliumAtomic private var _downloadStatus: HeliumFetchedConfigStatus = .notDownloadedYet
     public var downloadStatus: HeliumFetchedConfigStatus { _downloadStatus }
@@ -250,16 +258,19 @@ public class HeliumFetchedConfigManager {
         apiKey: String,
         completion: @escaping (HeliumFetchResult) -> Void
     ) {
-        if downloadStatus == .inProgress {
+        let resetCountAtStart: Int? = _fetchLifecycle.withValue { lifecycle in
+            guard _downloadStatus != .inProgress else { return nil }
+            _downloadStatus = .inProgress
+            downloadStep = .config
+            return lifecycle.resetCount
+        }
+        guard let resetCountAtStart else {
             HeliumLogger.log(.debug, category: .config, "Config download already in progress, skipping new request")
             return
         }
         HeliumLogger.log(.debug, category: .config, "Starting download of paywalls")
         let initializeStartTime = DispatchTime.now()
-        fetchTask = Task {
-            updateDownloadState(.inProgress)
-            downloadStep = .config
-
+        let task = Task {
             // Pre-fetching
             async let storeCountryCode: Void = AppStoreCountryHelper.shared.fetchStoreCountryCode()
             async let applePay: Void? = withTimeoutAbandoningOperation(
@@ -287,9 +298,30 @@ public class HeliumFetchedConfigManager {
                 configStartTime: configStartTime,
                 lastStatusCode: nil,
                 lastServerMessage: nil,
+                resetCountAtStart: resetCountAtStart,
                 completion: completion
             )
         }
+        _fetchLifecycle.withValue { lifecycle in
+            if lifecycle.resetCount == resetCountAtStart {
+                lifecycle.task = task
+            } else {
+                task.cancel()
+            }
+        }
+    }
+
+    @discardableResult
+    private func commitUnlessReset(since resetCountAtStart: Int, _ write: () -> Void) -> Bool {
+        _fetchLifecycle.withValue { lifecycle in
+            guard lifecycle.resetCount == resetCountAtStart else { return false }
+            write()
+            return true
+        }
+    }
+
+    private func hasReset(since resetCountAtStart: Int) -> Bool {
+        fetchLifecycle.resetCount != resetCountAtStart
     }
     
     private func fetchConfigWithRetry(
@@ -301,6 +333,7 @@ public class HeliumFetchedConfigManager {
         configStartTime: DispatchTime,
         lastStatusCode: Int?,
         lastServerMessage: String?,
+        resetCountAtStart: Int,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
         do {
@@ -327,6 +360,7 @@ public class HeliumFetchedConfigManager {
                         configStartTime: configStartTime,
                         lastStatusCode: lastStatusCode,
                         lastServerMessage: lastServerMessage,
+                        resetCountAtStart: resetCountAtStart,
                         completion: completion
                     )
                 } else {
@@ -335,7 +369,7 @@ public class HeliumFetchedConfigManager {
                     ])
                     let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                     let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
-                    updateDownloadState(.downloadFailure)
+                    guard updateDownloadState(.downloadFailure, resetCountAtStart: resetCountAtStart) else { return }
                     completion(.failure(
                         HeliumFetchError(
                             summary: "config_fetch",
@@ -357,22 +391,24 @@ public class HeliumFetchedConfigManager {
             let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
             
             // Update the fetched config
-            guard !Task.isCancelled else { return }
-            self.fetchedConfig = newConfig
-            self.fetchedConfigJSON = newConfigJSON
-            triggersWithSkippedBundleAndReason = []
+            let didStoreConfig = commitUnlessReset(since: resetCountAtStart) {
+                self.fetchedConfig = newConfig
+                self.fetchedConfigJSON = newConfigJSON
+                triggersWithSkippedBundleAndReason = []
+            }
+            guard didStoreConfig else { return }
             
-            if let stripeCustomerId = fetchedConfig?.stripeCustomerId {
+            if let stripeCustomerId = newConfig.stripeCustomerId {
                 applyCustomerIdFromConfig(stripeCustomerId, provider: .stripe)
             }
 
-            if let paddleCustomerId = fetchedConfig?.paddleCustomerId {
+            if let paddleCustomerId = newConfig.paddleCustomerId {
                 applyCustomerIdFromConfig(paddleCustomerId, provider: .paddle)
             }
             
             // Download assets
             
-            let preloadedBundles = self.fetchedConfig?.bundles
+            let preloadedBundles = newConfig.bundles
             if let preloadedBundles, !preloadedBundles.isEmpty {
                 // Start price fetch async (with timing), then do sync bundle save, then await price
                 async let priceTask: (UInt64, Bool) = {
@@ -385,7 +421,7 @@ public class HeliumFetchedConfigManager {
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
 
                 // Bundles saved, switch to products step
-                downloadStep = .products
+                commitUnlessReset(since: resetCountAtStart) { downloadStep = .products }
 
                 let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
@@ -404,10 +440,11 @@ public class HeliumFetchedConfigManager {
                 await handleConfigFetchSuccess(
                     newConfig: newConfig,
                     metrics: metrics,
+                    resetCountAtStart: resetCountAtStart,
                     completion: completion
                 )
             } else {
-                downloadStep = .bundles
+                commitUnlessReset(since: resetCountAtStart) { downloadStep = .bundles }
                 
                 // Start both operations in parallel, each tracking its own time
                 async let bundlesTask: (BundlesRetrieveResult, UInt64) = {
@@ -415,7 +452,7 @@ public class HeliumFetchedConfigManager {
                     let result = await retrieveBundles(config: newConfig)
                     let timeMS = dispatchTimeDifferenceInMS(from: start)
                     // Bundles are fetched, switch to products step
-                    downloadStep = .products
+                    commitUnlessReset(since: resetCountAtStart) { downloadStep = .products }
                     return (result, timeMS)
                 }()
                 
@@ -430,17 +467,18 @@ public class HeliumFetchedConfigManager {
                 let (localizedPriceTimeMS, localizedPriceSuccess) = await priceTask
                 
                 let bundles = bundlesResult.successMapBundleIdToHtml
-                guard !Task.isCancelled else { return }
-                _fetchedConfig.withValue { $0?.bundles = bundles }
+                let didStoreBundles = commitUnlessReset(since: resetCountAtStart) {
+                    _fetchedConfig.withValue { $0?.bundles = bundles }
+                    triggersWithSkippedBundleAndReason = bundlesResult.triggersWithSkippedBundleAndReason
+                }
+                guard didStoreBundles else { return }
                 let bytesWritten = saveBundleAssets(bundles: bundles)
                 let sizeKB = Int(round(Double(bytesWritten) / 1024.0))
-                
-                triggersWithSkippedBundleAndReason = bundlesResult.triggersWithSkippedBundleAndReason
                 
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 
                 if !bundlesResult.triggersWithNoBundle.isEmpty {
-                    updateDownloadState(.downloadFailure)
+                    guard updateDownloadState(.downloadFailure, resetCountAtStart: resetCountAtStart) else { return }
                     completion(.failure(
                         HeliumFetchError(
                             summary: "bundle_fetch",
@@ -476,6 +514,7 @@ public class HeliumFetchedConfigManager {
                     await handleConfigFetchSuccess(
                         newConfig: newConfig,
                         metrics: metrics,
+                        resetCountAtStart: resetCountAtStart,
                         completion: completion
                     )
                 }
@@ -503,7 +542,7 @@ public class HeliumFetchedConfigManager {
             // Check for invalid API key error - this is non-retryable
             if let configError, configError.isInvalidApiKeyError {
                 HeliumLogger.log(.error, category: .config, "Invalid API key detected. Get your Helium API key at https://app.tryhelium.com/profile")
-                updateDownloadState(.downloadFailure)
+                guard updateDownloadState(.downloadFailure, resetCountAtStart: resetCountAtStart) else { return }
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
@@ -543,6 +582,7 @@ public class HeliumFetchedConfigManager {
                     configStartTime: configStartTime,
                     lastStatusCode: newLastStatusCode,
                     lastServerMessage: newLastServerMessage,
+                    resetCountAtStart: resetCountAtStart,
                     completion: completion
                 )
             } else {
@@ -550,7 +590,7 @@ public class HeliumFetchedConfigManager {
                     "error": errorDesc,
                     "attempts": String(attemptCounter)
                 ])
-                updateDownloadState(.downloadFailure)
+                guard updateDownloadState(.downloadFailure, resetCountAtStart: resetCountAtStart) else { return }
                 let configDownloadTimeMS = dispatchTimeDifferenceInMS(from: configStartTime)
                 let totalTimeMS = dispatchTimeDifferenceInMS(from: initializeStartTime)
                 completion(.failure(
@@ -848,11 +888,12 @@ public class HeliumFetchedConfigManager {
     private func handleConfigFetchSuccess(
         newConfig: HeliumFetchedConfig,
         metrics: HeliumFetchMetrics,
+        resetCountAtStart: Int,
         completion: @escaping (HeliumFetchResult) -> Void
     ) async {
-        guard !Task.isCancelled else { return }
+        guard !hasReset(since: resetCountAtStart) else { return }
         completion(.success(newConfig, metrics))
-        updateDownloadState(.downloadSuccess)
+        guard updateDownloadState(.downloadSuccess, resetCountAtStart: resetCountAtStart) else { return }
         
         let triggersMissingProducts = newConfig.getTriggersWithMissingProducts()
         if !triggersMissingProducts.isEmpty {
@@ -1020,9 +1061,9 @@ public class HeliumFetchedConfigManager {
         return getLocalizedPriceMap().filter { acceptedProductIds.contains($0.key) }
     }
     
-    private func updateDownloadState(_ status: HeliumFetchedConfigStatus) {
-        guard !Task.isCancelled else { return }
-        _downloadStatus = status
+    @discardableResult
+    private func updateDownloadState(_ status: HeliumFetchedConfigStatus, resetCountAtStart: Int) -> Bool {
+        commitUnlessReset(since: resetCountAtStart) { _downloadStatus = status }
     }
     
     public func getConfig() -> HeliumFetchedConfig? {

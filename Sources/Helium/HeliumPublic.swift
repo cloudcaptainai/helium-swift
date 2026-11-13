@@ -8,7 +8,7 @@ import StoreKit
 public class Helium {
     init() {}
     
-    var controller: HeliumController?
+    @HeliumAtomic var controller: HeliumController?
     @HeliumAtomic private var initialized: Bool = false
     
     private func reset() {
