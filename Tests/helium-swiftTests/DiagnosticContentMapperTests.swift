@@ -24,12 +24,30 @@ final class DiagnosticContentMapperTests: XCTestCase {
         )
     }
 
-    /// Every authored record: both skip reasons, every unavailable reason, the nil path, and the
-    /// preview-only fallback record.
+    private func downloadFailureContent(_ fetchFailure: HeliumFetchFailureKind?) -> DiagnosticContent {
+        mapper.mapUnavailable(
+            .paywallsDownloadFail,
+            context: DiagnosticContext(trigger: trigger, fetchFailure: fetchFailure)
+        )
+    }
+
+    private func banditContent(code: String?, message: String?) -> DiagnosticContent {
+        mapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(trigger: trigger, banditReason: message, banditReasonCode: code)
+        )
+    }
+
+    /// Every authored record: both skip reasons, every unavailable reason, the nil path, the
+    /// preview-only fallback record, and the per-stage download failure records, and every
+    /// server reason code plus the unknown and missing code paths.
     private func allContent() -> [DiagnosticContent] {
         PaywallSkippedReason.allCases.map { mapper.mapSkip($0) }
             + PaywallUnavailableReason.allCases.map { content(for: $0) }
             + [content(for: nil), previewFallbackContent()]
+            + [HeliumFetchFailureKind.configFetch, .invalidApiKey, .bundleFetch].map(downloadFailureContent)
+            + BanditReasonPresentationMapper.presentations.keys.sorted().map { banditContent(code: $0, message: nil) }
+            + [banditContent(code: "new_server_code", message: "Unrecognised."), banditContent(code: nil, message: nil)]
     }
 
     // MARK: - Forward compat: no raw codes leak into displayed prose
@@ -59,7 +77,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
     /// The CTA and the users-will-see link own every URL, so no prose field may contain one.
     func testNoProseContainsAUrl() {
         for content in allContent() {
-            for prose in [content.title, content.body, content.usersWillSee] {
+            for prose in [content.title, content.body, content.usersWillSee, content.fix ?? "", content.detail ?? ""] {
                 XCTAssertFalse(
                     prose.contains("http"),
                     "\(content.reasonCode) embeds a URL in prose: \(prose)"
@@ -185,7 +203,7 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertTrue(content.body.contains("\"\(trigger)\""))
         XCTAssertEqual(
             content.cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls")
         )
     }
 
@@ -227,14 +245,14 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
         XCTAssertEqual(
             content.cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls/abc-123")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls/abc-123")
         )
     }
 
     func testPaywallEditorCtaUsesThePaywallListWhenTheIdIsUnknown() {
         XCTAssertEqual(
             content(for: .noProductsIOS).cta,
-            .openUrl(label: "Open Paywall Editor", url: "https://app.tryhelium.com/paywalls")
+            .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls")
         )
     }
 
@@ -257,7 +275,29 @@ final class DiagnosticContentMapperTests: XCTestCase {
         XCTAssertFalse(content.body.contains("Currently enabled"))
     }
 
-    func testTriggerWithoutPaywallUsesBanditReasonAsBodyWhenSupplied() {
+    func testTriggerWithoutPaywallHeadlinesARecognisedBanditReason() {
+        let sentence = BanditReasonPresentationMapperTests.paddleGeoSentence
+        let content = mapper.mapUnavailable(
+            .triggerHasNoPaywall,
+            context: DiagnosticContext(
+                trigger: trigger,
+                banditReason: sentence,
+                banditReasonCode: "paddle_store_country_not_us",
+                countrySignals: CountrySignals(deviceRegion: "US", storeCountry: "GB")
+            )
+        )
+
+        XCTAssertEqual(content.title, "Paddle needs a US buyer")
+        XCTAssertEqual(content.fix, "Target this paywall at a US audience, or add a rule for users outside the US.")
+        XCTAssertEqual(content.body, content.fix)
+        XCTAssertEqual(content.detail, sentence)
+        XCTAssertEqual(content.checks.map(\.verdict), [.unknown, .failed, .unknown])
+        XCTAssertEqual(content.category, .setup)
+        XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
+        XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
+    }
+
+    func testTriggerWithoutPaywallShowsAnUnrecognisedBanditReasonAsTheBody() {
         let content = mapper.mapUnavailable(
             .triggerHasNoPaywall,
             context: DiagnosticContext(
@@ -266,24 +306,52 @@ final class DiagnosticContentMapperTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            content.body,
-            "App-to-Web paywalls are not available in this region."
-        )
         XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
-        XCTAssertTrue(content.usersWillSee.contains("Other users may receive one"))
+        XCTAssertEqual(content.body, "App-to-Web paywalls are not available in this region.")
+        XCTAssertNil(content.fix)
+        XCTAssertNil(content.detail)
+        XCTAssertTrue(content.checks.isEmpty)
         XCTAssertFalse(content.body.contains("Verify the trigger is in a workflow"))
-        XCTAssertFalse(content.title.localizedCaseInsensitiveContains("Bandit"))
+    }
+
+    func testFixDetailAndChecksOnlyAppearTogetherOnBanditReasons() {
+        for content in allContent() {
+            if content.fix == nil {
+                XCTAssertNil(content.detail, content.reasonCode)
+                XCTAssertTrue(content.checks.isEmpty, content.reasonCode)
+            } else {
+                XCTAssertEqual(content.reasonCode, PaywallUnavailableReason.triggerHasNoPaywall.rawValue)
+            }
+        }
+    }
+
+    func testProductionCodeWithoutMessageHasFixAndRawCode() {
+        for code in BanditReasonPresentationMapper.presentations.keys {
+            let content = mapper.mapUnavailable(.triggerHasNoPaywall, context: DiagnosticContext(trigger: trigger, banditReasonCode: code))
+            XCTAssertNotNil(content.fix, code)
+            XCTAssertNil(content.detail, code)
+            XCTAssertEqual(content.serverReasonCode, code)
+        }
+    }
+
+    func testUnknownCodeAndLegacyMessageRemainVisibleWithoutClassification() {
+        for code in [nil, "", "new_server_code"] as [String?] {
+            let content = mapper.mapUnavailable(.triggerHasNoPaywall, context: DiagnosticContext(trigger: trigger, banditReason: "Apple Pay California", banditReasonCode: code))
+            XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
+            XCTAssertEqual(content.body, "Apple Pay California")
+            XCTAssertNil(content.fix)
+            XCTAssertEqual(content.serverReasonCode, code ?? "(missing)")
+        }
     }
 
     func testTriggerWithoutPaywallKeepsExistingContentWhenBanditReasonIsAbsent() {
         let content = content(for: .triggerHasNoPaywall)
 
-        XCTAssertEqual(content.title, "No paywall is connected to this trigger")
-        XCTAssertTrue(content.body.contains("Verify the trigger is in a workflow"))
+        XCTAssertEqual(content.title, "No paywall was resolved for this trigger")
+        XCTAssertEqual(content.body, "No server explanation was provided.")
         XCTAssertEqual(
             content.usersWillSee,
-            "Users hitting this trigger see nothing. Consider adding a fallback paywall."
+            "This user sees no paywall. Other users may receive one depending on targeting and eligibility. Consider adding a fallback paywall."
         )
     }
 
@@ -299,17 +367,100 @@ final class DiagnosticContentMapperTests: XCTestCase {
 
     func testUnactionableFailuresCopyTheReport() {
         let errors: [PaywallUnavailableReason] = [
-            .couldNotFindBundleUrl, .webviewRenderFail, .bridgingError, .invalidResolvedConfig,
+            .webviewRenderFail, .bridgingError, .invalidResolvedConfig,
         ]
         for reason in errors {
             XCTAssertEqual(content(for: reason).cta, .copyReport, reason.rawValue)
         }
     }
 
-    func testTargetingSkipOpensWorkflows() {
+    func testRepublishableBundleProblemsCopyThePaywallEditorLink() {
+        let republishable: [PaywallUnavailableReason] = [
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
+            .bundleFetch403, .bundleFetch404, .bundleFetch410, .bundleFetchCannotDecodeContent,
+        ]
+        for reason in republishable {
+            XCTAssertEqual(
+                mapper.mapUnavailable(reason, context: context(paywallId: "abc-123")).cta,
+                .copyUrl(label: "Copy Paywall Editor Link", url: "https://app.tryhelium.com/paywalls/abc-123"),
+                reason.rawValue
+            )
+        }
+    }
+
+    // MARK: - SDK-side skips after a served paywall
+
+    func testEveryBundleProblemSharesOneActionableBody() {
+        let reasons: [PaywallUnavailableReason] = [
+            .couldNotFindBundleUrl, .bundleFetchInvalidUrlDetected, .bundleFetchInvalidUrl,
+            .bundleFetch403, .bundleFetch404, .bundleFetch410, .bundleFetchCannotDecodeContent,
+        ]
+        let contents = reasons.map { content(for: $0) }
+
+        XCTAssertEqual(Set(contents.map(\.title)), ["The paywall's content couldn't be loaded"])
+        XCTAssertEqual(Set(contents.map(\.body)).count, 1)
+        for content in contents {
+            XCTAssertTrue(content.body.contains("\"\(trigger)\""), content.reasonCode)
+            XCTAssertTrue(content.body.contains("Save the paywall again"), content.reasonCode)
+            XCTAssertFalse(content.body.contains("HTTP"), content.reasonCode)
+            XCTAssertEqual(content.category, .integrationError, content.reasonCode)
+        }
+        XCTAssertEqual(Set(contents.map(\.reasonCode)).count, reasons.count)
+    }
+
+    func testEachLoadingStepHasItsOwnBody() {
+        let reasons: [PaywallUnavailableReason] = [
+            .paywallsNotDownloaded, .configFetchInProgress, .bundlesFetchInProgress,
+            .productsFetchInProgress,
+        ]
+        let contents = reasons.map { content(for: $0) }
+
+        XCTAssertEqual(Set(contents.map(\.title)).count, reasons.count)
+        XCTAssertEqual(Set(contents.map(\.body)).count, reasons.count)
+        for content in contents {
+            XCTAssertTrue(content.usersWillSee.contains("loading indication"), content.reasonCode)
+        }
+        XCTAssertTrue(content(for: .configFetchInProgress).body.contains("configuration"))
+        XCTAssertTrue(content(for: .bundlesFetchInProgress).body.contains("content"))
+        XCTAssertTrue(content(for: .productsFetchInProgress).body.contains("App Store"))
+    }
+
+    func testDownloadFailureNamesTheStageThatFailed() {
+        XCTAssertEqual(
+            downloadFailureContent(.configFetch).title,
+            "Paywall configuration failed to download"
+        )
+        XCTAssertEqual(
+            downloadFailureContent(.bundleFetch).title,
+            "Paywall content failed to download"
+        )
+        XCTAssertEqual(downloadFailureContent(.bundleFetch).cta, .copyReport)
+    }
+
+    func testRejectedApiKeyIsASetupProblemPointingAtTheProfile() {
+        let content = downloadFailureContent(.invalidApiKey)
+
+        XCTAssertEqual(content.category, .setup)
+        XCTAssertEqual(content.title, "Your Helium API key was rejected")
+        XCTAssertTrue(content.body.contains("Helium.shared.initialize(apiKey:)"))
+        XCTAssertEqual(content.cta, .copyUrl(label: "Copy Profile Link", url: "https://app.tryhelium.com/profile"))
+    }
+
+    func testDownloadFailureWithoutAKnownStageKeepsTheGenericBody() {
+        let content = downloadFailureContent(nil)
+
+        XCTAssertEqual(content.category, .network)
+        XCTAssertEqual(content.title, "Paywalls failed to download")
+        XCTAssertEqual(
+            content.body,
+            "Paywalls failed to download. Check this device's connection and your Helium API key."
+        )
+    }
+
+    func testTargetingSkipCopiesTheWorkflowsLink() {
         XCTAssertEqual(
             mapper.mapSkip(.targetingHoldout).cta,
-            .openUrl(label: "Open Workflows", url: "https://app.tryhelium.com/workflows")
+            .copyUrl(label: "Copy Workflows Link", url: "https://app.tryhelium.com/workflows")
         )
     }
 
@@ -329,6 +480,23 @@ final class DiagnosticContentMapperTests: XCTestCase {
             content(for: .alreadyPresented).title,
             "A Helium paywall is already being presented"
         )
+    }
+
+    func testDashboardLinksAreCopiedAndDocsLinksAreOpened() {
+        var copied = 0
+        for content in allContent() {
+            switch content.cta {
+            case let .openUrl(_, url):
+                XCTAssertFalse(url.contains("app.tryhelium.com"), "\(content.reasonCode) opens the dashboard")
+            case let .copyUrl(label, url):
+                copied += 1
+                XCTAssertTrue(url.contains("app.tryhelium.com"), "\(content.reasonCode) copies a non-dashboard link")
+                XCTAssertTrue(label.hasPrefix("Copy ") && label.hasSuffix(" Link"), "\(content.reasonCode): \(label)")
+            case .copyReport:
+                break
+            }
+        }
+        XCTAssertGreaterThan(copied, 0)
     }
 
     // MARK: - Users-will-see matrix

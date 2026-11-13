@@ -21,17 +21,28 @@ struct DiagnosticContext {
 
     /// Bandit's optional explanation for why this trigger did not resolve to a paywall.
     let banditReason: String?
+    let banditReasonCode: String?
+
+    let fetchFailure: HeliumFetchFailureKind?
+
+    let countrySignals: CountrySignals
 
     init(
         trigger: String,
         paywallId: String? = nil,
         webCheckoutProcessors: WebCheckoutProcessors = [],
-        banditReason: String? = nil
+        banditReason: String? = nil,
+        banditReasonCode: String? = nil,
+        fetchFailure: HeliumFetchFailureKind? = nil,
+        countrySignals: CountrySignals = CountrySignals()
     ) {
         self.trigger = trigger
         self.paywallId = paywallId
         self.webCheckoutProcessors = webCheckoutProcessors
         self.banditReason = banditReason
+        self.banditReasonCode = banditReasonCode
+        self.fetchFailure = fetchFailure
+        self.countrySignals = countrySignals
     }
 
     /// Resolves the context from live SDK state. The paywall id is best-effort: an unresolvable
@@ -41,7 +52,13 @@ struct DiagnosticContext {
             trigger: trigger,
             paywallId: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.paywallUUID,
             webCheckoutProcessors: Helium.config.webCheckoutProcessors,
-            banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger)
+            banditReason: HeliumFetchedConfigManager.shared.getBanditReasonForTrigger(trigger),
+            banditReasonCode: HeliumFetchedConfigManager.shared.getBanditReasonCodeForTrigger(trigger),
+            fetchFailure: HeliumFetchedConfigManager.shared.lastFetchFailure,
+            countrySignals: CountrySignals(
+                deviceRegion: Locale.current.regionCode,
+                storeCountry: AppStoreCountryHelper.shared.getStoreCountryCode()
+            )
         )
     }
 }
