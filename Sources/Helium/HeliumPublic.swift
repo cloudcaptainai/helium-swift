@@ -92,7 +92,7 @@ public class Helium {
     /// in order to show a paywall.
     ///
     /// - Tip: Create a unique trigger for each location a paywall can show in your app (for example, `"onboarding"` and `"settings"`).
-    ///   This gives you more flexibility with paywall variations and experiments, letting you take full advantage of Helium.
+    ///   This gives you more flexibility with paywall variation and experiments, letting you take full advantage of Helium.
     ///
     /// - Parameters:
     ///   - trigger: The trigger configured in the Helium dashboard.
