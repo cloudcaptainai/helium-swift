@@ -42,10 +42,6 @@ public protocol PaywallContextEvent: HeliumEvent {
 }
 
 extension PaywallContextEvent {
-    public var isSecondTry: Bool {
-        HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName)
-    }
-    
     /// Get experiment allocation info for this event's trigger
     /// 
     /// - Returns: ExperimentInfo if the trigger has experiment data, nil otherwise
@@ -81,6 +77,8 @@ public extension ProductEvent {
 /// Event fired when a paywall is displayed to the user
 /// - Note: Event fired when a paywall becomes visible on screen via onReceive of presentationState.isOpen changing to true. Fired by logImpression() when paywall view's onAppear is called or presentation state changes.
 public struct PaywallOpenEvent: PaywallContextEvent {
+    public let isSecondTry: Bool
+
     /// The trigger identifier that caused this paywall to be shown
     /// - Note: Corresponds to trigger key in Helium dashboard (e.g., "premium_upgrade", "onboarding")
     public let triggerName: String
@@ -111,7 +109,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         loadTimeTakenMS: UInt64? = nil, loadingBudgetMS: UInt64? = nil,
         paywallUnavailableReason: PaywallUnavailableReason? = nil,
         newWindowCreated: Bool? = nil,
-        timestamp: Date = Date()
+        timestamp: Date = Date(), secondTry: Bool = false
     ) {
         self.triggerName = triggerName
         self.paywallName = paywallName
@@ -120,6 +118,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
         self.loadingBudgetMS = loadingBudgetMS
         self.paywallUnavailableReason = paywallUnavailableReason
         self.newWindowCreated = newWindowCreated
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -193,6 +192,8 @@ public struct PaywallCloseEvent: PaywallContextEvent {
 /// Event fired when user dismisses a paywall
 /// - Note: Event fired when dismiss() or dismissAll() is called from JavaScript or native code (user taps X button). Fired BEFORE PaywallCloseEvent when dispatchEvent parameter is true.
 public struct PaywallDismissedEvent: PaywallContextEvent {
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the dismissed paywall
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -209,10 +210,11 @@ public struct PaywallDismissedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, dismissAll: Bool = false, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, dismissAll: Bool = false, timestamp: Date = Date(), secondTry: Bool = false) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.dismissAll = dismissAll
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -351,6 +353,8 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
     /// - Note: Value comes from componentName field in 'cta-pressed' JavaScript message (e.g., "learn_more", "terms_of_service")
     public let buttonName: String
     
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall containing this button
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -363,10 +367,11 @@ public struct PaywallButtonPressedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(buttonName: String, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(buttonName: String, triggerName: String, paywallName: String, timestamp: Date = Date(), secondTry: Bool = false) {
         self.buttonName = buttonName
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -396,6 +401,8 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
     /// - Note: Any numerical values will have Double type
     public let params: [String: Any]
     
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall that sent this action
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -413,12 +420,13 @@ public struct CustomPaywallActionEvent: PaywallContextEvent {
         params: [String: Any],
         triggerName: String,
         paywallName: String,
-        timestamp: Date = Date()
+        timestamp: Date = Date(), secondTry: Bool = false
     ) {
         self.actionName = actionName
         self.params = params
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -450,6 +458,8 @@ public struct ProductSelectedEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where selection occurred
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -462,11 +472,12 @@ public struct ProductSelectedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -499,6 +510,8 @@ public struct PurchasePressedEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where purchase was initiated
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -514,12 +527,13 @@ public struct PurchasePressedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -575,8 +589,7 @@ public enum HeliumPaymentProcessor: String, Codable, Sendable {
 /// Event fired when a purchase completes successfully.
 /// See `paymentProcessor` to identify which payment processor completed the purchase.
 public struct PurchaseSucceededEvent: ProductEvent {
-    var isWebSecondTry = false
-    public var isSecondTry: Bool { isWebSecondTry || HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName) }
+    public let isSecondTry: Bool
     /// The Helium product identifier that was successfully purchased
     /// - Note: StoreKit product ID from App Store Connect, pro\_id:pri\_id from Paddle, prod\_id:price\_id from Stripe
     public let productId: String
@@ -608,7 +621,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, skPostPurchaseTxnTimeMS: UInt64? = nil, paymentProcessor: HeliumPaymentProcessor = .appStore, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
@@ -617,6 +630,7 @@ public struct PurchaseSucceededEvent: ProductEvent {
         self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
         self.skPostPurchaseTxnTimeMS = skPostPurchaseTxnTimeMS
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -660,6 +674,8 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where purchase was cancelled
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -675,12 +691,13 @@ public struct PurchaseCancelledEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -714,6 +731,8 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where purchase failed
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -733,13 +752,14 @@ public struct PurchaseFailedEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, error: Error? = nil, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.error = error
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -784,8 +804,7 @@ public enum PurchaseRestoredOrigin: String, Codable, Sendable {
 /// (explicit restorePurchases() or makePurchase returning .restored) or by detecting an
 /// already-entitled product on return from an external web checkout.
 public struct PurchaseRestoredEvent: ProductEvent {
-    var isWebSecondTry = false
-    public var isSecondTry: Bool { isWebSecondTry || HeliumPaywallPresenter.shared.isSecondTryPaywall(trigger: triggerName) }
+    public let isSecondTry: Bool
     /// The product identifier that was restored
     /// - Note: Set to "HELIUM_GENERIC_PRODUCT" when restoring all purchases via restorePurchases()
     public let productId: String
@@ -808,12 +827,13 @@ public struct PurchaseRestoredEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, triggerName: String, paywallName: String, restoreOrigin: PurchaseRestoredOrigin, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.restoreOrigin = restoreOrigin
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -836,6 +856,8 @@ public struct PurchaseRestoredEvent: ProductEvent {
 /// Event fired when restorePurchases() delegate method returns false
 /// - Note: No previous purchases found to restore or restore process failed
 public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where restore was attempted
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -848,9 +870,10 @@ public struct PurchaseRestoreFailedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, timestamp: Date = Date(), secondTry: Bool = false) {
         self.triggerName = triggerName
         self.paywallName = paywallName
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -880,6 +903,8 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where re-purchase was attempted
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -898,13 +923,14 @@ public struct PurchaseAlreadyEntitledEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, storeKitTransactionId: String?, storeKitOriginalTransactionId: String?, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.storeKitTransactionId = storeKitTransactionId
         self.storeKitOriginalTransactionId = storeKitOriginalTransactionId
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -991,6 +1017,8 @@ public struct PurchasePendingEvent: ProductEvent {
     /// App Store promotional offer identifier applied to this product.
     public let offerIdentifier: String?
 
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the paywall where purchase is pending
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -1006,12 +1034,13 @@ public struct PurchasePendingEvent: ProductEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
 
-    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date()) {
+    public init(productId: String, offerIdentifier: String? = nil, triggerName: String, paywallName: String, paymentProcessor: HeliumPaymentProcessor, timestamp: Date = Date(), secondTry: Bool = false) {
         self.productId = productId
         self.offerIdentifier = offerIdentifier
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.paymentProcessor = paymentProcessor
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
 
@@ -1283,6 +1312,8 @@ public struct PaywallsDownloadErrorEvent: HeliumEvent {
 /// Event fired when paywall web view finishes rendering
 /// - Note: Event fired when WebView's didFinish navigation delegate method is called and document.readyState is 'complete'. Includes render time in milliseconds from start of load to completion.
 public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
+    public let isSecondTry: Bool
+
     /// The trigger identifier for the rendered paywall
     /// - Note: Corresponds to trigger key in Helium dashboard
     public let triggerName: String
@@ -1302,11 +1333,12 @@ public struct PaywallWebViewRenderedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date()) {
+    public init(triggerName: String, paywallName: String, webviewRenderTimeTakenMS: UInt64? = nil, paywallUnavailableReason: PaywallUnavailableReason? = nil, timestamp: Date = Date(), secondTry: Bool = false) {
         self.triggerName = triggerName
         self.paywallName = paywallName
         self.webviewRenderTimeTakenMS = webviewRenderTimeTakenMS
         self.paywallUnavailableReason = paywallUnavailableReason
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     

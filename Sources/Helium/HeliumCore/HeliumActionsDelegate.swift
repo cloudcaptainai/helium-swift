@@ -129,7 +129,8 @@ class HeliumActionsDelegate: ObservableObject {
             triggerName: trigger,
             paywallName: isFallback ? "fallback_\(paywallInfo.paywallTemplateName)" : paywallInfo.paywallTemplateName,
             webviewRenderTimeTakenMS: timeTakenMS,
-            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil
+            paywallUnavailableReason: isFallback ? .webviewRenderFail : nil,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -148,7 +149,8 @@ class HeliumActionsDelegate: ObservableObject {
             if dispatchEvent {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
-                    paywallName: paywallInfo.paywallTemplateName
+                    paywallName: paywallInfo.paywallTemplateName,
+                    secondTry: paywallSession.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
             }
@@ -166,7 +168,8 @@ class HeliumActionsDelegate: ObservableObject {
                 let event = PaywallDismissedEvent(
                     triggerName: trigger,
                     paywallName: paywallInfo.paywallTemplateName,
-                    dismissAll: true
+                    dismissAll: true,
+                    secondTry: paywallSession.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
             }
@@ -180,7 +183,8 @@ class HeliumActionsDelegate: ObservableObject {
         if !isLoading {
             // Re-use same presentation context as underlying paywall. Integrator can check
             // isSecondTry to distinguish events.
-            let presentationContext = paywallSession.presentationContext
+            var presentationContext = paywallSession.presentationContext
+            presentationContext.isSecondTry = true
             let secondTryTrigger = "\(trigger)_second_try"
             // Try uuid lookup first. Previews skip it: the uuid can match the same paywall
             // served under a live trigger, which would present a production entry — real
@@ -188,11 +192,11 @@ class HeliumActionsDelegate: ObservableObject {
             if let uuid, !HeliumFetchedConfigManager.isPreviewTrigger(trigger),
                let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, isSecondTry: true, presentationContext: presentationContext)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
             else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, isSecondTry: true, presentationContext: presentationContext)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
@@ -211,7 +215,8 @@ class HeliumActionsDelegate: ObservableObject {
             let event = PaywallButtonPressedEvent(
                 buttonName: contentComponentName,
                 triggerName: trigger,
-                paywallName: paywallInfo.paywallTemplateName
+                paywallName: paywallInfo.paywallTemplateName,
+                secondTry: paywallSession.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }
@@ -234,7 +239,8 @@ class HeliumActionsDelegate: ObservableObject {
             offerIdentifier: selectedParts.promoOfferId,
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,
-            paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId)
+            paymentProcessor: HeliumPaymentProcessor.resolve(for: selectedProductId),
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(pressedEvent, paywallSession: paywallSession)
 
@@ -297,7 +303,8 @@ class HeliumActionsDelegate: ObservableObject {
             viewType: viewType,
             loadTimeTakenMS: loadTimeTakenMS,
             loadingBudgetMS: paywallSession.presentationContext.config.loadingBudgetForAnalyticsMS,
-            paywallUnavailableReason: fallbackReason
+            paywallUnavailableReason: fallbackReason,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -309,7 +316,8 @@ class HeliumActionsDelegate: ObservableObject {
         // Use new typed event
         let event = PaywallCloseEvent(
             triggerName: trigger,
-            paywallName: paywallInfo.paywallTemplateName
+            paywallName: paywallInfo.paywallTemplateName,
+            secondTry: paywallSession.isSecondTry
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
     }
@@ -321,7 +329,8 @@ class HeliumActionsDelegate: ObservableObject {
                 actionName: actionName,
                 params: params,
                 triggerName: trigger,
-                paywallName: paywallInfo.paywallTemplateName
+                paywallName: paywallInfo.paywallTemplateName,
+                secondTry: paywallSession.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
         }

@@ -65,6 +65,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "viewType": "presented",
                 "loadTimeTakenMS": 123,
                 "loadingBudgetMS": 500,
@@ -78,6 +79,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "viewType": "embedded",
             ]
         )
@@ -94,6 +96,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "errorDescription": "WebView failed to load",
                 "paywallUnavailableReason": "paywallsNotDownloaded",
                 "loadTimeTakenMS": 3000,
@@ -107,6 +110,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "Template not found",
             ]
         )
@@ -132,6 +136,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "No paywall for trigger",
                 "paywallUnavailableReason": "triggerHasNoPaywall",
                 "failureClass": "paddle_geo_blocked",
@@ -146,6 +151,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "fallback_onboarding",
+                "isSecondTry": false,
                 "viewType": "presented",
                 "paywallUnavailableReason": "triggerHasNoPaywall",
                 "failureClass": "paddle_geo_blocked",
@@ -161,6 +167,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "A paywall is already being presented.",
                 "paywallUnavailableReason": "alreadyPresented",
             ]
@@ -174,8 +181,34 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallClose",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": true,
             ]
         )
+    }
+
+    func testSecondTryFailureAndPurchasePayloads() throws {
+        try assertWirePayload(
+            PaywallOpenFailedEvent(triggerName: "retry", paywallName: "Second", error: "Unable to open", secondTry: true),
+            equals: [
+                "type": "paywallOpenFailed",
+                "triggerName": "retry",
+                "paywallTemplateName": "Second",
+                "isSecondTry": true,
+                "errorDescription": "Unable to open",
+            ]
+        )
+        let purchase = PurchaseSucceededEvent(
+            productId: "prod_b:price_b", triggerName: "onboarding", paywallName: "Second",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .stripe, secondTry: true
+        )
+        try assertWirePayload(purchase, equals: [
+            "type": "subscriptionSucceeded",
+            "triggerName": "onboarding",
+            "paywallTemplateName": "Second",
+            "isSecondTry": true,
+            "productKey": "prod_b:price_b",
+            "paymentProcessor": "stripe",
+        ])
     }
 
     func testPaywallDismissedPayload() throws {
@@ -185,6 +218,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallDismissed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "dismissAll": true,
             ]
         )
@@ -194,6 +228,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallDismissed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "dismissAll": false,
             ]
         )
@@ -220,6 +255,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallWebViewRendered",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "webviewRenderTimeTakenMS": 250,
                 "paywallUnavailableReason": "triggerHasNoPaywall",
             ]
@@ -230,6 +266,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallWebViewRendered",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -242,6 +279,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "ctaName": "learn_more",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -259,6 +297,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "actionName": "toggle_feature",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "params": ["count": 2, "flag": true, "name": "abc"],
             ]
         )
@@ -278,6 +317,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -290,6 +330,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -303,6 +344,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "stripe",
             ]
         )
@@ -320,6 +362,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "storeKitTransactionId": "txn_123",
                 "storeKitOriginalTransactionId": "txn_001",
                 "skPostPurchaseTxnTimeMS": 88,
@@ -337,6 +380,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "paddle",
             ]
         )
@@ -356,6 +400,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "offerIdentifier": "WIN_BACK",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -371,6 +416,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -385,6 +431,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "errorDescription": "Something failed",
                 "paymentProcessor": "paddle",
             ]
@@ -396,6 +443,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -412,6 +460,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "restoreOrigin": "restorePurchases",
                 "paymentProcessor": "paddle",
             ]
@@ -425,6 +474,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "subscriptionRestoreFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -440,6 +490,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "storeKitTransactionId": "txn_123",
                 "storeKitOriginalTransactionId": "txn_001",
                 "canonicalJoinTransactionId": "txn_123",
@@ -455,6 +506,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -467,6 +519,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -672,6 +725,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             "type": "paywallClose",
             "triggerName": "onboarding",
             "paywallTemplateName": "spring_sale",
+            "isSecondTry": false,
         ])
         XCTAssertEqual(encoded["isHeliumEvent"] as? Bool, true)
         XCTAssertEqual(encoded["userId"] as? String, "user_1")

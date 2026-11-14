@@ -144,9 +144,9 @@ class HeliumPaywallDelegateWrapper {
 
         switch transactionStatus {
         case .cancelled:
-            self.fireEvent(PurchaseCancelledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseCancelledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
         case .failed(let error):
-            self.fireEvent(PurchaseFailedEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseFailedEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, error: error, paymentProcessor: paymentProcessor, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
         case .restored:
             let dialogConfig = Helium.config.webCheckoutAlreadyPurchasedDialogConfig
             var fireRestoreEvent = true
@@ -180,7 +180,8 @@ class HeliumPaywallDelegateWrapper {
                     triggerName: triggerName,
                     paywallName: paywallTemplateName,
                     restoreOrigin: .duringPurchase,
-                    paymentProcessor: paymentProcessor
+                    paymentProcessor: paymentProcessor,
+                    secondTry: paywallSession.isSecondTry
                 ), paywallSession: paywallSession)
             }
         case .purchased:
@@ -199,7 +200,7 @@ class HeliumPaywallDelegateWrapper {
             }
             
             if hadEntitlementBeforePurchase {
-                fireEvent(PurchaseAlreadyEntitledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId), paywallSession: paywallSession)
+                fireEvent(PurchaseAlreadyEntitledEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, storeKitTransactionId: transactionIds?.transactionId, storeKitOriginalTransactionId: transactionIds?.originalTransactionId, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
             } else {
                 syncAfterPurchase(productId: storeKitProductId, transaction: transactionIds?.transaction)
                 
@@ -221,12 +222,13 @@ class HeliumPaywallDelegateWrapper {
                     storeKitTransactionId: transactionIds?.transactionId,
                     storeKitOriginalTransactionId: transactionIds?.originalTransactionId,
                     skPostPurchaseTxnTimeMS: skPostPurchaseTxnTimeMS,
-                    paymentProcessor: paymentProcessor
+                    paymentProcessor: paymentProcessor,
+                    secondTry: paywallSession.isSecondTry
                 )
                 fireEvent(purchaseSucceededEvent, paywallSession: paywallSession)
             }
         case .pending:
-            self.fireEvent(PurchasePendingEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchasePendingEvent(productId: storeKitProductId, offerIdentifier: resolvedPromoOfferId, triggerName: triggerName, paywallName: paywallTemplateName, paymentProcessor: paymentProcessor, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
             // Add a listener for pending appStore purchases.
             // Other processors have their own mechanisms for handling pending purchases.
             if paymentProcessor == .appStore {
@@ -259,9 +261,9 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         if result {
-            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .restorePurchases, paymentProcessor: restoringProcessor), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .restorePurchases, paymentProcessor: restoringProcessor, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
         } else {
-            self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName), paywallSession: paywallSession)
+            self.fireEvent(PurchaseRestoreFailedEvent(triggerName: triggerName, paywallName: paywallTemplateName, secondTry: paywallSession.isSecondTry), paywallSession: paywallSession)
             if Helium.config.restorePurchasesDialog.showHeliumDialog {
                 Task { @MainActor in
                     let alert = UIAlertController(
@@ -562,7 +564,8 @@ class HeliumPaywallDelegateWrapper {
                                 paywallName: paywallTemplateName,
                                 storeKitTransactionId: transactionIds.transactionId,
                                 storeKitOriginalTransactionId: transactionIds.originalTransactionId,
-                                skPostPurchaseTxnTimeMS: nil
+                                skPostPurchaseTxnTimeMS: nil,
+                                secondTry: paywallSession.isSecondTry
                             ),
                             paywallSession: paywallSession
                         )
