@@ -197,11 +197,10 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "errorDescription": "Unable to open",
             ]
         )
-        var purchase = PurchaseSucceededEvent(
+        let purchase = PurchaseSucceededEvent(
             productId: "prod_b:price_b", triggerName: "onboarding", paywallName: "Second",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .stripe
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .stripe, secondTry: true
         )
-        purchase.isWebSecondTry = true
         try assertWirePayload(purchase, equals: [
             "type": "subscriptionSucceeded",
             "triggerName": "onboarding",
