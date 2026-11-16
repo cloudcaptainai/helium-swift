@@ -421,24 +421,16 @@ actor HeliumEntitlementsManager {
     
     func restoreStoreKitPurchases() async -> Bool {
         cache.lastTransactionsLoadedTime = nil
-        cache.subscriptionStatuses.removeAll()
         await loadEntitlementsIfNeeded()
 
         if cache.transactions.isEmpty {
-            let syncCompleted = await withTimeoutAbandoningOperation(milliseconds: 30_000) {
-                do {
-                    try await AppStore.sync()
-                } catch {
-                    HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync failed", metadata: ["error": error.localizedDescription])
-                }
-                return true
-            }
-            if syncCompleted == nil {
-                HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync timed out")
+            do {
+                try await AppStore.sync()
+            } catch {
+                HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync failed", metadata: ["error": error.localizedDescription])
             }
 
             cache.lastTransactionsLoadedTime = nil
-            cache.subscriptionStatuses.removeAll()
             await loadEntitlementsIfNeeded()
         }
 
