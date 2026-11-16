@@ -423,22 +423,29 @@ actor HeliumEntitlementsManager {
         cache.lastTransactionsLoadedTime = nil
         await loadEntitlementsIfNeeded()
 
+        var hostSourceEntitled = false
         if cache.transactions.isEmpty {
-            do {
-                try await AppStore.sync()
-            } catch {
-                HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync failed", metadata: ["error": error.localizedDescription])
+            if let hostSource = Helium.config.thirdPartyEntitlementsSource {
+                hostSourceEntitled = await !hostSource.purchasedHeliumProductIds().isEmpty
             }
+            // Avoid the App Store sign-in prompt for users already entitled through another source.
+            if await allThirdPartyEntitledProductIds().isEmpty {
+                do {
+                    try await AppStore.sync()
+                } catch {
+                    HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync failed", metadata: ["error": error.localizedDescription])
+                }
 
-            cache.lastTransactionsLoadedTime = nil
-            await loadEntitlementsIfNeeded()
+                cache.lastTransactionsLoadedTime = nil
+                await loadEntitlementsIfNeeded()
+            }
         }
 
         if Helium.shared.paywallsLoaded() {
             await refreshEntitledForTriggerCache()
         }
 
-        return !cache.transactions.isEmpty || (cache.lastTransactionsLoadedTime == nil
+        return hostSourceEntitled || !cache.transactions.isEmpty || (cache.lastTransactionsLoadedTime == nil
             && cache.persistedEntitlements.contains { $0.appearsValid() })
     }
 
