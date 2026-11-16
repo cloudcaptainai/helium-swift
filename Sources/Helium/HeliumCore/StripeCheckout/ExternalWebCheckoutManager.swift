@@ -825,15 +825,6 @@ public class ExternalWebCheckoutManager: NSObject {
         return [inAppBrowser ? 750_000_000 : 0, 2_000_000_000, 2_000_000_000, 3_000_000_000]
     }
 
-    private func paywallForProduct(_ productId: String, observation: CheckoutObservation, fromSuccessRedirect: Bool) -> (name: String, isSecondTry: Bool) {
-        let primaryProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
-        let second = observation.secondTry
-        let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
-        let isWebSecondTry = ownSecond.contains(productId) && !primaryProducts.contains(productId)
-        return ((isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
-                isWebSecondTry || observation.paywallSession.isSecondTry)
-    }
-
     /// Refreshes entitlements once and scans active observations (newest-first).
     /// A newly-entitled offered product always fires `PurchaseSucceededEvent`.
     /// An already-entitled offered product fires `PurchaseRestoredEvent` only
@@ -855,13 +846,18 @@ public class ExternalWebCheckoutManager: NSObject {
         let observationsSnapshot = activeCheckoutObservations
             .sorted { $0.value.addedAt > $1.value.addedAt }
 
-        var restoredCandidate: (productId: String, observation: CheckoutObservation)?
+        var restoredCandidate: (productId: String, observation: CheckoutObservation, paywall: (name: String, isSecondTry: Bool))?
 
         for (sessionId, observation) in observationsSnapshot {
             let primaryProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
             let second = observation.secondTry
             let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
             let offeredProducts = primaryProducts + ownSecond
+            func paywallForProduct(_ productId: String) -> (name: String, isSecondTry: Bool) {
+                let isWebSecondTry = ownSecond.contains(productId) && !primaryProducts.contains(productId)
+                return ((isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                        isWebSecondTry || observation.paywallSession.isSecondTry)
+            }
             guard !offeredProducts.isEmpty else { continue }
             let newlyEntitledIds = currentEntitledIds.subtracting(observation.entitledProductIdsBeforeCheckout)
             HeliumLogger.log(.debug, category: .entitlements, "\(provider.displayName) checkForNewPurchase session", metadata: [
@@ -874,7 +870,7 @@ public class ExternalWebCheckoutManager: NSObject {
             // recently added session (likely the one the user just interacted with).
             // In practice, second-try paywalls offer different products.
             if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                let paywall = paywallForProduct(purchasedProductId, observation: observation, fromSuccessRedirect: fromSuccessRedirect)
+                let paywall = paywallForProduct(purchasedProductId)
                 let event = PurchaseSucceededEvent(
                     productId: purchasedProductId,
                     triggerName: observation.paywallSession.trigger,
@@ -913,19 +909,18 @@ public class ExternalWebCheckoutManager: NSObject {
             if fromSuccessRedirect,
                restoredCandidate == nil,
                let entitledProductId = currentEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                restoredCandidate = (entitledProductId, observation)
+                restoredCandidate = (entitledProductId, observation, paywallForProduct(entitledProductId))
             }
         }
 
         if let restored = restoredCandidate {
-            let paywall = paywallForProduct(restored.productId, observation: restored.observation, fromSuccessRedirect: fromSuccessRedirect)
             let event = PurchaseRestoredEvent(
                 productId: restored.productId,
                 triggerName: restored.observation.paywallSession.trigger,
-                paywallName: paywall.name,
+                paywallName: restored.paywall.name,
                 restoreOrigin: .detectedPostWebCheckout,
                 paymentProcessor: provider.kind,
-                secondTry: paywall.isSecondTry
+                secondTry: restored.paywall.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 event,

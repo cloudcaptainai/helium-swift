@@ -156,21 +156,16 @@ public struct PaywallCloseEvent: PaywallContextEvent {
     /// The name/identifier of the paywall template that was closed
     /// - Note: Template name from Helium configuration
     public let paywallName: String
-    public var isSecondTry: Bool {
-        _secondTry ?? false
-    }
+    public let isSecondTry: Bool
     
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    /// Second try paywalls are always presented via HeliumPaywallPresenter, which sets this value.
-    private var _secondTry: Bool? = nil
-    
     public init(triggerName: String, paywallName: String, secondTry: Bool, timestamp: Date = Date()) {
         self.triggerName = triggerName
         self.paywallName = paywallName
-        self._secondTry = secondTry
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
@@ -239,9 +234,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// The name/identifier of the paywall template that failed to open
     /// - Note: Template name from Helium configuration (may be empty if paywall not found)
     public let paywallName: String
-    public var isSecondTry: Bool {
-        _secondTry
-    }
+    public let isSecondTry: Bool
     
     /// Optional error message describing why the paywall failed to open
     /// - Note: Provides context for debugging (e.g., "WebView failed to load", "Template not found")
@@ -262,9 +255,6 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
     
-    // Second try needs to be explicitly set for PaywallOpenFailedEvent
-    private let _secondTry: Bool
-    
     public init(
         triggerName: String,
         paywallName: String,
@@ -283,7 +273,7 @@ public struct PaywallOpenFailedEvent: PaywallContextEvent {
         self.loadTimeTakenMS = loadTimeTakenMS
         self.loadingBudgetMS = loadingBudgetMS
         self.newWindowCreated = newWindowCreated
-        self._secondTry = secondTry
+        self.isSecondTry = secondTry
         self.timestamp = timestamp
     }
     
