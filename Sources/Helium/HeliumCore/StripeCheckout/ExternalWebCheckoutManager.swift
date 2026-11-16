@@ -825,7 +825,7 @@ public class ExternalWebCheckoutManager: NSObject {
         return [inAppBrowser ? 750_000_000 : 0, 2_000_000_000, 2_000_000_000, 3_000_000_000]
     }
 
-    private func checkoutAttribution(productId: String, observation: CheckoutObservation, fromSuccessRedirect: Bool) -> (paywallName: String, isSecondTry: Bool) {
+    private func paywallForProduct(_ productId: String, observation: CheckoutObservation, fromSuccessRedirect: Bool) -> (name: String, isSecondTry: Bool) {
         let primaryProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
         let second = observation.secondTry
         let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
@@ -874,15 +874,15 @@ public class ExternalWebCheckoutManager: NSObject {
             // recently added session (likely the one the user just interacted with).
             // In practice, second-try paywalls offer different products.
             if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                let attribution = checkoutAttribution(productId: purchasedProductId, observation: observation, fromSuccessRedirect: fromSuccessRedirect)
+                let paywall = paywallForProduct(purchasedProductId, observation: observation, fromSuccessRedirect: fromSuccessRedirect)
                 let event = PurchaseSucceededEvent(
                     productId: purchasedProductId,
                     triggerName: observation.paywallSession.trigger,
-                    paywallName: attribution.paywallName,
+                    paywallName: paywall.name,
                     storeKitTransactionId: nil,
                     storeKitOriginalTransactionId: nil,
                     paymentProcessor: provider.kind,
-                    secondTry: attribution.isSecondTry
+                    secondTry: paywall.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     event,
@@ -918,14 +918,14 @@ public class ExternalWebCheckoutManager: NSObject {
         }
 
         if let restored = restoredCandidate {
-            let attribution = checkoutAttribution(productId: restored.productId, observation: restored.observation, fromSuccessRedirect: fromSuccessRedirect)
+            let paywall = paywallForProduct(restored.productId, observation: restored.observation, fromSuccessRedirect: fromSuccessRedirect)
             let event = PurchaseRestoredEvent(
                 productId: restored.productId,
                 triggerName: restored.observation.paywallSession.trigger,
-                paywallName: attribution.paywallName,
+                paywallName: paywall.name,
                 restoreOrigin: .detectedPostWebCheckout,
                 paymentProcessor: provider.kind,
-                secondTry: attribution.isSecondTry
+                secondTry: paywall.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 event,
