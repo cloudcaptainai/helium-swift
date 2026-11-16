@@ -249,7 +249,7 @@ func makeTestCheckoutAnalytics(session: PaywallSession, provider: HeliumPaymentP
     let event = PurchaseSucceededEvent(productId: "", triggerName: session.trigger,
                                        paywallName: session.paywallInfoWithBackups?.paywallTemplateName ?? "",
                                        storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-                                       paymentProcessor: provider)
+                                       paymentProcessor: provider, secondTry: session.isSecondTry)
     return HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: session)
 }
 

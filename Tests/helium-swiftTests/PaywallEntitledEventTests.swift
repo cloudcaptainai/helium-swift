@@ -8,7 +8,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     func testConsumeReturnsMarkedEventOnce() {
         let purchased = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         let sessionId = UUID().uuidString
         HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: .purchased(purchased))
@@ -29,11 +29,11 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     func testLastEntitlingEventWins() {
         let purchased = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         let restored = PurchaseRestoredEvent(
             productId: "com.test.restored", triggerName: "t", paywallName: "p",
-            restoreOrigin: .restorePurchases, paymentProcessor: .appStore
+            restoreOrigin: .restorePurchases, paymentProcessor: .appStore, secondTry: false
         )
         let sessionId = UUID().uuidString
         HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: .purchased(purchased))
@@ -52,7 +52,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
         let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: "txn_1", storeKitOriginalTransactionId: nil
+            storeKitTransactionId: "txn_1", storeKitOriginalTransactionId: nil, secondTry: false
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
@@ -69,7 +69,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
         let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseRestoredEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            restoreOrigin: .duringPurchase, paymentProcessor: .appStore
+            restoreOrigin: .duringPurchase, paymentProcessor: .appStore, secondTry: false
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseRestoredEvent.self).count == 1 }
@@ -85,7 +85,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
         let session = makeTestSession(trigger: "t", onEntitled: { _ in })
         let event = PurchaseAlreadyEntitledEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseAlreadyEntitledEvent.self).count == 1 }
@@ -98,7 +98,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
 
     func testFireEventDoesNotMarkSessionForNonEntitlingEvent() {
         let session = makeTestSession(trigger: "t", onEntitled: { _ in })
-        let event = PurchaseFailedEvent(productId: "com.test.product", triggerName: "t", paywallName: "p", paymentProcessor: .appStore)
+        let event = PurchaseFailedEvent(productId: "com.test.product", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseFailedEvent.self).count == 1 }
 
@@ -109,7 +109,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
         let session = makeTestSession(trigger: "t")
         let event = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PurchaseSucceededEvent.self).count == 1 }
@@ -160,7 +160,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     func testDispatchEntitledEventCallsOnEntitledOnceAndConsumes() {
         let purchased = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         let sessionId = UUID().uuidString
         var received: [PaywallEntitledEvent] = []
@@ -180,7 +180,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
     func testDispatchEntitledEventWithoutHandlerStillConsumesMark() {
         let purchased = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         let sessionId = UUID().uuidString
         HeliumPaywallPresenter.shared.markSessionAsEntitled(sessionId: sessionId, event: .purchased(purchased))
@@ -210,7 +210,7 @@ final class PaywallEntitledEventTests: HeliumTestCase {
 
         let purchased = PurchaseSucceededEvent(
             productId: "com.test.product", triggerName: "t", paywallName: "p",
-            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
         )
         XCTAssertEqual(PaywallEntitledEvent.purchased(purchased).productId, "com.test.product")
         XCTAssertTrue(PaywallEntitledEvent.purchased(purchased).event is PurchaseSucceededEvent)

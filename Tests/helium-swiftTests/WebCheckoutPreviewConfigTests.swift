@@ -37,7 +37,7 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         let templateEvent = PurchaseSucceededEvent(
             productId: "", triggerName: triggerName, paywallName: "P",
             storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-            paymentProcessor: provider.kind
+            paymentProcessor: provider.kind, secondTry: false
         )
         let analyticsEvent = HeliumAnalyticsManager.shared.buildLoggedEvent(
             for: templateEvent,

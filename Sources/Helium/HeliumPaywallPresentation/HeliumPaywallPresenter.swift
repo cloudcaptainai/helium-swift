@@ -70,7 +70,7 @@ class HeliumPaywallPresenter {
 
     func isSecondTryPaywall(trigger: String) -> Bool {
         return paywallsDisplayed.contains {
-            $0.trigger == trigger && $0.isSecondTry
+            $0.trigger == trigger && $0.paywallSession.isSecondTry
         }
     }
     
@@ -199,7 +199,8 @@ class HeliumPaywallPresenter {
                     paywallName: Helium.shared.fetchedPaywallInfo(trigger: trigger)?.paywallTemplateName ?? "unknown",
                     error: "A paywall is already being presented.",
                     paywallUnavailableReason: .alreadyPresented,
-                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
+                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS,
+                    secondTry: presentationContext.isSecondTry
                 ),
                 paywallSession: nil
             )
@@ -415,7 +416,7 @@ class HeliumPaywallPresenter {
             "isSecondTry": String(presentationContext.isSecondTry),
             "isFallback": String(fallbackReason != nil)
         ])
-        let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, isSecondTry: presentationContext.isSecondTry, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
+        let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
         modalVC.modalPresentationStyle = .fullScreen
         
         var presenter = presentationContext.config.presentFromViewController

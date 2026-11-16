@@ -825,6 +825,15 @@ public class ExternalWebCheckoutManager: NSObject {
         return [inAppBrowser ? 750_000_000 : 0, 2_000_000_000, 2_000_000_000, 3_000_000_000]
     }
 
+    private func checkoutAttribution(productId: String, observation: CheckoutObservation, fromSuccessRedirect: Bool) -> (paywallName: String, isSecondTry: Bool) {
+        let primaryProducts = observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
+        let second = observation.secondTry
+        let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
+        let isWebSecondTry = ownSecond.contains(productId) && !primaryProducts.contains(productId)
+        return ((isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                isWebSecondTry || observation.paywallSession.isSecondTry)
+    }
+
     /// Refreshes entitlements once and scans active observations (newest-first).
     /// A newly-entitled offered product always fires `PurchaseSucceededEvent`.
     /// An already-entitled offered product fires `PurchaseRestoredEvent` only
@@ -865,15 +874,15 @@ public class ExternalWebCheckoutManager: NSObject {
             // recently added session (likely the one the user just interacted with).
             // In practice, second-try paywalls offer different products.
             if let purchasedProductId = newlyEntitledIds.first(where: { offeredProducts.contains($0) }) {
-                let isWebSecondTry = ownSecond.contains(purchasedProductId) && !primaryProducts.contains(purchasedProductId)
+                let attribution = checkoutAttribution(productId: purchasedProductId, observation: observation, fromSuccessRedirect: fromSuccessRedirect)
                 let event = PurchaseSucceededEvent(
                     productId: purchasedProductId,
                     triggerName: observation.paywallSession.trigger,
-                    paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                    paywallName: attribution.paywallName,
                     storeKitTransactionId: nil,
                     storeKitOriginalTransactionId: nil,
                     paymentProcessor: provider.kind,
-                    secondTry: isWebSecondTry || observation.paywallSession.isSecondTry
+                    secondTry: attribution.isSecondTry
                 )
                 HeliumPaywallDelegateWrapper.shared.fireEvent(
                     event,
@@ -909,17 +918,14 @@ public class ExternalWebCheckoutManager: NSObject {
         }
 
         if let restored = restoredCandidate {
-            let primaryProducts = restored.observation.paywallSession.paywallInfoWithBackups.flatMap({ provider.getOfferedProducts($0, fromSuccessRedirect) }) ?? []
-            let second = restored.observation.secondTry
-            let ownSecond = provider.kind == .paddle ? (second?.productsOfferedPaddle ?? []) : (second?.productsOfferedStripe ?? [])
-            let isWebSecondTry = ownSecond.contains(restored.productId) && !primaryProducts.contains(restored.productId)
+            let attribution = checkoutAttribution(productId: restored.productId, observation: restored.observation, fromSuccessRedirect: fromSuccessRedirect)
             let event = PurchaseRestoredEvent(
                 productId: restored.productId,
                 triggerName: restored.observation.paywallSession.trigger,
-                paywallName: (isWebSecondTry ? second?.paywallTemplateName : nil) ?? restored.observation.paywallSession.paywallInfoWithBackups?.paywallTemplateName ?? "",
+                paywallName: attribution.paywallName,
                 restoreOrigin: .detectedPostWebCheckout,
                 paymentProcessor: provider.kind,
-                secondTry: isWebSecondTry || restored.observation.paywallSession.isSecondTry
+                secondTry: attribution.isSecondTry
             )
             HeliumPaywallDelegateWrapper.shared.fireEvent(
                 event,
