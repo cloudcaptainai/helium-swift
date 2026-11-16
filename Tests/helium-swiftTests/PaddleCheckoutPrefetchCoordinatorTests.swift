@@ -196,7 +196,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             } else {
                 guard case .notStarted = result else { return XCTFail("Unexpected second-try prefetch") }
             }
-            coordinator.cancelForSession(sessionId: session.sessionId)
+            await coordinator.cancelAllAndAwait()
         }
     }
     private var testSessionId: String { testSession.sessionId }
