@@ -419,7 +419,6 @@ actor HeliumEntitlementsManager {
         return false
     }
     
-    @available(iOS 15.0, *)
     func restoreStoreKitPurchases() async -> Bool {
         cache.lastTransactionsLoadedTime = nil
         cache.subscriptionStatuses.removeAll()
@@ -791,3 +790,4 @@ actor HeliumEntitlementsManager {
         }
     }
 }
+
