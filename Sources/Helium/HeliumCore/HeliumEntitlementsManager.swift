@@ -419,6 +419,38 @@ actor HeliumEntitlementsManager {
         return false
     }
     
+    @available(iOS 15.0, *)
+    func restoreStoreKitPurchases() async -> Bool {
+        cache.lastTransactionsLoadedTime = nil
+        cache.subscriptionStatuses.removeAll()
+        await loadEntitlementsIfNeeded()
+
+        if cache.transactions.isEmpty {
+            let syncCompleted = await withTimeoutAbandoningOperation(milliseconds: 30_000) {
+                do {
+                    try await AppStore.sync()
+                } catch {
+                    HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync failed", metadata: ["error": error.localizedDescription])
+                }
+                return true
+            }
+            if syncCompleted == nil {
+                HeliumLogger.log(.warn, category: .entitlements, "StoreKit restore sync timed out")
+            }
+
+            cache.lastTransactionsLoadedTime = nil
+            cache.subscriptionStatuses.removeAll()
+            await loadEntitlementsIfNeeded()
+        }
+
+        if Helium.shared.paywallsLoaded() {
+            await refreshEntitledForTriggerCache()
+        }
+
+        return !cache.transactions.isEmpty || (cache.lastTransactionsLoadedTime == nil
+            && cache.persistedEntitlements.contains { $0.appearsValid() })
+    }
+
     func hasAnyEntitlement() async -> Bool {
         if await !allThirdPartyEntitledProductIds().isEmpty { return true }
         
@@ -759,4 +791,3 @@ actor HeliumEntitlementsManager {
         }
     }
 }
-

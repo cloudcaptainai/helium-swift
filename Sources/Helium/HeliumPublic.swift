@@ -80,7 +80,9 @@ public class Helium {
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
+        }
 
+        Task {
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
         }
