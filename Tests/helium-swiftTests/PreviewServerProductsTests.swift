@@ -191,7 +191,8 @@ final class PreviewServerProductsTests: XCTestCase {
             paddleProducts: nil,
             paddleClientToken: paddleClientToken,
             forceExternalCheckoutSimulation: nil,
-            forcePaddleCaConsentModal: nil
+            forcePaddleCaConsentModal: nil,
+            previewEligibilityIpCountry: nil
         )
     }
 
