@@ -345,7 +345,7 @@ struct HeliumControlPanelView: View {
     ) {
         let service = HeliumControlPanelService.shared
         let requested = Helium.testing.effectivePaddleAccountOverride
-        guard requested != service.onLaunchPaddleAccountOverride else {
+        guard !service.onLaunchConfigMatches(requested) else {
             if let version, let paywall { selectVersion(version, paywall: paywall) }
             return
         }

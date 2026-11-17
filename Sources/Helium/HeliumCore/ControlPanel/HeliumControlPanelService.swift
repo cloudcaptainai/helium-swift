@@ -96,10 +96,13 @@ class HeliumControlPanelService {
     }
 
     private var refreshedOnLaunchPaddleAccountOverride: HeliumPaddleAccountOverride?
+    /// An unsuccessful refresh may still have replaced the config, so its account is unknown.
+    private var onLaunchPaddleAccountUnknown = false
 
-    /// The Paddle account override the current on-launch config was fetched with.
-    var onLaunchPaddleAccountOverride: HeliumPaddleAccountOverride {
-        refreshedOnLaunchPaddleAccountOverride ?? Helium.testing.paddleAccountOverride
+    /// Whether the current on-launch config was fetched with this Paddle account override.
+    func onLaunchConfigMatches(_ paddleAccountOverride: HeliumPaddleAccountOverride) -> Bool {
+        !onLaunchPaddleAccountUnknown
+            && paddleAccountOverride == (refreshedOnLaunchPaddleAccountOverride ?? Helium.testing.paddleAccountOverride)
     }
 
     /// Re-runs on-launch so its Paddle client token, prices and routes come from the account the
@@ -110,11 +113,13 @@ class HeliumControlPanelService {
         let deadline = Date().addingTimeInterval(30)
         await waitForConfigDownload(until: deadline)
         guard !Task.isCancelled else { return false }
+        onLaunchPaddleAccountUnknown = true
         controller.downloadConfig()
         await waitForConfigDownload(until: deadline)
         guard !Task.isCancelled,
               HeliumFetchedConfigManager.shared.downloadStatus == .downloadSuccess else { return false }
         refreshedOnLaunchPaddleAccountOverride = paddleAccountOverride
+        onLaunchPaddleAccountUnknown = false
         return true
     }
 
