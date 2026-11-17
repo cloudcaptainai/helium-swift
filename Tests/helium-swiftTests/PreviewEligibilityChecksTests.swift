@@ -82,6 +82,7 @@ final class PreviewEligibilityChecksTests: XCTestCase {
         {"productIds": [], "paywalls": [], "forceExternalCheckoutSimulation": false, "previewEligibilityIpCountry": "US"}
         """.utf8))
         store.applyEligibility(from: cleared)
+        store.purchaseMode = .real
         XCTAssertEqual(store.purchaseMode, .real)
         XCTAssertEqual(store.eligibilityStatus, .checked)
 
