@@ -59,12 +59,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             PaywallOpenEvent(
                 triggerName: "onboarding", paywallName: "spring_sale", viewType: .presented,
                 loadTimeTakenMS: 123, loadingBudgetMS: 500,
-                paywallUnavailableReason: .notInitialized, newWindowCreated: true
+                paywallUnavailableReason: .notInitialized, newWindowCreated: true, secondTry: false
             ),
             equals: [
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "viewType": "presented",
                 "loadTimeTakenMS": 123,
                 "loadingBudgetMS": 500,
@@ -73,11 +74,12 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             ]
         )
         try assertWirePayload(
-            PaywallOpenEvent(triggerName: "onboarding", paywallName: "spring_sale", viewType: .embedded),
+            PaywallOpenEvent(triggerName: "onboarding", paywallName: "spring_sale", viewType: .embedded, secondTry: false),
             equals: [
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "viewType": "embedded",
             ]
         )
@@ -88,12 +90,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             PaywallOpenFailedEvent(
                 triggerName: "onboarding", paywallName: "spring_sale", error: "WebView failed to load",
                 paywallUnavailableReason: .paywallsNotDownloaded,
-                loadTimeTakenMS: 3000, loadingBudgetMS: 2000, newWindowCreated: false
+                loadTimeTakenMS: 3000, loadingBudgetMS: 2000, newWindowCreated: false, secondTry: false
             ),
             equals: [
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "errorDescription": "WebView failed to load",
                 "paywallUnavailableReason": "paywallsNotDownloaded",
                 "loadTimeTakenMS": 3000,
@@ -102,11 +105,12 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             ]
         )
         try assertWirePayload(
-            PaywallOpenFailedEvent(triggerName: "onboarding", paywallName: "", error: "Template not found"),
+            PaywallOpenFailedEvent(triggerName: "onboarding", paywallName: "", error: "Template not found", secondTry: false),
             equals: [
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "Template not found",
             ]
         )
@@ -126,12 +130,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PaywallOpenFailedEvent(
                 triggerName: "onboarding", paywallName: "", error: "No paywall for trigger",
-                paywallUnavailableReason: .triggerHasNoPaywall
+                paywallUnavailableReason: .triggerHasNoPaywall, secondTry: false
             ),
             equals: [
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "No paywall for trigger",
                 "paywallUnavailableReason": "triggerHasNoPaywall",
                 "failureClass": "paddle_geo_blocked",
@@ -140,12 +145,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PaywallOpenEvent(
                 triggerName: "onboarding", paywallName: "fallback_onboarding", viewType: .presented,
-                paywallUnavailableReason: .triggerHasNoPaywall
+                paywallUnavailableReason: .triggerHasNoPaywall, secondTry: false
             ),
             equals: [
                 "type": "paywallOpen",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "fallback_onboarding",
+                "isSecondTry": false,
                 "viewType": "presented",
                 "paywallUnavailableReason": "triggerHasNoPaywall",
                 "failureClass": "paddle_geo_blocked",
@@ -155,12 +161,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PaywallOpenFailedEvent(
                 triggerName: "onboarding", paywallName: "", error: "A paywall is already being presented.",
-                paywallUnavailableReason: .alreadyPresented
+                paywallUnavailableReason: .alreadyPresented, secondTry: false
             ),
             equals: [
                 "type": "paywallOpenFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "",
+                "isSecondTry": false,
                 "errorDescription": "A paywall is already being presented.",
                 "paywallUnavailableReason": "alreadyPresented",
             ]
@@ -174,26 +181,54 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "type": "paywallClose",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": true,
             ]
         )
     }
 
+    func testSecondTryFailureAndPurchasePayloads() throws {
+        try assertWirePayload(
+            PaywallOpenFailedEvent(triggerName: "retry", paywallName: "Second", error: "Unable to open", secondTry: true),
+            equals: [
+                "type": "paywallOpenFailed",
+                "triggerName": "retry",
+                "paywallTemplateName": "Second",
+                "isSecondTry": true,
+                "errorDescription": "Unable to open",
+            ]
+        )
+        let purchase = PurchaseSucceededEvent(
+            productId: "prod_b:price_b", triggerName: "onboarding", paywallName: "Second",
+            storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .stripe, secondTry: true
+        )
+        try assertWirePayload(purchase, equals: [
+            "type": "subscriptionSucceeded",
+            "triggerName": "onboarding",
+            "paywallTemplateName": "Second",
+            "isSecondTry": true,
+            "productKey": "prod_b:price_b",
+            "paymentProcessor": "stripe",
+        ])
+    }
+
     func testPaywallDismissedPayload() throws {
         try assertWirePayload(
-            PaywallDismissedEvent(triggerName: "onboarding", paywallName: "spring_sale", dismissAll: true),
+            PaywallDismissedEvent(triggerName: "onboarding", paywallName: "spring_sale", dismissAll: true, secondTry: false),
             equals: [
                 "type": "paywallDismissed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "dismissAll": true,
             ]
         )
         try assertWirePayload(
-            PaywallDismissedEvent(triggerName: "onboarding", paywallName: "spring_sale"),
+            PaywallDismissedEvent(triggerName: "onboarding", paywallName: "spring_sale", secondTry: false),
             equals: [
                 "type": "paywallDismissed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "dismissAll": false,
             ]
         )
@@ -214,34 +249,37 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PaywallWebViewRenderedEvent(
                 triggerName: "onboarding", paywallName: "spring_sale",
-                webviewRenderTimeTakenMS: 250, paywallUnavailableReason: .triggerHasNoPaywall
+                webviewRenderTimeTakenMS: 250, paywallUnavailableReason: .triggerHasNoPaywall, secondTry: false
             ),
             equals: [
                 "type": "paywallWebViewRendered",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "webviewRenderTimeTakenMS": 250,
                 "paywallUnavailableReason": "triggerHasNoPaywall",
             ]
         )
         try assertWirePayload(
-            PaywallWebViewRenderedEvent(triggerName: "onboarding", paywallName: "spring_sale"),
+            PaywallWebViewRenderedEvent(triggerName: "onboarding", paywallName: "spring_sale", secondTry: false),
             equals: [
                 "type": "paywallWebViewRendered",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
 
     func testPaywallButtonPressedPayload() throws {
         try assertWirePayload(
-            PaywallButtonPressedEvent(buttonName: "learn_more", triggerName: "onboarding", paywallName: "spring_sale"),
+            PaywallButtonPressedEvent(buttonName: "learn_more", triggerName: "onboarding", paywallName: "spring_sale", secondTry: false),
             equals: [
                 "type": "ctaPressed",
                 "ctaName": "learn_more",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -252,18 +290,19 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             CustomPaywallActionEvent(
                 actionName: "toggle_feature",
                 params: ["count": 2, "flag": true, "name": "abc"],
-                triggerName: "onboarding", paywallName: "spring_sale"
+                triggerName: "onboarding", paywallName: "spring_sale", secondTry: false
             ),
             equals: [
                 "type": "customPaywallAction",
                 "actionName": "toggle_feature",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "params": ["count": 2, "flag": true, "name": "abc"],
             ]
         )
         let payload = try mapperPayload(for: CustomPaywallActionEvent(
-            actionName: "noop", params: [:], triggerName: "onboarding", paywallName: "spring_sale"
+            actionName: "noop", params: [:], triggerName: "onboarding", paywallName: "spring_sale", secondTry: false
         ))
         XCTAssertEqual(payload["params"] as? String, "{}")
     }
@@ -272,24 +311,26 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
 
     func testProductSelectedPayload() throws {
         try assertWirePayload(
-            ProductSelectedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale"),
+            ProductSelectedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", secondTry: false),
             equals: [
                 "type": "offerSelected",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
 
     func testPurchasePressedPayload() throws {
         try assertWirePayload(
-            PurchasePressedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore),
+            PurchasePressedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore, secondTry: false),
             equals: [
                 "type": "subscriptionPressed",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -297,12 +338,13 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
 
     func testPurchaseCancelledPayload() throws {
         try assertWirePayload(
-            PurchaseCancelledEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .stripe),
+            PurchaseCancelledEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .stripe, secondTry: false),
             equals: [
                 "type": "subscriptionCancelled",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "stripe",
             ]
         )
@@ -313,13 +355,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             PurchaseSucceededEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
                 storeKitTransactionId: "txn_123", storeKitOriginalTransactionId: "txn_001",
-                skPostPurchaseTxnTimeMS: 88, paymentProcessor: .appStore
+                skPostPurchaseTxnTimeMS: 88, paymentProcessor: .appStore, secondTry: false
             ),
             equals: [
                 "type": "subscriptionSucceeded",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "storeKitTransactionId": "txn_123",
                 "storeKitOriginalTransactionId": "txn_001",
                 "skPostPurchaseTxnTimeMS": 88,
@@ -330,13 +373,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PurchaseSucceededEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
-                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .paddle
+                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .paddle, secondTry: false
             ),
             equals: [
                 "type": "subscriptionSucceeded",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "paddle",
             ]
         )
@@ -348,7 +392,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 productId: "com.test.product", offerIdentifier: "WIN_BACK",
                 triggerName: "onboarding", paywallName: "spring_sale",
                 storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-                paymentProcessor: .appStore
+                paymentProcessor: .appStore, secondTry: false
             ),
             equals: [
                 "type": "subscriptionSucceeded",
@@ -356,6 +400,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 "offerIdentifier": "WIN_BACK",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -364,13 +409,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
                 productId: "com.test.product",
                 triggerName: "onboarding", paywallName: "spring_sale",
                 storeKitTransactionId: nil, storeKitOriginalTransactionId: nil,
-                paymentProcessor: .appStore
+                paymentProcessor: .appStore, secondTry: false
             ),
             equals: [
                 "type": "subscriptionSucceeded",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -379,23 +425,25 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     func testPurchaseFailedPayload() throws {
         let error = NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Something failed"])
         try assertWirePayload(
-            PurchaseFailedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", error: error, paymentProcessor: .paddle),
+            PurchaseFailedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", error: error, paymentProcessor: .paddle, secondTry: false),
             equals: [
                 "type": "subscriptionFailed",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "errorDescription": "Something failed",
                 "paymentProcessor": "paddle",
             ]
         )
         try assertWirePayload(
-            PurchaseFailedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore),
+            PurchaseFailedEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore, secondTry: false),
             equals: [
                 "type": "subscriptionFailed",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -405,13 +453,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PurchaseRestoredEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
-                restoreOrigin: .restorePurchases, paymentProcessor: .paddle
+                restoreOrigin: .restorePurchases, paymentProcessor: .paddle, secondTry: false
             ),
             equals: [
                 "type": "subscriptionRestored",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "restoreOrigin": "restorePurchases",
                 "paymentProcessor": "paddle",
             ]
@@ -420,11 +469,12 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
 
     func testPurchaseRestoreFailedPayload() throws {
         try assertWirePayload(
-            PurchaseRestoreFailedEvent(triggerName: "onboarding", paywallName: "spring_sale"),
+            PurchaseRestoreFailedEvent(triggerName: "onboarding", paywallName: "spring_sale", secondTry: false),
             equals: [
                 "type": "subscriptionRestoreFailed",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
@@ -433,13 +483,14 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PurchaseAlreadyEntitledEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
-                storeKitTransactionId: "txn_123", storeKitOriginalTransactionId: "txn_001"
+                storeKitTransactionId: "txn_123", storeKitOriginalTransactionId: "txn_001", secondTry: false
             ),
             equals: [
                 "type": "purchase_already_entitled",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "storeKitTransactionId": "txn_123",
                 "storeKitOriginalTransactionId": "txn_001",
                 "canonicalJoinTransactionId": "txn_123",
@@ -448,25 +499,27 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
         try assertWirePayload(
             PurchaseAlreadyEntitledEvent(
                 productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale",
-                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil
+                storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false
             ),
             equals: [
                 "type": "purchase_already_entitled",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
             ]
         )
     }
 
     func testPurchasePendingPayload() throws {
         try assertWirePayload(
-            PurchasePendingEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore),
+            PurchasePendingEvent(productId: "com.test.product", triggerName: "onboarding", paywallName: "spring_sale", paymentProcessor: .appStore, secondTry: false),
             equals: [
                 "type": "subscriptionPending",
                 "productKey": "com.test.product",
                 "triggerName": "onboarding",
                 "paywallTemplateName": "spring_sale",
+                "isSecondTry": false,
                 "paymentProcessor": "appStore",
             ]
         )
@@ -556,23 +609,23 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     func testTrackEventNames() throws {
         let samples: [(HeliumEvent, String)] = [
             (InitializeCalledEvent(), "helium_initializeCalled"),
-            (PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .triggered), "helium_paywallOpen"),
-            (PaywallOpenFailedEvent(triggerName: "t", paywallName: "p", error: "e"), "helium_paywallOpenFailed"),
-            (PaywallCloseEvent(triggerName: "t", paywallName: "p"), "helium_paywallClose"),
-            (PaywallDismissedEvent(triggerName: "t", paywallName: "p"), "helium_paywallDismissed"),
+            (PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .triggered, secondTry: false), "helium_paywallOpen"),
+            (PaywallOpenFailedEvent(triggerName: "t", paywallName: "p", error: "e", secondTry: false), "helium_paywallOpenFailed"),
+            (PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false), "helium_paywallClose"),
+            (PaywallDismissedEvent(triggerName: "t", paywallName: "p", secondTry: false), "helium_paywallDismissed"),
             (PaywallSkippedEvent(triggerName: "t"), "helium_paywallSkipped"),
-            (PaywallWebViewRenderedEvent(triggerName: "t", paywallName: "p"), "helium_paywallWebViewRendered"),
-            (PaywallButtonPressedEvent(buttonName: "b", triggerName: "t", paywallName: "p"), "helium_ctaPressed"),
-            (CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "t", paywallName: "p"), "helium_customPaywallAction"),
-            (ProductSelectedEvent(productId: "pr", triggerName: "t", paywallName: "p"), "helium_offerSelected"),
-            (PurchasePressedEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore), "helium_subscriptionPressed"),
-            (PurchaseCancelledEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore), "helium_subscriptionCancelled"),
-            (PurchaseSucceededEvent(productId: "pr", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil), "helium_subscriptionSucceeded"),
-            (PurchaseFailedEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore), "helium_subscriptionFailed"),
-            (PurchaseRestoredEvent(productId: "pr", triggerName: "t", paywallName: "p", restoreOrigin: .duringPurchase, paymentProcessor: .appStore), "helium_subscriptionRestored"),
-            (PurchaseRestoreFailedEvent(triggerName: "t", paywallName: "p"), "helium_subscriptionRestoreFailed"),
-            (PurchaseAlreadyEntitledEvent(productId: "pr", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil), "helium_purchase_already_entitled"),
-            (PurchasePendingEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore), "helium_subscriptionPending"),
+            (PaywallWebViewRenderedEvent(triggerName: "t", paywallName: "p", secondTry: false), "helium_paywallWebViewRendered"),
+            (PaywallButtonPressedEvent(buttonName: "b", triggerName: "t", paywallName: "p", secondTry: false), "helium_ctaPressed"),
+            (CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "t", paywallName: "p", secondTry: false), "helium_customPaywallAction"),
+            (ProductSelectedEvent(productId: "pr", triggerName: "t", paywallName: "p", secondTry: false), "helium_offerSelected"),
+            (PurchasePressedEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false), "helium_subscriptionPressed"),
+            (PurchaseCancelledEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false), "helium_subscriptionCancelled"),
+            (PurchaseSucceededEvent(productId: "pr", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false), "helium_subscriptionSucceeded"),
+            (PurchaseFailedEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false), "helium_subscriptionFailed"),
+            (PurchaseRestoredEvent(productId: "pr", triggerName: "t", paywallName: "p", restoreOrigin: .duringPurchase, paymentProcessor: .appStore, secondTry: false), "helium_subscriptionRestored"),
+            (PurchaseRestoreFailedEvent(triggerName: "t", paywallName: "p", secondTry: false), "helium_subscriptionRestoreFailed"),
+            (PurchaseAlreadyEntitledEvent(productId: "pr", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false), "helium_purchase_already_entitled"),
+            (PurchasePendingEvent(productId: "pr", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false), "helium_subscriptionPending"),
             (PaywallsDownloadSuccessEvent(), "helium_paywallsDownloadSuccess"),
             (PaywallsDownloadErrorEvent(error: "e", configDownloaded: false), "helium_paywallsDownloadError"),
             (UserAllocatedEvent(trigger: "t", experimentInfo: placeholderExperimentInfo()), "helium_userAllocated"),
@@ -594,22 +647,22 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
 
     func testTriggerAndTemplateExtraction() throws {
         let contextEvents: [HeliumEvent] = [
-            PaywallOpenEvent(triggerName: "trig", paywallName: "tmpl", viewType: .presented),
-            PaywallOpenFailedEvent(triggerName: "trig", paywallName: "tmpl", error: "e"),
-            PaywallCloseEvent(triggerName: "trig", paywallName: "tmpl"),
-            PaywallDismissedEvent(triggerName: "trig", paywallName: "tmpl"),
-            PaywallWebViewRenderedEvent(triggerName: "trig", paywallName: "tmpl"),
-            PaywallButtonPressedEvent(buttonName: "b", triggerName: "trig", paywallName: "tmpl"),
-            CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "trig", paywallName: "tmpl"),
-            ProductSelectedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl"),
-            PurchasePressedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore),
-            PurchaseCancelledEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore),
-            PurchaseSucceededEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
-            PurchaseFailedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore),
-            PurchaseRestoredEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", restoreOrigin: .restorePurchases, paymentProcessor: .appStore),
-            PurchaseRestoreFailedEvent(triggerName: "trig", paywallName: "tmpl"),
-            PurchaseAlreadyEntitledEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
-            PurchasePendingEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore),
+            PaywallOpenEvent(triggerName: "trig", paywallName: "tmpl", viewType: .presented, secondTry: false),
+            PaywallOpenFailedEvent(triggerName: "trig", paywallName: "tmpl", error: "e", secondTry: false),
+            PaywallCloseEvent(triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            PaywallDismissedEvent(triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            PaywallWebViewRenderedEvent(triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            PaywallButtonPressedEvent(buttonName: "b", triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            ProductSelectedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            PurchasePressedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore, secondTry: false),
+            PurchaseCancelledEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore, secondTry: false),
+            PurchaseSucceededEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false),
+            PurchaseFailedEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore, secondTry: false),
+            PurchaseRestoredEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", restoreOrigin: .restorePurchases, paymentProcessor: .appStore, secondTry: false),
+            PurchaseRestoreFailedEvent(triggerName: "trig", paywallName: "tmpl", secondTry: false),
+            PurchaseAlreadyEntitledEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false),
+            PurchasePendingEvent(productId: "pr", triggerName: "trig", paywallName: "tmpl", paymentProcessor: .appStore, secondTry: false),
         ]
         for event in contextEvents {
             XCTAssertEqual(HeliumAnalyticsMapper.getTriggerName(event), "trig", "\(event.eventName)")
@@ -639,7 +692,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
     // MARK: - Logged event envelope
 
     func testLoggedEventNestsPayloadUnderHeliumEventKey() throws {
-        let event = PaywallCloseEvent(triggerName: "onboarding", paywallName: "spring_sale")
+        let event = PaywallCloseEvent(triggerName: "onboarding", paywallName: "spring_sale", secondTry: false)
         let loggedEvent = HeliumPaywallLoggedEvent(
             heliumEvent: try SegmentJSON(HeliumAnalyticsMapper.mapToAnalyticsPayload(event)),
             fetchedConfigId: nil,
@@ -672,6 +725,7 @@ final class AnalyticsPayloadMappingTests: XCTestCase {
             "type": "paywallClose",
             "triggerName": "onboarding",
             "paywallTemplateName": "spring_sale",
+            "isSecondTry": false,
         ])
         XCTAssertEqual(encoded["isHeliumEvent"] as? Bool, true)
         XCTAssertEqual(encoded["userId"] as? String, "user_1")

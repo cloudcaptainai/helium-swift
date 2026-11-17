@@ -57,6 +57,8 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         analytics.experimentID = "experiment"
         analytics.modelID = "model"
         var analyticsDict = testAnalyticsDictionary(analytics)
+        let parentEvent = try XCTUnwrap(analyticsDict["heliumEvent"] as? [String: Any])
+        XCTAssertEqual(parentEvent["isSecondTry"] as? Bool, false)
         analyticsDict["additionalPaywallFields"] = ["paywallBundleUrl": "https://example.com/native", "webPaywallBundleUrl": "https://example.com/a", "other": "kept"]
         let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analyticsDict))
         XCTAssertEqual(ready.context["paywallUUID"] as? String, "b")

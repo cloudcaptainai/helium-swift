@@ -24,9 +24,9 @@ final class PreviewPresentationContextTests: XCTestCase {
         let host = makeHost(onAnyEvent: { received.append($0.eventName) })
         let preview = PaywallPresentationContext.preview(inheriting: host, onPreviewClosed: {}, onPreviewNotShown: {})
 
-        preview.eventHandlers?.handleEvent(PurchasePressedEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", paymentProcessor: .appStore))
-        preview.eventHandlers?.handleEvent(PurchaseCancelledEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", paymentProcessor: .appStore))
-        preview.eventHandlers?.handleEvent(PurchaseRestoreFailedEvent(triggerName: previewTrigger, paywallName: "preview"))
+        preview.eventHandlers?.handleEvent(PurchasePressedEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", paymentProcessor: .appStore, secondTry: false))
+        preview.eventHandlers?.handleEvent(PurchaseCancelledEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", paymentProcessor: .appStore, secondTry: false))
+        preview.eventHandlers?.handleEvent(PurchaseRestoreFailedEvent(triggerName: previewTrigger, paywallName: "preview", secondTry: false))
 
         XCTAssertEqual(received, ["purchasePressed", "purchaseCancelled", "purchaseRestoreFailed"])
     }
@@ -37,7 +37,7 @@ final class PreviewPresentationContextTests: XCTestCase {
         let host = makeHost(onClose: { _ in hostCloses += 1 })
         let preview = PaywallPresentationContext.preview(inheriting: host, onPreviewClosed: { released += 1 }, onPreviewNotShown: {})
 
-        preview.eventHandlers?.handleEvent(PaywallCloseEvent(triggerName: previewTrigger, paywallName: "preview"))
+        preview.eventHandlers?.handleEvent(PaywallCloseEvent(triggerName: previewTrigger, paywallName: "preview", secondTry: false))
 
         XCTAssertEqual(hostCloses, 1)
         XCTAssertEqual(released, 1)
@@ -59,7 +59,7 @@ final class PreviewPresentationContextTests: XCTestCase {
         var entitled = 0
         let host = makeHost(onEntitled: { _ in entitled += 1 })
         let preview = PaywallPresentationContext.preview(inheriting: host, onPreviewClosed: {}, onPreviewNotShown: {})
-        let event = PurchaseSucceededEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .appStore)
+        let event = PurchaseSucceededEvent(productId: "annual", triggerName: previewTrigger, paywallName: "preview", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, paymentProcessor: .appStore, secondTry: false)
 
         preview.onEntitled?(PaywallEntitledEvent(entitlingEvent: event)!)
 
@@ -87,7 +87,7 @@ final class PreviewPresentationContextTests: XCTestCase {
         var released = 0
         let preview = PaywallPresentationContext.preview(inheriting: nil, onPreviewClosed: { released += 1 }, onPreviewNotShown: {})
 
-        preview.eventHandlers?.handleEvent(PaywallCloseEvent(triggerName: previewTrigger, paywallName: "preview"))
+        preview.eventHandlers?.handleEvent(PaywallCloseEvent(triggerName: previewTrigger, paywallName: "preview", secondTry: false))
 
         XCTAssertEqual(released, 1)
         XCTAssertNil(preview.onEntitled)

@@ -46,7 +46,6 @@ class HeliumViewController: UIViewController {
         fallbackReason != nil
     }
     private(set) var isLoading: Bool
-    let isSecondTry: Bool
     private var contentView: AnyView
     private var hostingController: UIHostingController<AnyView>?
     let presentationState = HeliumPaywallPresentationState(viewType: .presented)
@@ -61,11 +60,10 @@ class HeliumViewController: UIViewController {
     private let loadStartTime: DispatchTime?
     private var displayTime: DispatchTime? = nil
     
-    init(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, isSecondTry: Bool, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext) {
+    init(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext) {
         self.trigger = trigger
         self.paywallSession = paywallSession
         self.fallbackReason = fallbackReason
-        self.isSecondTry = isSecondTry
         self.isLoading = isLoading
         self.presentationContext = presentationContext
         self.contentView = AnyView(contentView
