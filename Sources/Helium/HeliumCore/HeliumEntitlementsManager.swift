@@ -423,11 +423,7 @@ actor HeliumEntitlementsManager {
         cache.lastTransactionsLoadedTime = nil
         await loadEntitlementsIfNeeded()
 
-        var hostSourceEntitled = false
         if cache.transactions.isEmpty {
-            if let hostSource = Helium.config.thirdPartyEntitlementsSource {
-                hostSourceEntitled = await !hostSource.purchasedHeliumProductIds().isEmpty
-            }
             // Avoid the App Store sign-in prompt for users already entitled through another source.
             if await allThirdPartyEntitledProductIds().isEmpty {
                 do {
@@ -445,7 +441,7 @@ actor HeliumEntitlementsManager {
             await refreshEntitledForTriggerCache()
         }
 
-        return hostSourceEntitled || !cache.transactions.isEmpty || (cache.lastTransactionsLoadedTime == nil
+        return !cache.transactions.isEmpty || (cache.lastTransactionsLoadedTime == nil
             && cache.persistedEntitlements.contains { $0.appearsValid() })
     }
 

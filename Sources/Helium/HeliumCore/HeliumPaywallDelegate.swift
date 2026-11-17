@@ -257,6 +257,10 @@ class HeliumPaywallDelegateWrapper {
                 result = await !HeliumEntitlementsManager.shared.stripeEntitlementsSource.purchasedHeliumProductIds().isEmpty
                 if result { restoringProcessor = .stripe }
             }
+            if !result, let thirdPartySource = Helium.config.thirdPartyEntitlementsSource {
+                thirdPartySource.invalidateCache()
+                result = await !thirdPartySource.purchasedHeliumProductIds().isEmpty
+            }
         }
         if result {
             self.fireEvent(PurchaseRestoredEvent(productId: "HELIUM_GENERIC_PRODUCT", triggerName: triggerName, paywallName: paywallTemplateName, restoreOrigin: .restorePurchases, paymentProcessor: restoringProcessor), paywallSession: paywallSession)
