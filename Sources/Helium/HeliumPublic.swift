@@ -1204,6 +1204,16 @@ public class HeliumTesting {
 
     init() {}
 
+    /// Which Paddle account a debug or TestFlight build checks out on.
+    ///
+    /// Test builds use the Paddle sandbox account when your organization has one connected. Set
+    /// `.production` to keep the production experience instead: the live account, live prices and
+    /// a real checkout that charges the card. Test builds only; App Store builds always use the
+    /// production account and are unaffected.
+    ///
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`
+    public var paddleAccountOverride: HeliumPaddleAccountOverride = .automatic
+
     /// Returns a stubbed transaction status for the given product ID.
     /// When set, replaces the real purchase flow.
     public var purchaseHandler: ((String) async -> HeliumPaywallTransactionStatus)?
@@ -1229,6 +1239,21 @@ public class HeliumTesting {
         restoreHandler = nil
         introOfferEligibility = nil
         promoOfferEligibility = nil
+        paddleAccountOverride = .automatic
+    }
+
+    /// The code setting, or the triple-tap preview screen's purchase mode choice.
+    var effectivePaddleAccountOverride: HeliumPaddleAccountOverride {
+        if paddleAccountOverride == .production
+            || HeliumPreviewConfigurationStore.shared.paddleAccountOverride == .production {
+            return .production
+        }
+        return .automatic
+    }
+
+    /// The `applicationInfo.paddleAccountOverride` request value; nil leaves the key out.
+    var paddleAccountOverrideRequestValue: String? {
+        effectivePaddleAccountOverride == .production ? HeliumPaddleAccountOverride.production.rawValue : nil
     }
 
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
@@ -1278,6 +1303,14 @@ public class HeliumTesting {
     private var isProductionEnvironment: Bool {
         AppReceiptsHelper.shared.environment == .production
     }
+}
+
+/// The Paddle account a debug or TestFlight build checks out on. See `HeliumTesting.paddleAccountOverride`.
+public enum HeliumPaddleAccountOverride: String {
+    /// The sandbox account when one is connected, otherwise the production account.
+    case automatic
+    /// The production account: live prices and real charges.
+    case production
 }
 
 @available(iOS 15.0, *)

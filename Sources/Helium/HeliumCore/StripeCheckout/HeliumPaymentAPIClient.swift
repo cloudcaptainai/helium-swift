@@ -73,12 +73,16 @@ public class HeliumPaymentAPIClient {
             "userId": HeliumIdentityManager.shared.getResolvedUserId(),
             "environment": AppReceiptsHelper.shared.getEnvironment()
         ]
-        body["applicationInfo"] = [
+        var applicationInfo: [String: Any] = [
             "platform": HeliumSdkConfig.shared.heliumPlatform,
             "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
             "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
             "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         ]
+        if let paddleAccountOverride = Helium.testing.paddleAccountOverrideRequestValue {
+            applicationInfo["paddleAccountOverride"] = paddleAccountOverride
+        }
+        body["applicationInfo"] = applicationInfo
         if let rcUserId = Helium.identify.revenueCatAppUserId {
             body["rcUserId"] = rcUserId
         }

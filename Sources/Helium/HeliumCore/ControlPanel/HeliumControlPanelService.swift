@@ -79,16 +79,40 @@ class HeliumControlPanelService {
 
     static func previewUserContext(locale: [String: Any]) -> [String: Any] {
         let config = HeliumSdkConfig.shared
+        var applicationInfo: [String: Any] = [
+            "platform": config.heliumPlatform,
+            "heliumSdk": config.heliumSdk,
+            "heliumSdkVersion": config.heliumSdkVersion,
+            "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
+            "environment": AppReceiptsHelper.shared.getEnvironment(),
+        ]
+        if let paddleAccountOverride = Helium.testing.paddleAccountOverrideRequestValue {
+            applicationInfo["paddleAccountOverride"] = paddleAccountOverride
+        }
         return [
             "locale": locale,
-            "applicationInfo": [
-                "platform": config.heliumPlatform,
-                "heliumSdk": config.heliumSdk,
-                "heliumSdkVersion": config.heliumSdkVersion,
-                "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
-                "environment": AppReceiptsHelper.shared.getEnvironment(),
-            ],
+            "applicationInfo": applicationInfo,
         ]
+    }
+
+    /// Re-runs on-launch so its Paddle client token, prices and routes come from the account the
+    /// preview purchase mode now asks for. Waits on the download status, since a fetch that is
+    /// already running or reset never reports back.
+    func refreshOnLaunchConfig() async {
+        guard let controller = Helium.shared.controller else { return }
+        let deadline = Date().addingTimeInterval(30)
+        await waitForConfigDownload(until: deadline)
+        guard !Task.isCancelled else { return }
+        controller.downloadConfig()
+        await waitForConfigDownload(until: deadline)
+    }
+
+    private func waitForConfigDownload(until deadline: Date) async {
+        while HeliumFetchedConfigManager.shared.downloadStatus == .inProgress,
+              Date() < deadline,
+              !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
     }
 
     func fetchPreviewPaywalls() async throws -> HeliumControlPanelResponse {

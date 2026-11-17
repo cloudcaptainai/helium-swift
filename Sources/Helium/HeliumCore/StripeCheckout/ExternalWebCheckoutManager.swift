@@ -496,7 +496,7 @@ public class ExternalWebCheckoutManager: NSObject {
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(triggerName)
         let previewConfiguration = isPreviewRun ? HeliumPreviewConfigurationStore.shared.configuration : nil
         if let previewConfiguration {
-            ctx["forceSimulatedFlow"] = previewConfiguration.purchaseMode == .simulated
+            ctx["forceSimulatedFlow"] = previewConfiguration.purchaseMode.isSimulated(for: provider.kind)
         }
 
         let baseBody = try HeliumPaymentAPIClient.shared.baseRequestBody(provider: provider)

@@ -13,6 +13,8 @@ struct HeliumControlPanelView: View {
     /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
     /// presented on top of a sheet that is still on its way out.
     @State private var queuedLaunch: (() -> Void)? = nil
+    /// The Paddle account override the loaded previews and on-launch config were fetched with.
+    @State private var fetchedPaddleAccountOverride: HeliumPaddleAccountOverride? = nil
     private let previewSettings = HeliumPreviewConfigurationStore.shared
     var hostPresentationContext: PaywallPresentationContext? = nil
 
@@ -92,9 +94,11 @@ struct HeliumControlPanelView: View {
             HeliumPreviewConfigurationView(
                 request: request,
                 onStart: { _ in
+                    var launch: (() -> Void)? = nil
                     if case .version(let version, let paywall) = request.target {
-                        queuedLaunch = { selectVersion(version, paywall: paywall) }
+                        launch = { selectVersion(version, paywall: paywall) }
                     }
+                    queuedLaunch = { launchOnRequestedPaddleAccount(launch) }
                     pendingConfiguration = nil
                 },
                 onCancel: { pendingConfiguration = nil }
@@ -335,9 +339,29 @@ struct HeliumControlPanelView: View {
             )
     }
 
+    /// A purchase mode that changes the Paddle account refetches on-launch and the previews first,
+    /// so the client token, prices and transactions all come from the account the tester picked.
+    private func launchOnRequestedPaddleAccount(_ launch: (() -> Void)?) {
+        let requested = Helium.testing.effectivePaddleAccountOverride
+        guard let fetched = fetchedPaddleAccountOverride, fetched != requested else {
+            launch?()
+            return
+        }
+        fetchTask?.cancel()
+        state = .loading
+        fetchTask = Task { @MainActor in
+            await HeliumControlPanelService.shared.refreshOnLaunchConfig()
+            guard !Task.isCancelled else { return }
+            await fetchPaywalls()
+            guard !Task.isCancelled, state.loadedResponse != nil else { return }
+            launch?()
+        }
+    }
+
     @MainActor
     private func fetchPaywalls() async {
         do {
+            let requestedOverride = Helium.testing.effectivePaddleAccountOverride
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
 
             // Fetch all products data
@@ -347,6 +371,11 @@ struct HeliumControlPanelView: View {
 
             previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
             previewSettings.forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
+            previewSettings.updatePaddleSandboxAvailability(
+                clientToken: response.paddleClientToken,
+                requestedProductionAccount: requestedOverride == .production
+            )
+            fetchedPaddleAccountOverride = requestedOverride
 
             state = .loaded(response)
         } catch {

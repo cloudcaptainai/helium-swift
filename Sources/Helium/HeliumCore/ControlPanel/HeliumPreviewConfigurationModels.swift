@@ -3,6 +3,7 @@ import Foundation
 /// How a preview handles the app2web checkout it kicks out to.
 enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     case simulated
+    case sandbox
     case real
 
     var id: String { rawValue }
@@ -10,6 +11,7 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .simulated: return "Simulated purchase"
+        case .sandbox: return "Sandbox purchase"
         case .real: return "Real purchase"
         }
     }
@@ -18,15 +20,28 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
         switch self {
         case .simulated:
             return "Looks like the normal purchase flow but no transaction occurs and no entitlement granted."
+        case .sandbox:
+            return "Checks out on your Paddle sandbox account. Use a Paddle test card; no real charge."
         case .real:
-            return "Complete real purchases. Your card is charged and entitlement granted."
+            return "Checks out on your production account. Your card is charged and entitlement granted."
         }
     }
 
     var systemImageName: String {
         switch self {
         case .simulated: return "sparkles"
+        case .sandbox: return "testtube.2"
         case .real: return "creditcard"
+        }
+    }
+
+    /// Sandbox is a Paddle account, so a Stripe checkout in sandbox mode stays simulated
+    /// rather than charging a real card.
+    func isSimulated(for processor: HeliumPaymentProcessor) -> Bool {
+        switch self {
+        case .simulated: return true
+        case .sandbox: return processor != .paddle
+        case .real: return false
         }
     }
 
@@ -64,15 +79,48 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         set { chosenShowCaliforniaConsentModal = newValue }
     }
 
+    /// Whether a `/preview-paywalls` response sent without a Paddle account override carried a
+    /// sandbox (`test_`) client token, so the org has a sandbox account this build routes to.
+    @Published var paddleSandboxAvailable = false
+
     @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
 
-    /// Defaults to the mode the device is eligible for until the tester picks one.
+    /// A response fetched with the production override carries the live token whether or not a
+    /// sandbox account exists, so only an automatic fetch can tell.
+    func updatePaddleSandboxAvailability(clientToken: String?, requestedProductionAccount: Bool) {
+        guard !requestedProductionAccount else { return }
+        paddleSandboxAvailable = clientToken?.hasPrefix("test_") == true
+    }
+
+    var purchaseModes: [HeliumPreviewPurchaseMode] {
+        HeliumPreviewPurchaseMode.allCases.filter { $0 != .sandbox || paddleSandboxAvailable }
+    }
+
+    /// The tester's pick, before the region check. Defaults to sandbox when it exists so a test
+    /// build never charges a card unless the tester asks for it.
+    private var selectedPurchaseMode: HeliumPreviewPurchaseMode {
+        switch chosenPurchaseMode {
+        case .sandbox? where !paddleSandboxAvailable: return .real
+        case let mode?: return mode
+        case nil: return paddleSandboxAvailable ? .sandbox : .real
+        }
+    }
+
+    /// Sandbox checkouts are not region-gated, so only a real purchase is forced to simulated.
     var purchaseMode: HeliumPreviewPurchaseMode {
         get {
-            if forceExternalCheckoutSimulation { return .simulated }
-            return chosenPurchaseMode ?? .real
+            let mode = selectedPurchaseMode
+            if mode == .real && forceExternalCheckoutSimulation { return .simulated }
+            return mode
         }
         set { chosenPurchaseMode = newValue }
+    }
+
+    /// A real purchase on a build that would otherwise route to the sandbox account asks for the
+    /// production account. Keyed off the pick rather than `purchaseMode`, so a region check that
+    /// forces simulated does not flip the account back and forth between fetches.
+    var paddleAccountOverride: HeliumPaddleAccountOverride {
+        paddleSandboxAvailable && selectedPurchaseMode == .real ? .production : .automatic
     }
 
     var configuration: HeliumPreviewConfiguration {

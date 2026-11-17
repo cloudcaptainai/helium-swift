@@ -114,7 +114,7 @@ struct HeliumPreviewConfigurationView: View {
     private var purchaseSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("PURCHASE FLOW")
-            ForEach(HeliumPreviewPurchaseMode.allCases) { mode in
+            ForEach(store.purchaseModes) { mode in
                 purchaseOption(mode)
             }
         }
@@ -221,7 +221,11 @@ struct HeliumPreviewConfigurationView: View {
         if request.isSettings {
             return "Save Settings"
         }
-        return configuration.purchaseMode == .real ? "Start Real Purchase Preview" : "Start Simulated Preview"
+        switch configuration.purchaseMode {
+        case .simulated: return "Start Simulated Preview"
+        case .sandbox: return "Start Sandbox Purchase Preview"
+        case .real: return "Start Real Purchase Preview"
+        }
     }
 
     private var startAction: some View {
