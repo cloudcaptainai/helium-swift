@@ -7,7 +7,7 @@
 
 import StoreKit
 
-public struct HeliumTransactionIdResult {
+public struct HeliumTransactionIdResult: Sendable {
     let transactionId: String?
     let originalTransactionId: String?
     let transaction: Transaction?

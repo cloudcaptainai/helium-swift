@@ -531,3 +531,43 @@ struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
         return p
     }
 }
+
+enum StoreRecheckDelegateResult: String {
+    case failed, cancelled
+}
+
+enum StoreRecheckBaselineState: String {
+    case finished, timedOut
+}
+
+/// Emitted when the SDK re-checks StoreKit after a purchase delegate reported failed or
+/// cancelled. `recoveredTransactionId` is set when the App Store had completed the purchase,
+/// and matches the `storeKitTransactionId` of the resulting purchase success event.
+struct PurchaseStoreRecheckCompleted: HeliumObservabilityEvent {
+    let productId: String
+    let paymentProcessor: String
+    let delegateResult: StoreRecheckDelegateResult
+    let baselineState: StoreRecheckBaselineState
+    let baselineDurationMs: Int
+    /// Nil when the re-check was skipped because the baseline lookup did not finish.
+    let recheckDurationMs: Int?
+    let recheckTimedOut: Bool
+    let recoveredTransactionId: String?
+
+    var name: String { "purchase_store_recheck_completed" }
+    var tags: Set<HeliumObservabilityTag> { [.entitlements] }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "productId": productId,
+            "paymentProcessor": paymentProcessor,
+            "delegateResult": delegateResult.rawValue,
+            "baselineState": baselineState.rawValue,
+            "baselineDurationMs": baselineDurationMs,
+            "recheckTimedOut": recheckTimedOut,
+            "recovered": recoveredTransactionId != nil,
+        ]
+        if let recheckDurationMs { p["recheckDurationMs"] = recheckDurationMs }
+        if let recoveredTransactionId { p["recoveredTransactionId"] = recoveredTransactionId }
+        return p
+    }
+}
