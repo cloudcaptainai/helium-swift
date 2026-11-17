@@ -13,8 +13,6 @@ struct HeliumControlPanelView: View {
     /// Launch deferred until the configuration sheet has finished dismissing, so a preview is never
     /// presented on top of a sheet that is still on its way out.
     @State private var queuedLaunch: (() -> Void)? = nil
-    /// The Paddle account override the loaded previews and on-launch config were fetched with.
-    @State private var fetchedPaddleAccountOverride: HeliumPaddleAccountOverride? = nil
     private let previewSettings = HeliumPreviewConfigurationStore.shared
     var hostPresentationContext: PaywallPresentationContext? = nil
 
@@ -94,11 +92,11 @@ struct HeliumControlPanelView: View {
             HeliumPreviewConfigurationView(
                 request: request,
                 onStart: { _ in
-                    var launch: (() -> Void)? = nil
                     if case .version(let version, let paywall) = request.target {
-                        launch = { selectVersion(version, paywall: paywall) }
+                        queuedLaunch = { launchOnRequestedPaddleAccount(version, in: paywall) }
+                    } else {
+                        queuedLaunch = { launchOnRequestedPaddleAccount(nil, in: nil) }
                     }
-                    queuedLaunch = { launchOnRequestedPaddleAccount(launch) }
                     pendingConfiguration = nil
                 },
                 onCancel: { pendingConfiguration = nil }
@@ -341,20 +339,34 @@ struct HeliumControlPanelView: View {
 
     /// A purchase mode that changes the Paddle account refetches on-launch and the previews first,
     /// so the client token, prices and transactions all come from the account the tester picked.
-    private func launchOnRequestedPaddleAccount(_ launch: (() -> Void)?) {
+    private func launchOnRequestedPaddleAccount(
+        _ version: HeliumPaywallPreviewVersion?,
+        in paywall: HeliumPaywallPreviewEntry?
+    ) {
+        let service = HeliumControlPanelService.shared
         let requested = Helium.testing.effectivePaddleAccountOverride
-        guard let fetched = fetchedPaddleAccountOverride, fetched != requested else {
-            launch?()
+        guard requested != service.onLaunchPaddleAccountOverride else {
+            if let version, let paywall { selectVersion(version, paywall: paywall) }
             return
         }
         fetchTask?.cancel()
         state = .loading
         fetchTask = Task { @MainActor in
-            await HeliumControlPanelService.shared.refreshOnLaunchConfig()
+            guard await service.refreshOnLaunchConfig(for: requested) else {
+                if !Task.isCancelled {
+                    state = .error("Couldn't load the selected Paddle account. Try again.")
+                }
+                return
+            }
             guard !Task.isCancelled else { return }
             await fetchPaywalls()
-            guard !Task.isCancelled, state.loadedResponse != nil else { return }
-            launch?()
+            // Paddle product IDs differ between accounts, so launch the refreshed copy of the version.
+            guard !Task.isCancelled,
+                  let version, let paywall,
+                  let refreshedPaywall = state.loadedResponse?.paywalls.first(where: { $0.id == paywall.id }),
+                  let refreshedVersion = refreshedPaywall.versions.first(where: { $0.id == version.id })
+            else { return }
+            selectVersion(refreshedVersion, paywall: refreshedPaywall)
         }
     }
 
@@ -375,7 +387,6 @@ struct HeliumControlPanelView: View {
                 clientToken: response.paddleClientToken,
                 requestedProductionAccount: requestedOverride == .production
             )
-            fetchedPaddleAccountOverride = requestedOverride
 
             state = .loaded(response)
         } catch {
@@ -402,7 +413,7 @@ struct HeliumControlPanelView: View {
         if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
             pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
         } else {
-            selectVersion(version, paywall: paywall)
+            launchOnRequestedPaddleAccount(version, in: paywall)
         }
     }
 

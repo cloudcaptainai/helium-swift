@@ -95,16 +95,27 @@ class HeliumControlPanelService {
         ]
     }
 
+    private var refreshedOnLaunchPaddleAccountOverride: HeliumPaddleAccountOverride?
+
+    /// The Paddle account override the current on-launch config was fetched with.
+    var onLaunchPaddleAccountOverride: HeliumPaddleAccountOverride {
+        refreshedOnLaunchPaddleAccountOverride ?? Helium.testing.paddleAccountOverride
+    }
+
     /// Re-runs on-launch so its Paddle client token, prices and routes come from the account the
     /// preview purchase mode now asks for. Waits on the download status, since a fetch that is
-    /// already running or reset never reports back.
-    func refreshOnLaunchConfig() async {
-        guard let controller = Helium.shared.controller else { return }
+    /// already running or reset never reports back. Returns whether on-launch now matches.
+    func refreshOnLaunchConfig(for paddleAccountOverride: HeliumPaddleAccountOverride) async -> Bool {
+        guard let controller = Helium.shared.controller else { return false }
         let deadline = Date().addingTimeInterval(30)
         await waitForConfigDownload(until: deadline)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return false }
         controller.downloadConfig()
         await waitForConfigDownload(until: deadline)
+        guard !Task.isCancelled,
+              HeliumFetchedConfigManager.shared.downloadStatus == .downloadSuccess else { return false }
+        refreshedOnLaunchPaddleAccountOverride = paddleAccountOverride
+        return true
     }
 
     private func waitForConfigDownload(until deadline: Date) async {
