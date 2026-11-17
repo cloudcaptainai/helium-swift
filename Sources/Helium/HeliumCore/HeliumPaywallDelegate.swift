@@ -258,7 +258,6 @@ class HeliumPaywallDelegateWrapper {
                 if result { restoringProcessor = .stripe }
             }
             if !result, let thirdPartySource = Helium.config.thirdPartyEntitlementsSource {
-                thirdPartySource.invalidateCache()
                 result = await !thirdPartySource.purchasedHeliumProductIds().isEmpty
             }
         }
