@@ -13,8 +13,14 @@ class HeliumObservabilityManager {
     private var analytics: Analytics?
     private var pendingTracks: [(Analytics) -> Void] = []
     private let maxPendingTracks = 100
+    private let unitTestTrackObserverLock = NSLock()
+    private var _unitTestTrackObserver: ((any HeliumObservabilityEvent) -> Void)?
     /// Unit-test hook only. Receives every tracked event synchronously. Always nil in production; unrelated to triple-tap previews or HeliumTesting.
-    var unitTestTrackObserver: ((any HeliumObservabilityEvent) -> Void)?
+    /// Lock-guarded because `track` runs on background tasks that can outlive the test that set the hook.
+    var unitTestTrackObserver: ((any HeliumObservabilityEvent) -> Void)? {
+        get { unitTestTrackObserverLock.withLock { _unitTestTrackObserver } }
+        set { unitTestTrackObserverLock.withLock { _unitTestTrackObserver = newValue } }
+    }
 
     private init() {}
 
