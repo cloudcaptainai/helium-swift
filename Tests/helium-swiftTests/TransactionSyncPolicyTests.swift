@@ -2,6 +2,27 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testOverlappingHistoryRequestsCoalesceIntoOneAdditionalPass() {
+        var state = TransactionHistorySyncState()
+        XCTAssertTrue(state.request())
+        XCTAssertFalse(state.request())
+        XCTAssertFalse(state.request())
+        XCTAssertTrue(state.finishPass())
+        XCTAssertFalse(state.finishPass())
+        XCTAssertTrue(state.request())
+        XCTAssertFalse(state.finishPass())
+    }
+
+    func testRequestDuringRescanSchedulesAnotherPass() {
+        var state = TransactionHistorySyncState()
+        XCTAssertTrue(state.request())
+        XCTAssertFalse(state.request())
+        XCTAssertTrue(state.finishPass())
+        XCTAssertFalse(state.request())
+        XCTAssertTrue(state.finishPass())
+        XCTAssertFalse(state.finishPass())
+    }
+
     func testPendingTransactionsDeduplicateAndRemoveOnlySentIds() {
         var pending = TransactionSyncPending<String>()
         pending.add("first", id: 1)

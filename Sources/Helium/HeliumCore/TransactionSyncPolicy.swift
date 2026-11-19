@@ -29,6 +29,29 @@ enum TransactionSyncPolicy {
     }
 }
 
+struct TransactionHistorySyncState {
+    private var isRunning = false
+    private var needsRescan = false
+
+    mutating func request() -> Bool {
+        guard !isRunning else {
+            needsRescan = true
+            return false
+        }
+        isRunning = true
+        return true
+    }
+
+    mutating func finishPass() -> Bool {
+        if needsRescan {
+            needsRescan = false
+            return true
+        }
+        isRunning = false
+        return false
+    }
+}
+
 struct TransactionSyncPending<Value> {
     private(set) var transactions: [UInt64: Value] = [:]
 

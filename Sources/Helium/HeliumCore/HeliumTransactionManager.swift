@@ -22,7 +22,7 @@ actor HeliumTransactionManager {
     private var periodicSyncTask: Task<Void, Never>?
     private var configDownloadObserver: NSObjectProtocol?
     private var appActiveObserver: NSObjectProtocol?
-    private var isSyncingHistory = false
+    private var historySyncState = TransactionHistorySyncState()
     private var foregroundThrottle = TransactionSyncThrottle()
     private var pendingTransactions = TransactionSyncPending<Transaction>()
     private var organizationRetryTask: Task<Void, Never>?
@@ -100,8 +100,7 @@ actor HeliumTransactionManager {
     }
 
     private func syncOnForeground() async {
-        guard !isSyncingHistory, organizationId != nil,
-              foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime) else { return }
+        guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime) else { return }
         await loadAndSyncTransactionHistory()
     }
 
@@ -117,28 +116,28 @@ actor HeliumTransactionManager {
             scheduleOrganizationRetry()
             return
         }
-        guard !isSyncingHistory else { return }
-        isSyncingHistory = true
-        defer { isSyncingHistory = false }
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
-        var transactionsToSync: [Transaction] = []
+        guard historySyncState.request() else { return }
+        repeat {
+            let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
+            var transactionsToSync: [Transaction] = []
 
-        for await verificationResult in Transaction.all {
-            guard case .verified(let transaction) = verificationResult else {
-                continue
+            for await verificationResult in Transaction.all {
+                guard case .verified(let transaction) = verificationResult else {
+                    continue
+                }
+                guard transaction.ownershipType != .familyShared else { continue }
+                // Skip transactions older than cutoff
+                if transaction.purchaseDate < cutoffDate {
+                    continue
+                }
+                if syncedTransactionIds[transaction.id] == nil {
+                    transactionsToSync.append(transaction)
+                    if transactionsToSync.count >= maxSyncedIdsToStore { break }
+                }
             }
-            guard transaction.ownershipType != .familyShared else { continue }
-            // Skip transactions older than cutoff
-            if transaction.purchaseDate < cutoffDate {
-                continue
-            }
-            if syncedTransactionIds[transaction.id] == nil {
-                transactionsToSync.append(transaction)
-                if transactionsToSync.count >= maxSyncedIdsToStore { break }
-            }
-        }
 
-        syncWithServer(transactions: transactionsToSync)
+            syncWithServer(transactions: transactionsToSync)
+        } while historySyncState.finishPass()
     }
     
     // MARK: - Processing
