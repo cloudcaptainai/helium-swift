@@ -136,7 +136,10 @@ actor HeliumTransactionManager {
             }
 
             transactionsToSync.sort { $0.purchaseDate > $1.purchaseDate }
-            syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore)))
+            if syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore))) {
+                organizationRetryTask?.cancel()
+                organizationRetryTask = nil
+            }
         } while historySyncState.finishPass()
     }
     
@@ -161,22 +164,22 @@ actor HeliumTransactionManager {
                     return
                 }
                 if organizationId != nil {
-                    organizationRetryTask = nil
                     await loadAndSyncTransactionHistory()
-                    return
+                    if Task.isCancelled { return }
                 }
             }
             organizationRetryTask = nil
         }
     }
     
-    private func syncWithServer(transactions: [Transaction]) {
+    @discardableResult
+    private func syncWithServer(transactions: [Transaction]) -> Bool {
         for transaction in transactions where transaction.ownershipType != .familyShared && syncedTransactionIds[transaction.id] == nil {
             pendingTransactions.add(transaction, id: transaction.id)
         }
         guard let organizationId else {
             scheduleOrganizationRetry()
-            return
+            return false
         }
         let eligible = Array(pendingTransactions.transactions.values)
         let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
@@ -188,9 +191,8 @@ actor HeliumTransactionManager {
             client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId)
         }
         pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
-        organizationRetryTask?.cancel()
-        organizationRetryTask = nil
         pruneAndSave()
+        return true
     }
     
     // MARK: - Persistence
