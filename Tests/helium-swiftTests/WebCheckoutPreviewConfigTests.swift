@@ -23,7 +23,6 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         store.showCaliforniaConsentModal = false
         store.configureBeforeEachPreview = false
         store.purchaseMode = .simulated
-        store.paddleSandboxAvailable = false
     }
 
     private func buildURL(
@@ -117,26 +116,6 @@ final class WebCheckoutPreviewConfigTests: XCTestCase {
         let ctx = try decodedCtx(from: url)
 
         XCTAssertEqual(ctx["forceSimulatedFlow"] as? Bool, true)
-    }
-
-    func testSandboxMode_paddleCheckoutIsNotSimulated() throws {
-        let store = HeliumPreviewConfigurationStore.shared
-        store.paddleSandboxAvailable = true
-        store.purchaseMode = .sandbox
-
-        let url = try buildURL(provider: .paddle, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
-
-        XCTAssertEqual(try decodedCtx(from: url)["forceSimulatedFlow"] as? Bool, false)
-    }
-
-    func testSandboxMode_stripeCheckoutStaysSimulated() throws {
-        let store = HeliumPreviewConfigurationStore.shared
-        store.paddleSandboxAvailable = true
-        store.purchaseMode = .sandbox
-
-        let url = try buildURL(provider: .stripe, triggerName: HeliumFetchedConfigManager.HELIUM_PREVIEW_TRIGGER)
-
-        XCTAssertEqual(try decodedCtx(from: url)["forceSimulatedFlow"] as? Bool, true)
     }
 
     // MARK: - California force flag

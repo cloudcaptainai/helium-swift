@@ -79,8 +79,8 @@ public class HeliumPaymentAPIClient {
             "heliumSdkVersion": HeliumSdkConfig.shared.heliumSdkVersion,
             "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
         ]
-        if let paddleAccountOverride = Helium.testing.paddleAccountOverrideRequestValue {
-            applicationInfo["paddleAccountOverride"] = paddleAccountOverride
+        if let webCheckoutAccountOverride = Helium.testing.webCheckoutAccountOverrideRequestValue {
+            applicationInfo["webCheckoutAccountOverride"] = webCheckoutAccountOverride
         }
         body["applicationInfo"] = applicationInfo
         if let rcUserId = Helium.identify.revenueCatAppUserId {

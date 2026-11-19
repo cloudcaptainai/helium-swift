@@ -93,9 +93,7 @@ struct HeliumControlPanelView: View {
                 request: request,
                 onStart: { _ in
                     if case .version(let version, let paywall) = request.target {
-                        queuedLaunch = { launchOnRequestedPaddleAccount(version, in: paywall) }
-                    } else {
-                        queuedLaunch = { launchOnRequestedPaddleAccount(nil, in: nil) }
+                        queuedLaunch = { selectVersion(version, paywall: paywall) }
                     }
                     pendingConfiguration = nil
                 },
@@ -337,43 +335,9 @@ struct HeliumControlPanelView: View {
             )
     }
 
-    /// A purchase mode that changes the Paddle account refetches on-launch and the previews first,
-    /// so the client token, prices and transactions all come from the account the tester picked.
-    private func launchOnRequestedPaddleAccount(
-        _ version: HeliumPaywallPreviewVersion?,
-        in paywall: HeliumPaywallPreviewEntry?
-    ) {
-        let service = HeliumControlPanelService.shared
-        let requested = Helium.testing.effectivePaddleAccountOverride
-        guard !service.onLaunchConfigMatches(requested) else {
-            if let version, let paywall { selectVersion(version, paywall: paywall) }
-            return
-        }
-        fetchTask?.cancel()
-        state = .loading
-        fetchTask = Task { @MainActor in
-            guard await service.refreshOnLaunchConfig(for: requested) else {
-                if !Task.isCancelled {
-                    state = .error("Couldn't load the selected Paddle account. Try again.")
-                }
-                return
-            }
-            guard !Task.isCancelled else { return }
-            await fetchPaywalls()
-            // Paddle product IDs differ between accounts, so launch the refreshed copy of the version.
-            guard !Task.isCancelled,
-                  let version, let paywall,
-                  let refreshedPaywall = state.loadedResponse?.paywalls.first(where: { $0.id == paywall.id }),
-                  let refreshedVersion = refreshedPaywall.versions.first(where: { $0.id == version.id })
-            else { return }
-            selectVersion(refreshedVersion, paywall: refreshedPaywall)
-        }
-    }
-
     @MainActor
     private func fetchPaywalls() async {
         do {
-            let requestedOverride = Helium.testing.effectivePaddleAccountOverride
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
 
             // Fetch all products data
@@ -383,10 +347,7 @@ struct HeliumControlPanelView: View {
 
             previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
             previewSettings.forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
-            previewSettings.updatePaddleSandboxAvailability(
-                clientToken: response.paddleClientToken,
-                requestedProductionAccount: requestedOverride == .production
-            )
+            previewSettings.updatePaddleAccount(clientToken: response.paddleClientToken)
 
             state = .loaded(response)
         } catch {
@@ -413,7 +374,7 @@ struct HeliumControlPanelView: View {
         if version.isApp2webCapable && previewSettings.configureBeforeEachPreview {
             pendingConfiguration = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
         } else {
-            launchOnRequestedPaddleAccount(version, in: paywall)
+            selectVersion(version, paywall: paywall)
         }
     }
 

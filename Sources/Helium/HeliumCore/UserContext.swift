@@ -50,7 +50,7 @@ struct CodableApplicationInfo: Codable {
     var testingPurchaseHandlerSet: Bool
     var testingRestoreHandlerSet: Bool
     var testingIntroOfferEligibilitySet: Bool
-    var paddleAccountOverride: String?
+    var webCheckoutAccountOverride: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -106,7 +106,7 @@ func createApplicationInfo() -> CodableApplicationInfo {
         testingPurchaseHandlerSet: Helium.testing.purchaseHandler != nil,
         testingRestoreHandlerSet: Helium.testing.restoreHandler != nil,
         testingIntroOfferEligibilitySet: Helium.testing.introOfferEligibility != nil,
-        paddleAccountOverride: Helium.testing.paddleAccountOverrideRequestValue
+        webCheckoutAccountOverride: Helium.testing.webCheckoutAccountOverrideRequestValue
     )
 }
 
@@ -193,8 +193,8 @@ public struct CodableUserContext: Codable {
             "testingRestoreHandlerSet": self.applicationInfo.testingRestoreHandlerSet,
             "testingIntroOfferEligibilitySet": self.applicationInfo.testingIntroOfferEligibilitySet
         ]
-        if let paddleAccountOverride = self.applicationInfo.paddleAccountOverride {
-            applicationInfoDict["paddleAccountOverride"] = paddleAccountOverride
+        if let webCheckoutAccountOverride = self.applicationInfo.webCheckoutAccountOverride {
+            applicationInfoDict["webCheckoutAccountOverride"] = webCheckoutAccountOverride
         }
         
         return [

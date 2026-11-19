@@ -3,7 +3,6 @@ import Foundation
 /// How a preview handles the app2web checkout it kicks out to.
 enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     case simulated
-    case sandbox
     case real
 
     var id: String { rawValue }
@@ -11,37 +10,25 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .simulated: return "Simulated purchase"
-        case .sandbox: return "Sandbox purchase"
         case .real: return "Real purchase"
         }
     }
 
-    var detail: String {
+    func detail(onPaddleSandboxAccount: Bool) -> String {
         switch self {
         case .simulated:
             return "Looks like the normal purchase flow but no transaction occurs and no entitlement granted."
-        case .sandbox:
-            return "Checks out on your Paddle sandbox account. Use a Paddle test card; no real charge."
+        case .real where onPaddleSandboxAccount:
+            return "Paddle checks out on your sandbox account: use a Paddle test card, no real charge. Stripe charges your card."
         case .real:
-            return "Checks out on your production account. Your card is charged and entitlement granted."
+            return "Checks out on your live account. Your card is charged and entitlement granted."
         }
     }
 
     var systemImageName: String {
         switch self {
         case .simulated: return "sparkles"
-        case .sandbox: return "testtube.2"
         case .real: return "creditcard"
-        }
-    }
-
-    /// Sandbox is a Paddle account, so a Stripe checkout in sandbox mode stays simulated
-    /// rather than charging a real card.
-    func isSimulated(for processor: HeliumPaymentProcessor) -> Bool {
-        switch self {
-        case .simulated: return true
-        case .sandbox: return processor != .paddle
-        case .real: return false
         }
     }
 
@@ -53,6 +40,18 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
 struct HeliumPreviewConfiguration: Equatable {
     var purchaseMode: HeliumPreviewPurchaseMode = .simulated
     var showCaliforniaConsentModal: Bool = false
+    var nextLaunchWebCheckoutAccount: HeliumWebCheckoutAccountOverride = .automatic
+}
+
+extension HeliumWebCheckoutAccountOverride {
+    static let previewChoices: [HeliumWebCheckoutAccountOverride] = [.automatic, .live]
+
+    var previewTitle: String {
+        switch self {
+        case .automatic: return "Sandbox account"
+        case .live: return "Live account"
+        }
+    }
 }
 
 /// Session-scoped app2web preview settings, applied to every preview launch so a tester
@@ -79,60 +78,56 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         set { chosenShowCaliforniaConsentModal = newValue }
     }
 
-    /// Whether a `/preview-paywalls` response sent without a Paddle account override carried a
-    /// sandbox (`test_`) client token, so the org has a sandbox account this build routes to.
-    @Published var paddleSandboxAvailable = false
-
     @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
 
-    /// A response fetched with the production override carries the live token whether or not a
-    /// sandbox account exists, so only an automatic fetch can tell.
-    func updatePaddleSandboxAvailability(clientToken: String?, requestedProductionAccount: Bool) {
-        guard !requestedProductionAccount else { return }
-        paddleSandboxAvailable = clientToken?.hasPrefix("test_") == true
+    /// Whether this session's `/preview-paywalls` response carried a sandbox (`test_`) Paddle client token.
+    @Published var onPaddleSandboxAccount = false
+
+    func updatePaddleAccount(clientToken: String?) {
+        onPaddleSandboxAccount = clientToken?.hasPrefix("test_") == true
     }
 
-    var purchaseModes: [HeliumPreviewPurchaseMode] {
-        HeliumPreviewPurchaseMode.allCases.filter { $0 != .sandbox || paddleSandboxAvailable }
-    }
+    private static let nextLaunchWebCheckoutAccountKey = "heliumPreviewNextLaunchWebCheckoutAccount"
 
-    /// The tester's pick, before the region check. Defaults to sandbox when it exists so a test
-    /// build never charges a card unless the tester asks for it.
-    private var selectedPurchaseMode: HeliumPreviewPurchaseMode {
-        switch chosenPurchaseMode {
-        case .sandbox? where !paddleSandboxAvailable: return .real
-        case let mode?: return mode
-        case nil: return paddleSandboxAvailable ? .sandbox : .real
+    /// The account is fixed per app session, so the tester's pick is saved and applied on the next launch.
+    @Published var nextLaunchWebCheckoutAccount = HeliumWebCheckoutAccountOverride(
+        rawValue: UserDefaults.standard.string(forKey: nextLaunchWebCheckoutAccountKey) ?? ""
+    ) ?? .automatic {
+        didSet {
+            UserDefaults.standard.set(nextLaunchWebCheckoutAccount.rawValue, forKey: Self.nextLaunchWebCheckoutAccountKey)
         }
     }
 
-    /// Sandbox checkouts are not region-gated, so only a real purchase is forced to simulated.
+    /// Only offered when there is a sandbox account to move away from or back to. A code-level
+    /// `.live` override always wins, so the choice is hidden then.
+    var showsWebCheckoutAccountChoice: Bool {
+        guard Helium.testing.webCheckoutAccountOverride == .automatic else { return false }
+        return onPaddleSandboxAccount
+            || Helium.testing.effectiveWebCheckoutAccountOverride == .live
+            || nextLaunchWebCheckoutAccount == .live
+    }
+
+    /// Defaults to the mode the device is eligible for until the tester picks one.
     var purchaseMode: HeliumPreviewPurchaseMode {
         get {
-            let mode = selectedPurchaseMode
-            if mode == .real && forceExternalCheckoutSimulation { return .simulated }
-            return mode
+            if forceExternalCheckoutSimulation { return .simulated }
+            return chosenPurchaseMode ?? .real
         }
         set { chosenPurchaseMode = newValue }
-    }
-
-    /// A real purchase on a build that would otherwise route to the sandbox account asks for the
-    /// production account. Keyed off the pick rather than `purchaseMode`, so a region check that
-    /// forces simulated does not flip the account back and forth between fetches.
-    var paddleAccountOverride: HeliumPaddleAccountOverride {
-        paddleSandboxAvailable && selectedPurchaseMode == .real ? .production : .automatic
     }
 
     var configuration: HeliumPreviewConfiguration {
         get {
             HeliumPreviewConfiguration(
                 purchaseMode: purchaseMode,
-                showCaliforniaConsentModal: showCaliforniaConsentModal
+                showCaliforniaConsentModal: showCaliforniaConsentModal,
+                nextLaunchWebCheckoutAccount: nextLaunchWebCheckoutAccount
             )
         }
         set {
             purchaseMode = newValue.purchaseMode
             showCaliforniaConsentModal = newValue.showCaliforniaConsentModal
+            nextLaunchWebCheckoutAccount = newValue.nextLaunchWebCheckoutAccount
         }
     }
 
