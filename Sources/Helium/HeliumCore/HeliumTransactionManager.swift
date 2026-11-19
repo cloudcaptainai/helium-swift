@@ -111,12 +111,14 @@ actor HeliumTransactionManager {
         )
     }
     
-    private func loadAndSyncTransactionHistory() async {
+    @discardableResult
+    private func loadAndSyncTransactionHistory(isOrganizationRetry: Bool = false) async -> Bool {
         guard organizationId != nil else {
             scheduleOrganizationRetry()
-            return
+            return false
         }
-        guard historySyncState.request() else { return }
+        guard historySyncState.request() else { return false }
+        var didSync = false
         repeat {
             let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
             var transactionsToSync: [Transaction] = []
@@ -137,10 +139,14 @@ actor HeliumTransactionManager {
 
             transactionsToSync.sort { $0.purchaseDate > $1.purchaseDate }
             if syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore))) {
-                organizationRetryTask?.cancel()
-                organizationRetryTask = nil
+                didSync = true
+                if !isOrganizationRetry {
+                    organizationRetryTask?.cancel()
+                    organizationRetryTask = nil
+                }
             }
         } while historySyncState.finishPass()
+        return didSync
     }
     
     // MARK: - Processing
@@ -164,8 +170,10 @@ actor HeliumTransactionManager {
                     return
                 }
                 if organizationId != nil {
-                    await loadAndSyncTransactionHistory()
-                    if Task.isCancelled { return }
+                    if await loadAndSyncTransactionHistory(isOrganizationRetry: true) {
+                        organizationRetryTask = nil
+                        return
+                    }
                 }
             }
             organizationRetryTask = nil
