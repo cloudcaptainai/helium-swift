@@ -24,6 +24,7 @@ actor HeliumTransactionManager {
     private var appActiveObserver: NSObjectProtocol?
     private var isSyncingHistory = false
     private var foregroundThrottle = TransactionSyncThrottle()
+    private var pendingTransactions = TransactionSyncPending<Transaction>()
     
     private init() {
         TransactionSyncPolicy.migrate(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
@@ -132,9 +133,7 @@ actor HeliumTransactionManager {
             }
         }
 
-        if !transactionsToSync.isEmpty {
-            syncWithServer(transactions: transactionsToSync)
-        }
+        syncWithServer(transactions: transactionsToSync)
     }
     
     // MARK: - Processing
@@ -149,7 +148,10 @@ actor HeliumTransactionManager {
     // MARK: - Server Sync
     
     private func syncWithServer(transactions: [Transaction]) {
-        let eligible = transactions.filter { $0.ownershipType != .familyShared }
+        for transaction in transactions where transaction.ownershipType != .familyShared && syncedTransactionIds[transaction.id] == nil {
+            pendingTransactions.add(transaction, id: transaction.id)
+        }
+        let eligible = Array(pendingTransactions.transactions.values)
         let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
         let client = syncClient
         TransactionSyncPolicy.sync(
@@ -158,6 +160,7 @@ actor HeliumTransactionManager {
             let ids = Set(ids)
             client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId)
         }
+        pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
         pruneAndSave()
     }
     

@@ -2,6 +2,18 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testPendingTransactionsDeduplicateAndRemoveOnlySentIds() {
+        var pending = TransactionSyncPending<String>()
+        pending.add("first", id: 1)
+        pending.add("updated", id: 1)
+        pending.add("second", id: 2)
+        XCTAssertEqual(pending.transactions, [1: "updated", 2: "second"])
+        pending.remove(ids: [1])
+        XCTAssertEqual(pending.transactions, [2: "second"])
+        pending.remove(ids: [])
+        XCTAssertEqual(pending.transactions, [2: "second"])
+    }
+
     func testMissingOrganizationDoesNotSendOrMarkTransactions() {
         for organizationId in [nil, "", " \n\t"] as [String?] {
             var syncedIds: [UInt64: Date] = [:]

@@ -29,6 +29,18 @@ enum TransactionSyncPolicy {
     }
 }
 
+struct TransactionSyncPending<Value> {
+    private(set) var transactions: [UInt64: Value] = [:]
+
+    mutating func add(_ transaction: Value, id: UInt64) {
+        transactions[id] = transaction
+    }
+
+    mutating func remove(ids: [UInt64]) {
+        for id in ids { transactions.removeValue(forKey: id) }
+    }
+}
+
 struct TransactionSyncThrottle {
     private var lastSync: TimeInterval?
 
