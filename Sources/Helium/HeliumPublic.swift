@@ -88,6 +88,14 @@ public class Helium {
         }
     }
     
+    /// Syncs purchase history after a purchase made outside Helium without blocking the caller.
+    /// Calls before initialization are ignored; history is synced automatically during initialization.
+    public func syncTransactions() {
+        Task {
+            await HeliumTransactionManager.shared.syncTransactions()
+        }
+    }
+
     /// Presents a full-screen paywall for the specified trigger.
     ///
     /// You must have a trigger and workflow configured in the [Helium dashboard](https://app.tryhelium.com/workflows)

@@ -4,6 +4,9 @@
 //
 
 import StoreKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 actor HeliumTransactionManager {
     static let shared = HeliumTransactionManager()
@@ -17,8 +20,13 @@ actor HeliumTransactionManager {
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
     private var periodicSyncTask: Task<Void, Never>?
+    private var configDownloadObserver: NSObjectProtocol?
+    private var appActiveObserver: NSObjectProtocol?
+    private var isSyncingHistory = false
+    private var foregroundThrottle = TransactionSyncThrottle()
     
     private init() {
+        TransactionSyncPolicy.migrate(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
         syncedTransactionIds = loadSyncedIds()
     }
     
@@ -28,6 +36,18 @@ actor HeliumTransactionManager {
         guard !isConfigured else { return }
         isConfigured = true
 
+        configDownloadObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("HeliumConfigDownloadComplete"), object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.syncTransactions() }
+        }
+#if canImport(UIKit)
+        appActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.syncOnForeground() }
+        }
+#endif
         startTransactionListener()
         await loadAndSyncTransactionHistory()
         startPeriodicSync()
@@ -71,8 +91,29 @@ actor HeliumTransactionManager {
     }
     
     // MARK: - Transaction History
+
+    func syncTransactions() async {
+        guard isConfigured else { return }
+        await loadAndSyncTransactionHistory()
+    }
+
+    private func syncOnForeground() async {
+        guard !isSyncingHistory, organizationId != nil,
+              foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime) else { return }
+        await loadAndSyncTransactionHistory()
+    }
+
+    private var organizationId: String? {
+        TransactionSyncPolicy.organizationId(
+            HeliumFetchedConfigManager.shared.getOrganizationID(),
+            HeliumFallbackViewManager.shared.getConfig()?.organizationID
+        )
+    }
     
     private func loadAndSyncTransactionHistory() async {
+        guard !isSyncingHistory, organizationId != nil else { return }
+        isSyncingHistory = true
+        defer { isSyncingHistory = false }
         let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
         var transactionsToSync: [Transaction] = []
 
@@ -80,17 +121,19 @@ actor HeliumTransactionManager {
             guard case .verified(let transaction) = verificationResult else {
                 continue
             }
+            guard transaction.ownershipType != .familyShared else { continue }
             // Skip transactions older than cutoff
             if transaction.purchaseDate < cutoffDate {
                 continue
             }
             if syncedTransactionIds[transaction.id] == nil {
                 transactionsToSync.append(transaction)
+                if transactionsToSync.count >= maxSyncedIdsToStore { break }
             }
         }
 
         if !transactionsToSync.isEmpty {
-            await syncWithServer(transactions: transactionsToSync)
+            syncWithServer(transactions: transactionsToSync)
         }
     }
     
@@ -100,16 +143,20 @@ actor HeliumTransactionManager {
         guard syncedTransactionIds[transaction.id] == nil else {
             return
         }
-        await syncWithServer(transactions: [transaction])
+        syncWithServer(transactions: [transaction])
     }
     
     // MARK: - Server Sync
     
-    private func syncWithServer(transactions: [Transaction]) async {
-        syncClient.syncTransactions(transactions)
-        
-        for transaction in transactions {
-            syncedTransactionIds[transaction.id] = transaction.purchaseDate
+    private func syncWithServer(transactions: [Transaction]) {
+        let eligible = transactions.filter { $0.ownershipType != .familyShared }
+        let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
+        let client = syncClient
+        TransactionSyncPolicy.sync(
+            transactions: dates, organizationId: organizationId, syncedIds: &syncedTransactionIds
+        ) { ids, organizationId in
+            let ids = Set(ids)
+            client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId)
         }
         pruneAndSave()
     }
@@ -162,14 +209,12 @@ class TransactionSyncClient {
         analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
     }
     
-    func syncTransactions(_ transactions: [Transaction]) {
-        guard !transactions.isEmpty else { return }
+    func syncTransactions(_ transactions: [Transaction], organizationId: String) {
+        guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getResolvedUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
-        // Note that organizationId may not be filled depending on when this is called
-        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
@@ -196,6 +241,9 @@ class TransactionSyncClient {
                 "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "platform": HeliumSdkConfig.shared.heliumPlatform,
+                "heliumSdkVersion": BuildConstants.version,
+                "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
+                "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
                 "timestamp": timestamp
             ]
             
