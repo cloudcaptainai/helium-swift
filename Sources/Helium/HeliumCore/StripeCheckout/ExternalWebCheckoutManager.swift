@@ -140,6 +140,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
+        var paddleAwaitDeadline: TimeInterval?
         if provider.kind == .paddle,
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -155,6 +156,7 @@ public class ExternalWebCheckoutManager: NSObject {
             }
 
             let awaitStart = Date()
+            paddleAwaitDeadline = ProcessInfo.processInfo.systemUptime + PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
                 priceIds: priceIdsToAwait
@@ -217,7 +219,12 @@ public class ExternalWebCheckoutManager: NSObject {
 
         let analyticsData = try JSONEncoder().encode(loggedEvent)
         let analytics = try JSONSerialization.jsonObject(with: analyticsData) as? [String: Any] ?? [:]
-        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analytics: analytics)
+        let secondTry = await readySecondTry(
+            paywallSession: paywallSession,
+            entitledBefore: entitledBefore,
+            analytics: analytics,
+            paddleAwaitDeadline: paddleAwaitDeadline
+        )
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -238,7 +245,12 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     @MainActor
-    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analytics: [String: Any]) -> (config: WebSecondTryConfig, context: [String: Any])? {
+    func readySecondTry(
+        paywallSession: PaywallSession,
+        entitledBefore: Set<String>,
+        analytics: [String: Any],
+        paddleAwaitDeadline: TimeInterval? = nil
+    ) async -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
               let paywallID = second.paywallID, paywallID > 0,
@@ -260,15 +272,35 @@ public class ExternalWebCheckoutManager: NSObject {
         guard !Self.containsEntitledProduct(offered, entitledIds: entitledBefore) else { return nil }
         let paddlePriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: paddleKeys)
         guard paddlePriceIds.count == paddleKeys.count else { return nil }
-        let outcomes = PaddleCheckoutPrefetchCoordinator.shared.completedOutcomes(
-            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
-        )
-        for priceId in paddlePriceIds {
-            guard case .ready = outcomes[priceId] ?? .notStarted else { return nil }
-        }
-
         let prices = provider.getProductsPriceMap() ?? [:]
         guard offered.allSatisfy({ prices[$0] != nil }) else { return nil }
+
+        let coordinator = PaddleCheckoutPrefetchCoordinator.shared
+        var outcomes = coordinator.completedOutcomes(
+            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
+        )
+        var pendingPriceIds: [String] = []
+        for priceId in paddlePriceIds {
+            switch outcomes[priceId] ?? .notStarted {
+            case .ready: break
+            case .notStarted: pendingPriceIds.append(priceId)
+            case .alreadyEntitled, .failed: return nil
+            }
+        }
+        if !pendingPriceIds.isEmpty {
+            // Both paywalls prefetch on open. B only gets what remains of A's wait budget.
+            guard let paddleAwaitDeadline else { return nil }
+            let remaining = paddleAwaitDeadline - ProcessInfo.processInfo.systemUptime
+            guard remaining > 0 else { return nil }
+            let pendingOutcomes = await coordinator.collectPrefetchOutcomes(
+                sessionId: paywallSession.sessionId, priceIds: pendingPriceIds,
+                timeout: remaining, surface: .secondTry
+            )
+            for priceId in pendingPriceIds {
+                guard case .ready = pendingOutcomes[priceId] ?? .notStarted else { return nil }
+            }
+            outcomes.merge(pendingOutcomes) { _, awaited in awaited }
+        }
 
         var info = original
         info.webProductsOfferedPaddle = paddleKeys

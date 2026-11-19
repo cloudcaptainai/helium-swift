@@ -11,6 +11,21 @@ private final class EmptyPaddleEntitlementsSource: HeliumPaymentEntitlementsSour
     }
 }
 
+private final class RecordingPaddleCheckoutManager: ExternalWebCheckoutManager {
+    var openedSecondTry: WebSecondTryConfig?
+
+    @MainActor
+    override func openEnrichedCheckoutURL(
+        _ url: URL,
+        entitledProductIdsBeforeCheckout: Set<String>,
+        paywallSession: PaywallSession,
+        secondTry: WebSecondTryConfig?
+    ) async throws -> WebCheckoutOutcome {
+        openedSecondTry = secondTry
+        return .opened
+    }
+}
+
 @MainActor
 final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
@@ -61,19 +76,22 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             defaultDiscountId: nil
         )
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [key: price], paddleClientToken: "test_xyz")
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: analytics))
+        let notStarted = await manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: analytics)
+        XCTAssertNil(notStarted)
         configureSharedCheckoutFlow(session: paywallSession, priceIds: [], countryCode: "US")
         defer { cleanupSharedCheckoutFlow(session: paywallSession) }
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second", surface: .secondTry)
         guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
-        let second = try XCTUnwrap(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: analytics))
+        let ready = await manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: analytics)
+        let second = try XCTUnwrap(ready)
         let context = try XCTUnwrap(second.context["perPaywallCtx"] as? [String: Any])
         XCTAssertEqual(context["initialPaddleProduct"] as? String, key)
         XCTAssertEqual(context["productsOfferedPaddle"] as? [String], [key])
         let bootstraps = try XCTUnwrap(context["paddleBootstraps"] as? [String: Any])
         XCTAssertNotNil(bootstraps["pri_second"])
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: ["pro_second:pri_other"], analytics: analytics))
+        let entitled = await manager.readySecondTry(paywallSession: paywallSession, entitledBefore: ["pro_second:pri_other"], analytics: analytics)
+        XCTAssertNil(entitled)
     }
 
     func testSecondTryRejectsMixedProviderProductsWithReadyPaddlePrefetch() async throws {
@@ -92,7 +110,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: session.sessionId, priceId: "pri_second", surface: .secondTry)
         guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
         let analytics = testAnalyticsDictionary(makeTestCheckoutAnalytics(session: session, provider: .paddle))
-        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics))
+        let mixed = await manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics)
+        XCTAssertNil(mixed)
     }
 
     func testStripeSecondTryRejectsMixedProductsEvenWithReadyPaddlePrefetch() async throws {
@@ -115,14 +134,16 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: session.sessionId, priceId: "pri_second", surface: .secondTry)
         guard case .ready = outcome else { return XCTFail("Expected ready outcome") }
         let analytics = testAnalyticsDictionary(makeTestCheckoutAnalytics(session: session, provider: .stripe))
-        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics))
+        let mixed = await manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analytics)
+        XCTAssertNil(mixed)
 
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: [], productsOfferedStripe: [stripeKey], showOn: ["dismissed"]
         )
         let stripeOnly = makeTestSession(paywallInfo: info)
-        XCTAssertNotNil(manager.readySecondTry(paywallSession: stripeOnly, entitledBefore: [], analytics: analytics))
+        let ready = await manager.readySecondTry(paywallSession: stripeOnly, entitledBefore: [], analytics: analytics)
+        XCTAssertNotNil(ready)
     }
 
     func testSecondTryContextOmitsAlreadyEntitledProduct() async throws {
@@ -140,7 +161,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_second_owned", surface: .secondTry)
         guard case .alreadyEntitled = outcome else { return XCTFail("Expected already-entitled outcome") }
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: testAnalyticsDictionary(makeTestCheckoutAnalytics(session: paywallSession, provider: .paddle))))
+        let ready = await manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: testAnalyticsDictionary(makeTestCheckoutAnalytics(session: paywallSession, provider: .paddle)))
+        XCTAssertNil(ready)
     }
 
     func testSecondTryContextOmitsFailedPrefetch() async throws {
@@ -159,7 +181,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         PaddleCheckoutPrefetchCoordinator.shared.prefetch(paywallSession: paywallSession, compositeKeys: [key], surface: .secondTry)
         let outcome = await PaddleCheckoutPrefetchCoordinator.shared.awaitOutcome(sessionId: paywallSession.sessionId, priceId: "pri_error", surface: .secondTry)
         guard case .failed = outcome else { return XCTFail("Expected failed outcome") }
-        XCTAssertNil(manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: testAnalyticsDictionary(makeTestCheckoutAnalytics(session: paywallSession, provider: .paddle))))
+        let ready = await manager.readySecondTry(paywallSession: paywallSession, entitledBefore: [], analytics: testAnalyticsDictionary(makeTestCheckoutAnalytics(session: paywallSession, provider: .paddle)))
+        XCTAssertNil(ready)
     }
 
     private var testSession: PaywallSession!
@@ -254,11 +277,13 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
 
     private func checkoutFlowSession(
         productKeys: [String],
-        browserStyle: WebCheckoutBrowserStyle? = nil
+        browserStyle: WebCheckoutBrowserStyle? = nil,
+        secondTry: WebSecondTryConfig? = nil
     ) -> PaywallSession {
         var paywallInfo = makeTestPaywallInfo()
         paywallInfo.webProductsOfferedPaddle = productKeys
         paywallInfo.webCheckoutBrowserStyle = browserStyle
+        paywallInfo.webSecondTryConfig = secondTry
         paywallInfo.additionalPaywallFields = JSON([
             "webPaywallBundleUrl": "https://bundles.clickthrough.to/test.html",
         ])
@@ -269,7 +294,8 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         session: PaywallSession,
         priceIds: [String],
         alreadyEntitledPriceId: String? = nil,
-        countryCode: Any = "MX"
+        countryCode: Any = "MX",
+        beforeCheckoutResponse: ((String) throws -> Void)? = nil
     ) {
         URLProtocol.registerClass(MockURLProtocol.self)
         MockURLProtocol.reset()
@@ -314,6 +340,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 )
                 let data = try XCTUnwrap(payload["data"] as? [String: Any])
                 let transactionId = try XCTUnwrap(data["transaction_id"] as? String)
+                try beforeCheckoutResponse?(transactionId)
                 response = HTTPURLResponse(
                     url: try XCTUnwrap(request.url),
                     statusCode: 201,
@@ -782,6 +809,49 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 )
             }
         }
+    }
+
+    func testStartCheckoutFlowIncludesSecondTryWhenItsPriceFinishesAfterPrimary() async throws {
+        let primaryKey = "pro_primary:pri_primary"
+        let secondKey = "pro_second:pri_second"
+        let secondTry = WebSecondTryConfig(
+            paywallUUID: "second", paywallID: 42, paywallTemplateName: "Second",
+            paywallVersionUUID: "version", bundleUrl: "https://example.com/b",
+            productsOfferedPaddle: [secondKey], productsOfferedStripe: [], showOn: ["dismissed"]
+        )
+        let session = checkoutFlowSession(productKeys: [primaryKey], secondTry: secondTry)
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(
+            stripeProducts: nil, paddleProducts: [secondKey: testPaddlePrice("pri_second")],
+            paddleClientToken: "test_xyz"
+        )
+        let secondRequested = expectation(description: "Second-try price is in flight")
+        let releaseSecond = DispatchSemaphore(value: 0)
+        configureSharedCheckoutFlow(
+            session: session, priceIds: ["pri_primary"], countryCode: "US"
+        ) { transactionId in
+            guard transactionId == "txn_pri_second" else { return }
+            secondRequested.fulfill()
+            guard releaseSecond.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+        }
+        defer {
+            releaseSecond.signal()
+            cleanupSharedCheckoutFlow(session: session)
+        }
+        let coordinator = PaddleCheckoutPrefetchCoordinator.shared
+        let primary = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_primary")
+        guard case .ready = primary else { return XCTFail("Expected the primary price to be ready") }
+        coordinator.handlePaywallOpen(paywallSession: session)
+        await fulfillment(of: [secondRequested], timeout: 2)
+
+        let manager = RecordingPaddleCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
+        let checkout = Task {
+            try await manager.startCheckoutFlow(for: primaryKey, triggerName: session.trigger, paywallSession: session)
+        }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        releaseSecond.signal()
+
+        _ = try await checkout.value
+        XCTAssertEqual(manager.openedSecondTry?.paywallUUID, secondTry.paywallUUID)
     }
 
     func testStartCheckoutFlowSurfacesNonUSBlockBeforeNotReady() async throws {

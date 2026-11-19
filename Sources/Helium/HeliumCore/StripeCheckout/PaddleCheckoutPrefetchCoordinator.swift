@@ -217,14 +217,16 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     func collectPrefetchOutcomes(
         sessionId: String,
-        priceIds: [String]
+        priceIds: [String],
+        timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds,
+        surface: PaddlePrefetchSurface = .primary
     ) async -> [String: PaddlePrefetchOutcome] {
         guard !priceIds.isEmpty else { return [:] }
         return await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
             for priceId in priceIds {
                 group.addTask { @MainActor in
                     let outcome = await self.awaitOutcome(
-                        sessionId: sessionId, priceId: priceId
+                        sessionId: sessionId, priceId: priceId, timeout: timeout, surface: surface
                     )
                     return (priceId, outcome)
                 }
