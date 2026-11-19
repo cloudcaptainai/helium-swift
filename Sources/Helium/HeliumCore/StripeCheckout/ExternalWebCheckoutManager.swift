@@ -288,7 +288,8 @@ public class ExternalWebCheckoutManager: NSObject {
             }
         }
         if !pendingPriceIds.isEmpty {
-            // Both paywalls prefetch on open. B only gets what remains of A's wait budget.
+            // Primary and web second-try Paddle prices prefetch in parallel.
+            // Pending second-try prices share the primary's prefetch deadline.
             guard let paddleAwaitDeadline else { return nil }
             let remaining = paddleAwaitDeadline - ProcessInfo.processInfo.systemUptime
             guard remaining > 0 else { return nil }
