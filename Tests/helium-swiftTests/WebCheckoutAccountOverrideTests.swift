@@ -21,11 +21,12 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
         Helium.testing.webCheckoutAccountOverride = .automatic
         store.nextLaunchWebCheckoutAccount = .automatic
         store.updatePaddleAccount(clientToken: nil)
-        Helium.testing.lockWebCheckoutAccountForSession()
+        relaunch()
     }
 
     /// Stands in for the next app launch, which fixes the account at `initialize`.
     private func relaunch() {
+        Helium.testing.sessionWebCheckoutAccountOverride = nil
         Helium.testing.lockWebCheckoutAccountForSession()
     }
 
@@ -61,6 +62,13 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
         relaunch()
 
         try assertSent("live")
+    }
+
+    func testReinitializeInTheSameLaunch_keepsTheAccount() throws {
+        store.nextLaunchWebCheckoutAccount = .live
+        Helium.testing.lockWebCheckoutAccountForSession()
+
+        try assertSent(nil)
     }
 
     func testReset_clearsTheOverride() throws {

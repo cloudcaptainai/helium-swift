@@ -1245,10 +1245,12 @@ public class HeliumTesting {
         webCheckoutAccountOverride = .automatic
     }
 
-    private var sessionWebCheckoutAccountOverride: HeliumWebCheckoutAccountOverride?
+    var sessionWebCheckoutAccountOverride: HeliumWebCheckoutAccountOverride?
 
     /// Fixes the account for the app session, so entitlements and previews never mix accounts.
+    /// Re-initializing (as `resetHelium` does) keeps the account until the app relaunches.
     func lockWebCheckoutAccountForSession() {
+        guard sessionWebCheckoutAccountOverride == nil else { return }
         let previewChoice = isProductionEnvironment
             ? .automatic
             : HeliumPreviewConfigurationStore.shared.nextLaunchWebCheckoutAccount
