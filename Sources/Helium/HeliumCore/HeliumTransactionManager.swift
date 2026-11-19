@@ -132,11 +132,11 @@ actor HeliumTransactionManager {
                 }
                 if syncedTransactionIds[transaction.id] == nil {
                     transactionsToSync.append(transaction)
-                    if transactionsToSync.count >= maxSyncedIdsToStore { break }
                 }
             }
 
-            syncWithServer(transactions: transactionsToSync)
+            transactionsToSync.sort { $0.purchaseDate > $1.purchaseDate }
+            syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore)))
         } while historySyncState.finishPass()
     }
     
