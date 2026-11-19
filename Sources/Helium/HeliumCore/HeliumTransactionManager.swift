@@ -25,6 +25,7 @@ actor HeliumTransactionManager {
     private var isSyncingHistory = false
     private var foregroundThrottle = TransactionSyncThrottle()
     private var pendingTransactions = TransactionSyncPending<Transaction>()
+    private var organizationRetryTask: Task<Void, Never>?
     
     private init() {
         TransactionSyncPolicy.migrate(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
@@ -112,7 +113,11 @@ actor HeliumTransactionManager {
     }
     
     private func loadAndSyncTransactionHistory() async {
-        guard !isSyncingHistory, organizationId != nil else { return }
+        guard organizationId != nil else {
+            scheduleOrganizationRetry()
+            return
+        }
+        guard !isSyncingHistory else { return }
         isSyncingHistory = true
         defer { isSyncingHistory = false }
         let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
@@ -146,10 +151,33 @@ actor HeliumTransactionManager {
     }
     
     // MARK: - Server Sync
+
+    private func scheduleOrganizationRetry() {
+        guard organizationRetryTask == nil else { return }
+        organizationRetryTask = Task {
+            for _ in 0..<18 {
+                do {
+                    try await Task.sleep(nanoseconds: 10_000_000_000)
+                } catch {
+                    return
+                }
+                if organizationId != nil {
+                    organizationRetryTask = nil
+                    await loadAndSyncTransactionHistory()
+                    return
+                }
+            }
+            organizationRetryTask = nil
+        }
+    }
     
     private func syncWithServer(transactions: [Transaction]) {
         for transaction in transactions where transaction.ownershipType != .familyShared && syncedTransactionIds[transaction.id] == nil {
             pendingTransactions.add(transaction, id: transaction.id)
+        }
+        guard let organizationId else {
+            scheduleOrganizationRetry()
+            return
         }
         let eligible = Array(pendingTransactions.transactions.values)
         let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
@@ -161,6 +189,8 @@ actor HeliumTransactionManager {
             client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId)
         }
         pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
+        organizationRetryTask?.cancel()
+        organizationRetryTask = nil
         pruneAndSave()
     }
     
