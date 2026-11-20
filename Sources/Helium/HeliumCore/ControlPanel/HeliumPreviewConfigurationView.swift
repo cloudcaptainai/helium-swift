@@ -28,7 +28,7 @@ struct HeliumPreviewConfigurationView: View {
         return effective
     }
 
-    static let vpnCaption = "A VPN only changes the network location."
+    static let vpnCaption = "All three must be US for a real purchase. A VPN only changes the network location."
     static let eligibilityCheckFailedText = "Couldn't check eligibility."
 
     var eligibilityRows: [HeliumPreviewEligibilityRow] {
