@@ -52,6 +52,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     private var cache: [CacheKey: Task<PaddlePrefetchOutcome, Never>] = [:]
     private var completed: [CacheKey: PaddlePrefetchOutcome] = [:]
     private var generations: [CacheKey: UUID] = [:]
+    private var openSessionsAwaitingTraits: Set<String> = []
 
     private struct CacheKey: Hashable, Sendable {
         let sessionId: String
@@ -70,17 +71,26 @@ final class PaddleCheckoutPrefetchCoordinator {
     // MARK: - Paywall lifecycle hooks
 
     func handlePaywallOpen(paywallSession: PaywallSession) {
-        guard let info = paywallSession.paywallInfoWithBackups else { return }
-        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty {
-            prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+        guard let info = paywallSession.paywallInfoWithBackups,
+              let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty else { return }
+        // A paywall open event can precede the webview assembling its display-time traits.
+        guard paywallSession.resolvedPaywallTraits != nil else {
+            openSessionsAwaitingTraits.insert(paywallSession.sessionId)
+            return
         }
-        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty,
-           let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
+        openSessionsAwaitingTraits.remove(paywallSession.sessionId)
+        prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+        if let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
             prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
         }
     }
 
-    func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary) {
+    func handlePaywallTraitsResolved(paywallSession: PaywallSession) {
+        guard openSessionsAwaitingTraits.contains(paywallSession.sessionId) else { return }
+        handlePaywallOpen(paywallSession: paywallSession)
+    }
+
+    func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary, paywallTraits: HeliumUserTraits? = nil) {
         guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
@@ -102,7 +112,8 @@ final class PaddleCheckoutPrefetchCoordinator {
             discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
             iosBundleId: Bundle.main.bundleIdentifier,
-            surface: surface
+            surface: surface,
+            paywallTraits: paywallTraits
         )
     }
 
@@ -119,7 +130,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
         iosBundleId: String?,
-        surface: PaddlePrefetchSurface = .primary
+        surface: PaddlePrefetchSurface = .primary,
+        paywallTraits: HeliumUserTraits? = nil
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
@@ -130,6 +142,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
+        let traits = paywallTraits ?? paywallSession.resolvedPaywallTraits
+        let traitsData = traits.flatMap { try? JSONEncoder().encode($0) }
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
@@ -147,6 +161,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     discountId: discountId,
                     paywallUUID: paywallUUID,
                     triggerName: triggerName,
+                    customPaywallTraitsJSON: traitsData,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
@@ -238,6 +253,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     func cancelForSession(sessionId: String) {
+        openSessionsAwaitingTraits.remove(sessionId)
         for key in Array(cache.keys) where key.sessionId == sessionId {
             if let task = cache.removeValue(forKey: key) {
                 task.cancel()
@@ -256,6 +272,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     func cancelAll() {
+        openSessionsAwaitingTraits.removeAll()
         completed.removeAll()
         generations.removeAll()
         for (_, task) in cache {
@@ -267,6 +284,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// Like `cancelAll`, but waits for each Task to finish. Use as a hard
     /// barrier before mutating shared state in-flight Tasks could touch.
     func cancelAllAndAwait() async {
+        openSessionsAwaitingTraits.removeAll()
         let tasks = Array(cache.values)
         cache.removeAll()
         completed.removeAll()
@@ -537,6 +555,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountId: String?,
         paywallUUID: String?,
         triggerName: String,
+        customPaywallTraitsJSON: Data?,
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
@@ -554,7 +573,8 @@ final class PaddleCheckoutPrefetchCoordinator {
                 priceId: priceId,
                 discountId: discountId,
                 paywallUUID: paywallUUID,
-                triggerName: triggerName
+                triggerName: triggerName,
+                customPaywallTraitsJSON: customPaywallTraitsJSON
             )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)

@@ -40,6 +40,12 @@ struct PaywallSession {
     let isSecondTry: Bool
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
+    private let paywallTraits = HeliumAtomic<HeliumUserTraits?>(wrappedValue: nil)
+
+    var resolvedPaywallTraits: HeliumUserTraits? {
+        get { paywallTraits.wrappedValue }
+        nonmutating set { paywallTraits.wrappedValue = newValue }
+    }
     
     var isFallback: Bool {
         return fallbackType != .notFallback

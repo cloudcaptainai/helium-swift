@@ -171,13 +171,17 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                            defaultDiscountId: nil)
     }
 
-    func testPaywallOpenPrefetchesSecondTryOnlyForPaddlePrimaryAndPaddleOnlySecondTry() async {
+    func testPaywallOpenPrefetchesSecondTryOnlyForPaddlePrimaryAndPaddleOnlySecondTry() async throws {
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
         MockURLProtocol.requestHandler = bothSucceedHandler()
         let lock = NSLock()
         var events: [any HeliumObservabilityEvent] = []
         HeliumObservabilityManager.shared.unitTestTrackObserver = { event in lock.withLock { events.append(event) } }
         defer { HeliumObservabilityManager.shared.unitTestTrackObserver = nil }
+        let identity = HeliumIdentityManager.shared
+        let previousTraits = identity.getUserTraits()
+        identity.setCustomUserTraits(HeliumUserTraits(["cohort": "identified", "source": "account"]))
+        defer { identity.setCustomUserTraits(previousTraits) }
         for (primaryPaddle, secondStripe, expectSecond) in [(true, false, true), (false, false, false), (true, true, false)] {
             var info = makeTestPaywallInfo()
             info.webProductsOfferedPaddle = primaryPaddle ? ["pro_a:pri_a"] : []
@@ -187,9 +191,33 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             )
             let session = makeTestSession(paywallInfo: info)
             coordinator.handlePaywallOpen(paywallSession: session)
+            let beforeTraits = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+            guard case .notStarted = beforeTraits else { return XCTFail("Expected prefetch to wait for display-time traits") }
+            session.resolvedPaywallTraits = HeliumUserTraits.forPaywall(
+                triggerName: session.trigger,
+                presentationTraits: HeliumUserTraits(["cohort": "presentation", "score": 3, "invalid": Double.infinity])
+            )
+            coordinator.handlePaywallTraitsResolved(paywallSession: session)
             let result = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_b", surface: .secondTry)
             if expectSecond {
                 guard case .ready = result else { return XCTFail("Expected second-try prefetch") }
+                let primary = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+                guard case .ready = primary else { return XCTFail("Expected primary prefetch") }
+                let requests = MockURLProtocol.capturedRequests.filter {
+                    $0.url?.path.hasSuffix("/paddle/create-transaction-for-paywall") == true
+                }
+                XCTAssertEqual(requests.count, 2)
+                for request in requests {
+                    let body = try XCTUnwrap(request.httpBody)
+                    let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                    let traits = try XCTUnwrap(payload["customPaywallTraits"] as? [String: Any])
+                    XCTAssertEqual(traits["trigger"] as? String, session.trigger)
+                    XCTAssertNotNil(traits["hlm_hasActivePaddleSubscription"] as? Bool)
+                    XCTAssertEqual(traits["cohort"] as? String, "presentation")
+                    XCTAssertEqual(traits["source"] as? String, "account")
+                    XCTAssertEqual(traits["score"] as? Int, 3)
+                    XCTAssertNil(traits["invalid"])
+                }
                 let secondEvents = lock.withLock { events.filter { ($0.properties["priceId"] as? String) == "pri_b" || ($0.properties["priceIds"] as? [String]) == ["pri_b"] } }
                 XCTAssertEqual(secondEvents.count, 4)
                 XCTAssertTrue(secondEvents.allSatisfy { ($0.properties["isSecondTry"] as? Bool) == true })

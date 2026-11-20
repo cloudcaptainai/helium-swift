@@ -109,9 +109,6 @@ class HeliumActionsDelegate: ObservableObject {
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
 
-    // The fully assembled traits the webview injected, frozen at display time.
-    private var resolvedPaywallTraits: HeliumUserTraits?
-    
     var dismissAction: (() -> Void)?
     
     var trigger: String {
@@ -227,7 +224,13 @@ class HeliumActionsDelegate: ObservableObject {
     }
 
     func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
-        resolvedPaywallTraits = traits
+        paywallSession.resolvedPaywallTraits = traits
+        if traits != nil {
+            let session = paywallSession
+            Task { @MainActor in
+                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallTraitsResolved(paywallSession: session)
+            }
+        }
     }
 
     func makePurchase() async -> HeliumPaywallTransactionStatus {
@@ -247,7 +250,7 @@ class HeliumActionsDelegate: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         let paywallTraits: HeliumUserTraits
-        if let resolvedPaywallTraits {
+        if let resolvedPaywallTraits = paywallSession.resolvedPaywallTraits {
             paywallTraits = resolvedPaywallTraits
         } else {
             HeliumObservabilityManager.shared.track(
