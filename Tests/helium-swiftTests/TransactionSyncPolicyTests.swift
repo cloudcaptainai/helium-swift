@@ -131,6 +131,29 @@ final class TransactionSyncPolicyTests: XCTestCase {
         XCTAssertEqual(defaults.integer(forKey: TransactionSyncPolicy.schemaVersionKey), TransactionSyncPolicy.schemaVersion + 1)
     }
 
+    func testCompletedScanSkipsStartupForegroundAndConfigRefetch() {
+        var throttle = TransactionSyncThrottle()
+        XCTAssertTrue(throttle.shouldSyncOnConfig(hasPending: false))
+        throttle.completedScan(now: 100)
+        XCTAssertFalse(throttle.shouldSync(now: 100))
+        XCTAssertFalse(throttle.shouldSyncOnConfig(hasPending: false))
+        XCTAssertFalse(throttle.shouldSyncOnConfig(hasPending: false))
+        XCTAssertTrue(throttle.shouldSync(now: 160))
+    }
+
+    func testPendingWorkBypassesCompletedScanThrottle() {
+        var throttle = TransactionSyncThrottle()
+        throttle.completedScan(now: 100)
+        XCTAssertTrue(throttle.shouldSyncOnConfig(hasPending: true))
+        XCTAssertTrue(throttle.shouldSync(now: 101, hasPending: true))
+    }
+
+    func testIncompleteScanStillAllowsConfigRecovery() {
+        var throttle = TransactionSyncThrottle()
+        XCTAssertTrue(throttle.shouldSync(now: 100))
+        XCTAssertTrue(throttle.shouldSyncOnConfig(hasPending: false))
+    }
+
     func testForegroundThrottleAllowsFirstCallAndSixtySecondBoundary() {
         var throttle = TransactionSyncThrottle()
         XCTAssertTrue(throttle.shouldSync(now: 100))

@@ -30,7 +30,7 @@ enum TransactionSyncPolicy {
 }
 
 struct TransactionHistorySyncState {
-    private var isRunning = false
+    private(set) var isRunning = false
     private var needsRescan = false
 
     mutating func request() -> Bool {
@@ -66,10 +66,20 @@ struct TransactionSyncPending<Value> {
 
 struct TransactionSyncThrottle {
     private var lastSync: TimeInterval?
+    private var hasCompletedScan = false
 
-    mutating func shouldSync(now: TimeInterval) -> Bool {
-        if let lastSync, now - lastSync < 60 { return false }
+    mutating func shouldSync(now: TimeInterval, hasPending: Bool = false) -> Bool {
+        if !hasPending, let lastSync, now - lastSync < 60 { return false }
         lastSync = now
         return true
+    }
+
+    func shouldSyncOnConfig(hasPending: Bool) -> Bool {
+        hasPending || !hasCompletedScan
+    }
+
+    mutating func completedScan(now: TimeInterval) {
+        hasCompletedScan = true
+        lastSync = now
     }
 }

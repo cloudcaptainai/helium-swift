@@ -41,7 +41,7 @@ actor HeliumTransactionManager {
         configDownloadObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("HeliumConfigDownloadComplete"), object: nil, queue: nil
         ) { [weak self] _ in
-            Task { await self?.syncTransactions() }
+            Task { await self?.syncOnConfigDownload() }
         }
 #if canImport(UIKit)
         appActiveObserver = NotificationCenter.default.addObserver(
@@ -100,7 +100,20 @@ actor HeliumTransactionManager {
     }
 
     private func syncOnForeground() async {
-        guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime) else { return }
+        let hasPending = !pendingTransactions.transactions.isEmpty
+        if organizationId != nil {
+            guard !historySyncState.isRunning || hasPending else { return }
+            guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime, hasPending: hasPending) else { return }
+        }
+        await loadAndSyncTransactionHistory()
+    }
+
+    private func syncOnConfigDownload() async {
+        let hasPending = !pendingTransactions.transactions.isEmpty
+        if organizationId != nil {
+            guard !historySyncState.isRunning || hasPending else { return }
+            guard foregroundThrottle.shouldSyncOnConfig(hasPending: hasPending) else { return }
+        }
         await loadAndSyncTransactionHistory()
     }
 
@@ -140,6 +153,7 @@ actor HeliumTransactionManager {
             transactionsToSync.sort { $0.purchaseDate > $1.purchaseDate }
             if syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore))) {
                 didSync = true
+                foregroundThrottle.completedScan(now: ProcessInfo.processInfo.systemUptime)
                 if !isOrganizationRetry {
                     organizationRetryTask?.cancel()
                     organizationRetryTask = nil
