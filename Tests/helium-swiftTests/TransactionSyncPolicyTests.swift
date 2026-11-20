@@ -2,6 +2,49 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testSavedIdsLoadStatesRemainFixedWhileCountAdvances() throws {
+        let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let key = "syncedIds"
+        let date = Date(timeIntervalSince1970: 100)
+        let cases: [(TransactionSyncedIdsState, Any?, Int)] = [
+            (.loaded, try JSONEncoder().encode([UInt64(1): date]), TransactionSyncPolicy.schemaVersion),
+            (.loaded, try JSONEncoder().encode([UInt64: Date]()), TransactionSyncPolicy.schemaVersion),
+            (.empty, nil, TransactionSyncPolicy.schemaVersion),
+            (.migrated, try JSONEncoder().encode([UInt64(1): date]), 0),
+            (.migrated, nil, 0),
+            (.decodeFailed, Data("invalid".utf8), TransactionSyncPolicy.schemaVersion),
+            (.decodeFailed, "not data", TransactionSyncPolicy.schemaVersion),
+            (.decodeFailed, Data("null".utf8), TransactionSyncPolicy.schemaVersion)
+        ]
+        for (index, (expectedState, stored, version)) in cases.enumerated() {
+            defaults.removeObject(forKey: key)
+            if let stored { defaults.set(stored, forKey: key) }
+            defaults.set(version, forKey: TransactionSyncPolicy.schemaVersionKey)
+            let loaded = TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: key)
+            XCTAssertEqual(loaded.state, expectedState)
+            XCTAssertEqual(loaded.ids, index == 0 ? [1: date] : [:])
+            var ids = loaded.ids
+            for id in [UInt64(2), 3] {
+                let countBeforeSending = ids.count
+                TransactionSyncPolicy.sync(transactions: [id: date], organizationId: "organization", syncedIds: &ids) { _, _ in
+                    let properties = TransactionSyncPolicy.metadata(
+                        trigger: .history, sdkEnvironment: "PRODUCTION", storeEnvironment: nil,
+                        ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
+                        syncedIdCount: countBeforeSending, syncedIdsState: loaded.state
+                    )
+                    XCTAssertEqual(properties["syncedIdCount"] as? Int, loaded.ids.count + Int(id) - 2)
+                    XCTAssertEqual(properties["syncedIdsState"] as? String, expectedState.rawValue)
+                }
+                defaults.set(try JSONEncoder().encode(ids), forKey: key)
+            }
+            XCTAssertEqual(loaded.state, expectedState)
+            XCTAssertEqual(ids.count, loaded.ids.count + 2)
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: key).state, .loaded)
+        }
+    }
+
     func testForegroundAfterRunningScanSnapshotCoalescesOneRescanWithoutPendingWork() {
         var throttle = TransactionSyncThrottle()
         var state = TransactionHistorySyncState()
@@ -109,7 +152,8 @@ final class TransactionSyncPolicyTests: XCTestCase {
     func testFamilySharedMetadataRetainsExplicitOwnership() {
         let properties = TransactionSyncPolicy.metadata(
             trigger: .history, sdkEnvironment: "SANDBOX", storeEnvironment: "SANDBOX",
-            ownershipType: "FAMILY_SHARED", revocationDate: nil, isUpgraded: false, expirationDate: nil
+            ownershipType: "FAMILY_SHARED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
+            syncedIdCount: 0, syncedIdsState: .empty
         )
         XCTAssertEqual(properties["ownershipType"] as? String, "FAMILY_SHARED")
         XCTAssertEqual(properties["syncSchemaVersion"] as? Int, 2)
@@ -120,11 +164,14 @@ final class TransactionSyncPolicyTests: XCTestCase {
         for trigger in TransactionSyncTrigger.allCases {
             let properties = TransactionSyncPolicy.metadata(
                 trigger: trigger, sdkEnvironment: "PRODUCTION", storeEnvironment: "SANDBOX",
-                ownershipType: "PURCHASED", revocationDate: date, isUpgraded: true, expirationDate: date
+                ownershipType: "PURCHASED", revocationDate: date, isUpgraded: true, expirationDate: date,
+                syncedIdCount: 4, syncedIdsState: .loaded
             )
             XCTAssertEqual(properties["syncSchemaVersion"] as? Int, 2)
             XCTAssertEqual(properties["syncTrigger"] as? String, trigger.rawValue)
             XCTAssertEqual(properties["sdkEnvironment"] as? String, "PRODUCTION")
+            XCTAssertEqual(properties["syncedIdCount"] as? Int, 4)
+            XCTAssertEqual(properties["syncedIdsState"] as? String, "loaded")
             XCTAssertEqual(properties["storeEnvironment"] as? String, "SANDBOX")
             XCTAssertEqual(properties["ownershipType"] as? String, "PURCHASED")
             XCTAssertEqual(properties["revocationDate"] as? String, formatAsTimestamp(date: date))
@@ -137,7 +184,8 @@ final class TransactionSyncPolicyTests: XCTestCase {
     func testSyncedMetadataOmitsUnavailableStoreAndDates() {
         let properties = TransactionSyncPolicy.metadata(
             trigger: .history, sdkEnvironment: "SANDBOX", storeEnvironment: nil,
-            ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil
+            ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
+            syncedIdCount: 0, syncedIdsState: .decodeFailed
         )
         XCTAssertNil(properties["storeEnvironment"])
         XCTAssertNil(properties["revocationDate"])

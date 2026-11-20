@@ -17,6 +17,7 @@ actor HeliumTransactionManager {
     
     /// Maps transaction ID to the date it was synced
     private var syncedTransactionIds: [UInt64: Date] = [:]
+    private let syncedIdsState: TransactionSyncedIdsState
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
     private var periodicSyncTask: Task<Void, Never>?
@@ -29,8 +30,9 @@ actor HeliumTransactionManager {
     private var organizationRetryTask: Task<Void, Never>?
     
     private init() {
-        TransactionSyncPolicy.migrate(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
-        syncedTransactionIds = loadSyncedIds()
+        let stored = TransactionSyncPolicy.loadSyncedIds(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
+        syncedTransactionIds = stored.ids
+        syncedIdsState = stored.state
     }
     
     // MARK: - Configuration
@@ -239,13 +241,16 @@ actor HeliumTransactionManager {
         let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
         let client = syncClient
         let triggers = pendingTransactions.triggers
+        let syncedIdCount = syncedTransactionIds.count
+        let syncedIdsState = self.syncedIdsState
         TransactionSyncPolicy.sync(
             transactions: dates, organizationId: organizationId, syncedIds: &syncedTransactionIds
         ) { ids, organizationId in
             let ids = Set(ids)
             let groups = Dictionary(grouping: eligible.filter { ids.contains($0.id) }) { triggers[$0.id] ?? .history }
             for (trigger, transactions) in groups {
-                client.syncTransactions(transactions, organizationId: organizationId, trigger: trigger)
+                client.syncTransactions(transactions, organizationId: organizationId, trigger: trigger,
+                                        syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState)
             }
         }
         pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
@@ -254,14 +259,6 @@ actor HeliumTransactionManager {
     }
     
     // MARK: - Persistence
-    
-    private func loadSyncedIds() -> [UInt64: Date] {
-        guard let data = UserDefaults.standard.data(forKey: syncedTransactionIdsKey),
-              let ids = try? JSONDecoder().decode([UInt64: Date].self, from: data) else {
-            return [:]
-        }
-        return ids
-    }
     
     private func pruneAndSave() {
         // Remove entries older than maxTransactionAgeDays
@@ -301,7 +298,8 @@ class TransactionSyncClient {
         analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
     }
     
-    func syncTransactions(_ transactions: [Transaction], organizationId: String, trigger: TransactionSyncTrigger) {
+    func syncTransactions(_ transactions: [Transaction], organizationId: String, trigger: TransactionSyncTrigger,
+                          syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState) {
         guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
@@ -350,7 +348,8 @@ class TransactionSyncClient {
                 storeEnvironment: storeEnvironment,
                 ownershipType: transaction.ownershipType == .familyShared ? "FAMILY_SHARED" : transaction.ownershipType.rawValue.uppercased(),
                 revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
-                expirationDate: transaction.expirationDate
+                expirationDate: transaction.expirationDate,
+                syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState
             )) { _, value in value }
             
             if let appAccountToken = transaction.appAccountToken {
