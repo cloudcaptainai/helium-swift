@@ -247,6 +247,18 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         XCTAssertEqual(redirectURLForObservability(String(repeating: "a", count: 500)).count, 200)
     }
 
+    func testRedirectUrlForObservabilityHandlesEdgeInputs() {
+        XCTAssertEqual(redirectURLForObservability("????"), "")
+        XCTAssertEqual(redirectURLForObservability("#"), "")
+        XCTAssertEqual(redirectURLForObservability("@"), "")
+        XCTAssertEqual(redirectURLForObservability("://"), "://")
+        XCTAssertEqual(redirectURLForObservability("🙂🙂?token=SENTINEL"), "🙂🙂")
+        XCTAssertEqual(redirectURLForObservability("🙂@🙂/🙂"), "🙂/🙂")
+        let combining = String(repeating: "e\u{301}", count: 300)
+        XCTAssertEqual(redirectURLForObservability(combining), String(repeating: "e\u{301}", count: 200))
+        XCTAssertEqual(redirectURLForObservability(String(repeating: "/", count: 500)).count, 200)
+    }
+
     // MARK: - FallbackPaywallsConfigured
 
     func testFullyPopulatedBundleCarriesGeneratedAtOrgDefaultUUIDCountAndMap() throws {
