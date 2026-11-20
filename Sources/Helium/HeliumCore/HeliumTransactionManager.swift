@@ -94,11 +94,6 @@ actor HeliumTransactionManager {
     
     // MARK: - Transaction History
 
-    func syncTransactions() async {
-        guard isConfigured else { return }
-        await loadAndSyncTransactionHistory()
-    }
-
     private func syncOnForeground() async {
         let hasPending = !pendingTransactions.transactions.isEmpty
         if organizationId != nil {
