@@ -14,10 +14,10 @@ struct HeliumPreviewConfigurationView: View {
     let onCancel: () -> Void
     var onRecheckEligibility: () -> Void = {}
 
-    @ObservedObject private var store = HeliumPreviewConfigurationStore.shared
+    @ObservedObject private var previewSettings = HeliumPreviewConfigurationStore.shared
     @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
 
-    private var realPurchaseUnavailable: Bool { store.forceExternalCheckoutSimulation }
+    private var realPurchaseUnavailable: Bool { previewSettings.forceExternalCheckoutSimulation }
 
     /// A recheck can block real purchases after the tester picked them.
     private var effectiveConfiguration: HeliumPreviewConfiguration {
@@ -35,7 +35,7 @@ struct HeliumPreviewConfigurationView: View {
         HeliumPreviewEligibilityRow.rows(
             storeCountry: AppStoreCountryHelper.shared.getStoreCountryCode(),
             deviceRegion: Locale.current.regionCode,
-            ipCountry: store.previewEligibilityIpCountry
+            ipCountry: previewSettings.previewEligibilityIpCountry
         )
     }
 
@@ -206,7 +206,7 @@ struct HeliumPreviewConfigurationView: View {
 
     @ViewBuilder
     private var realPurchaseEligibility: some View {
-        if store.eligibilityStatus == .failed {
+        if previewSettings.eligibilityStatus == .failed {
             HStack(spacing: 8) {
                 Label(Self.eligibilityCheckFailedText, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -234,7 +234,7 @@ struct HeliumPreviewConfigurationView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    if store.eligibilityStatus == .checking {
+                    if previewSettings.eligibilityStatus == .checking {
                         ProgressView()
                     } else {
                         Button("Check again", action: onRecheckEligibility)
@@ -262,8 +262,8 @@ struct HeliumPreviewConfigurationView: View {
                         .foregroundColor(.primary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .blue))
-                .disabled(store.forcePaddleCaConsentModal)
-                if store.forcePaddleCaConsentModal {
+                .disabled(previewSettings.forcePaddleCaConsentModal)
+                if previewSettings.forcePaddleCaConsentModal {
                     Label("Paddle checkouts only. Your device is in California, so the consent modal always shows.", systemImage: "lock.fill")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -300,7 +300,7 @@ struct HeliumPreviewConfigurationView: View {
 
     private var startAction: some View {
         Button {
-            store.configuration = effectiveConfiguration
+            previewSettings.configuration = effectiveConfiguration
             onStart(effectiveConfiguration)
         } label: {
             Text(startActionLabel)
