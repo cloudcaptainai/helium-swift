@@ -1,7 +1,24 @@
 import XCTest
+import StoreKit
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testProductTypeMetadataUsesStableLowercaseValues() {
+        let cases: [(Product.ProductType?, String)] = [
+            (.autoRenewable, "auto_renewable"), (.nonRenewable, "non_renewable"),
+            (.consumable, "consumable"), (.nonConsumable, "non_consumable"),
+            (Product.ProductType(rawValue: "future"), "unknown"), (nil, "unknown")
+        ]
+        for (type, expected) in cases {
+            let properties = TransactionSyncPolicy.metadata(
+                trigger: .history, sdkEnvironment: "PRODUCTION", storeEnvironment: nil,
+                ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
+                syncedIdCount: 0, syncedIdsState: .empty, productType: type
+            )
+            XCTAssertEqual(properties["productType"] as? String, expected)
+        }
+    }
+
     func testSavedIdsLoadStatesRemainFixedWhileCountAdvances() throws {
         let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

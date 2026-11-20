@@ -1,4 +1,5 @@
 import Foundation
+import StoreKit
 
 enum TransactionSyncTrigger: String, CaseIterable {
     case listener, history, afterPurchase
@@ -11,13 +12,15 @@ enum TransactionSyncedIdsState: String, CaseIterable {
 enum TransactionSyncPolicy {
     static func metadata(trigger: TransactionSyncTrigger, sdkEnvironment: String, storeEnvironment: String?,
                          ownershipType: String, revocationDate: Date?, isUpgraded: Bool, expirationDate: Date?,
-                         syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState) -> [String: Any] {
+                         syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState,
+                         productType: Product.ProductType? = nil) -> [String: Any] {
         var properties: [String: Any] = [
             "syncSchemaVersion": 2,
             "syncTrigger": trigger.rawValue,
             "sdkEnvironment": sdkEnvironment,
             "syncedIdCount": syncedIdCount,
             "syncedIdsState": syncedIdsState.rawValue,
+            "productType": productType.map(self.productType) ?? "unknown",
             "ownershipType": ownershipType,
             "isUpgraded": isUpgraded
         ]
@@ -25,6 +28,16 @@ enum TransactionSyncPolicy {
         if let revocationDate { properties["revocationDate"] = formatAsTimestamp(date: revocationDate) }
         if let expirationDate { properties["expirationDate"] = formatAsTimestamp(date: expirationDate) }
         return properties
+    }
+
+    static func productType(_ type: Product.ProductType) -> String {
+        switch type {
+        case .autoRenewable: return "auto_renewable"
+        case .nonRenewable: return "non_renewable"
+        case .consumable: return "consumable"
+        case .nonConsumable: return "non_consumable"
+        default: return "unknown"
+        }
     }
 
     static let organizationRetryDelays: [UInt64] = [10, 30, 60].map { $0 * 1_000_000_000 }

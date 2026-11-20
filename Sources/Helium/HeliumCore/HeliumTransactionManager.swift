@@ -349,7 +349,7 @@ class TransactionSyncClient {
                 ownershipType: transaction.ownershipType == .familyShared ? "FAMILY_SHARED" : transaction.ownershipType.rawValue.uppercased(),
                 revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
                 expirationDate: transaction.expirationDate,
-                syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState
+                syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState, productType: transaction.productType
             )) { _, value in value }
             
             if let appAccountToken = transaction.appAccountToken {
