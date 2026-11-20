@@ -20,57 +20,100 @@ final class TransactionSyncPolicyTests: XCTestCase {
     }
 
     func testSavedIdsLoadStatesRemainFixedWhileCountAdvances() throws {
-        let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let key = "syncedIds"
-        let date = Date(timeIntervalSince1970: 100)
-        let cases: [(TransactionSyncedIdsState, Any?, Int)] = [
-            (.loaded, try JSONEncoder().encode([UInt64(1): date]), TransactionSyncPolicy.schemaVersion),
-            (.loaded, try JSONEncoder().encode([UInt64: Date]()), TransactionSyncPolicy.schemaVersion),
-            (.empty, nil, TransactionSyncPolicy.schemaVersion),
-            (.migrated, try JSONEncoder().encode([UInt64(1): date]), 0),
-            (.empty, nil, 0),
-            (.decodeFailed, Data("invalid".utf8), TransactionSyncPolicy.schemaVersion),
-            (.decodeFailed, "not data", TransactionSyncPolicy.schemaVersion),
-            (.decodeFailed, Data("null".utf8), TransactionSyncPolicy.schemaVersion)
-        ]
-        for (index, (expectedState, stored, version)) in cases.enumerated() {
-            defaults.removeObject(forKey: key)
-            if let stored { defaults.set(stored, forKey: key) }
-            defaults.set(version, forKey: TransactionSyncPolicy.schemaVersionKey)
-            let loaded = TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: key)
-            XCTAssertEqual(loaded.state, expectedState)
-            XCTAssertEqual(loaded.ids, index == 0 ? [1: date] : [:])
-            var ids = loaded.ids
-            for id in [UInt64(2), 3] {
-                let countBeforeSending = ids.count
-                TransactionSyncPolicy.sync(transactions: [id: date], organizationId: "organization", syncedIds: &ids) { _, _ in
-                    let properties = TransactionSyncPolicy.metadata(
-                        trigger: .history, sdkEnvironment: "PRODUCTION", storeEnvironment: nil,
-                        ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
-                        syncedIdCount: countBeforeSending, syncedIdsState: loaded.state
-                    )
-                    XCTAssertEqual(properties["syncedIdCount"] as? Int, loaded.ids.count + Int(id) - 2)
-                    XCTAssertEqual(properties["syncedIdsState"] as? String, expectedState.rawValue)
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            let date = Date(timeIntervalSince1970: 100)
+            let cases: [(TransactionSyncedIdsState, Data?)] = [
+                (.loaded, try JSONEncoder().encode(TransactionSyncedIdsFile(schemaVersion: TransactionSyncPolicy.schemaVersion, ids: [1: date]))),
+                (.loaded, try JSONEncoder().encode(TransactionSyncedIdsFile(schemaVersion: TransactionSyncPolicy.schemaVersion, ids: [:]))),
+                (.empty, nil),
+                (.migrated, try JSONEncoder().encode(TransactionSyncedIdsFile(schemaVersion: 0, ids: [1: date]))),
+                (.decodeFailed, Data("invalid".utf8)),
+                (.decodeFailed, Data("null".utf8)),
+                (.decodeFailed, Data("{}".utf8))
+            ]
+            for (index, (expectedState, data)) in cases.enumerated() {
+                if FileManager.default.fileExists(atPath: fileURL.path) { try FileManager.default.removeItem(at: fileURL) }
+                if let data { try data.write(to: fileURL, options: .atomic) }
+                let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
+                XCTAssertEqual(loaded.state, expectedState)
+                XCTAssertEqual(loaded.ids, index == 0 ? [1: date] : [:])
+                var ids = loaded.ids
+                for id in [UInt64(2), 3] {
+                    let countBeforeSending = ids.count
+                    TransactionSyncPolicy.sync(transactions: [id: date], organizationId: "organization", syncedIds: &ids) { _, _ in
+                        let properties = TransactionSyncPolicy.metadata(
+                            trigger: .history, sdkEnvironment: "PRODUCTION", storeEnvironment: nil,
+                            ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil,
+                            syncedIdCount: countBeforeSending, syncedIdsState: loaded.state
+                        )
+                        XCTAssertEqual(properties["syncedIdCount"] as? Int, loaded.ids.count + Int(id) - 2)
+                        XCTAssertEqual(properties["syncedIdsState"] as? String, expectedState.rawValue)
+                    }
+                    XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
                 }
-                defaults.set(try JSONEncoder().encode(ids), forKey: key)
+                XCTAssertEqual(loaded.state, expectedState)
+                XCTAssertEqual(ids.count, loaded.ids.count + 2)
+                XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).state, .loaded)
             }
-            XCTAssertEqual(loaded.state, expectedState)
-            XCTAssertEqual(ids.count, loaded.ids.count + 2)
-            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: key).state, .loaded)
         }
     }
 
-    func testFreshInstallWritesSchemaWithoutReportingMigration() throws {
+    private func withSyncedIdsStore(_ test: (URL, UserDefaults, String) throws -> Void) throws {
         let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let loaded = TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: "syncedIds")
-        XCTAssertEqual(loaded.state, .empty)
-        XCTAssertTrue(loaded.ids.isEmpty)
-        XCTAssertNil(defaults.object(forKey: "syncedIds"))
-        XCTAssertEqual(defaults.integer(forKey: TransactionSyncPolicy.schemaVersionKey), TransactionSyncPolicy.schemaVersion)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try test(directory.appendingPathComponent("synced_ids.json"), defaults, suite)
+    }
+
+    func testMissingFileIsEmptyAndLegacyDefaultsAreDeletedWithoutImport() throws {
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            defaults.set(try JSONEncoder().encode([UInt64(1): Date()]), forKey: "heliumSyncedTransactionIds")
+            defaults.set(TransactionSyncPolicy.schemaVersion, forKey: "heliumTransactionSyncSchemaVersion")
+            defaults.set("keep", forKey: "hostPreference")
+            let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
+            XCTAssertEqual(loaded.state, .empty)
+            XCTAssertTrue(loaded.ids.isEmpty)
+            XCTAssertNil(defaults.object(forKey: "heliumSyncedTransactionIds"))
+            XCTAssertNil(defaults.object(forKey: "heliumTransactionSyncSchemaVersion"))
+            XCTAssertEqual(defaults.string(forKey: "hostPreference"), "keep")
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).state, .empty)
+        }
+    }
+
+    func testSavedFileSurvivesClearingDefaultsAndCreatesDirectory() throws {
+        try withSyncedIdsStore { fileURL, defaults, suite in
+            let nestedFile = fileURL.deletingLastPathComponent().appendingPathComponent("Helium/synced_ids.json")
+            let ids: [UInt64: Date] = [1: Date(timeIntervalSince1970: 100)]
+            XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: nestedFile))
+            defaults.removePersistentDomain(forName: suite)
+            let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: nestedFile, defaults: defaults)
+            XCTAssertEqual(loaded.state, .loaded)
+            XCTAssertEqual(loaded.ids, ids)
+            let stored = try JSONDecoder().decode(TransactionSyncedIdsFile.self, from: Data(contentsOf: nestedFile))
+            XCTAssertEqual(stored.schemaVersion, TransactionSyncPolicy.schemaVersion)
+            XCTAssertEqual(stored.ids, ids)
+        }
+    }
+
+    func testUnavailableUnreadableAndUnwritableFilesAreContained() throws {
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: nil, defaults: defaults).state, .decodeFailed)
+            XCTAssertFalse(TransactionSyncPolicy.saveSyncedIds([:], fileURL: nil))
+            let directory = fileURL.deletingLastPathComponent()
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: directory, defaults: defaults).state, .decodeFailed)
+            XCTAssertFalse(TransactionSyncPolicy.saveSyncedIds([:], fileURL: directory))
+            let corrupt = Data("invalid".utf8)
+            try corrupt.write(to: fileURL, options: .atomic)
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).state, .decodeFailed)
+            XCTAssertEqual(try Data(contentsOf: fileURL), corrupt)
+            XCTAssertFalse(TransactionSyncPolicy.saveSyncedIds([:], fileURL: fileURL.appendingPathComponent("blocked.json")))
+            XCTAssertEqual(try Data(contentsOf: fileURL), corrupt)
+        }
     }
 
     func testForegroundAfterRunningScanSnapshotCoalescesOneRescanWithoutPendingWork() {
@@ -321,37 +364,34 @@ final class TransactionSyncPolicyTests: XCTestCase {
         XCTAssertEqual(TransactionSyncPolicy.organizationId("first", "second"), "first")
     }
 
-    func testMissingOrOlderSchemaClearsIdsOnlyOnce() throws {
-        let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let idsKey = "syncedIds"
-        let data = try JSONEncoder().encode([UInt64(1): Date(timeIntervalSince1970: 100)])
-
-        for version in [nil, 0] as [Int?] {
-            defaults.removeObject(forKey: TransactionSyncPolicy.schemaVersionKey)
-            if let version { defaults.set(version, forKey: TransactionSyncPolicy.schemaVersionKey) }
-            defaults.set(data, forKey: idsKey)
-            TransactionSyncPolicy.migrate(defaults: defaults, syncedIdsKey: idsKey)
-            XCTAssertNil(defaults.data(forKey: idsKey))
-            XCTAssertEqual(defaults.integer(forKey: TransactionSyncPolicy.schemaVersionKey), TransactionSyncPolicy.schemaVersion)
-
-            defaults.set(data, forKey: idsKey)
-            TransactionSyncPolicy.migrate(defaults: defaults, syncedIdsKey: idsKey)
-            XCTAssertEqual(defaults.data(forKey: idsKey), data)
+    func testOlderFileSchemaClearsIdsOnlyOnce() throws {
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            let ids: [UInt64: Date] = [1: Date(timeIntervalSince1970: 100)]
+            let old = TransactionSyncedIdsFile(schemaVersion: 0, ids: ids)
+            try JSONEncoder().encode(old).write(to: fileURL, options: .atomic)
+            let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
+            XCTAssertEqual(loaded.state, .migrated)
+            XCTAssertTrue(loaded.ids.isEmpty)
+            let stored = try JSONDecoder().decode(TransactionSyncedIdsFile.self, from: Data(contentsOf: fileURL))
+            XCTAssertEqual(stored.schemaVersion, TransactionSyncPolicy.schemaVersion)
+            XCTAssertTrue(stored.ids.isEmpty)
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).state, .loaded)
+            XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
+            XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).ids, ids)
         }
     }
 
     func testNewerSchemaDoesNotClearIdsOrDowngradeVersion() throws {
-        let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(TransactionSyncPolicy.schemaVersion + 1, forKey: TransactionSyncPolicy.schemaVersionKey)
-        let data = Data([1, 2, 3])
-        defaults.set(data, forKey: "syncedIds")
-        TransactionSyncPolicy.migrate(defaults: defaults, syncedIdsKey: "syncedIds")
-        XCTAssertEqual(defaults.data(forKey: "syncedIds"), data)
-        XCTAssertEqual(defaults.integer(forKey: TransactionSyncPolicy.schemaVersionKey), TransactionSyncPolicy.schemaVersion + 1)
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            let ids: [UInt64: Date] = [1: Date(timeIntervalSince1970: 100)]
+            let newer = TransactionSyncedIdsFile(schemaVersion: TransactionSyncPolicy.schemaVersion + 1, ids: ids)
+            let data = try JSONEncoder().encode(newer)
+            try data.write(to: fileURL, options: .atomic)
+            let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
+            XCTAssertEqual(loaded.state, .loaded)
+            XCTAssertEqual(loaded.ids, ids)
+            XCTAssertEqual(try Data(contentsOf: fileURL), data)
+        }
     }
 
     func testCompletedScanSkipsStartupForegroundAndConfigRefetch() {

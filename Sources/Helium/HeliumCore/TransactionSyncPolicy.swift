@@ -9,6 +9,11 @@ enum TransactionSyncedIdsState: String, CaseIterable {
     case loaded, empty, migrated, decodeFailed
 }
 
+struct TransactionSyncedIdsFile: Codable {
+    let schemaVersion: Int
+    let ids: [UInt64: Date]
+}
+
 enum TransactionSyncPolicy {
     static func metadata(trigger: TransactionSyncTrigger, sdkEnvironment: String, storeEnvironment: String?,
                          ownershipType: String, revocationDate: Date?, isUpgraded: Bool, expirationDate: Date?,
@@ -42,27 +47,38 @@ enum TransactionSyncPolicy {
 
     static let organizationRetryDelays: [UInt64] = [10, 30, 60].map { $0 * 1_000_000_000 }
     static let schemaVersion = 1
-    static let schemaVersionKey = "heliumTransactionSyncSchemaVersion"
-
-    @discardableResult
-    static func migrate(defaults: UserDefaults, syncedIdsKey: String) -> Bool {
-        guard defaults.integer(forKey: schemaVersionKey) < schemaVersion else { return false }
-        let hadSavedIds = defaults.object(forKey: syncedIdsKey) != nil
-        defaults.removeObject(forKey: syncedIdsKey)
-        defaults.set(schemaVersion, forKey: schemaVersionKey)
-        return hadSavedIds
-    }
-
-    static func loadSyncedIds(defaults: UserDefaults, syncedIdsKey: String) -> (ids: [UInt64: Date], state: TransactionSyncedIdsState) {
-        if migrate(defaults: defaults, syncedIdsKey: syncedIdsKey) {
-            return ([:], .migrated)
-        }
-        guard let stored = defaults.object(forKey: syncedIdsKey) else { return ([:], .empty) }
-        guard let data = stored as? Data,
-              let ids = try? JSONDecoder().decode([UInt64: Date].self, from: data) else {
+    static func loadSyncedIds(fileURL: URL?, defaults: UserDefaults = .standard) -> (ids: [UInt64: Date], state: TransactionSyncedIdsState) {
+        defaults.removeObject(forKey: "heliumSyncedTransactionIds")
+        defaults.removeObject(forKey: "heliumTransactionSyncSchemaVersion")
+        guard let fileURL else { return ([:], .decodeFailed) }
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            return ([:], .empty)
+        } catch {
             return ([:], .decodeFailed)
         }
-        return (ids, .loaded)
+        guard let stored = try? JSONDecoder().decode(TransactionSyncedIdsFile.self, from: data) else {
+            return ([:], .decodeFailed)
+        }
+        if stored.schemaVersion < schemaVersion {
+            guard saveSyncedIds([:], fileURL: fileURL) else { return ([:], .decodeFailed) }
+            return ([:], .migrated)
+        }
+        return (stored.ids, .loaded)
+    }
+
+    static func saveSyncedIds(_ ids: [UInt64: Date], fileURL: URL?) -> Bool {
+        guard let fileURL else { return false }
+        do {
+            let data = try JSONEncoder().encode(TransactionSyncedIdsFile(schemaVersion: schemaVersion, ids: ids))
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: fileURL, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 
     static func organizationId(_ candidates: String?...) -> String? {

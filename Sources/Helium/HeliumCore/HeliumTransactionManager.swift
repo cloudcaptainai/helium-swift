@@ -11,7 +11,7 @@ import UIKit
 actor HeliumTransactionManager {
     static let shared = HeliumTransactionManager()
     
-    private let syncedTransactionIdsKey = "heliumSyncedTransactionIds"
+    private let syncedIdsFileURL = heliumAppSupportDirectory?.appendingPathComponent("helium_synced_transaction_ids.json")
     private let maxSyncedIdsToStore = 1000
     private let maxTransactionAgeDays = 365 * 2  // 2 years
     
@@ -30,7 +30,7 @@ actor HeliumTransactionManager {
     private var organizationRetryTask: Task<Void, Never>?
     
     private init() {
-        let stored = TransactionSyncPolicy.loadSyncedIds(defaults: .standard, syncedIdsKey: syncedTransactionIdsKey)
+        let stored = TransactionSyncPolicy.loadSyncedIds(fileURL: syncedIdsFileURL)
         syncedTransactionIds = stored.ids
         syncedIdsState = stored.state
     }
@@ -271,11 +271,10 @@ actor HeliumTransactionManager {
             syncedTransactionIds = Dictionary(uniqueKeysWithValues: sorted.prefix(maxSyncedIdsToStore).map { ($0.key, $0.value) })
         }
         
-        guard let data = try? JSONEncoder().encode(syncedTransactionIds) else {
+        guard TransactionSyncPolicy.saveSyncedIds(syncedTransactionIds, fileURL: syncedIdsFileURL) else {
             HeliumLogger.log(.warn, category: .core, "Failed to persist synced transaction IDs")
             return
         }
-        UserDefaults.standard.set(data, forKey: syncedTransactionIdsKey)
     }
 
 }
