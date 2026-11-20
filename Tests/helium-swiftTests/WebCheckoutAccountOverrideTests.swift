@@ -3,8 +3,6 @@ import XCTest
 
 final class WebCheckoutAccountOverrideTests: XCTestCase {
 
-    private let store = HeliumPreviewConfigurationStore.shared
-
     override func setUp() {
         super.setUp()
         Helium.lastApiKeyUsed = "test_api_key_web_checkout_override"
@@ -19,8 +17,6 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
 
     private func resetState() {
         Helium.testing.webCheckoutAccountOverride = .automatic
-        store.nextLaunchWebCheckoutAccount = .automatic
-        store.updatePaddleAccount(clientToken: nil)
         relaunch()
     }
 
@@ -65,7 +61,7 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
     }
 
     func testReinitializeInTheSameLaunch_keepsTheAccount() throws {
-        store.nextLaunchWebCheckoutAccount = .live
+        Helium.testing.webCheckoutAccountOverride = .live
         Helium.testing.lockWebCheckoutAccountForSession()
 
         try assertSent(nil)
@@ -91,52 +87,14 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
         try assertSent("live")
     }
 
-    func testPreviewLiveChoice_waitsForTheNextLaunch() throws {
-        store.nextLaunchWebCheckoutAccount = .live
-
-        try assertSent(nil)
-        relaunch()
-        try assertSent("live")
-    }
-
-    func testPreviewSandboxChoice_keepsTheSessionLiveUntilTheNextLaunch() throws {
-        store.nextLaunchWebCheckoutAccount = .live
-        relaunch()
-        store.nextLaunchWebCheckoutAccount = .automatic
-
-        try assertSent("live")
-        relaunch()
-        try assertSent(nil)
-    }
-
-    // MARK: - Preview screen
-
-    func testSandboxToken_offersTheAccountChoice() {
-        store.updatePaddleAccount(clientToken: "test_abc")
-
-        XCTAssertTrue(store.showsWebCheckoutAccountChoice)
-    }
-
-    func testLiveToken_hidesTheAccountChoice() {
-        store.updatePaddleAccount(clientToken: "live_abc")
-
-        XCTAssertFalse(store.showsWebCheckoutAccountChoice)
-    }
-
-    func testLiveSessionFromThePreviewChoice_keepsOfferingTheWayBack() {
-        store.nextLaunchWebCheckoutAccount = .live
-        relaunch()
-        store.updatePaddleAccount(clientToken: "live_abc")
-
-        XCTAssertTrue(store.showsWebCheckoutAccountChoice)
-    }
-
-    func testCodeLiveOverride_hidesTheAccountChoice() {
+    func testAutomaticChangeAfterInitialize_keepsTheLiveAccount() throws {
         Helium.testing.webCheckoutAccountOverride = .live
         relaunch()
-        store.updatePaddleAccount(clientToken: "live_abc")
+        Helium.testing.webCheckoutAccountOverride = .automatic
 
-        XCTAssertFalse(store.showsWebCheckoutAccountChoice)
+        try assertSent("live")
+        Helium.testing.lockWebCheckoutAccountForSession()
+        try assertSent("live")
     }
 
     func testRealPurchaseDetail_namesTheSessionAccount() {

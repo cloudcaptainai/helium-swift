@@ -27,9 +27,6 @@ struct HeliumPreviewConfigurationView: View {
                     title
                     subheader
                     purchaseSection
-                    if store.showsWebCheckoutAccountChoice {
-                        accountSection
-                    }
                     if request.showsCompliance {
                         complianceSection
                     }
@@ -176,54 +173,6 @@ struct HeliumPreviewConfigurationView: View {
         }
         .buttonStyle(.plain)
         .opacity(isDisabled ? 0.55 : 1)
-    }
-
-    // MARK: - Checkout account
-
-    private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("CHECKOUT ACCOUNT")
-            ForEach(HeliumWebCheckoutAccountOverride.previewChoices, id: \.self) { account in
-                accountOption(account)
-            }
-            Text("Applies the next time the app launches. This session uses the \(sessionAccountName) account.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 22)
-    }
-
-    private var sessionAccountName: String {
-        store.onPaddleSandboxAccount ? "sandbox" : "live"
-    }
-
-    private func accountOption(_ account: HeliumWebCheckoutAccountOverride) -> some View {
-        let isSelected = configuration.nextLaunchWebCheckoutAccount == account
-
-        return Button {
-            configuration.nextLaunchWebCheckoutAccount = account
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.title3)
-                    .foregroundColor(isSelected ? .blue : .secondary)
-                Text(account.previewTitle)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.primary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? selectedBackground : Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue : Color(.separator), lineWidth: isSelected ? 2 : 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Compliance

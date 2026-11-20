@@ -1209,12 +1209,12 @@ public class HeliumTesting {
     ///
     /// Test builds check out on your Paddle sandbox account when your organization has one connected.
     /// Set `.live` to keep the production experience instead: the live account, live prices and a
-    /// real checkout that charges the card. Testers can make the same choice from the triple-tap
-    /// preview screen. Test builds only; App Store builds always use the live account and are
-    /// unaffected.
+    /// real checkout that charges the card. This is a per-build setting: distribute separate
+    /// TestFlight builds to test live and sandbox accounts. App Store builds always use the live
+    /// account and are unaffected.
     ///
-    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`. The account is fixed
-    ///   for the app session, so a later change takes effect on the next launch.
+    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`. It is read once
+    ///   at initialization and cannot change the account for that app session.
     public var webCheckoutAccountOverride: HeliumWebCheckoutAccountOverride = .automatic
 
     /// Returns a stubbed transaction status for the given product ID.
@@ -1251,11 +1251,7 @@ public class HeliumTesting {
     /// Re-initializing (as `resetHelium` does) keeps the account until the app relaunches.
     func lockWebCheckoutAccountForSession() {
         guard sessionWebCheckoutAccountOverride == nil else { return }
-        let previewChoice = isProductionEnvironment
-            ? .automatic
-            : HeliumPreviewConfigurationStore.shared.nextLaunchWebCheckoutAccount
-        sessionWebCheckoutAccountOverride =
-            webCheckoutAccountOverride == .live || previewChoice == .live ? .live : .automatic
+        sessionWebCheckoutAccountOverride = webCheckoutAccountOverride
     }
 
     var effectiveWebCheckoutAccountOverride: HeliumWebCheckoutAccountOverride {

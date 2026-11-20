@@ -40,18 +40,6 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
 struct HeliumPreviewConfiguration: Equatable {
     var purchaseMode: HeliumPreviewPurchaseMode = .simulated
     var showCaliforniaConsentModal: Bool = false
-    var nextLaunchWebCheckoutAccount: HeliumWebCheckoutAccountOverride = .automatic
-}
-
-extension HeliumWebCheckoutAccountOverride {
-    static let previewChoices: [HeliumWebCheckoutAccountOverride] = [.automatic, .live]
-
-    var previewTitle: String {
-        switch self {
-        case .automatic: return "Sandbox account"
-        case .live: return "Live account"
-        }
-    }
 }
 
 /// Session-scoped app2web preview settings, applied to every preview launch so a tester
@@ -87,26 +75,6 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         onPaddleSandboxAccount = clientToken?.hasPrefix("test_") == true
     }
 
-    private static let nextLaunchWebCheckoutAccountKey = "heliumPreviewNextLaunchWebCheckoutAccount"
-
-    /// The account is fixed per app session, so the tester's pick is saved and applied on the next launch.
-    @Published var nextLaunchWebCheckoutAccount = HeliumWebCheckoutAccountOverride(
-        rawValue: UserDefaults.standard.string(forKey: nextLaunchWebCheckoutAccountKey) ?? ""
-    ) ?? .automatic {
-        didSet {
-            UserDefaults.standard.set(nextLaunchWebCheckoutAccount.rawValue, forKey: Self.nextLaunchWebCheckoutAccountKey)
-        }
-    }
-
-    /// Only offered when there is a sandbox account to move away from or back to. A code-level
-    /// `.live` override always wins, so the choice is hidden then.
-    var showsWebCheckoutAccountChoice: Bool {
-        guard Helium.testing.webCheckoutAccountOverride == .automatic else { return false }
-        return onPaddleSandboxAccount
-            || Helium.testing.effectiveWebCheckoutAccountOverride == .live
-            || nextLaunchWebCheckoutAccount == .live
-    }
-
     /// Defaults to the mode the device is eligible for until the tester picks one.
     var purchaseMode: HeliumPreviewPurchaseMode {
         get {
@@ -120,14 +88,12 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         get {
             HeliumPreviewConfiguration(
                 purchaseMode: purchaseMode,
-                showCaliforniaConsentModal: showCaliforniaConsentModal,
-                nextLaunchWebCheckoutAccount: nextLaunchWebCheckoutAccount
+                showCaliforniaConsentModal: showCaliforniaConsentModal
             )
         }
         set {
             purchaseMode = newValue.purchaseMode
             showCaliforniaConsentModal = newValue.showCaliforniaConsentModal
-            nextLaunchWebCheckoutAccount = newValue.nextLaunchWebCheckoutAccount
         }
     }
 
