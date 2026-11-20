@@ -31,7 +31,6 @@ enum SdkApiCoverage {
             Helium.config.restorePurchasesDialog.setCustomRestoreFailedStrings(customTitle: "t", customMessage: "m", customCloseButtonText: "c")
             Helium.config.restorePurchasesDialog.disableRestoreFailedDialog()
             Helium.config.enableExternalWebCheckout(successURL: "heliumexamplestripe://openapp", cancelURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
-            Helium.config.disableExternalWebCheckout()
             Helium.config.enableExternalWebCheckout(redirectURL: "heliumexamplestripe://openapp", paymentProcessors: .all)
             _ = Helium.shared.handleURL(URL(string: "heliumexamplestripe://openapp?transactionId=coverage")!)
             _ = Helium.shared.canShowPaywallFor(trigger: trigger)
