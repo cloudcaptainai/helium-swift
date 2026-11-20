@@ -2,6 +2,58 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testForegroundAfterRunningScanSnapshotCoalescesOneRescanWithoutPendingWork() {
+        var throttle = TransactionSyncThrottle()
+        var state = TransactionHistorySyncState()
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertTrue(throttle.shouldSync(now: 10))
+        XCTAssertFalse(state.request())
+        throttle.startedScan()
+        for now in [11.0, 12] {
+            XCTAssertFalse(throttle.shouldSync(now: now))
+        }
+        throttle.completedScan(now: 20)
+        XCTAssertTrue(state.finishPass())
+        throttle.startedScan()
+        throttle.completedScan(now: 21)
+        XCTAssertFalse(state.finishPass())
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 70))
+    }
+
+    func testThrottledForegroundDuringRunningScanSurvivesThatPassCompleting() {
+        var throttle = TransactionSyncThrottle()
+        var state = TransactionHistorySyncState()
+        throttle.completedScan(now: 100)
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertFalse(throttle.shouldSync(now: 111))
+        throttle.completedScan(now: 120)
+        XCTAssertFalse(state.finishPass())
+        XCTAssertEqual(throttle.deferredForegroundAt, 160)
+        XCTAssertTrue(throttle.takeDeferredForeground(now: 160))
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertFalse(state.finishPass())
+    }
+
+    func testDeferredForegroundDuringLongRunningScanCoalescesOneRescan() {
+        var throttle = TransactionSyncThrottle()
+        var state = TransactionHistorySyncState()
+        throttle.completedScan(now: 100)
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertFalse(throttle.shouldSync(now: 111))
+        XCTAssertTrue(throttle.takeDeferredForeground(now: 160))
+        XCTAssertFalse(state.request())
+        throttle.startedScan()
+        throttle.completedScan(now: 170)
+        XCTAssertTrue(state.finishPass())
+        throttle.startedScan()
+        XCTAssertFalse(state.finishPass())
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 200))
+    }
+
     func testThrottledForegroundDefersOneScanUntilWindowEnds() {
         var throttle = TransactionSyncThrottle()
         XCTAssertFalse(throttle.takeDeferredForeground(now: 100))

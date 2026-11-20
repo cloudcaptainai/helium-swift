@@ -98,7 +98,6 @@ actor HeliumTransactionManager {
     private func syncOnForeground() async {
         let hasPending = !pendingTransactions.transactions.isEmpty
         if organizationId != nil {
-            guard !historySyncState.isRunning || hasPending else { return }
             guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime, hasPending: hasPending) else {
                 scheduleDeferredForegroundSync()
                 return
@@ -124,6 +123,12 @@ actor HeliumTransactionManager {
                 return
             }
         }
+    }
+
+    private func cancelDeferredForegroundSync() {
+        deferredForegroundTask?.cancel()
+        deferredForegroundTask = nil
+        foregroundThrottle.startedScan()
     }
 
     private func syncOnConfigDownload() async {
@@ -153,12 +158,13 @@ actor HeliumTransactionManager {
             scheduleOrganizationRetry()
             return false
         }
-        deferredForegroundTask?.cancel()
-        deferredForegroundTask = nil
-        foregroundThrottle.startedScan()
-        guard historySyncState.request() else { return false }
+        guard historySyncState.request() else {
+            cancelDeferredForegroundSync()
+            return false
+        }
         var didSync = false
         repeat {
+            cancelDeferredForegroundSync()
             let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
             var transactionsToSync: [Transaction] = []
 

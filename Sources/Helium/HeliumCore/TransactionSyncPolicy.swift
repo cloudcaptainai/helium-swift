@@ -119,7 +119,6 @@ struct TransactionSyncThrottle {
     }
 
     mutating func completedScan(now: TimeInterval) {
-        startedScan()
         hasCompletedScan = true
         lastSync = now
     }
