@@ -172,18 +172,17 @@ actor HeliumTransactionManager {
     private func scheduleOrganizationRetry() {
         guard organizationRetryTask == nil else { return }
         organizationRetryTask = Task {
-            for _ in 0..<18 {
+            for delay in TransactionSyncPolicy.organizationRetryDelays {
                 do {
-                    try await Task.sleep(nanoseconds: 10_000_000_000)
+                    try await Task.sleep(nanoseconds: delay)
                 } catch {
                     return
                 }
                 if organizationId != nil {
-                    if await loadAndSyncTransactionHistory(isOrganizationRetry: true) {
-                        guard !Task.isCancelled else { return }
-                        organizationRetryTask = nil
-                        return
-                    }
+                    await loadAndSyncTransactionHistory(isOrganizationRetry: true)
+                    guard !Task.isCancelled else { return }
+                    organizationRetryTask = nil
+                    return
                 }
             }
             guard !Task.isCancelled else { return }

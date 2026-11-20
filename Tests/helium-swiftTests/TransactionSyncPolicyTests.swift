@@ -2,6 +2,10 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testOrganizationRetryUsesThreeShortBackoffDelays() {
+        XCTAssertEqual(TransactionSyncPolicy.organizationRetryDelays, [10_000_000_000, 30_000_000_000, 60_000_000_000])
+    }
+
     func testOverlappingHistoryRequestsCoalesceIntoOneAdditionalPass() {
         var state = TransactionHistorySyncState()
         XCTAssertTrue(state.request())

@@ -1,6 +1,7 @@
 import Foundation
 
 enum TransactionSyncPolicy {
+    static let organizationRetryDelays: [UInt64] = [10, 30, 60].map { $0 * 1_000_000_000 }
     static let schemaVersion = 1
     static let schemaVersionKey = "heliumTransactionSyncSchemaVersion"
 
