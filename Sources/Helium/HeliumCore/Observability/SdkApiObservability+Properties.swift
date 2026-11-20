@@ -94,8 +94,23 @@ func webCheckoutObservabilityProperties(
         "accepted": accepted,
         "deprecatedOverload": deprecatedOverload,
     ]
-    if let url = URL(string: redirectURL), url.scheme != nil { p["redirectUrl"] = urlForObservability(url) }
+    p["redirectUrl"] = redirectURLForObservability(redirectURL)
     return p
+}
+
+/// Well-formed URLs report scheme, host, and path. Anything else is still reported so a malformed
+/// value can be diagnosed, with the query, fragment, and credentials cut since they can carry user data.
+func redirectURLForObservability(_ redirectURL: String, maxLength: Int = 200) -> String {
+    if let url = URL(string: redirectURL), url.scheme != nil {
+        return String(urlForObservability(url).prefix(maxLength))
+    }
+    var value = String(redirectURL.prefix { $0 != "?" && $0 != "#" })
+    let authorityStart = value.range(of: "://")?.upperBound ?? value.startIndex
+    let authorityEnd = value[authorityStart...].firstIndex(of: "/") ?? value.endIndex
+    if let at = value[authorityStart..<authorityEnd].lastIndex(of: "@") {
+        value.removeSubrange(authorityStart...at)
+    }
+    return String(value.prefix(maxLength))
 }
 
 extension PaywallPresentationConfig {

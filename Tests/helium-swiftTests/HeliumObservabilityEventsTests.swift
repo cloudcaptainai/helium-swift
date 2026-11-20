@@ -216,16 +216,35 @@ final class HeliumObservabilityEventsTests: XCTestCase {
         ]))
     }
 
-    func testWebCheckoutPropertiesOmitRedirectUrlWithoutAScheme() {
+    func testWebCheckoutPropertiesCarryAMalformedRedirectUrl() {
         let props = webCheckoutObservabilityProperties(
             processors: .paddle,
-            redirectURL: "not a url",
+            redirectURL: "myapp/checkout?token=SENTINEL",
             accepted: false,
             deprecatedOverload: true
         )
 
-        XCTAssertNil(props["redirectUrl"])
+        XCTAssertEqual(props["redirectUrl"] as? String, "myapp/checkout")
         XCTAssertEqual(props["processors"] as? String, "paddle")
+    }
+
+    func testRedirectUrlForObservabilityKeepsSchemeHostAndPathOfAWellFormedUrl() {
+        XCTAssertEqual(
+            redirectURLForObservability("https://user:secret@example.com/checkout/return?token=SENTINEL#frag"),
+            "https://example.com/checkout/return"
+        )
+    }
+
+    func testRedirectUrlForObservabilityCutsQueryFragmentAndCredentialsFromMalformedInput() {
+        XCTAssertEqual(redirectURLForObservability("myapp/checkout?token=SENTINEL"), "myapp/checkout")
+        XCTAssertEqual(redirectURLForObservability("not a url#SENTINEL"), "not a url")
+        XCTAssertEqual(redirectURLForObservability("://user:SENTINEL@host/path"), "://host/path")
+        XCTAssertEqual(redirectURLForObservability(":://@@?#"), ":://")
+    }
+
+    func testRedirectUrlForObservabilityKeepsEmptyInputEmptyAndCapsLength() {
+        XCTAssertEqual(redirectURLForObservability(""), "")
+        XCTAssertEqual(redirectURLForObservability(String(repeating: "a", count: 500)).count, 200)
     }
 
     // MARK: - FallbackPaywallsConfigured
