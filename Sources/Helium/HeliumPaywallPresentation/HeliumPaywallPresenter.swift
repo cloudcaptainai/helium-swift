@@ -39,19 +39,19 @@ class HeliumPaywallPresenter {
     
     struct PresentationClaim: Equatable {
         let id = UUID()
-        let claimedAt: TimeInterval
+        let expiresAt: DispatchTime
     }
 
     @MainActor
     private func claimPresentation() -> PresentationClaim? {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = DispatchTime.now()
         if !paywallsDisplayed.isEmpty {
             return nil
         }
-        if let active = activePresentationClaim, now - active.claimedAt < pendingPresentationWindow {
+        if let active = activePresentationClaim, now < active.expiresAt {
             return nil
         }
-        let claim = PresentationClaim(claimedAt: now)
+        let claim = PresentationClaim(expiresAt: now + pendingPresentationWindow)
         activePresentationClaim = claim
         return claim
     }

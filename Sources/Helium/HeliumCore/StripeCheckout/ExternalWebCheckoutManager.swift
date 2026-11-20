@@ -140,7 +140,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
-        var paddleAwaitDeadline: TimeInterval?
+        var paddleAwaitDeadline: DispatchTime?
         if provider.kind == .paddle,
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -156,7 +156,7 @@ public class ExternalWebCheckoutManager: NSObject {
             }
 
             let awaitStart = Date()
-            paddleAwaitDeadline = ProcessInfo.processInfo.systemUptime + PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
+            paddleAwaitDeadline = .now() + PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
                 priceIds: priceIdsToAwait
@@ -249,7 +249,7 @@ public class ExternalWebCheckoutManager: NSObject {
         paywallSession: PaywallSession,
         entitledBefore: Set<String>,
         analytics: [String: Any],
-        paddleAwaitDeadline: TimeInterval? = nil
+        paddleAwaitDeadline: DispatchTime? = nil
     ) async -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
@@ -290,9 +290,9 @@ public class ExternalWebCheckoutManager: NSObject {
         if !pendingPriceIds.isEmpty {
             // Primary and web second-try Paddle prices prefetch in parallel.
             // Pending second-try prices share the primary's prefetch deadline.
-            guard let paddleAwaitDeadline else { return nil }
-            let remaining = paddleAwaitDeadline - ProcessInfo.processInfo.systemUptime
-            guard remaining > 0 else { return nil }
+            let now = DispatchTime.now()
+            guard let paddleAwaitDeadline, now < paddleAwaitDeadline else { return nil }
+            let remaining = Double(paddleAwaitDeadline.uptimeNanoseconds - now.uptimeNanoseconds) / 1_000_000_000
             let pendingOutcomes = await coordinator.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId, priceIds: pendingPriceIds,
                 timeout: remaining, surface: .secondTry
