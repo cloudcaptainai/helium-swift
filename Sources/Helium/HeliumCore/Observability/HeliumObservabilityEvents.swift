@@ -541,7 +541,7 @@ enum StoreRecheckBaselineState: String {
 }
 
 enum StoreRecheckSkipReason: String {
-    case simulatedPurchase, notAppStore, cancelRecheckDisabled, baselineTimedOut, baselineUnverified
+    case simulatedPurchase, notAppStore, webCheckoutKey, cancelRecheckDisabled, baselineTimedOut, baselineUnverified
 }
 
 /// Emitted when a purchase delegate reports failed or cancelled, whether or not the SDK then

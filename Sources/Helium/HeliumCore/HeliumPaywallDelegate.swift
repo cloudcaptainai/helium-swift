@@ -156,6 +156,8 @@ class HeliumPaywallDelegateWrapper {
         let recheckSkipReason: StoreRecheckSkipReason?
         if isSimulatedPurchase || isPurchaseSimulationActive {
             recheckSkipReason = .simulatedPurchase
+        } else if HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey) {
+            recheckSkipReason = .webCheckoutKey
         } else if !canRecheckStore {
             recheckSkipReason = .notAppStore
         } else {

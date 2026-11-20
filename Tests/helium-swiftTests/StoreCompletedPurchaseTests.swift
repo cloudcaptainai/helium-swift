@@ -276,7 +276,7 @@ final class StoreCompletedPurchaseRoutingTests: HeliumTestCase {
             return XCTFail("expected failed, got \(status)")
         }
         XCTAssertEqual(lookup.callCount, 0)
-        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .notAppStore)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .webCheckoutKey)
     }
 
     func testFailedPurchaseIsNotRecheckedWhenTheBaselineWasUnverified() async {
