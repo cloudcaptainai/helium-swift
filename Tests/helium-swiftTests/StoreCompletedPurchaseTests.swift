@@ -3,7 +3,7 @@ import XCTest
 
 private final class ScriptedTransactionLookup: StoreTransactionLookup, @unchecked Sendable {
     struct Response {
-        let snapshot: StoreTransactionSnapshot?
+        let outcome: StoreTransactionLookupOutcome
         var delayMilliseconds: UInt64 = 0
     }
 
@@ -22,21 +22,21 @@ private final class ScriptedTransactionLookup: StoreTransactionLookup, @unchecke
     }
 
     convenience init(_ snapshots: [StoreTransactionSnapshot?]) {
-        self.init(snapshots.map { Response(snapshot: $0) })
+        self.init(snapshots.map { Response(outcome: $0.map { .verified($0) } ?? .noTransaction) })
     }
 
-    func latestTransaction(productId: String) async -> StoreTransactionSnapshot? {
+    func latestTransaction(productId: String) async -> StoreTransactionLookupOutcome {
         let response: Response? = {
             lock.lock()
             defer { lock.unlock() }
             _callCount += 1
             return responses.isEmpty ? nil : responses.removeFirst()
         }()
-        guard let response else { return nil }
+        guard let response else { return .noTransaction }
         if response.delayMilliseconds > 0 {
             try? await Task.sleep(nanoseconds: response.delayMilliseconds * 1_000_000)
         }
-        return response.snapshot
+        return response.outcome
     }
 }
 
@@ -212,7 +212,7 @@ final class StoreCompletedPurchaseRoutingTests: HeliumTestCase {
             return XCTFail("expected cancelled, got \(status)")
         }
         XCTAssertEqual(lookup.callCount, 1, "only the pre-purchase baseline should query StoreKit")
-        XCTAssertTrue(recorder.recheckEvents.isEmpty)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .cancelRecheckDisabled)
     }
 
     func testFailedPurchaseStaysFailedWhenTheStoreHasNoNewTransaction() async {
@@ -232,8 +232,8 @@ final class StoreCompletedPurchaseRoutingTests: HeliumTestCase {
 
     func testFailedPurchaseIsNotRecheckedWhenTheBaselineDidNotFinish() async {
         let lookup = ScriptedTransactionLookup([
-            .init(snapshot: nil, delayMilliseconds: 1_500),
-            .init(snapshot: snapshot(transactionId: "new_txn")),
+            .init(outcome: .noTransaction, delayMilliseconds: 1_500),
+            .init(outcome: .verified(snapshot(transactionId: "new_txn"))),
         ])
         HeliumPaywallDelegateWrapper.shared.storeTransactionLookup = lookup
         mockDelegate.purchaseResult = .failed(NSError(domain: "network", code: -1001))
@@ -245,13 +245,14 @@ final class StoreCompletedPurchaseRoutingTests: HeliumTestCase {
         }
         XCTAssertEqual(lookup.callCount, 1)
         XCTAssertEqual(recorder.recheckEvents.first?.baselineState, .timedOut)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .baselineTimedOut)
         XCTAssertNil(recorder.recheckEvents.first?.recheckDurationMs)
     }
 
     func testFailedPurchaseStaysFailedWhenTheRecheckTimesOut() async {
         HeliumPaywallDelegateWrapper.shared.storeTransactionLookup = ScriptedTransactionLookup([
-            .init(snapshot: nil),
-            .init(snapshot: snapshot(transactionId: "new_txn"), delayMilliseconds: 10_000),
+            .init(outcome: .noTransaction),
+            .init(outcome: .verified(snapshot(transactionId: "new_txn")), delayMilliseconds: 10_000),
         ])
         mockDelegate.purchaseResult = .failed(NSError(domain: "network", code: -1001))
 
@@ -275,6 +276,42 @@ final class StoreCompletedPurchaseRoutingTests: HeliumTestCase {
             return XCTFail("expected failed, got \(status)")
         }
         XCTAssertEqual(lookup.callCount, 0)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .notAppStore)
+    }
+
+    func testFailedPurchaseIsNotRecheckedWhenTheBaselineWasUnverified() async {
+        let lookup = ScriptedTransactionLookup([
+            .init(outcome: .unverified),
+            .init(outcome: .verified(snapshot(transactionId: "new_txn"))),
+        ])
+        HeliumPaywallDelegateWrapper.shared.storeTransactionLookup = lookup
+        mockDelegate.purchaseResult = .failed(NSError(domain: "network", code: -1001))
+
+        let status = await purchase()
+
+        guard case .failed = status else {
+            return XCTFail("expected failed, got \(status)")
+        }
+        XCTAssertEqual(lookup.callCount, 1)
+        XCTAssertEqual(recorder.recheckEvents.first?.baselineState, .unverified)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .baselineUnverified)
+    }
+
+    func testSimulatedPurchaseIsNotRecheckedAndTakesNoBaseline() async throws {
+        Helium.testing.purchaseHandler = { _ in .failed(NSError(domain: "simulated", code: 1)) }
+        defer { Helium.testing.reset() }
+        try XCTSkipUnless(Helium.testing.isPurchaseSimulationActive, "purchase simulation is ignored in a production environment")
+        let lookup = ScriptedTransactionLookup([nil, snapshot(transactionId: "new_txn")])
+        HeliumPaywallDelegateWrapper.shared.storeTransactionLookup = lookup
+
+        let status = await purchase()
+
+        guard case .failed = status else {
+            return XCTFail("expected failed, got \(status)")
+        }
+        XCTAssertEqual(lookup.callCount, 0)
+        XCTAssertEqual(recorder.recheckEvents.first?.skipReason, .simulatedPurchase)
+        XCTAssertNil(recorder.recheckEvents.first?.baselineState)
     }
 
     func testPurchasedResultUsesTheDelegatesTransaction() async {

@@ -36,7 +36,7 @@ class MockHeliumPaywallDelegate: HeliumPaywallDelegate {
 // MARK: - EmptyStoreTransactionLookup
 
 struct EmptyStoreTransactionLookup: StoreTransactionLookup {
-    func latestTransaction(productId: String) async -> StoreTransactionSnapshot? { nil }
+    func latestTransaction(productId: String) async -> StoreTransactionLookupOutcome { .noTransaction }
 }
 
 // MARK: - CapturingEventListener

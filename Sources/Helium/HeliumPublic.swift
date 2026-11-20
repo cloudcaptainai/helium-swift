@@ -1226,6 +1226,11 @@ public class HeliumTesting {
         promoOfferEligibility = nil
     }
 
+    /// True when `purchaseHandler` will replace the real purchase flow.
+    var isPurchaseSimulationActive: Bool {
+        purchaseHandler != nil && !isProductionEnvironment
+    }
+
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {
         guard let handler = purchaseHandler else { return nil }
         guard !isProductionEnvironment else {

@@ -9,38 +9,44 @@ struct StoreTransactionSnapshot: Sendable {
     let isOwnedByPurchaser: Bool
 }
 
-/// The store's latest transaction for a product before a purchase attempt; `transactionId` is nil
-/// when the store held none.
-struct StoreTransactionBaseline: Sendable {
+enum StoreTransactionLookupOutcome: Sendable {
+    case noTransaction
+    case unverified
+    case verified(StoreTransactionSnapshot)
+}
+
+/// What the store held for a product before a purchase attempt.
+struct StoreTransactionBaseline {
+    let state: StoreRecheckBaselineState
     let transactionId: String?
-}
-
-struct StoreTransactionBaselineLookup {
-    /// Nil when the lookup did not finish in time.
-    let baseline: StoreTransactionBaseline?
     let durationMs: Int
-}
 
-/// Distinguishes "the store has no transaction" from a lookup that did not finish.
-struct StoreTransactionLookupResult: Sendable {
-    let snapshot: StoreTransactionSnapshot?
+    /// Only a baseline that read a verified transaction, or confirmed there was none, can tell an
+    /// earlier purchase apart from one made during the attempt.
+    var isUsable: Bool {
+        state == .transactionFound || state == .noTransaction
+    }
 }
 
 protocol StoreTransactionLookup: Sendable {
-    func latestTransaction(productId: String) async -> StoreTransactionSnapshot?
+    func latestTransaction(productId: String) async -> StoreTransactionLookupOutcome
 }
 
 struct StoreKitTransactionLookup: StoreTransactionLookup {
-    func latestTransaction(productId: String) async -> StoreTransactionSnapshot? {
-        guard case .verified(let transaction) = await Transaction.latest(for: productId) else {
-            return nil
+    func latestTransaction(productId: String) async -> StoreTransactionLookupOutcome {
+        switch await Transaction.latest(for: productId) {
+        case nil:
+            return .noTransaction
+        case .unverified?:
+            return .unverified
+        case .verified(let transaction)?:
+            return .verified(StoreTransactionSnapshot(
+                ids: HeliumTransactionIdResult(transaction: transaction),
+                isRevoked: transaction.revocationDate != nil,
+                isPurchaseReason: Self.isPurchaseReason(transaction),
+                isOwnedByPurchaser: transaction.ownershipType == .purchased
+            ))
         }
-        return StoreTransactionSnapshot(
-            ids: HeliumTransactionIdResult(transaction: transaction),
-            isRevoked: transaction.revocationDate != nil,
-            isPurchaseReason: Self.isPurchaseReason(transaction),
-            isOwnedByPurchaser: transaction.ownershipType == .purchased
-        )
     }
 
     private static func isPurchaseReason(_ transaction: Transaction) -> Bool {

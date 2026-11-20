@@ -89,8 +89,10 @@ class HeliumPaywallDelegateWrapper {
         let resolvedPromoOfferId = keyParts.promoOfferId
 
         let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
+        let isPurchaseSimulationActive = Helium.testing.isPurchaseSimulationActive
         let canRecheckStore = paymentProcessor == .appStore
             && !HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey)
+            && !isPurchaseSimulationActive
 
         async let hadEntitlementLookup = withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: storeKitProductId)
@@ -151,18 +153,24 @@ class HeliumPaywallDelegateWrapper {
             }
         }
 
-        var storeCompletedTransactionIds: HeliumTransactionIdResult? = nil
-        if canRecheckStore && !isSimulatedPurchase {
-            storeCompletedTransactionIds = await storeCompletedPurchase(
-                after: transactionStatus,
-                productId: storeKitProductId,
-                baseline: baseline,
-                paymentProcessor: paymentProcessor,
-                paywallSession: paywallSession
-            )
-            if storeCompletedTransactionIds != nil {
-                transactionStatus = .purchased
-            }
+        let recheckSkipReason: StoreRecheckSkipReason?
+        if isSimulatedPurchase || isPurchaseSimulationActive {
+            recheckSkipReason = .simulatedPurchase
+        } else if !canRecheckStore {
+            recheckSkipReason = .notAppStore
+        } else {
+            recheckSkipReason = nil
+        }
+        let storeCompletedTransactionIds = await storeCompletedPurchase(
+            after: transactionStatus,
+            productId: storeKitProductId,
+            baseline: baseline,
+            skipReason: recheckSkipReason,
+            paymentProcessor: paymentProcessor,
+            paywallSession: paywallSession
+        )
+        if storeCompletedTransactionIds != nil {
+            transactionStatus = .purchased
         }
 
         switch transactionStatus {
@@ -261,13 +269,23 @@ class HeliumPaywallDelegateWrapper {
         return transactionStatus;
     }
 
-    private func storeTransactionBaseline(productId: String, canRecheckStore: Bool) async -> StoreTransactionBaselineLookup? {
+    private func storeTransactionBaseline(productId: String, canRecheckStore: Bool) async -> StoreTransactionBaseline? {
         guard canRecheckStore else { return nil }
         let startedAt = Date()
-        let baseline = await withTimeoutAbandoningOperation(milliseconds: 500) { [lookup = storeTransactionLookup] in
-            StoreTransactionBaseline(transactionId: await lookup.latestTransaction(productId: productId)?.ids.transactionId)
+        let outcome = await withTimeoutAbandoningOperation(milliseconds: 500) { [lookup = storeTransactionLookup] in
+            await lookup.latestTransaction(productId: productId)
         }
-        return StoreTransactionBaselineLookup(baseline: baseline, durationMs: msSince(startedAt))
+        let durationMs = msSince(startedAt)
+        switch outcome {
+        case nil:
+            return StoreTransactionBaseline(state: .timedOut, transactionId: nil, durationMs: durationMs)
+        case .noTransaction?:
+            return StoreTransactionBaseline(state: .noTransaction, transactionId: nil, durationMs: durationMs)
+        case .unverified?:
+            return StoreTransactionBaseline(state: .unverified, transactionId: nil, durationMs: durationMs)
+        case .verified(let snapshot)?:
+            return StoreTransactionBaseline(state: .transactionFound, transactionId: snapshot.ids.transactionId, durationMs: durationMs)
+        }
     }
 
     /// A delegate can report cancelled or failed after the App Store already completed the
@@ -276,7 +294,8 @@ class HeliumPaywallDelegateWrapper {
     private func storeCompletedPurchase(
         after status: HeliumPaywallTransactionStatus,
         productId: String,
-        baseline: StoreTransactionBaselineLookup?,
+        baseline: StoreTransactionBaseline?,
+        skipReason initialSkipReason: StoreRecheckSkipReason?,
         paymentProcessor: HeliumPaymentProcessor,
         paywallSession: PaywallSession
     ) async -> HeliumTransactionIdResult? {
@@ -285,28 +304,39 @@ class HeliumPaywallDelegateWrapper {
         case .failed:
             delegateResult = .failed
         case .cancelled:
-            // Cancels are common and the paywall waits on this check, so it is opt-in.
-            guard HeliumFetchedConfigManager.shared.isFeatureEnabled(.storeRecheckAfterCancel) else { return nil }
             delegateResult = .cancelled
         default:
             return nil
         }
-        guard let baseline else { return nil }
+
+        var skipReason = initialSkipReason
+        // Cancels are common and the paywall waits on this check, so it is opt-in.
+        if skipReason == nil, delegateResult == .cancelled,
+           !HeliumFetchedConfigManager.shared.isFeatureEnabled(.storeRecheckAfterCancel) {
+            skipReason = .cancelRecheckDisabled
+        }
+        // Without knowing what the store held before the attempt, an earlier purchase could be
+        // mistaken for this one.
+        if skipReason == nil {
+            if baseline?.state == .timedOut {
+                skipReason = .baselineTimedOut
+            } else if baseline?.isUsable != true {
+                skipReason = .baselineUnverified
+            }
+        }
 
         var recheckTimedOut = false
         var recheckDurationMs: Int? = nil
         var recovered: StoreTransactionSnapshot? = nil
-        // Without knowing what the store held before the attempt, an earlier purchase could be
-        // mistaken for this one.
-        if let baselineTransaction = baseline.baseline {
+        if skipReason == nil, let baseline {
             let startedAt = Date()
-            let lookupResult = await withTimeoutAbandoningOperation(milliseconds: 2000) { [lookup = storeTransactionLookup] in
-                StoreTransactionLookupResult(snapshot: await lookup.latestTransaction(productId: productId))
+            let outcome = await withTimeoutAbandoningOperation(milliseconds: 2000) { [lookup = storeTransactionLookup] in
+                await lookup.latestTransaction(productId: productId)
             }
             recheckDurationMs = msSince(startedAt)
-            recheckTimedOut = lookupResult == nil
-            if let latest = lookupResult?.snapshot,
-               StoreCompletedPurchaseCheck.isCompletedDuringAttempt(latest, baselineTransactionId: baselineTransaction.transactionId) {
+            recheckTimedOut = outcome == nil
+            if case .verified(let latest)? = outcome,
+               StoreCompletedPurchaseCheck.isCompletedDuringAttempt(latest, baselineTransactionId: baseline.transactionId) {
                 recovered = latest
             }
         }
@@ -316,8 +346,9 @@ class HeliumPaywallDelegateWrapper {
                 productId: productId,
                 paymentProcessor: paymentProcessor.rawValue,
                 delegateResult: delegateResult,
-                baselineState: baseline.baseline == nil ? .timedOut : .finished,
-                baselineDurationMs: baseline.durationMs,
+                skipReason: skipReason,
+                baselineState: baseline?.state,
+                baselineDurationMs: baseline?.durationMs,
                 recheckDurationMs: recheckDurationMs,
                 recheckTimedOut: recheckTimedOut,
                 recoveredTransactionId: recovered?.ids.transactionId
