@@ -92,10 +92,25 @@ struct TransactionSyncPending<Value> {
 struct TransactionSyncThrottle {
     private var lastSync: TimeInterval?
     private var hasCompletedScan = false
+    private(set) var deferredForegroundAt: TimeInterval?
 
     mutating func shouldSync(now: TimeInterval, hasPending: Bool = false) -> Bool {
-        if !hasPending, let lastSync, now - lastSync < 60 { return false }
+        if !hasPending, let lastSync, now - lastSync < 60 {
+            if deferredForegroundAt == nil { deferredForegroundAt = lastSync + 60 }
+            return false
+        }
+        startedScan()
         lastSync = now
+        return true
+    }
+
+    mutating func startedScan() {
+        deferredForegroundAt = nil
+    }
+
+    mutating func takeDeferredForeground(now: TimeInterval) -> Bool {
+        guard let deferredForegroundAt, now >= deferredForegroundAt else { return false }
+        self.deferredForegroundAt = nil
         return true
     }
 
@@ -104,6 +119,7 @@ struct TransactionSyncThrottle {
     }
 
     mutating func completedScan(now: TimeInterval) {
+        startedScan()
         hasCompletedScan = true
         lastSync = now
     }

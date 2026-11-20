@@ -2,6 +2,45 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testThrottledForegroundDefersOneScanUntilWindowEnds() {
+        var throttle = TransactionSyncThrottle()
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 100))
+        throttle.completedScan(now: 100)
+        XCTAssertFalse(throttle.shouldSync(now: 110))
+        XCTAssertEqual(throttle.deferredForegroundAt, 160)
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 159.999))
+        XCTAssertTrue(throttle.takeDeferredForeground(now: 160))
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 160))
+    }
+
+    func testRepeatedThrottledForegroundsCoalesceAtOriginalDeadline() {
+        var throttle = TransactionSyncThrottle()
+        var state = TransactionHistorySyncState()
+        throttle.completedScan(now: 100)
+        for now in [101.0, 120, 159.999] {
+            XCTAssertFalse(throttle.shouldSync(now: now))
+            XCTAssertEqual(throttle.deferredForegroundAt, 160)
+        }
+        XCTAssertTrue(throttle.takeDeferredForeground(now: 160))
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 160))
+        XCTAssertFalse(state.finishPass())
+    }
+
+    func testInterveningScanInvalidatesDeferredForegroundWithoutExtraPass() {
+        var throttle = TransactionSyncThrottle()
+        var state = TransactionHistorySyncState()
+        throttle.completedScan(now: 100)
+        XCTAssertFalse(throttle.shouldSync(now: 110))
+        XCTAssertTrue(state.request())
+        throttle.startedScan()
+        XCTAssertNil(throttle.deferredForegroundAt)
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 160))
+        XCTAssertFalse(state.finishPass())
+        XCTAssertFalse(throttle.takeDeferredForeground(now: 200))
+    }
+
     func testHistoryDrainPreservesOriginalPendingTriggers() {
         var pending = TransactionSyncPending<String>()
         pending.add("listener", id: 1, trigger: .listener)

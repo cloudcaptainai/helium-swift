@@ -24,6 +24,7 @@ actor HeliumTransactionManager {
     private var appActiveObserver: NSObjectProtocol?
     private var historySyncState = TransactionHistorySyncState()
     private var foregroundThrottle = TransactionSyncThrottle()
+    private var deferredForegroundTask: Task<Void, Never>?
     private var pendingTransactions = TransactionSyncPending<Transaction>()
     private var organizationRetryTask: Task<Void, Never>?
     
@@ -98,9 +99,31 @@ actor HeliumTransactionManager {
         let hasPending = !pendingTransactions.transactions.isEmpty
         if organizationId != nil {
             guard !historySyncState.isRunning || hasPending else { return }
-            guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime, hasPending: hasPending) else { return }
+            guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime, hasPending: hasPending) else {
+                scheduleDeferredForegroundSync()
+                return
+            }
         }
         await loadAndSyncTransactionHistory()
+    }
+
+    private func scheduleDeferredForegroundSync() {
+        guard deferredForegroundTask == nil, let deadline = foregroundThrottle.deferredForegroundAt else { return }
+        deferredForegroundTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let remaining = deadline - ProcessInfo.processInfo.systemUptime
+                if remaining > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64((remaining * 1_000_000_000).rounded(.up)))
+                    } catch {
+                        return
+                    }
+                    continue
+                }
+                await self?.loadAndSyncTransactionHistory(isDeferredForeground: true)
+                return
+            }
+        }
     }
 
     private func syncOnConfigDownload() async {
@@ -120,11 +143,19 @@ actor HeliumTransactionManager {
     }
     
     @discardableResult
-    private func loadAndSyncTransactionHistory(isOrganizationRetry: Bool = false) async -> Bool {
+    private func loadAndSyncTransactionHistory(isOrganizationRetry: Bool = false, isDeferredForeground: Bool = false) async -> Bool {
+        if isDeferredForeground {
+            guard !Task.isCancelled else { return false }
+            deferredForegroundTask = nil
+            guard foregroundThrottle.takeDeferredForeground(now: ProcessInfo.processInfo.systemUptime) else { return false }
+        }
         guard organizationId != nil else {
             scheduleOrganizationRetry()
             return false
         }
+        deferredForegroundTask?.cancel()
+        deferredForegroundTask = nil
+        foregroundThrottle.startedScan()
         guard historySyncState.request() else { return false }
         var didSync = false
         repeat {
