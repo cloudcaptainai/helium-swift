@@ -85,16 +85,17 @@ func userTraitsObservabilityProperties(_ traits: HeliumUserTraits, viaMap: Bool)
 
 func webCheckoutObservabilityProperties(
     processors: WebCheckoutProcessors,
-    hasRedirectUrl: Bool,
+    redirectURL: String,
     accepted: Bool,
     deprecatedOverload: Bool
 ) -> [String: Any] {
-    [
+    var p: [String: Any] = [
         "processors": processors.observabilityValue,
-        "hasRedirectUrl": hasRedirectUrl,
         "accepted": accepted,
         "deprecatedOverload": deprecatedOverload,
     ]
+    if let url = URL(string: redirectURL), url.scheme != nil { p["redirectUrl"] = urlForObservability(url) }
+    return p
 }
 
 extension PaywallPresentationConfig {

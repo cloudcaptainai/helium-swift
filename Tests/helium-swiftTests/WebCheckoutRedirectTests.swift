@@ -7,11 +7,11 @@ final class WebCheckoutRedirectTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.resetExternalWebCheckoutForTesting()
     }
 
     override func tearDown() {
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.resetExternalWebCheckoutForTesting()
         super.tearDown()
     }
 
@@ -76,7 +76,7 @@ final class WebCheckoutRedirectTests: XCTestCase {
         enableSingleURL("https://example.com/return/")
         XCTAssertEqual(classify("https://example.com/return"), .cancel)
 
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.resetExternalWebCheckoutForTesting()
         enableSingleURL("https://example.com/return")
         XCTAssertEqual(classify("https://example.com/return/"), .cancel)
     }
@@ -146,7 +146,7 @@ final class WebCheckoutRedirectTests: XCTestCase {
 
     func testDisable_clearsConfiguration() {
         enableSingleURL()
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.resetExternalWebCheckoutForTesting()
         XCTAssertFalse(Helium.config.webCheckoutEnabled)
         XCTAssertNil(Helium.config.checkoutSuccessURL)
         XCTAssertNil(Helium.config.checkoutCancelURL)
