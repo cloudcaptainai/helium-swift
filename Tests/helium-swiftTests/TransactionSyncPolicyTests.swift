@@ -13,7 +13,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
             (.loaded, try JSONEncoder().encode([UInt64: Date]()), TransactionSyncPolicy.schemaVersion),
             (.empty, nil, TransactionSyncPolicy.schemaVersion),
             (.migrated, try JSONEncoder().encode([UInt64(1): date]), 0),
-            (.migrated, nil, 0),
+            (.empty, nil, 0),
             (.decodeFailed, Data("invalid".utf8), TransactionSyncPolicy.schemaVersion),
             (.decodeFailed, "not data", TransactionSyncPolicy.schemaVersion),
             (.decodeFailed, Data("null".utf8), TransactionSyncPolicy.schemaVersion)
@@ -43,6 +43,17 @@ final class TransactionSyncPolicyTests: XCTestCase {
             XCTAssertEqual(ids.count, loaded.ids.count + 2)
             XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: key).state, .loaded)
         }
+    }
+
+    func testFreshInstallWritesSchemaWithoutReportingMigration() throws {
+        let suite = "TransactionSyncPolicyTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let loaded = TransactionSyncPolicy.loadSyncedIds(defaults: defaults, syncedIdsKey: "syncedIds")
+        XCTAssertEqual(loaded.state, .empty)
+        XCTAssertTrue(loaded.ids.isEmpty)
+        XCTAssertNil(defaults.object(forKey: "syncedIds"))
+        XCTAssertEqual(defaults.integer(forKey: TransactionSyncPolicy.schemaVersionKey), TransactionSyncPolicy.schemaVersion)
     }
 
     func testForegroundAfterRunningScanSnapshotCoalescesOneRescanWithoutPendingWork() {

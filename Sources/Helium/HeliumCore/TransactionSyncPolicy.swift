@@ -34,9 +34,10 @@ enum TransactionSyncPolicy {
     @discardableResult
     static func migrate(defaults: UserDefaults, syncedIdsKey: String) -> Bool {
         guard defaults.integer(forKey: schemaVersionKey) < schemaVersion else { return false }
+        let hadSavedIds = defaults.object(forKey: syncedIdsKey) != nil
         defaults.removeObject(forKey: syncedIdsKey)
         defaults.set(schemaVersion, forKey: schemaVersionKey)
-        return true
+        return hadSavedIds
     }
 
     static func loadSyncedIds(defaults: UserDefaults, syncedIdsKey: String) -> (ids: [UInt64: Date], state: TransactionSyncedIdsState) {
