@@ -79,7 +79,7 @@ actor HeliumTransactionManager {
                 guard case .verified(let transaction) = verificationResult else {
                     continue
                 }
-                await processTransaction(transaction)
+                await processTransaction(transaction, trigger: .listener)
             }
         }
     }
@@ -89,7 +89,7 @@ actor HeliumTransactionManager {
         guard let transaction else {
             return
         }
-        await processTransaction(transaction)
+        await processTransaction(transaction, trigger: .afterPurchase)
     }
     
     // MARK: - Transaction History
@@ -160,11 +160,11 @@ actor HeliumTransactionManager {
     
     // MARK: - Processing
     
-    private func processTransaction(_ transaction: Transaction) async {
+    private func processTransaction(_ transaction: Transaction, trigger: TransactionSyncTrigger) async {
         guard syncedTransactionIds[transaction.id] == nil else {
             return
         }
-        syncWithServer(transactions: [transaction])
+        syncWithServer(transactions: [transaction], trigger: trigger)
     }
     
     // MARK: - Server Sync
@@ -191,7 +191,7 @@ actor HeliumTransactionManager {
     }
     
     @discardableResult
-    private func syncWithServer(transactions: [Transaction]) -> Bool {
+    private func syncWithServer(transactions: [Transaction], trigger: TransactionSyncTrigger = .history) -> Bool {
         for transaction in transactions where transaction.ownershipType != .familyShared && syncedTransactionIds[transaction.id] == nil {
             pendingTransactions.add(transaction, id: transaction.id)
         }
@@ -206,7 +206,7 @@ actor HeliumTransactionManager {
             transactions: dates, organizationId: organizationId, syncedIds: &syncedTransactionIds
         ) { ids, organizationId in
             let ids = Set(ids)
-            client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId)
+            client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId, trigger: trigger)
         }
         pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
         pruneAndSave()
@@ -261,7 +261,7 @@ class TransactionSyncClient {
         analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
     }
     
-    func syncTransactions(_ transactions: [Transaction], organizationId: String) {
+    func syncTransactions(_ transactions: [Transaction], organizationId: String, trigger: TransactionSyncTrigger) {
         guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
@@ -303,9 +303,17 @@ class TransactionSyncClient {
                 properties["subscriptionGroupId"] = subscriptionGroupID
             }
             
+            var storeEnvironment: String?
             if #available(iOS 16.0, *) {
+                storeEnvironment = transaction.environment.rawValue.uppercased()
                 properties["environment"] = transaction.environment.rawValue.uppercased()
             }
+            properties.merge(TransactionSyncPolicy.metadata(
+                trigger: trigger, sdkEnvironment: AppReceiptsHelper.shared.getEnvironment(),
+                storeEnvironment: storeEnvironment, ownershipType: transaction.ownershipType.rawValue,
+                revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+                expirationDate: transaction.expirationDate
+            )) { _, value in value }
             
             if let appAccountToken = transaction.appAccountToken {
                 properties["appAttributionToken"] = appAccountToken.uuidString

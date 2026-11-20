@@ -2,6 +2,36 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testSyncedMetadataIncludesProvenanceAndStoreDates() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        for trigger in TransactionSyncTrigger.allCases {
+            let properties = TransactionSyncPolicy.metadata(
+                trigger: trigger, sdkEnvironment: "PRODUCTION", storeEnvironment: "SANDBOX",
+                ownershipType: "PURCHASED", revocationDate: date, isUpgraded: true, expirationDate: date
+            )
+            XCTAssertEqual(properties["syncSchemaVersion"] as? Int, 2)
+            XCTAssertEqual(properties["syncTrigger"] as? String, trigger.rawValue)
+            XCTAssertEqual(properties["sdkEnvironment"] as? String, "PRODUCTION")
+            XCTAssertEqual(properties["storeEnvironment"] as? String, "SANDBOX")
+            XCTAssertEqual(properties["ownershipType"] as? String, "PURCHASED")
+            XCTAssertEqual(properties["revocationDate"] as? String, formatAsTimestamp(date: date))
+            XCTAssertEqual(properties["expirationDate"] as? String, formatAsTimestamp(date: date))
+            XCTAssertEqual(properties["isUpgraded"] as? Bool, true)
+            XCTAssertNil(properties["environment"])
+        }
+    }
+
+    func testSyncedMetadataOmitsUnavailableStoreAndDates() {
+        let properties = TransactionSyncPolicy.metadata(
+            trigger: .history, sdkEnvironment: "SANDBOX", storeEnvironment: nil,
+            ownershipType: "PURCHASED", revocationDate: nil, isUpgraded: false, expirationDate: nil
+        )
+        XCTAssertNil(properties["storeEnvironment"])
+        XCTAssertNil(properties["revocationDate"])
+        XCTAssertNil(properties["expirationDate"])
+        XCTAssertEqual(properties["isUpgraded"] as? Bool, false)
+    }
+
     func testOrganizationRetryUsesThreeShortBackoffDelays() {
         XCTAssertEqual(TransactionSyncPolicy.organizationRetryDelays, [10_000_000_000, 30_000_000_000, 60_000_000_000])
     }

@@ -1,6 +1,25 @@
 import Foundation
 
+enum TransactionSyncTrigger: String, CaseIterable {
+    case listener, history, afterPurchase
+}
+
 enum TransactionSyncPolicy {
+    static func metadata(trigger: TransactionSyncTrigger, sdkEnvironment: String, storeEnvironment: String?,
+                         ownershipType: String, revocationDate: Date?, isUpgraded: Bool, expirationDate: Date?) -> [String: Any] {
+        var properties: [String: Any] = [
+            "syncSchemaVersion": 2,
+            "syncTrigger": trigger.rawValue,
+            "sdkEnvironment": sdkEnvironment,
+            "ownershipType": ownershipType,
+            "isUpgraded": isUpgraded
+        ]
+        if let storeEnvironment { properties["storeEnvironment"] = storeEnvironment }
+        if let revocationDate { properties["revocationDate"] = formatAsTimestamp(date: revocationDate) }
+        if let expirationDate { properties["expirationDate"] = formatAsTimestamp(date: expirationDate) }
+        return properties
+    }
+
     static let organizationRetryDelays: [UInt64] = [10, 30, 60].map { $0 * 1_000_000_000 }
     static let schemaVersion = 1
     static let schemaVersionKey = "heliumTransactionSyncSchemaVersion"
