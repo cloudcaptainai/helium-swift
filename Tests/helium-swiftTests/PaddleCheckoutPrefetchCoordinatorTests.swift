@@ -1232,9 +1232,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             paddleClientToken: "test_xyz", iosBundleId: nil, surface: .secondTry
         )
 
+        let waitStarted = DispatchTime.now()
         let outcomes = await coordinator.collectPrefetchOutcomes(
             sessionId: session.sessionId, priceIds: ["pri_owned", "pri_pending"], surface: .secondTry
         )
+        XCTAssertLessThan(DispatchTime.now(), waitStarted + .seconds(2), "The canceled waiter must not consume the prefetch timeout")
         guard case .alreadyEntitled = outcomes["pri_owned"] else { return XCTFail("Expected the owned price to end the wait") }
         XCTAssertNil(outcomes["pri_pending"])
 
