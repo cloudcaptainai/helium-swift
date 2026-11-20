@@ -2,6 +2,15 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testFamilySharedMetadataRetainsExplicitOwnership() {
+        let properties = TransactionSyncPolicy.metadata(
+            trigger: .history, sdkEnvironment: "SANDBOX", storeEnvironment: "SANDBOX",
+            ownershipType: "FAMILY_SHARED", revocationDate: nil, isUpgraded: false, expirationDate: nil
+        )
+        XCTAssertEqual(properties["ownershipType"] as? String, "FAMILY_SHARED")
+        XCTAssertEqual(properties["syncSchemaVersion"] as? Int, 2)
+    }
+
     func testSyncedMetadataIncludesProvenanceAndStoreDates() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         for trigger in TransactionSyncTrigger.allCases {

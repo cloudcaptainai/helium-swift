@@ -135,7 +135,6 @@ actor HeliumTransactionManager {
                 guard case .verified(let transaction) = verificationResult else {
                     continue
                 }
-                guard transaction.ownershipType != .familyShared else { continue }
                 // Skip transactions older than cutoff
                 if transaction.purchaseDate < cutoffDate {
                     continue
@@ -192,7 +191,7 @@ actor HeliumTransactionManager {
     
     @discardableResult
     private func syncWithServer(transactions: [Transaction], trigger: TransactionSyncTrigger = .history) -> Bool {
-        for transaction in transactions where transaction.ownershipType != .familyShared && syncedTransactionIds[transaction.id] == nil {
+        for transaction in transactions where syncedTransactionIds[transaction.id] == nil {
             pendingTransactions.add(transaction, id: transaction.id)
         }
         guard let organizationId else {
@@ -270,9 +269,6 @@ class TransactionSyncClient {
         let timestamp = formatAsTimestamp(date: Date())
         
         for transaction in transactions {
-            if transaction.ownershipType == .familyShared {
-                continue // only include purchases by this user
-            }
             let rawCountryCode: String
             if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
                 rawCountryCode = transaction.storefront.countryCode
@@ -310,7 +306,8 @@ class TransactionSyncClient {
             }
             properties.merge(TransactionSyncPolicy.metadata(
                 trigger: trigger, sdkEnvironment: AppReceiptsHelper.shared.getEnvironment(),
-                storeEnvironment: storeEnvironment, ownershipType: transaction.ownershipType.rawValue,
+                storeEnvironment: storeEnvironment,
+                ownershipType: transaction.ownershipType == .familyShared ? "FAMILY_SHARED" : transaction.ownershipType.rawValue.uppercased(),
                 revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
                 expirationDate: transaction.expirationDate
             )) { _, value in value }
