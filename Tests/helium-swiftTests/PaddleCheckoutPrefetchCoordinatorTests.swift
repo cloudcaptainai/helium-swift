@@ -342,7 +342,7 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         PaddleCheckoutPrefetchCoordinator.shared.cancelForSession(sessionId: session.sessionId)
         MockURLProtocol.reset()
         URLProtocol.unregisterClass(MockURLProtocol.self)
-        Helium.config.resetExternalWebCheckoutForTesting()
+        Helium.config.clearExternalWebCheckoutForTesting()
         Helium.lastApiKeyUsed = nil
     }
 

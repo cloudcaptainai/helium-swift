@@ -880,7 +880,9 @@ public class HeliumConfig {
     /// ``Helium/handleURL(_:)`` from your URL handler.
     ///
     /// - Important: Call this before ``Helium/initialize(apiKey:)``. It only needs to be called once
-    ///   per app launch; calling it again replaces the previous configuration.
+    ///   per app launch.
+    ///
+    /// - SeeAlso: [Paddle onboarding guide](https://docs.tryhelium.com/guides/paddle-onboarding-guide)
     ///
     /// - Parameters:
     ///   - redirectURL: The URL checkout redirects back to when the user is done.
@@ -910,7 +912,9 @@ public class HeliumConfig {
     /// URL covers all checkout outcomes.
     ///
     /// - Important: Call this before ``Helium/initialize(apiKey:)``. It only needs to be called once
-    ///   per app launch; calling it again replaces the previous configuration.
+    ///   per app launch.
+    ///
+    /// - SeeAlso: [Paddle onboarding guide](https://docs.tryhelium.com/guides/paddle-onboarding-guide)
     @available(*, deprecated, message: "Use enableExternalWebCheckout(redirectURL:paymentProcessors:) instead. A single redirect URL covers success, cancel, and payment failure; the SDK determines the outcome itself.")
     public func enableExternalWebCheckout(
         successURL: String,
@@ -947,7 +951,8 @@ public class HeliumConfig {
         return true
     }
 
-    func resetExternalWebCheckoutForTesting() {
+    /// Only for Helium's internal unit and UI tests; not part of the public API.
+    func clearExternalWebCheckoutForTesting() {
         webCheckoutProcessors = []
         checkoutSuccessURL = nil
         checkoutCancelURL = nil
