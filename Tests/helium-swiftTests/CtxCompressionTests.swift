@@ -2,6 +2,23 @@ import XCTest
 import Compression
 @testable import Helium
 
+private final class RecordingWebCheckoutManager: ExternalWebCheckoutManager {
+    private(set) var openedURL: URL?
+    private(set) var openedSecondTry: WebSecondTryConfig?
+
+    @MainActor
+    override func openEnrichedCheckoutURL(
+        _ url: URL,
+        entitledProductIdsBeforeCheckout: Set<String>,
+        paywallSession: PaywallSession,
+        secondTry: WebSecondTryConfig?
+    ) async throws -> WebCheckoutOutcome {
+        openedURL = url
+        openedSecondTry = secondTry
+        return .opened
+    }
+}
+
 final class CtxCompressionTests: XCTestCase {
 
     override func tearDown() {
@@ -259,6 +276,65 @@ final class CtxCompressionTests: XCTestCase {
         XCTAssertEqual(nested["showOn"] as? [String], ["dismissed"])
         let child = try XCTUnwrap(nested["perPaywallCtx"] as? [String: Any])
         XCTAssertEqual(child["initialPaddleProduct"] as? String, "pro_b:pri_b")
+    }
+
+    @MainActor
+    func testCheckoutURLIncludesDropReasonOnlyForConfiguredSecondTry() async throws {
+        Helium.lastApiKeyUsed = "test_api_key_for_second_try"
+        Helium.config.enableExternalWebCheckout(redirectURL: "myapp://checkout", paymentProcessors: .all)
+        let config = HeliumFetchedConfigManager.shared
+        config.setPreviewServerProducts(stripeProducts: [:], paddleProducts: nil, paddleClientToken: nil)
+        defer {
+            Helium.config.disableExternalWebCheckout()
+            Helium.lastApiKeyUsed = nil
+            HeliumFetchedConfigManager.reset()
+        }
+        let showOn = ["dismissed", "subscriptionCancelled"]
+        let cases: [(products: [String]?, reason: String?)] = [
+            (nil, nil),
+            (["prod_b:price_b"], "webSecondTryAlreadyEntitled"),
+            (["prod_c:price_c"], "webSecondTryMissingPriceDetails"),
+            ([], "webSecondTryNoProducts"),
+        ]
+        for (products, reason) in cases {
+            var info = makeTestPaywallInfo()
+            info.paywallUUID = "a"
+            info.webProductsOfferedStripe = ["prod_a:price_a"]
+            info.additionalPaywallFields = JSON(["webPaywallBundleUrl": "https://example.com/a"])
+            if let products {
+                info.webSecondTryConfig = WebSecondTryConfig(
+                    paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second",
+                    paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
+                    productsOfferedPaddle: [], productsOfferedStripe: products, showOn: showOn
+                )
+            }
+            let session = makeTestSession(paywallInfo: info)
+            let source = FixedWebEntitlementsSource(provider: .stripe, productKeys: ["prod_b:another_price"])
+            let manager = RecordingWebCheckoutManager(provider: .stripe, entitlementsSource: source)
+            _ = try await manager.startCheckoutFlow(for: "prod_a:price_a", triggerName: session.trigger, paywallSession: session)
+
+            let url = try XCTUnwrap(manager.openedURL)
+            XCTAssertEqual(url.path, "/a")
+            XCTAssertNil(manager.openedSecondTry)
+            let fragment = try XCTUnwrap(url.fragment)
+            let compressed = try XCTUnwrap(base64URLDecode(String(fragment.dropFirst("ctx=".count))))
+            let data = try decompressWithAppleZlib(compressed, originalSize: 8192)
+            let ctx = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertEqual(ctx["initialStripeSelection"] as? String, "prod_a:price_a")
+            guard let reason else {
+                XCTAssertNil(ctx["webSecondTryConfig"])
+                continue
+            }
+            let unavailable = try XCTUnwrap(ctx["webSecondTryConfig"] as? [String: Any])
+            XCTAssertEqual(unavailable["paywallUnavailableReason"] as? String, reason)
+            XCTAssertEqual(unavailable["showOn"] as? [String], showOn)
+            XCTAssertNil(unavailable["bundleUrl"])
+            let child = try XCTUnwrap(unavailable["perPaywallCtx"] as? [String: Any])
+            XCTAssertNil(child["initialStripeSelection"])
+            let target = try XCTUnwrap(child["analytics"] as? [String: Any])
+            XCTAssertEqual(target["paywallUUID"] as? String, "b")
+            XCTAssertEqual(target["parentPaywallSessionId"] as? String, session.sessionId)
+        }
     }
 
     func testBuildEnrichedCheckoutURL_omitsCustomPaywallTraitsWhenFlagOff() async throws {
