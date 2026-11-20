@@ -2,6 +2,19 @@ import XCTest
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testHistoryDrainPreservesOriginalPendingTriggers() {
+        var pending = TransactionSyncPending<String>()
+        pending.add("listener", id: 1, trigger: .listener)
+        pending.add("purchase", id: 2, trigger: .afterPurchase)
+        pending.add("history", id: 3)
+        pending.add("listener rescanned", id: 1)
+        pending.add("purchase rescanned", id: 2)
+        XCTAssertEqual(pending.triggers, [1: .listener, 2: .afterPurchase, 3: .history])
+        pending.remove(ids: [1, 2, 3])
+        XCTAssertTrue(pending.triggers.isEmpty)
+        XCTAssertTrue(pending.transactions.isEmpty)
+    }
+
     func testFamilySharedMetadataRetainsExplicitOwnership() {
         let properties = TransactionSyncPolicy.metadata(
             trigger: .history, sdkEnvironment: "SANDBOX", storeEnvironment: "SANDBOX",

@@ -74,13 +74,18 @@ struct TransactionHistorySyncState {
 
 struct TransactionSyncPending<Value> {
     private(set) var transactions: [UInt64: Value] = [:]
+    private(set) var triggers: [UInt64: TransactionSyncTrigger] = [:]
 
-    mutating func add(_ transaction: Value, id: UInt64) {
+    mutating func add(_ transaction: Value, id: UInt64, trigger: TransactionSyncTrigger = .history) {
         transactions[id] = transaction
+        if triggers[id] == nil { triggers[id] = trigger }
     }
 
     mutating func remove(ids: [UInt64]) {
-        for id in ids { transactions.removeValue(forKey: id) }
+        for id in ids {
+            transactions.removeValue(forKey: id)
+            triggers.removeValue(forKey: id)
+        }
     }
 }
 

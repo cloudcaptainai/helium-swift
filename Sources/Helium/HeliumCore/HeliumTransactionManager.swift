@@ -192,7 +192,7 @@ actor HeliumTransactionManager {
     @discardableResult
     private func syncWithServer(transactions: [Transaction], trigger: TransactionSyncTrigger = .history) -> Bool {
         for transaction in transactions where syncedTransactionIds[transaction.id] == nil {
-            pendingTransactions.add(transaction, id: transaction.id)
+            pendingTransactions.add(transaction, id: transaction.id, trigger: trigger)
         }
         guard let organizationId else {
             scheduleOrganizationRetry()
@@ -201,11 +201,15 @@ actor HeliumTransactionManager {
         let eligible = Array(pendingTransactions.transactions.values)
         let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
         let client = syncClient
+        let triggers = pendingTransactions.triggers
         TransactionSyncPolicy.sync(
             transactions: dates, organizationId: organizationId, syncedIds: &syncedTransactionIds
         ) { ids, organizationId in
             let ids = Set(ids)
-            client.syncTransactions(eligible.filter { ids.contains($0.id) }, organizationId: organizationId, trigger: trigger)
+            let groups = Dictionary(grouping: eligible.filter { ids.contains($0.id) }) { triggers[$0.id] ?? .history }
+            for (trigger, transactions) in groups {
+                client.syncTransactions(transactions, organizationId: organizationId, trigger: trigger)
+            }
         }
         pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
         pruneAndSave()
