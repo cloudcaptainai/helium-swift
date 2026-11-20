@@ -32,10 +32,10 @@ enum TransactionSyncPolicy {
 
     static func productType(_ type: Product.ProductType) -> String {
         switch type {
-        case .autoRenewable: return "auto_renewable"
-        case .nonRenewable: return "non_renewable"
+        case .autoRenewable: return "autoRenewable"
+        case .nonRenewable: return "nonRenewable"
         case .consumable: return "consumable"
-        case .nonConsumable: return "non_consumable"
+        case .nonConsumable: return "nonConsumable"
         default: return "unknown"
         }
     }

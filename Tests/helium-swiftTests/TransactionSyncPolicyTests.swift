@@ -3,10 +3,10 @@ import StoreKit
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
-    func testProductTypeMetadataUsesStableLowercaseValues() {
+    func testProductTypeMetadataUsesExistingPayloadSpellings() {
         let cases: [(Product.ProductType?, String)] = [
-            (.autoRenewable, "auto_renewable"), (.nonRenewable, "non_renewable"),
-            (.consumable, "consumable"), (.nonConsumable, "non_consumable"),
+            (.autoRenewable, "autoRenewable"), (.nonRenewable, "nonRenewable"),
+            (.consumable, "consumable"), (.nonConsumable, "nonConsumable"),
             (Product.ProductType(rawValue: "future"), "unknown"), (nil, "unknown")
         ]
         for (type, expected) in cases {
