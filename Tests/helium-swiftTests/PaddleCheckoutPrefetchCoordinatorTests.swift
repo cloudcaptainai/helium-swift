@@ -834,23 +834,22 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             guard releaseSecond.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
         }
         defer {
+            HeliumObservabilityManager.shared.unitTestTrackObserver = nil
             releaseSecond.signal()
             cleanupSharedCheckoutFlow(session: session)
         }
         let coordinator = PaddleCheckoutPrefetchCoordinator.shared
         let primary = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_primary")
         guard case .ready = primary else { return XCTFail("Expected the primary price to be ready") }
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { event in
+            guard let resolved = event as? PaddlePrefetchAwaitResolved, resolved.tappedPriceId == "pri_primary" else { return }
+            releaseSecond.signal()
+        }
         coordinator.handlePaywallOpen(paywallSession: session)
         await fulfillment(of: [secondRequested], timeout: 2)
 
         let manager = RecordingPaddleCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
-        let checkout = Task {
-            try await manager.startCheckoutFlow(for: primaryKey, triggerName: session.trigger, paywallSession: session)
-        }
-        try? await Task.sleep(nanoseconds: 250_000_000)
-        releaseSecond.signal()
-
-        _ = try await checkout.value
+        _ = try await manager.startCheckoutFlow(for: primaryKey, triggerName: session.trigger, paywallSession: session)
         XCTAssertEqual(manager.openedSecondTry?.paywallUUID, secondTry.paywallUUID)
     }
 
@@ -1206,6 +1205,42 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             priceIds: []
         )
         XCTAssertEqual(outcomes.count, 0)
+    }
+
+    func testCollectSecondTryOutcomesStopsWaitingForOtherPricesWhenOneIsAlreadyEntitled() async throws {
+        let session = checkoutFlowSession(productKeys: [])
+        let coordinator = PaddleCheckoutPrefetchCoordinator.shared
+        let releasePending = DispatchSemaphore(value: 0)
+        configureSharedCheckoutFlow(
+            session: session, priceIds: [], alreadyEntitledPriceId: "pri_owned", countryCode: "US"
+        ) { transactionId in
+            guard transactionId == "txn_pri_pending" else { return }
+            guard releasePending.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+        }
+        defer {
+            releasePending.signal()
+            cleanupSharedCheckoutFlow(session: session)
+        }
+        coordinator.prefetch(
+            paywallSession: session, priceIds: ["pri_owned"],
+            paddleClientToken: "test_xyz", iosBundleId: nil, surface: .secondTry
+        )
+        let owned = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_owned", surface: .secondTry)
+        guard case .alreadyEntitled = owned else { return XCTFail("Expected an already-entitled prefetch") }
+        coordinator.prefetch(
+            paywallSession: session, priceIds: ["pri_pending"],
+            paddleClientToken: "test_xyz", iosBundleId: nil, surface: .secondTry
+        )
+
+        let outcomes = await coordinator.collectPrefetchOutcomes(
+            sessionId: session.sessionId, priceIds: ["pri_owned", "pri_pending"], surface: .secondTry
+        )
+        guard case .alreadyEntitled = outcomes["pri_owned"] else { return XCTFail("Expected the owned price to end the wait") }
+        XCTAssertNil(outcomes["pri_pending"])
+
+        releasePending.signal()
+        let remaining = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_pending", surface: .secondTry)
+        guard case .ready = remaining else { return XCTFail("Ending the wait must not cancel the prefetch") }
     }
 
     func testCollectPrefetchOutcomes_handlesSinglePriceId() async throws {
