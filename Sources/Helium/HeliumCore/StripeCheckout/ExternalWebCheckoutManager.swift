@@ -42,6 +42,8 @@ public class ExternalWebCheckoutManager: NSObject {
     private var foregroundCheckTask: Task<Void, Never>?
     private var pendingBackgroundObserver: NSObjectProtocol?
 
+    typealias SecondTryResolution = (config: WebSecondTryConfig?, context: [String: Any])
+
     // Server-managed checkout observation
     private struct CheckoutObservation {
         let paywallSession: PaywallSession
@@ -235,19 +237,6 @@ public class ExternalWebCheckoutManager: NSObject {
         )
 
         return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession, secondTry: secondTry?.config)
-    }
-
-    typealias SecondTryResolution = (config: WebSecondTryConfig?, context: [String: Any])
-
-    private enum SecondTryUnavailableReason: String {
-        case webSecondTryInvalidPaywall
-        case webSecondTryProviderMismatch
-        case webSecondTryNoProducts
-        case webSecondTryAlreadyEntitled
-        case webSecondTryInvalidPaddlePrices
-        case webSecondTryPaddlePrefetchFailed
-        case webSecondTryPaddlePrefetchNotReady
-        case webSecondTryMissingPriceDetails
     }
 
     @MainActor
