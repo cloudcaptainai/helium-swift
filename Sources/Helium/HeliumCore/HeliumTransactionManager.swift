@@ -171,11 +171,13 @@ actor HeliumTransactionManager {
                 }
                 if organizationId != nil {
                     if await loadAndSyncTransactionHistory(isOrganizationRetry: true) {
+                        guard !Task.isCancelled else { return }
                         organizationRetryTask = nil
                         return
                     }
                 }
             }
+            guard !Task.isCancelled else { return }
             organizationRetryTask = nil
         }
     }
