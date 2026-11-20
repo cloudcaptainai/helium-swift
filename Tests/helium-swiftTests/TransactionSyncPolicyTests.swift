@@ -70,18 +70,28 @@ final class TransactionSyncPolicyTests: XCTestCase {
         try test(directory.appendingPathComponent("synced_ids.json"), defaults, suite)
     }
 
-    func testMissingFileIsEmptyAndLegacyDefaultsAreDeletedWithoutImport() throws {
+    func testMissingFileWithLegacyListIsMigratedAndDefaultsAreDeletedWithoutImport() throws {
         try withSyncedIdsStore { fileURL, defaults, _ in
             defaults.set(try JSONEncoder().encode([UInt64(1): Date()]), forKey: "heliumSyncedTransactionIds")
             defaults.set(TransactionSyncPolicy.schemaVersion, forKey: "heliumTransactionSyncSchemaVersion")
             defaults.set("keep", forKey: "hostPreference")
             let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
-            XCTAssertEqual(loaded.state, .empty)
+            XCTAssertEqual(loaded.state, .migrated)
             XCTAssertTrue(loaded.ids.isEmpty)
             XCTAssertNil(defaults.object(forKey: "heliumSyncedTransactionIds"))
             XCTAssertNil(defaults.object(forKey: "heliumTransactionSyncSchemaVersion"))
             XCTAssertEqual(defaults.string(forKey: "hostPreference"), "keep")
             XCTAssertEqual(TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).state, .empty)
+        }
+    }
+
+    func testMissingFileWithoutLegacyListIsEmptyOnFreshInstall() throws {
+        try withSyncedIdsStore { fileURL, defaults, _ in
+            let loaded = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults)
+            XCTAssertEqual(loaded.state, .empty)
+            XCTAssertTrue(loaded.ids.isEmpty)
+            XCTAssertNil(defaults.object(forKey: "heliumSyncedTransactionIds"))
+            XCTAssertNil(defaults.object(forKey: "heliumTransactionSyncSchemaVersion"))
         }
     }
 

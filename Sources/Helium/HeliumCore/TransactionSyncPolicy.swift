@@ -48,6 +48,7 @@ enum TransactionSyncPolicy {
     static let organizationRetryDelays: [UInt64] = [10, 30, 60].map { $0 * 1_000_000_000 }
     static let schemaVersion = 1
     static func loadSyncedIds(fileURL: URL?, defaults: UserDefaults = .standard) -> (ids: [UInt64: Date], state: TransactionSyncedIdsState) {
+        let hadLegacyIds = defaults.object(forKey: "heliumSyncedTransactionIds") != nil
         defaults.removeObject(forKey: "heliumSyncedTransactionIds")
         defaults.removeObject(forKey: "heliumTransactionSyncSchemaVersion")
         guard let fileURL else { return ([:], .decodeFailed) }
@@ -55,7 +56,7 @@ enum TransactionSyncPolicy {
         do {
             data = try Data(contentsOf: fileURL)
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
-            return ([:], .empty)
+            return ([:], hadLegacyIds ? .migrated : .empty)
         } catch {
             return ([:], .decodeFailed)
         }
