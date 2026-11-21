@@ -110,6 +110,29 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(mockDelegate.receivedEvents.compactMap { ($0 as? UserAllocatedEvent)?.experimentInfo.experimentId }, ["exp-flow"])
     }
 
+    func testMalformedStoredEntryRecoversEnrollmentFromBackup() throws {
+        let config = try experimentConfig()
+        injectConfig(config)
+        let tracker = ExperimentAllocationTracker.shared
+        tracker.recordDecision(trigger: "checkout", paywallInfo: config.triggerToPaywalls["checkout"])
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
+        let enrolledAt = try XCTUnwrap(config.extractExperimentInfo(trigger: "checkout")?.enrolledAt)
+        let original = try XCTUnwrap(UserDefaults.standard.data(forKey: "heliumExperimentAllocations"))
+        let fileURL = try XCTUnwrap(heliumAppSupportDirectory).appendingPathComponent("helium_experiment_allocations.json")
+        waitForEventDispatch { (try? Data(contentsOf: fileURL)) == original }
+        XCTAssertEqual(try Data(contentsOf: fileURL), original)
+        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+        let malformed = try JSONSerialization.data(withJSONObject: [
+            "\(persistentId)_exp-flow": ["allocationIndex": "invalid"]
+        ])
+        UserDefaults.standard.set(malformed, forKey: "heliumExperimentAllocations")
+        tracker.loadStoredAllocations()
+        XCTAssertEqual(config.extractExperimentInfo(trigger: "checkout")?.enrolledAt, enrolledAt)
+        tracker.recordDecision(trigger: "checkout", paywallInfo: config.triggerToPaywalls["checkout"])
+        drainMainActor()
+        XCTAssertEqual(mockDelegate.receivedEvents.filter { $0 is UserAllocatedEvent }.count, 1)
+    }
+
     func testAllocationTriggerListUsesRemoteConfigWithFallbackLoaded() throws {
         var remote = try experimentConfig(shouldShow: true)
         remote.triggerToPaywalls["remote_alias"] = remote.triggerToPaywalls["checkout"]

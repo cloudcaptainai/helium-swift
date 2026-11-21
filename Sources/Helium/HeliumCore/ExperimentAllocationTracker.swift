@@ -58,18 +58,17 @@ class ExperimentAllocationTracker {
     }
     
     func loadStoredAllocations() {
-        // Try UserDefaults first
-        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
-           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
-            storedAllocations = decoded.compactMapValues(\.value)
-            return
-        }
-        
+        var allocations: [String: StoredAllocation] = [:]
         if let fileURL = allocationsFileURL,
            let data = try? Data(contentsOf: fileURL),
            let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
-            storedAllocations = decoded.compactMapValues(\.value)
+            allocations = decoded.compactMapValues(\.value)
         }
+        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
+            allocations.merge(decoded.compactMapValues(\.value)) { _, current in current }
+        }
+        storedAllocations = allocations
     }
     
     /// Persists allocations to UserDefaults and file (as backup)
