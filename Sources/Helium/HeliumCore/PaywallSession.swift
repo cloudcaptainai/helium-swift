@@ -40,25 +40,26 @@ struct PaywallSession {
     let isSecondTry: Bool
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
-    private let paywallTraits = HeliumAtomic<HeliumUserTraits?>(wrappedValue: nil)
 
-    var resolvedPaywallTraits: HeliumUserTraits? {
-        paywallTraits.wrappedValue
+    private final class PrefetchReadiness {
+        var isOpen = false
+        var traits: HeliumUserTraits?
     }
 
-    func getOrFreezePaywallTraits(presentationTraits: HeliumUserTraits? = nil) -> HeliumUserTraits {
-        if let resolvedPaywallTraits {
-            return resolvedPaywallTraits
-        }
-        let traits = HeliumUserTraits.forPaywall(
-            triggerName: trigger,
-            presentationTraits: presentationTraits ?? presentationContext.customPaywallTraits
-        )
-        return paywallTraits.withValue { snapshot in
-            if let snapshot { return snapshot }
-            snapshot = traits
-            return traits
-        }
+    private let prefetchReadiness = PrefetchReadiness()
+
+    @MainActor var isOpenForPrefetch: Bool {
+        get { prefetchReadiness.isOpen }
+        nonmutating set { prefetchReadiness.isOpen = newValue }
+    }
+
+    @MainActor var resolvedPaywallTraits: HeliumUserTraits? {
+        prefetchReadiness.traits
+    }
+
+    @MainActor func publishPaywallTraits(_ traits: HeliumUserTraits) {
+        guard prefetchReadiness.traits == nil else { return }
+        prefetchReadiness.traits = traits
     }
     
     var isFallback: Bool {

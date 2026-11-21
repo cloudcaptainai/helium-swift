@@ -69,9 +69,15 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     // MARK: - Paywall lifecycle hooks
 
-    func handlePaywallOpen(paywallSession: PaywallSession, presentationTraits: HeliumUserTraits? = nil) {
-        let traits = paywallSession.getOrFreezePaywallTraits(presentationTraits: presentationTraits)
-        guard let info = paywallSession.paywallInfoWithBackups,
+    func handlePaywallOpen(paywallSession: PaywallSession) {
+        paywallSession.isOpenForPrefetch = true
+        startPrefetchIfReady(paywallSession: paywallSession)
+    }
+
+    func startPrefetchIfReady(paywallSession: PaywallSession) {
+        guard paywallSession.isOpenForPrefetch,
+              let traits = paywallSession.resolvedPaywallTraits,
+              let info = paywallSession.paywallInfoWithBackups,
               let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty else { return }
         prefetch(paywallSession: paywallSession, compositeKeys: webProducts, paywallTraits: traits)
         if let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
@@ -107,6 +113,7 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     func handlePaywallClose(paywallSession: PaywallSession) {
+        paywallSession.isOpenForPrefetch = false
         cancelForSession(sessionId: paywallSession.sessionId)
     }
 

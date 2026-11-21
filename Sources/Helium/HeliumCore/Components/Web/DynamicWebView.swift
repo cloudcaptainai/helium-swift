@@ -261,130 +261,137 @@ struct DynamicWebView: View {
         // Initialization timing
         _ = Date()
         
-        // Context and script injection timing
-        do {
-            let contextJSON = createHeliumContext(triggerName: triggerName)
-            
-            _ = Date()
-            var mergedContext = contextJSON
-            let traits = actionsDelegate.delegate.paywallSession.getOrFreezePaywallTraits(presentationTraits: dynamicPaywallTraits)
-            mergedContext["customPaywallTraits"] = JSON(try traits.jsonObject())
-            mergedContext["screenInfo"]["safeAreaInsets"] = JSON(
-                PaywallSafeAreaInsets.jsonObject(PaywallSafeAreaInsets.current(for: webView))
-            )
-            
-            // Get localized prices from HeliumFetchedConfigManager
-            // Only fetch prices for products associated with this trigger
-            let localizedPrices = HeliumFetchedConfigManager.shared.getLocalizedPriceMapForTrigger(triggerName)
-            
-            _ = Date()
-            let stringSource = """
-            (function() {
-                // Create properties on window object directly
-                Object.defineProperty(window, 'heliumContext', {
-                    value: \(mergedContext.rawString() ?? "{}"),
-                    writable: false,
-                    enumerable: true,
-                    configurable: false
-                });
-                
-                Object.defineProperty(window, 'heliumLocalizedPrices', {
-                    value: \(JSON(localizedPrices.mapValues { $0.json }).rawString() ?? "{}"),
-                    writable: false,
-                    enumerable: true,
-                    configurable: false
-                });
-                
-                 Object.defineProperty(window, 'heliumReady', {
-                    value: true,
-                    writable: false,
-                    enumerable: true,
-                    configurable: false
-                });
-            })();
-            """
-            
-            let combinedScript = WKUserScript(
-                source: stringSource,
+        let errorHookScript: WKUserScript?
+        if HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) {
+            errorHookScript = WKUserScript(
+                source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             )
-
-            let errorHookScript: WKUserScript?
-            if HeliumFetchedConfigManager.shared.isFeatureEnabled(.jsCrashFallback) {
-                errorHookScript = WKUserScript(
-                    source: WebViewRenderGuard.errorHookScriptSource(loadToken: loadToken),
-                    injectionTime: .atDocumentStart,
-                    forMainFrameOnly: true
-                )
-            } else {
-                errorHookScript = nil
-            }
-
-            let preparingToken = loadToken
-            Task {
-                // WebView creation timing
-                _ = Date()
-                let preparedWebView = await WebViewManager.shared.prepareForShowing(
-                    filePath: filePathToLoad,
-                    shouldEnableScroll: shouldEnableScroll,
-                    delegateWrapper: actionsDelegate,
-                    heliumViewController: presentationState.heliumViewController
-                )
-                // A newer load attempt superseded this one during preparation. Release this
-                // task's holder unless the newer attempt received the same pooled instance.
-                guard preparingToken == loadToken else {
-                    if let preparedWebView, preparedWebView !== webView {
-                        WebViewManager.shared.releaseHolderIfUnused(for: preparedWebView)
-                    }
-                    return
-                }
-                guard let preparedWebView else {
-                    HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
-                    webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
-                    return
-                }
-                
-                _ = Date()
-                preparedWebView.configuration.userContentController.removeAllUserScripts()
-                preparedWebView.configuration.userContentController.addUserScript(combinedScript)
-                if let errorHookScript {
-                    preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
-                }
-                
-                // File loading timing
-                _ = Date()
-                
-                do {
-                    var htmlStringIfNeeded: String? = nil
-                    if !useBackup, let bundleId {
-                        htmlStringIfNeeded = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleId]
-                        if htmlStringIfNeeded == nil && backupFilePath == nil {
-                            // This can happen if bundleId is actually for a fallback bundle
-                            htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[bundleId]
-                        }
-                    } else if useBackup, let backupBundleId {
-                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
-                    }
-                    
-                    try WebViewManager.shared.loadFilePath(
-                        filePathToLoad,
-                        toWebView: preparedWebView,
-                        htmlStringIfNeeded: htmlStringIfNeeded
-                    )
-                    webView = preparedWebView
-                } catch {
-                    webViewLoadFail(reason: "WebViewLoadFail")
-                }
-            }
-            Task {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                // try here to try and make autoplay more smooth
-                lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
-            }
-        } catch {
-            webViewLoadFail(reason: "WebViewContextError")
+        } else {
+            errorHookScript = nil
         }
+
+        let preparingToken = loadToken
+        Task { @MainActor in
+            // WebView creation timing
+            _ = Date()
+            let preparedWebView = await WebViewManager.shared.prepareForShowing(
+                filePath: filePathToLoad,
+                shouldEnableScroll: shouldEnableScroll,
+                delegateWrapper: actionsDelegate,
+                heliumViewController: presentationState.heliumViewController
+            )
+            // A newer load attempt superseded this one during preparation. Release this
+            // task's holder unless the newer attempt received the same pooled instance.
+            guard preparingToken == loadToken else {
+                if let preparedWebView, preparedWebView !== webView {
+                    WebViewManager.shared.releaseHolderIfUnused(for: preparedWebView)
+                }
+                return
+            }
+            guard let preparedWebView else {
+                HeliumLogger.log(.error, category: .ui, "Failed to retrieve preparedWebView!")
+                webViewLoadFail(reason: "NoPreparedWebView") // logically this should never be possible
+                return
+            }
+            
+            let session = actionsDelegate.delegate.paywallSession
+            let traits = session.resolvedPaywallTraits ?? HeliumUserTraits.forPaywall(
+                triggerName: session.trigger,
+                presentationTraits: dynamicPaywallTraits ?? session.presentationContext.customPaywallTraits
+            )
+            guard let combinedScript = try? makeContextScript(traits: traits) else {
+                WebViewManager.shared.releaseHolderIfUnused(for: preparedWebView)
+                webViewLoadFail(reason: "WebViewContextError")
+                return
+            }
+            _ = Date()
+            preparedWebView.configuration.userContentController.removeAllUserScripts()
+            preparedWebView.configuration.userContentController.addUserScript(combinedScript)
+            session.publishPaywallTraits(traits)
+            PaddleCheckoutPrefetchCoordinator.shared.startPrefetchIfReady(paywallSession: session)
+            if let errorHookScript {
+                preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
+            }
+            
+            // File loading timing
+            _ = Date()
+            
+            do {
+                var htmlStringIfNeeded: String? = nil
+                if !useBackup, let bundleId {
+                    htmlStringIfNeeded = HeliumFetchedConfigManager.shared.fetchedConfig?.bundles?[bundleId]
+                    if htmlStringIfNeeded == nil && backupFilePath == nil {
+                        // This can happen if bundleId is actually for a fallback bundle
+                        htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[bundleId]
+                    }
+                } else if useBackup, let backupBundleId {
+                    htmlStringIfNeeded = HeliumFallbackViewManager.shared.getConfig()?.bundles?[backupBundleId]
+                }
+                
+                try WebViewManager.shared.loadFilePath(
+                    filePathToLoad,
+                    toWebView: preparedWebView,
+                    htmlStringIfNeeded: htmlStringIfNeeded
+                )
+                webView = preparedWebView
+            } catch {
+                webViewLoadFail(reason: "WebViewLoadFail")
+            }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            // try here to try and make autoplay more smooth
+            lowPowerModeAutoPlayVideoWorkaround(multipleAttempts: false)
+        }
+    }
+
+    @MainActor
+    private func makeContextScript(traits: HeliumUserTraits) throws -> WKUserScript? {
+        var mergedContext = createHeliumContext(triggerName: triggerName)
+        mergedContext["customPaywallTraits"] = JSON(try traits.jsonObject())
+        mergedContext["screenInfo"]["safeAreaInsets"] = JSON(
+            PaywallSafeAreaInsets.jsonObject(PaywallSafeAreaInsets.current(for: webView))
+        )
+
+        // Get localized prices from HeliumFetchedConfigManager
+        // Only fetch prices for products associated with this trigger
+        let localizedPrices = HeliumFetchedConfigManager.shared.getLocalizedPriceMapForTrigger(triggerName)
+
+        _ = Date()
+        guard let contextSource = mergedContext.rawString() else { return nil }
+        let stringSource = """
+        (function() {
+            // Create properties on window object directly
+            Object.defineProperty(window, 'heliumContext', {
+                value: \(contextSource),
+                writable: false,
+                enumerable: true,
+                configurable: false
+            });
+
+            Object.defineProperty(window, 'heliumLocalizedPrices', {
+                value: \(JSON(localizedPrices.mapValues { $0.json }).rawString() ?? "{}"),
+                writable: false,
+                enumerable: true,
+                configurable: false
+            });
+
+             Object.defineProperty(window, 'heliumReady', {
+                value: true,
+                writable: false,
+                enumerable: true,
+                configurable: false
+            });
+        })();
+        """
+
+        return WKUserScript(
+            source: stringSource,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
     }
     
     private func handlePaywallJSError(_ info: [String: Any]) {

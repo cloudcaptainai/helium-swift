@@ -35,6 +35,18 @@ final class PromoPurchaseRoutingTests: HeliumTestCase {
         makeTestSession(trigger: "test_trigger")
     }
 
+    @MainActor
+    func testPurchaseWithoutAnInjectedSnapshotDoesNotFreezeTraits() async throws {
+        let session = makeSession()
+        let info = try XCTUnwrap(session.paywallInfoWithBackups)
+        let actions = HeliumActionsDelegate(paywallInfo: info, paywallSession: session, trigger: session.trigger)
+
+        let status = await actions.makePurchase()
+
+        guard case .purchased = status else { return XCTFail("Expected the purchase to complete without injected traits") }
+        XCTAssertNil(session.resolvedPaywallTraits)
+    }
+
     func testCompositeKeyRoutesToPromoOverload() async {
         _ = await HeliumPaywallDelegateWrapper.shared.handlePurchase(
             productKey: "test_yearly:test_yearly_offer_identifier",

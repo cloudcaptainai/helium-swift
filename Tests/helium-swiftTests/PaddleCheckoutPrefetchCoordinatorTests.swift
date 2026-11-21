@@ -190,10 +190,11 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
                 productsOfferedPaddle: ["pro_b:pri_b"], productsOfferedStripe: secondStripe ? ["prod_b:price_b"] : [], showOn: ["dismissed"]
             )
             let session = makeTestSession(paywallInfo: info)
-            coordinator.handlePaywallOpen(
-                paywallSession: session,
+            session.publishPaywallTraits(HeliumUserTraits.forPaywall(
+                triggerName: session.trigger,
                 presentationTraits: HeliumUserTraits(["cohort": "presentation", "score": 3, "invalid": Double.infinity])
-            )
+            ))
+            coordinator.handlePaywallOpen(paywallSession: session)
             let result = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_b", surface: .secondTry)
             if expectSecond {
                 guard case .ready = result else { return XCTFail("Expected second-try prefetch") }
@@ -223,65 +224,66 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             await coordinator.cancelAllAndAwait()
         }
     }
-    func testPaywallOpenPrefetchReusesSnapshotWhenWebViewResolvesTraitsFirst() async throws {
+    func testOpenAndPublishedTraitsStartPrefetchOnceInEitherOrder() async throws {
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+
+        for openFirst in [true, false] {
+            let session = checkoutFlowSession(productKeys: ["pro_a:pri_a"])
+            let traits = HeliumUserTraits(["cohort": openFirst ? "open_first" : "publish_first"])
+            let publish = {
+                session.publishPaywallTraits(traits)
+                self.coordinator.startPrefetchIfReady(paywallSession: session)
+            }
+
+            if openFirst {
+                coordinator.handlePaywallOpen(paywallSession: session)
+                XCTAssertNil(session.resolvedPaywallTraits)
+            } else {
+                publish()
+            }
+
+            let beforeBoth = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+            guard case .notStarted = beforeBoth else { return XCTFail("Prefetch started without both signals") }
+
+            if openFirst {
+                publish()
+            } else {
+                session.publishPaywallTraits(HeliumUserTraits(["cohort": "must_not_replace_snapshot"]))
+                coordinator.handlePaywallOpen(paywallSession: session)
+            }
+            coordinator.startPrefetchIfReady(paywallSession: session)
+
+            let afterBoth = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+            guard case .ready = afterBoth else { return XCTFail("Expected prefetch after both signals") }
+
+            let requests = MockURLProtocol.capturedRequests.filter {
+                $0.url?.path.hasSuffix("/paddle/create-transaction-for-paywall") == true
+            }
+            XCTAssertEqual(requests.count, 1)
+            let body = try XCTUnwrap(try XCTUnwrap(requests.first).httpBody)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            let sentTraits = try XCTUnwrap(payload["customPaywallTraits"] as? [String: Any])
+            XCTAssertEqual(sentTraits["cohort"] as? String, openFirst ? "open_first" : "publish_first")
+
+            coordinator.handlePaywallClose(paywallSession: session)
+            MockURLProtocol.reset()
+            MockURLProtocol.requestHandler = bothSucceedHandler()
+        }
+    }
+
+    func testCloseBeforeTraitsArePublishedDoesNotStartPrefetch() async {
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
         MockURLProtocol.requestHandler = bothSucceedHandler()
         let session = checkoutFlowSession(productKeys: ["pro_a:pri_a"])
-        let injectedTraits = session.getOrFreezePaywallTraits(presentationTraits: HeliumUserTraits(["cohort": "early"]))
-
-        let beforeOpen = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
-        guard case .notStarted = beforeOpen else { return XCTFail("Prefetch started before the paywall opened") }
-
-        coordinator.handlePaywallOpen(paywallSession: session, presentationTraits: HeliumUserTraits(["cohort": "later"]))
-        let afterOpen = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
-        guard case .ready = afterOpen else { return XCTFail("Expected prefetch when the paywall opened") }
-
-        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first {
-            $0.url?.path.hasSuffix("/paddle/create-transaction-for-paywall") == true
-        })
-        let body = try XCTUnwrap(request.httpBody)
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        let traits = try XCTUnwrap(payload["customPaywallTraits"] as? [String: Any])
-        XCTAssertEqual(traits["cohort"] as? String, "early")
-        XCTAssertEqual(traits as NSDictionary, try injectedTraits.jsonObject() as NSDictionary)
-    }
-
-    func testPaywallOpenPrefetchFreezesSessionTraitsBeforeWebViewLoads() async throws {
-        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
-        MockURLProtocol.requestHandler = bothSucceedHandler()
-        let identity = HeliumIdentityManager.shared
-        let previousTraits = identity.getUserTraits()
-        identity.setCustomUserTraits(HeliumUserTraits(["account": "at_open"]))
-        defer { identity.setCustomUserTraits(previousTraits) }
-        var info = makeTestPaywallInfo()
-        info.webProductsOfferedPaddle = ["pro_a:pri_a"]
-        let session = PaywallSession(
-            trigger: "test_trigger",
-            paywallInfo: info,
-            fallbackType: .notFallback,
-            presentationContext: PaywallPresentationContext(
-                config: PaywallPresentationConfig(customPaywallTraits: HeliumUserTraits(["cohort": "at_open"])),
-                eventHandlers: nil,
-                onEntitled: nil,
-                onPaywallNotShown: nil
-            )
-        )
 
         coordinator.handlePaywallOpen(paywallSession: session)
-        let outcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
-        guard case .ready = outcome else { return XCTFail("Expected prefetch without waiting for the web view") }
-        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first {
-            $0.url?.path.hasSuffix("/paddle/create-transaction-for-paywall") == true
-        })
-        let body = try XCTUnwrap(request.httpBody)
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        let traits = try XCTUnwrap(payload["customPaywallTraits"] as? [String: Any])
-        XCTAssertEqual(traits["cohort"] as? String, "at_open")
-        XCTAssertEqual(traits["account"] as? String, "at_open")
+        coordinator.handlePaywallClose(paywallSession: session)
+        session.publishPaywallTraits(HeliumUserTraits(["cohort": "late"]))
+        coordinator.startPrefetchIfReady(paywallSession: session)
 
-        identity.setCustomUserTraits(HeliumUserTraits(["account": "later"]))
-        let injectedTraits = session.getOrFreezePaywallTraits(presentationTraits: HeliumUserTraits(["cohort": "later"]))
-        XCTAssertEqual(traits as NSDictionary, try injectedTraits.jsonObject() as NSDictionary)
+        let outcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+        guard case .notStarted = outcome else { return XCTFail("Late publication started prefetch after close") }
     }
 
     private var testSessionId: String { testSession.sessionId }
