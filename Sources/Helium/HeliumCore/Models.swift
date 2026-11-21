@@ -295,7 +295,7 @@ public struct HeliumFetchedConfig: Codable {
     }
     
     func getTriggersWithMissingProducts() -> [String] {
-        triggerToPaywalls.filter { !$0.value.hasProducts }.map { $0.key }
+        triggerToPaywalls.filter { $0.value.shouldShow != false && !$0.value.hasProducts }.map { $0.key }
     }
 }
 
