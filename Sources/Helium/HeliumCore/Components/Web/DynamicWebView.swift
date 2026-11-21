@@ -246,6 +246,7 @@ struct DynamicWebView: View {
       }
     }
 
+    @MainActor
     private func loadWebView(useBackup: Bool = false) {
         if webView != nil {
             return
@@ -267,18 +268,12 @@ struct DynamicWebView: View {
             
             _ = Date()
             var mergedContext = contextJSON
-            // Prefer the live environment traits so a paywall constructed off-screen still injects the latest
-            // traits at display time; the frozen session value is the safety net (and covers the presented path,
-            // which does not set the environment).
-            let presentationTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits
-            let combinedTraits = HeliumUserTraits.forPaywall(
-                triggerName: triggerName,
-                presentationTraits: presentationTraits
+            let session = actionsDelegate.delegate.paywallSession
+            let traits = session.resolvedPaywallTraits ?? HeliumUserTraits.forPaywall(
+                triggerName: session.trigger,
+                presentationTraits: dynamicPaywallTraits ?? session.presentationContext.customPaywallTraits
             )
-            // Freeze the fully assembled display-time traits for the session so an external web
-            // checkout launched from this paywall sends the exact same customPaywallTraits.
-            actionsDelegate.setResolvedPaywallTraits(combinedTraits)
-            mergedContext["customPaywallTraits"] = JSON(try combinedTraits.jsonObject())
+            mergedContext["customPaywallTraits"] = JSON(try traits.jsonObject())
             mergedContext["screenInfo"]["safeAreaInsets"] = JSON(
                 PaywallSafeAreaInsets.jsonObject(PaywallSafeAreaInsets.current(for: webView))
             )
@@ -332,7 +327,7 @@ struct DynamicWebView: View {
             }
 
             let preparingToken = loadToken
-            Task {
+            Task { @MainActor in
                 // WebView creation timing
                 _ = Date()
                 let preparedWebView = await WebViewManager.shared.prepareForShowing(
@@ -358,6 +353,8 @@ struct DynamicWebView: View {
                 _ = Date()
                 preparedWebView.configuration.userContentController.removeAllUserScripts()
                 preparedWebView.configuration.userContentController.addUserScript(combinedScript)
+                session.publishPaywallTraits(traits)
+                PaddleCheckoutPrefetchCoordinator.shared.startPrefetchIfReady(paywallSession: session)
                 if let errorHookScript {
                     preparedWebView.configuration.userContentController.addUserScript(errorHookScript)
                 }

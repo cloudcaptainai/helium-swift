@@ -40,6 +40,27 @@ struct PaywallSession {
     let isSecondTry: Bool
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
+
+    private final class PrefetchReadiness {
+        var isOpen = false
+        var traits: HeliumUserTraits?
+    }
+
+    private let prefetchReadiness = PrefetchReadiness()
+
+    @MainActor var isOpenForPrefetch: Bool {
+        get { prefetchReadiness.isOpen }
+        nonmutating set { prefetchReadiness.isOpen = newValue }
+    }
+
+    @MainActor var resolvedPaywallTraits: HeliumUserTraits? {
+        prefetchReadiness.traits
+    }
+
+    @MainActor func publishPaywallTraits(_ traits: HeliumUserTraits) {
+        guard prefetchReadiness.traits == nil else { return }
+        prefetchReadiness.traits = traits
+    }
     
     var isFallback: Bool {
         return fallbackType != .notFallback

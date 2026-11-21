@@ -67,10 +67,6 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.selectProduct(productId: productId)
     }
 
-    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
-        delegate.setResolvedPaywallTraits(traits)
-    }
-
     func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         delegate.logRenderTime(timeTakenMS: timeTakenMS, isFallback: isFallback);
     }
@@ -109,9 +105,6 @@ class HeliumActionsDelegate: ObservableObject {
     private var isLoading: Bool = false
     private var lastShownSecondTryTrigger: String? = nil
 
-    // The fully assembled traits the webview injected, frozen at display time.
-    private var resolvedPaywallTraits: HeliumUserTraits?
-    
     var dismissAction: (() -> Void)?
     
     var trigger: String {
@@ -226,10 +219,7 @@ class HeliumActionsDelegate: ObservableObject {
         selectedProductId = productId
     }
 
-    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
-        resolvedPaywallTraits = traits
-    }
-
+    @MainActor
     func makePurchase() async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
@@ -247,7 +237,7 @@ class HeliumActionsDelegate: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         let paywallTraits: HeliumUserTraits
-        if let resolvedPaywallTraits {
+        if let resolvedPaywallTraits = paywallSession.resolvedPaywallTraits {
             paywallTraits = resolvedPaywallTraits
         } else {
             HeliumObservabilityManager.shared.track(
