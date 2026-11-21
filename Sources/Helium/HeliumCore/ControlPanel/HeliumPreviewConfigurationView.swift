@@ -186,7 +186,7 @@ struct HeliumPreviewConfigurationView: View {
                             tag("US ONLY")
                         }
                     }
-                    Text(request.purchaseDetail(mode, checkoutPaddleClientToken: checkoutPaddleClientToken))
+                    Text(mode.detail(paddleClientToken: checkoutPaddleClientToken))
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -187,14 +187,7 @@ struct HeliumPreviewConfigurationRequest: Identifiable {
 
     /// The CA consent toggle only exists on Paddle checkouts, so it is hidden for a
     /// Stripe-only paywall. The session settings screen always shows it.
-    var showsCompliance: Bool { usesPaddleCheckout }
-
-    /// A Stripe-only paywall never checks out on Paddle, so its copy names no Paddle account.
-    func purchaseDetail(_ mode: HeliumPreviewPurchaseMode, checkoutPaddleClientToken: String?) -> String {
-        mode.detail(paddleClientToken: usesPaddleCheckout ? checkoutPaddleClientToken : nil)
-    }
-
-    private var usesPaddleCheckout: Bool {
+    var showsCompliance: Bool {
         switch target {
         case .version(let version, _): return version.hasApp2webPaddle
         case .settings: return true

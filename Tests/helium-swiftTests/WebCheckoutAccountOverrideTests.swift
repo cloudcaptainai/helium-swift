@@ -110,26 +110,4 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
             XCTAssertFalse(detail.contains("live"))
         }
     }
-
-    func testRealPurchaseDetail_stripeOnlyPaywallNamesNoPaddleAccount() throws {
-        let version = try JSONDecoder().decode(HeliumPaywallPreviewVersion.self, from: Data("""
-            {"versionId": "v1", "versionStatus": "published", "webPaywallBundleUrl": "https://example.com/bundle_1.html", "webStripeProductIds": ["price_1"]}
-            """.utf8))
-        let paywall = try JSONDecoder().decode(HeliumPaywallPreviewEntry.self, from: Data("""
-            {"paywallUuid": "p1", "paywallName": "Stripe paywall", "versions": []}
-            """.utf8))
-        let stripeOnly = HeliumPreviewConfigurationRequest(target: .version(version, paywall: paywall))
-
-        for token in ["test_abc", "live_abc"] {
-            XCTAssertEqual(
-                stripeOnly.purchaseDetail(.real, checkoutPaddleClientToken: token),
-                HeliumPreviewPurchaseMode.real.detail(paddleClientToken: nil)
-            )
-        }
-        XCTAssertTrue(
-            HeliumPreviewConfigurationRequest(target: .settings)
-                .purchaseDetail(.real, checkoutPaddleClientToken: "test_abc")
-                .contains("Paddle sandbox account")
-        )
-    }
 }
