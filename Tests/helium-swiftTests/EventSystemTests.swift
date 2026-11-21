@@ -6,7 +6,7 @@ final class EventSystemTests: HeliumTestCase {
     func testFireEventReachesAllThreeTargets() {
         let captor = PaywallEventHandlersCaptor()
         let session = makeTestSession(trigger: "test_trigger", eventHandlers: captor.handlers)
-        let event = PaywallDismissedEvent(triggerName: "test_trigger", paywallName: "test_paywall")
+        let event = PaywallDismissedEvent(triggerName: "test_trigger", paywallName: "test_paywall", secondTry: false)
 
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: session)
         waitForEventDispatch { self.listener.eventsOfType(PaywallDismissedEvent.self).count == 1 }
@@ -31,7 +31,7 @@ final class EventSystemTests: HeliumTestCase {
         Helium.shared.addHeliumEventListener(listener3)
         waitForListenerRegistration(of: listener3, registered: true)
 
-        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
+        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
         waitForEventDispatch { listener3.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
@@ -52,7 +52,7 @@ final class EventSystemTests: HeliumTestCase {
         XCTAssertNil(weakRef, "Listener should be deallocated after dropping the strong reference")
 
         // Fire event — deallocated listener should not receive it and should not crash
-        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
+        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
         waitForEventDispatch { self.listener.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
@@ -62,11 +62,11 @@ final class EventSystemTests: HeliumTestCase {
 
     func testEventNameMatchesExpected() {
         let events: [(HeliumEvent, String)] = [
-            (PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented), "paywallOpen"),
-            (PaywallCloseEvent(triggerName: "t", paywallName: "p"), "paywallClose"),
-            (PaywallDismissedEvent(triggerName: "t", paywallName: "p"), "paywallDismissed"),
+            (PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false), "paywallOpen"),
+            (PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false), "paywallClose"),
+            (PaywallDismissedEvent(triggerName: "t", paywallName: "p", secondTry: false), "paywallDismissed"),
             (PaywallSkippedEvent(triggerName: "t"), "paywallSkipped"),
-            (PurchaseSucceededEvent(productId: "p", triggerName: "t", paywallName: "w", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil), "purchaseSucceeded"),
+            (PurchaseSucceededEvent(productId: "p", triggerName: "t", paywallName: "w", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false), "purchaseSucceeded"),
             (InitializeCalledEvent(), "initializeCalled"),
         ]
 

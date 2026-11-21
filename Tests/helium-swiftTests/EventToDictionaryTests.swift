@@ -10,7 +10,7 @@ final class EventToDictionaryTests: XCTestCase {
             viewType: .presented,
             loadTimeTakenMS: 500,
             loadingBudgetMS: 7000,
-            timestamp: Date(timeIntervalSince1970: 1000)
+            timestamp: Date(timeIntervalSince1970: 1000), secondTry: false
         )
         let dict = event.toDictionary()
         XCTAssertEqual(dict["type"] as? String, "paywallOpen")
@@ -31,7 +31,7 @@ final class EventToDictionaryTests: XCTestCase {
             storeKitTransactionId: "txn_123",
             storeKitOriginalTransactionId: "orig_456",
             skPostPurchaseTxnTimeMS: 50,
-            timestamp: Date(timeIntervalSince1970: 2000)
+            timestamp: Date(timeIntervalSince1970: 2000), secondTry: false
         )
         let dict = event.toDictionary()
         XCTAssertEqual(dict["type"] as? String, "purchaseSucceeded")
@@ -49,7 +49,7 @@ final class EventToDictionaryTests: XCTestCase {
             triggerName: "upgrade",
             paywallName: "wall",
             storeKitTransactionId: nil,
-            storeKitOriginalTransactionId: nil
+            storeKitOriginalTransactionId: nil, secondTry: false
         )
         XCTAssertEqual(withOffer.toDictionary()["offerIdentifier"] as? String, "WIN_BACK")
 
@@ -58,7 +58,7 @@ final class EventToDictionaryTests: XCTestCase {
             triggerName: "upgrade",
             paywallName: "wall",
             storeKitTransactionId: nil,
-            storeKitOriginalTransactionId: nil
+            storeKitOriginalTransactionId: nil, secondTry: false
         )
         XCTAssertNil(withoutOffer.toDictionary()["offerIdentifier"])
     }
@@ -77,7 +77,7 @@ final class EventToDictionaryTests: XCTestCase {
             actionName: "toggle_feature",
             params: params,
             triggerName: "settings",
-            paywallName: "wall"
+            paywallName: "wall", secondTry: false
         )
         let dict = event.toDictionary()
         XCTAssertEqual(dict["type"] as? String, "customPaywallAction")
@@ -89,26 +89,26 @@ final class EventToDictionaryTests: XCTestCase {
 
     func testAllEventTypesHaveTypeAndTimestamp() {
         let events: [HeliumEvent] = [
-            PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented),
-            PaywallCloseEvent(triggerName: "t", paywallName: "p"),
-            PaywallDismissedEvent(triggerName: "t", paywallName: "p"),
-            PaywallOpenFailedEvent(triggerName: "t", paywallName: "p", error: "err"),
+            PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false),
+            PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false),
+            PaywallDismissedEvent(triggerName: "t", paywallName: "p", secondTry: false),
+            PaywallOpenFailedEvent(triggerName: "t", paywallName: "p", error: "err", secondTry: false),
             PaywallSkippedEvent(triggerName: "t"),
-            PaywallButtonPressedEvent(buttonName: "btn", triggerName: "t", paywallName: "p"),
-            CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "t", paywallName: "p"),
-            ProductSelectedEvent(productId: "prod", triggerName: "t", paywallName: "p"),
-            PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
-            PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
-            PurchaseCancelledEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
-            PurchaseFailedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
-            PurchaseRestoredEvent(productId: "prod", triggerName: "t", paywallName: "p", restoreOrigin: .restorePurchases, paymentProcessor: .appStore),
-            PurchaseRestoreFailedEvent(triggerName: "t", paywallName: "p"),
-            PurchaseAlreadyEntitledEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil),
-            PurchasePendingEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore),
+            PaywallButtonPressedEvent(buttonName: "btn", triggerName: "t", paywallName: "p", secondTry: false),
+            CustomPaywallActionEvent(actionName: "a", params: [:], triggerName: "t", paywallName: "p", secondTry: false),
+            ProductSelectedEvent(productId: "prod", triggerName: "t", paywallName: "p", secondTry: false),
+            PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false),
+            PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false),
+            PurchaseCancelledEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false),
+            PurchaseFailedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false),
+            PurchaseRestoredEvent(productId: "prod", triggerName: "t", paywallName: "p", restoreOrigin: .restorePurchases, paymentProcessor: .appStore, secondTry: false),
+            PurchaseRestoreFailedEvent(triggerName: "t", paywallName: "p", secondTry: false),
+            PurchaseAlreadyEntitledEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false),
+            PurchasePendingEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false),
             InitializeCalledEvent(),
             PaywallsDownloadSuccessEvent(),
             PaywallsDownloadErrorEvent(error: "err", configDownloaded: false),
-            PaywallWebViewRenderedEvent(triggerName: "t", paywallName: "p"),
+            PaywallWebViewRenderedEvent(triggerName: "t", paywallName: "p", secondTry: false),
         ]
 
         for event in events {

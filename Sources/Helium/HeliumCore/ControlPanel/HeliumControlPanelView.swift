@@ -57,10 +57,7 @@ struct HeliumControlPanelView: View {
                         .accessibilityLabel("App2Web preview settings")
                     }
                     Button {
-                        state = .loading
-                        activity = .idle
-                        fetchTask?.cancel()
-                        fetchTask = Task { await fetchPaywalls() }
+                        reloadPaywalls()
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -97,7 +94,8 @@ struct HeliumControlPanelView: View {
                     }
                     pendingConfiguration = nil
                 },
-                onCancel: { pendingConfiguration = nil }
+                onCancel: { pendingConfiguration = nil },
+                onRecheckEligibility: { reloadPaywalls() }
             )
         }
         .onAppear {
@@ -335,8 +333,16 @@ struct HeliumControlPanelView: View {
             )
     }
 
+    private func reloadPaywalls() {
+        state = .loading
+        activity = .idle
+        fetchTask?.cancel()
+        fetchTask = Task { await fetchPaywalls() }
+    }
+
     @MainActor
     private func fetchPaywalls() async {
+        previewSettings.eligibilityStatus = .checking
         do {
             let response = try await HeliumControlPanelService.shared.fetchPreviewPaywalls()
 
@@ -345,13 +351,13 @@ struct HeliumControlPanelView: View {
 
             guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
 
-            previewSettings.forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
-            previewSettings.forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
+            previewSettings.applyEligibility(from: response)
             previewSettings.updatePaddleAccount(clientToken: response.paddleClientToken)
 
             state = .loaded(response)
         } catch {
             if !Task.isCancelled {
+                previewSettings.markEligibilityCheckFailed()
                 state = .error(error.localizedDescription)
             }
         }

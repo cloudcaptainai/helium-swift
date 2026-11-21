@@ -12,6 +12,8 @@ struct HeliumControlPanelResponse: Codable {
     /// A verified US-California device: real checkout is allowed, but showing the CA
     /// consent modal is a hard precondition for a Paddle purchase. Absent reads false.
     let forcePaddleCaConsentModal: Bool?
+    /// The request IP's country as the server's real-purchase eligibility check saw it.
+    let previewEligibilityIpCountry: String?
 
     func linkedInAppPaywall(for webPaywall: HeliumPaywallPreviewEntry) -> HeliumPaywallPreviewEntry? {
         let webBundleUrls = Set(webPaywall.versions.compactMap(\.bundleUrl))

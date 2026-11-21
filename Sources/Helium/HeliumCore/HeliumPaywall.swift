@@ -217,7 +217,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                     error: "Paywall failed to show in embedded view.",
                     paywallUnavailableReason: unavailableReason,
                     loadTimeTakenMS: resolvedLoadTimeTakenMS,
-                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS
+                    loadingBudgetMS: config.loadingBudgetForAnalyticsMS,
+                    secondTry: false
                 ),
                 paywallSession: nil,
                 overridePresentationContext: presentationContext

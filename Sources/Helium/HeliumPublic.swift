@@ -81,7 +81,9 @@ public class Helium {
         
         Task {
             await WebViewManager.shared.preCreateFirstWebView()
+        }
 
+        Task {
             await HeliumEntitlementsManager.shared.configure()
             await HeliumTransactionManager.shared.configure()
         }
@@ -1261,6 +1263,11 @@ public class HeliumTesting {
     /// The `applicationInfo.webCheckoutAccountOverride` request value; nil leaves the key out.
     var webCheckoutAccountOverrideRequestValue: String? {
         effectiveWebCheckoutAccountOverride == .live ? HeliumWebCheckoutAccountOverride.live.rawValue : nil
+    }
+
+    /// True when `purchaseHandler` will replace the real purchase flow.
+    var isPurchaseSimulationActive: Bool {
+        purchaseHandler != nil && !isProductionEnvironment
     }
 
     func simulatedPurchaseStatusIfActive(productId: String) async -> HeliumPaywallTransactionStatus? {

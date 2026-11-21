@@ -575,3 +575,51 @@ struct FallbackPaywallsConfigured: HeliumObservabilityEvent {
         return p
     }
 }
+
+enum StoreRecheckDelegateResult: String {
+    case failed, cancelled
+}
+
+enum StoreRecheckBaselineState: String {
+    case transactionFound, noTransaction, unverified, timedOut
+}
+
+enum StoreRecheckSkipReason: String {
+    case simulatedPurchase, notAppStore, webCheckoutKey, cancelRecheckDisabled, baselineTimedOut, baselineUnverified
+}
+
+/// Emitted when a purchase delegate reports failed or cancelled, whether or not the SDK then
+/// re-checked StoreKit (`skipReason` says why not). `recoveredTransactionId` is set when the App
+/// Store had completed the purchase, and matches the `storeKitTransactionId` of the resulting
+/// purchase success event.
+struct PurchaseStoreRecheckCompleted: HeliumObservabilityEvent {
+    let productId: String
+    let paymentProcessor: String
+    let delegateResult: StoreRecheckDelegateResult
+    let skipReason: StoreRecheckSkipReason?
+    /// Nil when no baseline was taken, i.e. for simulated and non-App-Store purchases.
+    let baselineState: StoreRecheckBaselineState?
+    let baselineDurationMs: Int?
+    let recheckDurationMs: Int?
+    let recheckTimedOut: Bool
+    let recoveredTransactionId: String?
+
+    var name: String { "purchase_store_recheck_completed" }
+    var tags: Set<HeliumObservabilityTag> { [.entitlements] }
+    var properties: [String: Any] {
+        var p: [String: Any] = [
+            "productId": productId,
+            "paymentProcessor": paymentProcessor,
+            "delegateResult": delegateResult.rawValue,
+            "recheckState": skipReason == nil ? "ran" : "skipped",
+            "recheckTimedOut": recheckTimedOut,
+            "recovered": recoveredTransactionId != nil,
+        ]
+        if let skipReason { p["skipReason"] = skipReason.rawValue }
+        if let baselineState { p["baselineState"] = baselineState.rawValue }
+        if let baselineDurationMs { p["baselineDurationMs"] = baselineDurationMs }
+        if let recheckDurationMs { p["recheckDurationMs"] = recheckDurationMs }
+        if let recoveredTransactionId { p["recoveredTransactionId"] = recoveredTransactionId }
+        return p
+    }
+}

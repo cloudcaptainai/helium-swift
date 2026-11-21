@@ -59,6 +59,26 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
     /// real, but only through the consent modal, so the toggle is forced on.
     @Published var forcePaddleCaConsentModal = false
 
+    /// The network-location signal behind `forceExternalCheckoutSimulation`; nil when the
+    /// server could not geolocate the request or predates the field.
+    @Published var previewEligibilityIpCountry: String?
+
+    @Published var eligibilityStatus: HeliumPreviewEligibilityStatus = .checking
+
+    /// Applies a `/preview-paywalls` response's eligibility signals.
+    func applyEligibility(from response: HeliumControlPanelResponse) {
+        forceExternalCheckoutSimulation = response.forceExternalCheckoutSimulation ?? true
+        forcePaddleCaConsentModal = response.forcePaddleCaConsentModal ?? false
+        previewEligibilityIpCountry = response.previewEligibilityIpCountry
+        eligibilityStatus = .checked
+    }
+
+    /// An unanswered check keeps real purchases blocked, even if an earlier check cleared them.
+    func markEligibilityCheckFailed() {
+        forceExternalCheckoutSimulation = true
+        eligibilityStatus = .failed
+    }
+
     @Published private var chosenShowCaliforniaConsentModal = false
 
     var showCaliforniaConsentModal: Bool {
@@ -97,6 +117,39 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
         }
     }
 
+}
+
+enum HeliumPreviewEligibilityStatus: Equatable {
+    case checking
+    case checked
+    case failed
+}
+
+/// One of the country signals a real purchase needs to be US.
+struct HeliumPreviewEligibilityRow: Equatable {
+    let label: String
+    /// The detected country code; nil when the signal is missing.
+    let value: String?
+
+    init(label: String, value: String?) {
+        self.label = label
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.value = trimmed?.isEmpty == false ? trimmed : nil
+    }
+
+    var isUS: Bool { value?.uppercased() == "US" }
+
+    var text: String { "\(label) (\(value ?? "unknown"))" }
+}
+
+extension HeliumPreviewEligibilityRow {
+    static func rows(storeCountry: String?, deviceRegion: String?, ipCountry: String?) -> [HeliumPreviewEligibilityRow] {
+        [
+            HeliumPreviewEligibilityRow(label: "App Store country", value: storeCountry),
+            HeliumPreviewEligibilityRow(label: "iPhone Region", value: deviceRegion),
+            HeliumPreviewEligibilityRow(label: "Network location", value: ipCountry),
+        ]
+    }
 }
 
 /// What the configuration screen is being opened for: editing the session settings from the

@@ -3,12 +3,19 @@ import XCTest
 
 final class EventListenerTests: HeliumTestCase {
 
+    func testSecondTryEventRetainsIdentityWhenDelivered() {
+        let event = PaywallDismissedEvent(triggerName: "retry", paywallName: "Second", secondTry: true)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
+        waitForEventDispatch { self.listener.eventsOfType(PaywallDismissedEvent.self).count == 1 }
+        XCTAssertEqual(listener.eventsOfType(PaywallDismissedEvent.self).first?.isSecondTry, true)
+    }
+
     func testAddAndRemoveListener() {
         let extra = CapturingEventListener()
         Helium.shared.addHeliumEventListener(extra)
         waitForListenerRegistration(of: extra, registered: true)
 
-        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
+        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
         waitForEventDispatch { extra.eventsOfType(PaywallOpenEvent.self).count == 1 }
         XCTAssertEqual(extra.eventsOfType(PaywallOpenEvent.self).count, 1)
@@ -17,7 +24,7 @@ final class EventListenerTests: HeliumTestCase {
         Helium.shared.removeHeliumEventListener(extra)
         waitForListenerRegistration(of: extra, registered: false)
 
-        let event2 = PaywallCloseEvent(triggerName: "t", paywallName: "p")
+        let event2 = PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event2, paywallSession: nil)
         waitForEventDispatch { self.listener.eventsOfType(PaywallCloseEvent.self).count == 1 }
         XCTAssertEqual(extra.eventsOfType(PaywallCloseEvent.self).count, 0, "Removed listener should not receive events")
@@ -33,7 +40,7 @@ final class EventListenerTests: HeliumTestCase {
         Helium.shared.removeAllHeliumEventListeners()
         waitForListenerRegistration(of: listener, registered: false)
 
-        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
+        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
         // No listener to receive events — wait for delegate dispatch instead
         waitForEventDispatch { self.mockDelegate.receivedEvents.count >= 1 }
@@ -50,7 +57,7 @@ final class EventListenerTests: HeliumTestCase {
         Helium.shared.addHeliumEventListener(extra) // duplicate — still registered
         waitForListenerRegistration(of: extra, registered: true)
 
-        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented)
+        let event = PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false)
         HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: nil)
         waitForEventDispatch { extra.eventsOfType(PaywallOpenEvent.self).count == 1 }
 
@@ -64,11 +71,11 @@ final class EventListenerTests: HeliumTestCase {
             .onAnyEvent { e in anyEvents.append(e) }
 
         // PaywallContextEvent - should fire
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertEqual(anyEvents.count, 1)
 
         // Another PaywallContextEvent
-        handlers.handleEvent(PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore))
+        handlers.handleEvent(PurchasePressedEvent(productId: "prod", triggerName: "t", paywallName: "p", paymentProcessor: .appStore, secondTry: false))
         XCTAssertEqual(anyEvents.count, 2)
 
         // PaywallSkippedEvent is NOT a PaywallContextEvent

@@ -266,7 +266,7 @@ final class FallbackPreviewTests: XCTestCase {
             triggerName: previewTrigger,
             paywallName: "default_fallback_paywall",
             viewType: .presented,
-            paywallUnavailableReason: .forceShowFallback
+            paywallUnavailableReason: .forceShowFallback, secondTry: false
         )
         XCTAssertEqual(event.toDictionary()["paywallUnavailableReason"] as? String, "forceShowFallback")
     }

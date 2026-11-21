@@ -12,11 +12,32 @@ struct HeliumPreviewConfigurationView: View {
     let request: HeliumPreviewConfigurationRequest
     let onStart: (HeliumPreviewConfiguration) -> Void
     let onCancel: () -> Void
+    var onRecheckEligibility: () -> Void = {}
 
-    @ObservedObject private var store = HeliumPreviewConfigurationStore.shared
+    @ObservedObject private var previewSettings = HeliumPreviewConfigurationStore.shared
     @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
 
-    private var realPurchaseUnavailable: Bool { store.forceExternalCheckoutSimulation }
+    private var realPurchaseUnavailable: Bool { previewSettings.forceExternalCheckoutSimulation }
+
+    /// A recheck can block real purchases after the tester picked them.
+    private var effectiveConfiguration: HeliumPreviewConfiguration {
+        var effective = configuration
+        if realPurchaseUnavailable {
+            effective.purchaseMode = .simulated
+        }
+        return effective
+    }
+
+    static let vpnCaption = "All three must be US for a real purchase. A VPN only changes the network location."
+    static let eligibilityCheckFailedText = "Couldn't check eligibility."
+
+    var eligibilityRows: [HeliumPreviewEligibilityRow] {
+        HeliumPreviewEligibilityRow.rows(
+            storeCountry: AppStoreCountryHelper.shared.getStoreCountryCode(),
+            deviceRegion: Locale.current.regionCode,
+            ipCountry: previewSettings.previewEligibilityIpCountry
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,19 +142,31 @@ struct HeliumPreviewConfigurationView: View {
         .padding(.top, 22)
     }
 
-    private func purchaseOption(_ mode: HeliumPreviewPurchaseMode) -> some View {
+    @ViewBuilder
+    func purchaseOption(_ mode: HeliumPreviewPurchaseMode) -> some View {
         let isDisabled = mode.isUSOnly && realPurchaseUnavailable
         let isSelected = configuration.purchaseMode == mode && !isDisabled
 
-        return Button {
-            guard !isDisabled else { return }
-            configuration.purchaseMode = mode
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.title3)
-                    .foregroundColor(isSelected ? .blue : .secondary)
+        if isDisabled {
+            purchaseOptionCard(mode, isSelected: false, isDisabled: true)
+        } else {
+            Button {
+                configuration.purchaseMode = mode
+            } label: {
+                purchaseOptionCard(mode, isSelected: isSelected, isDisabled: false)
+            }
+            .buttonStyle(.plain)
+        }
+    }
 
+    private func purchaseOptionCard(_ mode: HeliumPreviewPurchaseMode, isSelected: Bool, isDisabled: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                .font(.title3)
+                .foregroundColor(isSelected ? .blue : .secondary)
+                .opacity(isDisabled ? 0.55 : 1)
+
+            VStack(alignment: .leading, spacing: 6) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Image(systemName: mode.systemImageName)
@@ -151,28 +184,69 @@ struct HeliumPreviewConfigurationView: View {
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
-                    if isDisabled {
-                        Label("Region outside the US. Use simulated or a US VPN.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                    }
+                }
+                .opacity(isDisabled ? 0.55 : 1)
+                if isDisabled {
+                    realPurchaseEligibility
+                        .padding(.top, 4)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? selectedBackground : Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue : Color(.separator), lineWidth: isSelected ? 2 : 1)
-            )
         }
-        .buttonStyle(.plain)
-        .opacity(isDisabled ? 0.55 : 1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSelected ? selectedBackground : Color(.secondarySystemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.blue : Color(.separator), lineWidth: isSelected ? 2 : 1)
+        )
+    }
+
+    @ViewBuilder
+    private var realPurchaseEligibility: some View {
+        if previewSettings.eligibilityStatus == .failed {
+            HStack(spacing: 8) {
+                Label(Self.eligibilityCheckFailedText, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Retry", action: onRecheckEligibility)
+                    .font(.caption.weight(.semibold))
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(eligibilityRows, id: \.label) { row in
+                            Label {
+                                Text(row.text)
+                                    .foregroundColor(.primary)
+                            } icon: {
+                                Image(systemName: row.isUS ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundColor(row.isUS ? .green : .red)
+                            }
+                            .font(.caption)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityValue(row.isUS ? "Passed" : "Failed")
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if previewSettings.eligibilityStatus == .checking {
+                        ProgressView()
+                    } else {
+                        Button("Check again", action: onRecheckEligibility)
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+                Text(Self.vpnCaption)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     // MARK: - Compliance
@@ -188,8 +262,8 @@ struct HeliumPreviewConfigurationView: View {
                         .foregroundColor(.primary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .blue))
-                .disabled(store.forcePaddleCaConsentModal)
-                if store.forcePaddleCaConsentModal {
+                .disabled(previewSettings.forcePaddleCaConsentModal)
+                if previewSettings.forcePaddleCaConsentModal {
                     Label("Paddle checkouts only. Your device is in California, so the consent modal always shows.", systemImage: "lock.fill")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -221,13 +295,13 @@ struct HeliumPreviewConfigurationView: View {
         if request.isSettings {
             return "Save Settings"
         }
-        return configuration.purchaseMode == .real ? "Start Real Purchase Preview" : "Start Simulated Preview"
+        return effectiveConfiguration.purchaseMode == .real ? "Start Real Purchase Preview" : "Start Simulated Preview"
     }
 
     private var startAction: some View {
         Button {
-            store.configuration = configuration
-            onStart(configuration)
+            previewSettings.configuration = effectiveConfiguration
+            onStart(effectiveConfiguration)
         } label: {
             Text(startActionLabel)
                 .fontWeight(.semibold)

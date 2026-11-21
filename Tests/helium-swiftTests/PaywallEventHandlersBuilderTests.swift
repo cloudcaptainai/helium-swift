@@ -19,20 +19,20 @@ final class PaywallEventHandlersBuilderTests: XCTestCase {
             .onCustomPaywallAction { _ in customFired = true }
             .onAnyEvent { _ in anyFired = true }
 
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertTrue(openFired)
         XCTAssertTrue(anyFired)
 
-        handlers.handleEvent(PaywallCloseEvent(triggerName: "t", paywallName: "p"))
+        handlers.handleEvent(PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false))
         XCTAssertTrue(closeFired)
 
-        handlers.handleEvent(PaywallDismissedEvent(triggerName: "t", paywallName: "p"))
+        handlers.handleEvent(PaywallDismissedEvent(triggerName: "t", paywallName: "p", secondTry: false))
         XCTAssertTrue(dismissedFired)
 
-        handlers.handleEvent(PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil))
+        handlers.handleEvent(PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false))
         XCTAssertTrue(purchaseFired)
 
-        handlers.handleEvent(CustomPaywallActionEvent(actionName: "act", params: [:], triggerName: "t", paywallName: "p"))
+        handlers.handleEvent(CustomPaywallActionEvent(actionName: "act", params: [:], triggerName: "t", paywallName: "p", secondTry: false))
         XCTAssertTrue(customFired)
     }
 
@@ -45,10 +45,10 @@ final class PaywallEventHandlersBuilderTests: XCTestCase {
             onPurchaseSucceeded: { _ in purchaseFired = true }
         )
 
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertTrue(openFired)
 
-        handlers.handleEvent(PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil))
+        handlers.handleEvent(PurchaseSucceededEvent(productId: "prod", triggerName: "t", paywallName: "p", storeKitTransactionId: nil, storeKitOriginalTransactionId: nil, secondTry: false))
         XCTAssertTrue(purchaseFired)
     }
 
@@ -72,12 +72,12 @@ final class PaywallEventHandlersBuilderTests: XCTestCase {
             .onClose { _ in closeCount += 1 }
             .onDismissed { _ in dismissCount += 1 }
 
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertEqual(openCount, 1)
         XCTAssertEqual(closeCount, 0)
         XCTAssertEqual(dismissCount, 0)
 
-        handlers.handleEvent(PaywallCloseEvent(triggerName: "t", paywallName: "p"))
+        handlers.handleEvent(PaywallCloseEvent(triggerName: "t", paywallName: "p", secondTry: false))
         XCTAssertEqual(openCount, 1)
         XCTAssertEqual(closeCount, 1)
         XCTAssertEqual(dismissCount, 0)
@@ -94,7 +94,7 @@ final class PaywallEventHandlersBuilderTests: XCTestCase {
         XCTAssertEqual(anyEventCount, 0, "onAnyEvent should NOT fire for non-PaywallContextEvent")
 
         // PaywallOpenEvent IS a PaywallContextEvent
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertEqual(anyEventCount, 1, "onAnyEvent should fire for PaywallContextEvent")
     }
 
@@ -106,7 +106,7 @@ final class PaywallEventHandlersBuilderTests: XCTestCase {
             .onOpen { _ in openFired = true }
             .onAnyEvent { _ in anyFired = true }
 
-        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented))
+        handlers.handleEvent(PaywallOpenEvent(triggerName: "t", paywallName: "p", viewType: .presented, secondTry: false))
         XCTAssertTrue(openFired)
         XCTAssertTrue(anyFired)
     }

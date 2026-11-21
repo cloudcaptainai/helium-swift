@@ -488,7 +488,8 @@ struct DynamicWebView: View {
             triggerName: trigger,
             paywallName: paywallName,
             error: "WebView failed to load - \(reason)",
-            paywallUnavailableReason: .webviewRenderFail
+            paywallUnavailableReason: .webviewRenderFail,
+            secondTry: paywallSession?.isSecondTry ?? false
         )
         if presentationState.viewType == .presented {
             let didHide = HeliumPaywallPresenter.shared.hideUpsell {
