@@ -227,6 +227,43 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
             await coordinator.cancelAllAndAwait()
         }
     }
+    func testPaywallOpenStartsPrefetchWhenTraitsAlreadyResolved() async throws {
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+        let session = checkoutFlowSession(productKeys: ["pro_a:pri_a"])
+        session.resolvedPaywallTraits = HeliumUserTraits(["cohort": "early"])
+        coordinator.handlePaywallTraitsResolved(paywallSession: session)
+
+        let beforeOpen = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+        guard case .notStarted = beforeOpen else { return XCTFail("Prefetch started before the paywall opened") }
+
+        coordinator.handlePaywallOpen(paywallSession: session)
+        let afterOpen = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+        guard case .ready = afterOpen else { return XCTFail("Expected prefetch when the paywall opened") }
+
+        let request = try XCTUnwrap(MockURLProtocol.capturedRequests.first {
+            $0.url?.path.hasSuffix("/paddle/create-transaction-for-paywall") == true
+        })
+        let body = try XCTUnwrap(request.httpBody)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let traits = try XCTUnwrap(payload["customPaywallTraits"] as? [String: Any])
+        XCTAssertEqual(traits["cohort"] as? String, "early")
+    }
+
+    func testPaywallClosedWhileWaitingForTraitsDoesNotPrefetchWhenTraitsResolve() async {
+        HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+        let session = checkoutFlowSession(productKeys: ["pro_a:pri_a"])
+        coordinator.handlePaywallOpen(paywallSession: session)
+        coordinator.handlePaywallClose(paywallSession: session)
+
+        session.resolvedPaywallTraits = HeliumUserTraits(["cohort": "late"])
+        coordinator.handlePaywallTraitsResolved(paywallSession: session)
+
+        let outcome = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_a")
+        guard case .notStarted = outcome else { return XCTFail("Prefetch started for a closed paywall") }
+    }
+
     private var testSessionId: String { testSession.sessionId }
 
     private var session: URLSession!
