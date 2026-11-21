@@ -43,8 +43,22 @@ struct PaywallSession {
     private let paywallTraits = HeliumAtomic<HeliumUserTraits?>(wrappedValue: nil)
 
     var resolvedPaywallTraits: HeliumUserTraits? {
-        get { paywallTraits.wrappedValue }
-        nonmutating set { paywallTraits.wrappedValue = newValue }
+        paywallTraits.wrappedValue
+    }
+
+    func getOrFreezePaywallTraits(presentationTraits: HeliumUserTraits? = nil) -> HeliumUserTraits {
+        if let resolvedPaywallTraits {
+            return resolvedPaywallTraits
+        }
+        let traits = HeliumUserTraits.forPaywall(
+            triggerName: trigger,
+            presentationTraits: presentationTraits ?? presentationContext.customPaywallTraits
+        )
+        return paywallTraits.withValue { snapshot in
+            if let snapshot { return snapshot }
+            snapshot = traits
+            return traits
+        }
     }
     
     var isFallback: Bool {

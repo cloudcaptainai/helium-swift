@@ -52,7 +52,6 @@ final class PaddleCheckoutPrefetchCoordinator {
     private var cache: [CacheKey: Task<PaddlePrefetchOutcome, Never>] = [:]
     private var completed: [CacheKey: PaddlePrefetchOutcome] = [:]
     private var generations: [CacheKey: UUID] = [:]
-    private var openSessionsAwaitingTraits: Set<String> = []
 
     private struct CacheKey: Hashable, Sendable {
         let sessionId: String
@@ -70,24 +69,14 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     // MARK: - Paywall lifecycle hooks
 
-    func handlePaywallOpen(paywallSession: PaywallSession) {
+    func handlePaywallOpen(paywallSession: PaywallSession, presentationTraits: HeliumUserTraits? = nil) {
+        let traits = paywallSession.getOrFreezePaywallTraits(presentationTraits: presentationTraits)
         guard let info = paywallSession.paywallInfoWithBackups,
               let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty else { return }
-        // A paywall open event can precede the webview assembling its display-time traits.
-        guard paywallSession.resolvedPaywallTraits != nil else {
-            openSessionsAwaitingTraits.insert(paywallSession.sessionId)
-            return
-        }
-        openSessionsAwaitingTraits.remove(paywallSession.sessionId)
-        prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
+        prefetch(paywallSession: paywallSession, compositeKeys: webProducts, paywallTraits: traits)
         if let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
-            prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
+            prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry, paywallTraits: traits)
         }
-    }
-
-    func handlePaywallTraitsResolved(paywallSession: PaywallSession) {
-        guard openSessionsAwaitingTraits.contains(paywallSession.sessionId) else { return }
-        handlePaywallOpen(paywallSession: paywallSession)
     }
 
     func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary, paywallTraits: HeliumUserTraits? = nil) {
@@ -253,7 +242,6 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     func cancelForSession(sessionId: String) {
-        openSessionsAwaitingTraits.remove(sessionId)
         for key in Array(cache.keys) where key.sessionId == sessionId {
             if let task = cache.removeValue(forKey: key) {
                 task.cancel()
@@ -272,7 +260,6 @@ final class PaddleCheckoutPrefetchCoordinator {
     }
 
     func cancelAll() {
-        openSessionsAwaitingTraits.removeAll()
         completed.removeAll()
         generations.removeAll()
         for (_, task) in cache {
@@ -284,7 +271,6 @@ final class PaddleCheckoutPrefetchCoordinator {
     /// Like `cancelAll`, but waits for each Task to finish. Use as a hard
     /// barrier before mutating shared state in-flight Tasks could touch.
     func cancelAllAndAwait() async {
-        openSessionsAwaitingTraits.removeAll()
         let tasks = Array(cache.values)
         cache.removeAll()
         completed.removeAll()

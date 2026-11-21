@@ -67,10 +67,6 @@ class ActionsDelegateWrapper: ObservableObject {
         delegate.selectProduct(productId: productId)
     }
 
-    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
-        delegate.setResolvedPaywallTraits(traits)
-    }
-
     func logRenderTime(timeTakenMS: UInt64, isFallback: Bool) {
         delegate.logRenderTime(timeTakenMS: timeTakenMS, isFallback: isFallback);
     }
@@ -85,8 +81,8 @@ class ActionsDelegateWrapper: ObservableObject {
         await delegate.restorePurchases();
     }
     
-    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64? = nil) {
-        delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
+    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64?, presentationTraits: HeliumUserTraits?) {
+        delegate.logImpression(viewType: viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS, presentationTraits: presentationTraits)
     }
     
     func logClosure() {
@@ -223,16 +219,6 @@ class HeliumActionsDelegate: ObservableObject {
         selectedProductId = productId
     }
 
-    func setResolvedPaywallTraits(_ traits: HeliumUserTraits?) {
-        paywallSession.resolvedPaywallTraits = traits
-        if traits != nil {
-            let session = paywallSession
-            Task { @MainActor in
-                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallTraitsResolved(paywallSession: session)
-            }
-        }
-    }
-
     func makePurchase() async -> HeliumPaywallTransactionStatus {
         HeliumLogger.log(.info, category: .core, "makePurchase called", metadata: ["productId": selectedProductId, "trigger": trigger])
         // Use new typed event
@@ -257,10 +243,7 @@ class HeliumActionsDelegate: ObservableObject {
                 PaywallTraitsFreezeMissingAtMakePurchase(productId: selectedProductId),
                 scope: paywallSession.observabilityScope
             )
-            paywallTraits = HeliumUserTraits.forPaywall(
-                triggerName: trigger,
-                presentationTraits: paywallSession.presentationContext.customPaywallTraits
-            )
+            paywallTraits = paywallSession.getOrFreezePaywallTraits()
         }
         return await HeliumPaywallDelegateWrapper.shared.handlePurchase(productKey: selectedProductId, triggerName: trigger, paywallTemplateName: paywallInfo.paywallTemplateName, paywallSession: paywallSession, paywallTraits: paywallTraits)
     }
@@ -285,7 +268,7 @@ class HeliumActionsDelegate: ObservableObject {
         return false
     }
     
-    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64? = nil) {
+    func logImpression(viewType: PaywallOpenViewType, fallbackReason: PaywallUnavailableReason?, loadTimeTakenMS: UInt64?, presentationTraits: HeliumUserTraits?) {
         if hiddenBehindSecondTry {
             return
         }
@@ -309,7 +292,7 @@ class HeliumActionsDelegate: ObservableObject {
             paywallUnavailableReason: fallbackReason,
             secondTry: paywallSession.isSecondTry
         )
-        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(event, paywallSession: paywallSession, presentationTraits: presentationTraits)
     }
     
     func logClosure() {

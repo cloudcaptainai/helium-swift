@@ -11,6 +11,7 @@ public struct DynamicBaseTemplateView: View {
     @Environment(\.heliumDismissBehavior) var dismissBehavior
     @Environment(\.paywallPresentationState) var presentationState: HeliumPaywallPresentationState
     @Environment(\.heliumLoadTimeTakenMS) var loadTimeTakenMS: UInt64?
+    @Environment(\.heliumDynamicPaywallTraits) private var dynamicPaywallTraits: HeliumUserTraits?
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
     let filePath: String
@@ -67,7 +68,12 @@ public struct DynamicBaseTemplateView: View {
                 InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId, dismissUnlessManual)
                 if !presentationState.isOpen {
                     presentationState.isOpen = true
-                    actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
+                    actionsDelegateWrapper.logImpression(
+                        viewType: presentationState.viewType,
+                        fallbackReason: fallbackReason,
+                        loadTimeTakenMS: loadTimeTakenMS,
+                        presentationTraits: dynamicPaywallTraits
+                    )
                     if manualDismissal {
                         HeliumObservabilityManager.shared.track(
                             EmbeddedPaywallManualDismissalEnabled(),

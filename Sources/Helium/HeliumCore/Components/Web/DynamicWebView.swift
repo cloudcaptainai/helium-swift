@@ -267,18 +267,8 @@ struct DynamicWebView: View {
             
             _ = Date()
             var mergedContext = contextJSON
-            // Prefer the live environment traits so a paywall constructed off-screen still injects the latest
-            // traits at display time; the frozen session value is the safety net (and covers the presented path,
-            // which does not set the environment).
-            let presentationTraits = dynamicPaywallTraits ?? paywallSession?.presentationContext.customPaywallTraits
-            let combinedTraits = HeliumUserTraits.forPaywall(
-                triggerName: triggerName,
-                presentationTraits: presentationTraits
-            )
-            // Freeze the fully assembled display-time traits for the session so an external web
-            // checkout launched from this paywall sends the exact same customPaywallTraits.
-            actionsDelegate.setResolvedPaywallTraits(combinedTraits)
-            mergedContext["customPaywallTraits"] = JSON(try combinedTraits.jsonObject())
+            let traits = actionsDelegate.delegate.paywallSession.getOrFreezePaywallTraits(presentationTraits: dynamicPaywallTraits)
+            mergedContext["customPaywallTraits"] = JSON(try traits.jsonObject())
             mergedContext["screenInfo"]["safeAreaInsets"] = JSON(
                 PaywallSafeAreaInsets.jsonObject(PaywallSafeAreaInsets.current(for: webView))
             )

@@ -316,9 +316,16 @@ class HeliumPaywallDelegateWrapper {
         paywallSession: PaywallSession?,
         overridePresentationContext: PaywallPresentationContext? = nil,
         overridePaywallSessionId: String? = nil,
-        sendToAnalytics: Bool = true
+        sendToAnalytics: Bool = true,
+        presentationTraits: HeliumUserTraits? = nil
     ) {
         Task { @MainActor in
+            if event is PaywallOpenEvent, let paywallSession {
+                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallOpen(
+                    paywallSession: paywallSession,
+                    presentationTraits: presentationTraits
+                )
+            }
             let context = overridePresentationContext ?? paywallSession?.presentationContext
             
             // First, call the event service if configured (from session context)
@@ -388,12 +395,6 @@ class HeliumPaywallDelegateWrapper {
                 StripeCheckoutManager.shared.stopObserving(paywallSession: paywallSession)
                 WebCheckoutPresenter.closeCheckout(forClosedPaywallSessionId: paywallSession.sessionId)
                 PaddleCheckoutPrefetchCoordinator.shared.handlePaywallClose(paywallSession: paywallSession)
-            }
-        }
-
-        if event is PaywallOpenEvent, let paywallSession {
-            Task { @MainActor in
-                PaddleCheckoutPrefetchCoordinator.shared.handlePaywallOpen(paywallSession: paywallSession)
             }
         }
     }
