@@ -24,7 +24,7 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
                 return "Complete real purchases. Your card is charged and entitlement granted."
             }
             return PaddleBFFClient.isSandboxClientToken(paddleClientToken)
-                ? "Paddle checks out on your Paddle sandbox account, so there's no real charge. Stripe charges your card."
+                ? "Paddle checks out on your Paddle sandbox account, so there's no real charge."
                 : "Paddle checks out on your live Paddle account. Your card is charged and entitlement granted."
         }
     }
@@ -91,9 +91,6 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
     }
 
     @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
-
-    /// The Paddle client token checkout uses, which names the account a real purchase checks out on.
-    @Published var checkoutPaddleClientToken: String?
 
     /// Defaults to the mode the device is eligible for until the tester picks one.
     var purchaseMode: HeliumPreviewPurchaseMode {
@@ -190,7 +187,14 @@ struct HeliumPreviewConfigurationRequest: Identifiable {
 
     /// The CA consent toggle only exists on Paddle checkouts, so it is hidden for a
     /// Stripe-only paywall. The session settings screen always shows it.
-    var showsCompliance: Bool {
+    var showsCompliance: Bool { usesPaddleCheckout }
+
+    /// A Stripe-only paywall never checks out on Paddle, so its copy names no Paddle account.
+    func purchaseDetail(_ mode: HeliumPreviewPurchaseMode, checkoutPaddleClientToken: String?) -> String {
+        mode.detail(paddleClientToken: usesPaddleCheckout ? checkoutPaddleClientToken : nil)
+    }
+
+    private var usesPaddleCheckout: Bool {
         switch target {
         case .version(let version, _): return version.hasApp2webPaddle
         case .settings: return true

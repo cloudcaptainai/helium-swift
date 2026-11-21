@@ -352,7 +352,6 @@ struct HeliumControlPanelView: View {
             guard HeliumControlPanelService.shared.applyServerProducts(from: response) else { return }
 
             previewSettings.applyEligibility(from: response)
-            previewSettings.checkoutPaddleClientToken = HeliumFetchedConfigManager.shared.paddleClientToken
 
             state = .loaded(response)
         } catch {
