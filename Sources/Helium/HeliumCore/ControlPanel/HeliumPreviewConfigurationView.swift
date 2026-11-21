@@ -179,7 +179,7 @@ struct HeliumPreviewConfigurationView: View {
                             tag("US ONLY")
                         }
                     }
-                    Text(mode.detail(onPaddleSandboxAccount: store.onPaddleSandboxAccount))
+                    Text(mode.detail(onPaddleSandboxAccount: previewSettings.onPaddleSandboxAccount))
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
