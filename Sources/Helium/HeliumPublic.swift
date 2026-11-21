@@ -1207,17 +1207,24 @@ public class HeliumTesting {
 
     init() {}
 
-    /// Which web checkout account a debug or TestFlight build uses.
+    /// Checks a debug or TestFlight build out on your live Paddle account.
     ///
     /// Test builds check out on your Paddle sandbox account when your organization has one connected.
-    /// Set `.live` to keep the production experience instead: the live account, live prices and a
-    /// real checkout that charges the card. This is a per-build setting: distribute separate
-    /// TestFlight builds to test live and sandbox accounts. App Store builds always use the live
-    /// account and are unaffected.
+    /// Call this to keep the production experience instead: live prices and a real checkout that
+    /// charges the card. This is a per-build setting: distribute separate TestFlight builds to test
+    /// live and sandbox accounts. App Store builds always use the live account and are unaffected.
     ///
-    /// - Important: Set this *before* you call `Helium.shared.initialize(...)`. It is read once
-    ///   at initialization and cannot change the account for that app session.
-    public var webCheckoutAccountOverride: HeliumWebCheckoutAccountOverride = .automatic
+    /// Applies to Paddle only. Stripe web checkout always uses the one Stripe account you've configured.
+    ///
+    /// - Important: Call this *before* you call `Helium.shared.initialize(...)`. Later calls are
+    ///   ignored, and the account stays the same until the app relaunches, including across `resetHelium`.
+    public func useLiveWebCheckoutAccount() {
+        guard !webCheckoutAccountLocked else {
+            HeliumLogger.log(.warn, category: .core, "useLiveWebCheckoutAccount() called after initialize, ignoring it until the app relaunches.")
+            return
+        }
+        usesLiveWebCheckoutAccount = true
+    }
 
     /// Returns a stubbed transaction status for the given product ID.
     /// When set, replaces the real purchase flow.
@@ -1244,25 +1251,20 @@ public class HeliumTesting {
         restoreHandler = nil
         introOfferEligibility = nil
         promoOfferEligibility = nil
-        webCheckoutAccountOverride = .automatic
     }
 
-    var sessionWebCheckoutAccountOverride: HeliumWebCheckoutAccountOverride?
+    var usesLiveWebCheckoutAccount = false
+    var webCheckoutAccountLocked = false
 
-    /// Fixes the account for the app session, so entitlements and previews never mix accounts.
-    /// Re-initializing (as `resetHelium` does) keeps the account until the app relaunches.
+    /// Locks the web checkout account override for this app launch, so entitlements cannot change within an app launch.
+    /// Re-initializing (see `resetHelium`) keeps the locked override until the app relaunches.
     func lockWebCheckoutAccountForSession() {
-        guard sessionWebCheckoutAccountOverride == nil else { return }
-        sessionWebCheckoutAccountOverride = webCheckoutAccountOverride
-    }
-
-    var effectiveWebCheckoutAccountOverride: HeliumWebCheckoutAccountOverride {
-        sessionWebCheckoutAccountOverride ?? webCheckoutAccountOverride
+        webCheckoutAccountLocked = true
     }
 
     /// The `applicationInfo.webCheckoutAccountOverride` request value; nil leaves the key out.
     var webCheckoutAccountOverrideRequestValue: String? {
-        effectiveWebCheckoutAccountOverride == .live ? HeliumWebCheckoutAccountOverride.live.rawValue : nil
+        usesLiveWebCheckoutAccount ? "live" : nil
     }
 
     /// True when `purchaseHandler` will replace the real purchase flow.
@@ -1317,14 +1319,6 @@ public class HeliumTesting {
     private var isProductionEnvironment: Bool {
         AppReceiptsHelper.shared.environment == .production
     }
-}
-
-/// The web checkout account a debug or TestFlight build uses. See `HeliumTesting.webCheckoutAccountOverride`.
-public enum HeliumWebCheckoutAccountOverride: String {
-    /// The sandbox account when one is connected, otherwise the live account.
-    case automatic
-    /// The live account: live prices and real charges.
-    case live
 }
 
 @available(iOS 15.0, *)

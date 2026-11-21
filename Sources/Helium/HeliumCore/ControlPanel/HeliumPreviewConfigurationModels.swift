@@ -14,14 +14,18 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
         }
     }
 
-    func detail(onPaddleSandboxAccount: Bool) -> String {
+    /// `paddleClientToken` is the token checkout uses; without one the account is unknown.
+    func detail(paddleClientToken: String?) -> String {
         switch self {
         case .simulated:
             return "Looks like the normal purchase flow but no transaction occurs and no entitlement granted."
-        case .real where onPaddleSandboxAccount:
-            return "Paddle checks out on your sandbox account: use a Paddle test card, no real charge. Stripe charges your card."
         case .real:
-            return "Checks out on your live account. Your card is charged and entitlement granted."
+            guard let paddleClientToken, !paddleClientToken.isEmpty else {
+                return "Complete real purchases. Your card is charged and entitlement granted."
+            }
+            return PaddleBFFClient.isSandboxClientToken(paddleClientToken)
+                ? "Paddle checks out on your Paddle sandbox account, so there's no real charge. Stripe charges your card."
+                : "Paddle checks out on your live Paddle account. Your card is charged and entitlement granted."
         }
     }
 
@@ -88,12 +92,8 @@ final class HeliumPreviewConfigurationStore: ObservableObject {
 
     @Published private var chosenPurchaseMode: HeliumPreviewPurchaseMode?
 
-    /// Whether this session's `/preview-paywalls` response carried a sandbox (`test_`) Paddle client token.
-    @Published var onPaddleSandboxAccount = false
-
-    func updatePaddleAccount(clientToken: String?) {
-        onPaddleSandboxAccount = clientToken?.hasPrefix("test_") == true
-    }
+    /// The Paddle client token checkout uses, which names the account a real purchase checks out on.
+    @Published var checkoutPaddleClientToken: String?
 
     /// Defaults to the mode the device is eligible for until the tester picks one.
     var purchaseMode: HeliumPreviewPurchaseMode {
