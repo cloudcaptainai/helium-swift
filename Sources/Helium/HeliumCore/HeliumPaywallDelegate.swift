@@ -74,6 +74,8 @@ class HeliumPaywallDelegateWrapper {
 
     /// Tracks Transaction.updates observation tasks for pending purchases, keyed by product ID
     @HeliumAtomic private var pendingPurchaseTasks: [String: Task<Void, Never>] = [:]
+
+    var storeTransactionLookup: StoreTransactionLookup = StoreKitTransactionLookup()
     
     private var delegate: HeliumPaywallDelegate {
         return Helium.config.purchaseDelegate
@@ -86,20 +88,29 @@ class HeliumPaywallDelegateWrapper {
         let storeKitProductId = keyParts.productId
         let resolvedPromoOfferId = keyParts.promoOfferId
 
-        let hadEntitlementBeforePurchase = await withTimeoutOrNil(milliseconds: 500) {
+        let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
+        let isPurchaseSimulationActive = Helium.testing.isPurchaseSimulationActive
+        let canRecheckStore = paymentProcessor == .appStore
+            && !HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey)
+            && !isPurchaseSimulationActive
+
+        async let hadEntitlementLookup = withTimeoutOrNil(milliseconds: 500) {
             await HeliumEntitlementsManager.shared.hasPersonallyPurchased(productId: storeKitProductId)
-        } ?? false
+        }
+        async let baselineLookup = storeTransactionBaseline(productId: storeKitProductId, canRecheckStore: canRecheckStore)
+        let hadEntitlementBeforePurchase = await hadEntitlementLookup ?? false
+        let baseline = await baselineLookup
 
         StoreKit1Listener.ensureListening()
 
-        let transactionStatus: HeliumPaywallTransactionStatus
-
-        let paymentProcessor = HeliumPaymentProcessor.resolve(for: productKey)
+        var transactionStatus: HeliumPaywallTransactionStatus
+        var isSimulatedPurchase = false
 
         var resolvedAlreadyOwnedViaWebCheckout = false
 
         if let simulated = await Helium.testing.simulatedPurchaseStatusIfActive(productId: storeKitProductId) {
             transactionStatus = simulated
+            isSimulatedPurchase = true
         } else {
             let stripeApplePayFlowEnabled = ApplePayHelper.shared.getStripeApplePayAvailable()
 
@@ -140,6 +151,28 @@ class HeliumPaywallDelegateWrapper {
             } else {
                 transactionStatus = await delegate.makePurchase(productId: storeKitProductId)
             }
+        }
+
+        let recheckSkipReason: StoreRecheckSkipReason?
+        if isSimulatedPurchase || isPurchaseSimulationActive {
+            recheckSkipReason = .simulatedPurchase
+        } else if HeliumPaymentProcessor.isWebProcessorCompositeKey(productKey) {
+            recheckSkipReason = .webCheckoutKey
+        } else if !canRecheckStore {
+            recheckSkipReason = .notAppStore
+        } else {
+            recheckSkipReason = nil
+        }
+        let storeCompletedTransactionIds = await storeCompletedPurchase(
+            after: transactionStatus,
+            productId: storeKitProductId,
+            baseline: baseline,
+            skipReason: recheckSkipReason,
+            paymentProcessor: paymentProcessor,
+            paywallSession: paywallSession
+        )
+        if storeCompletedTransactionIds != nil {
+            transactionStatus = .purchased
         }
 
         switch transactionStatus {
@@ -186,9 +219,10 @@ class HeliumPaywallDelegateWrapper {
             }
         case .purchased:
             let transactionRetrievalStartTime: DispatchTime = DispatchTime.now()
-            var transactionIds: HeliumTransactionIdResult? = nil
+            var transactionIds: HeliumTransactionIdResult? = storeCompletedTransactionIds
             
-            if let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
+            if transactionIds == nil,
+               let transactionDelegate = delegate as? HeliumDelegateReturnsTransaction,
                let heliumTransactionIdResult = transactionDelegate.getLatestCompletedTransactionIdResult() {
                 // Double-check to make sure correct transaction retrieved
                 if heliumTransactionIdResult.productId == storeKitProductId {
@@ -237,6 +271,97 @@ class HeliumPaywallDelegateWrapper {
             }
         }
         return transactionStatus;
+    }
+
+    private func storeTransactionBaseline(productId: String, canRecheckStore: Bool) async -> StoreTransactionBaseline? {
+        guard canRecheckStore else { return nil }
+        let startedAt = Date()
+        let outcome = await withTimeoutAbandoningOperation(milliseconds: 500) { [lookup = storeTransactionLookup] in
+            await lookup.latestTransaction(productId: productId)
+        }
+        let durationMs = msSince(startedAt)
+        switch outcome {
+        case nil:
+            return StoreTransactionBaseline(state: .timedOut, transactionId: nil, durationMs: durationMs)
+        case .noTransaction?:
+            return StoreTransactionBaseline(state: .noTransaction, transactionId: nil, durationMs: durationMs)
+        case .unverified?:
+            return StoreTransactionBaseline(state: .unverified, transactionId: nil, durationMs: durationMs)
+        case .verified(let snapshot)?:
+            return StoreTransactionBaseline(state: .transactionFound, transactionId: snapshot.ids.transactionId, durationMs: durationMs)
+        }
+    }
+
+    /// A delegate can report cancelled or failed after the App Store already completed the
+    /// purchase, e.g. when a purchase SDK's server call times out after StoreKit succeeded.
+    /// Returns the store transaction when one was completed during this attempt.
+    private func storeCompletedPurchase(
+        after status: HeliumPaywallTransactionStatus,
+        productId: String,
+        baseline: StoreTransactionBaseline?,
+        skipReason initialSkipReason: StoreRecheckSkipReason?,
+        paymentProcessor: HeliumPaymentProcessor,
+        paywallSession: PaywallSession
+    ) async -> HeliumTransactionIdResult? {
+        let delegateResult: StoreRecheckDelegateResult
+        switch status {
+        case .failed:
+            delegateResult = .failed
+        case .cancelled:
+            delegateResult = .cancelled
+        default:
+            return nil
+        }
+
+        var skipReason = initialSkipReason
+        // Cancels are common and the paywall waits on this check, so it is opt-in.
+        if skipReason == nil, delegateResult == .cancelled,
+           !HeliumFetchedConfigManager.shared.isFeatureEnabled(.storeRecheckAfterCancel) {
+            skipReason = .cancelRecheckDisabled
+        }
+        // Without knowing what the store held before the attempt, an earlier purchase could be
+        // mistaken for this one.
+        if skipReason == nil {
+            if baseline?.state == .timedOut {
+                skipReason = .baselineTimedOut
+            } else if baseline?.isUsable != true {
+                skipReason = .baselineUnverified
+            }
+        }
+
+        var recheckTimedOut = false
+        var recheckDurationMs: Int? = nil
+        var recovered: StoreTransactionSnapshot? = nil
+        if skipReason == nil, let baseline {
+            let startedAt = Date()
+            let outcome = await withTimeoutAbandoningOperation(milliseconds: 2000) { [lookup = storeTransactionLookup] in
+                await lookup.latestTransaction(productId: productId)
+            }
+            recheckDurationMs = msSince(startedAt)
+            recheckTimedOut = outcome == nil
+            if case .verified(let latest)? = outcome,
+               StoreCompletedPurchaseCheck.isCompletedDuringAttempt(latest, baselineTransactionId: baseline.transactionId) {
+                recovered = latest
+            }
+        }
+
+        HeliumObservabilityManager.shared.track(
+            PurchaseStoreRecheckCompleted(
+                productId: productId,
+                paymentProcessor: paymentProcessor.rawValue,
+                delegateResult: delegateResult,
+                skipReason: skipReason,
+                baselineState: baseline?.state,
+                baselineDurationMs: baseline?.durationMs,
+                recheckDurationMs: recheckDurationMs,
+                recheckTimedOut: recheckTimedOut,
+                recoveredTransactionId: recovered?.ids.transactionId
+            ),
+            scope: paywallSession.observabilityScope
+        )
+        guard let recovered else { return nil }
+        HeliumLogger.log(.warn, category: .core, "Purchase delegate reported cancelled or failed but the App Store completed the purchase. Reporting it as purchased.", metadata: ["productId": productId])
+        return recovered.ids
     }
 
     func restorePurchases(triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession) async -> Bool {

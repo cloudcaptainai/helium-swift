@@ -22,6 +22,10 @@ enum HeliumFeatureFlag: String, CaseIterable {
     /// Gates the already-owned check across every offered Paddle and Stripe web price,
     /// and tap-time prefetch of the tapped Paddle price.
     case a2wAlreadyOwnedAllWebProducts
+
+    /// Gates re-checking StoreKit after a purchase delegate reports cancelled. Off (default)
+    /// reports the cancel immediately; failures are re-checked regardless.
+    case storeRecheckAfterCancel
 }
 
 /// Immutable resolved view of the server's `featureFlags` map.
