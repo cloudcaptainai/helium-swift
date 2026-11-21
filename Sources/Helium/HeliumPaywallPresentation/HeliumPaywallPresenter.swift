@@ -558,6 +558,8 @@ class HeliumPaywallPresenter {
             guard let currentPaywall = paywallsDisplayed.popLast() else {
                 return
             }
+            // Invalidate pending checkout now; the close event still follows the animation.
+            currentPaywall.paywallSession.markClosed()
             HeliumLogger.log(.trace, category: .ui, "Hiding paywall", metadata: ["trigger": currentPaywall.trigger])
             // Use presentingViewController to ensure cascading dismiss (e.g., if paywall is presenting an alert)
             if let presenter = currentPaywall.presentingViewController {
@@ -591,6 +593,9 @@ class HeliumPaywallPresenter {
         Task { @MainActor in
             let paywallsToRemove = paywallsDisplayed
             paywallsDisplayed.removeAll()
+            for paywall in paywallsToRemove {
+                paywall.paywallSession.markClosed()
+            }
             let group = DispatchGroup()
             
             for (index, paywall) in paywallsToRemove.reversed().enumerated() {
