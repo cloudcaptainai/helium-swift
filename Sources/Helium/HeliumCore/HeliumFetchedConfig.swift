@@ -648,6 +648,7 @@ public class HeliumFetchedConfigManager {
         var cachedBundleIdToHtmlMap: [String : String] = [:]
         
         for (trigger, paywallInfo) in config.triggerToPaywalls {
+            guard paywallInfo.shouldShow != false else { continue }
             if let bundleUrl = paywallInfo.extractedBundleUrl {
                 let bundleId = HeliumAssetManager.shared.getBundleIdFromURL(bundleUrl) ?? ""
                 if cachedBundleIDs.contains(bundleId) {

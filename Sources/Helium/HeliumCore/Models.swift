@@ -239,10 +239,11 @@ public struct HeliumFetchedConfig: Codable {
     /// - Parameter trigger: The trigger name to extract experiment info for
     /// - Returns: ExperimentInfo if experiment data is available
     func extractExperimentInfo(trigger: String) -> ExperimentInfo? {
-        // Get paywall info for this trigger
-        guard let paywallInfo = triggerToPaywalls[trigger] else {
-            return nil
-        }
+        extractExperimentInfo(trigger: trigger, paywallInfo: triggerToPaywalls[trigger])
+    }
+
+    func extractExperimentInfo(trigger: String, paywallInfo: HeliumPaywallInfo?) -> ExperimentInfo? {
+        guard let paywallInfo else { return nil }
         
         // Check top-level experimentInfo field
         guard let expInfo = paywallInfo.experimentInfo, expInfo.exists(),

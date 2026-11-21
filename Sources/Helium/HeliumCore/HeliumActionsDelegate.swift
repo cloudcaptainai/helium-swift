@@ -192,10 +192,12 @@ class HeliumActionsDelegate: ObservableObject {
             if let uuid, !HeliumFetchedConfigManager.isPreviewTrigger(trigger),
                let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
+                ExperimentAllocationTracker.shared.recordDecision(trigger: foundTrigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(foundTrigger))
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
             else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
+                ExperimentAllocationTracker.shared.recordDecision(trigger: secondTryTrigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(secondTryTrigger))
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
@@ -286,16 +288,6 @@ class HeliumActionsDelegate: ObservableObject {
         if hiddenBehindSecondTry {
             return
         }
-        
-        // Track experiment allocation for embedded/triggered views
-        // Determine if this is a fallback by checking if it's in the fetched config
-        let isFallback = fallbackReason != nil
-        
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: trigger,
-            isFallback: isFallback,
-            paywallSession: paywallSession
-        )
         
         let event = PaywallOpenEvent(
             triggerName: trigger,
