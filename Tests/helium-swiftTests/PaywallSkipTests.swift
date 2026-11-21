@@ -76,6 +76,26 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(Set(triggers), Set(["checkout", "skip"]))
     }
 
+    func testMalformedStoredEntryPreservesOtherEnrollment() throws {
+        let config = try experimentConfig()
+        injectConfig(config)
+        let info = try XCTUnwrap(config.extractExperimentInfo(trigger: "checkout"))
+        let valid = StoredAllocation(from: info, trigger: "checkout")
+        var entry = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(valid)) as? [String: Any])
+        entry["enrolledAt"] = 12345.0
+        let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
+        let data = try JSONSerialization.data(withJSONObject: [
+            "\(persistentId)_exp-flow": entry,
+            "\(persistentId)_broken": ["allocationIndex": "not-an-index"]
+        ])
+        UserDefaults.standard.set(data, forKey: "heliumExperimentAllocations")
+        ExperimentAllocationTracker.shared.loadStoredAllocations()
+        XCTAssertEqual(config.extractExperimentInfo(trigger: "checkout")?.enrolledAt, Date(timeIntervalSinceReferenceDate: 12345))
+        ExperimentAllocationTracker.shared.recordDecision(trigger: "checkout", paywallInfo: config.triggerToPaywalls["checkout"])
+        drainMainActor()
+        XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent })
+    }
+
     func testMalformedExperimentDoesNotBlockOtherTrigger() throws {
         var config = try experimentConfig()
         var broken = try XCTUnwrap(config.triggerToPaywalls["checkout"])

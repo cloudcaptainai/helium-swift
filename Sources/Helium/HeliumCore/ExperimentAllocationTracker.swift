@@ -28,6 +28,14 @@ struct StoredAllocation: Codable {
     }
 }
 
+private struct StoredAllocationEntry: Decodable {
+    let value: StoredAllocation?
+
+    init(from decoder: Decoder) {
+        value = try? StoredAllocation(from: decoder)
+    }
+}
+
 /// Manages experiment allocation event tracking across all presentation types
 /// - Note: Ensures UserAllocatedEvent fires only when user gets a new allocation or 
 ///   when experiment details change for the user (by Helium persistent ID)
@@ -49,20 +57,18 @@ class ExperimentAllocationTracker {
         heliumAppSupportDirectory?.appendingPathComponent(allocationsFileName)
     }
     
-    /// Loads stored allocations - tries UserDefaults first, falls back to file
-    private func loadStoredAllocations() {
+    func loadStoredAllocations() {
         // Try UserDefaults first
         if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
-           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
-            storedAllocations = decoded
+           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
+            storedAllocations = decoded.compactMapValues(\.value)
             return
         }
         
-        // Fallback to file
         if let fileURL = allocationsFileURL,
            let data = try? Data(contentsOf: fileURL),
-           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
-            storedAllocations = decoded
+           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
+            storedAllocations = decoded.compactMapValues(\.value)
         }
     }
     
