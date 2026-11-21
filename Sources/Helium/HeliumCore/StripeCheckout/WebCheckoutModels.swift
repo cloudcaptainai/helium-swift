@@ -339,6 +339,17 @@ enum HeliumPaymentRoutingError: LocalizedError {
     }
 }
 
+enum SecondTryUnavailableReason: String {
+    case webSecondTryInvalidPaywall
+    case webSecondTryProviderMismatch
+    case webSecondTryNoProducts
+    case webSecondTryAlreadyEntitled
+    case webSecondTryInvalidPaddlePrices
+    case webSecondTryPaddlePrefetchFailed
+    case webSecondTryPaddlePrefetchNotReady
+    case webSecondTryMissingPriceDetails
+}
+
 enum WebCheckoutError: LocalizedError {
     case cannotPresentCheckout
     case checkoutURLsNotConfigured
