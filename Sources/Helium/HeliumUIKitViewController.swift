@@ -13,13 +13,10 @@ public class HeliumPaywallPresentationState: ObservableObject {
     
     let viewType: PaywallOpenViewType
     weak var heliumViewController: HeliumViewController? = nil
-    var isOpen: Bool = false // only used by .embedded and .triggered
     var isInline: Bool { viewType != .presented }
     
-    private let useAppearanceToSetIsOpen: Bool
-    init(viewType: PaywallOpenViewType, useAppearanceToSetIsOpen: Bool = false) {
+    init(viewType: PaywallOpenViewType) {
         self.viewType = viewType
-        self.useAppearanceToSetIsOpen = useAppearanceToSetIsOpen
     }
     
 }
@@ -27,10 +24,7 @@ public class HeliumPaywallPresentationState: ObservableObject {
 // Use EnvironmentKey so can provide a default value in case paywallPresentationState not set,
 // like when using upsell widget directly instead of HeliumViewController.
 private struct HeliumPaywallPresentationStateKey: EnvironmentKey {
-    // Rely on HeliumViewController/DynamicPaywallModifier if possible to manage isOpen
-    // state but if that's not available (ex: the paywall presentation is handled externally)
-    // then just use onAppear/onDisappear
-    static let defaultValue: HeliumPaywallPresentationState = HeliumPaywallPresentationState(viewType: .embedded, useAppearanceToSetIsOpen: true)
+    static let defaultValue = HeliumPaywallPresentationState(viewType: .embedded)
 }
 extension EnvironmentValues {
     var paywallPresentationState: HeliumPaywallPresentationState {
