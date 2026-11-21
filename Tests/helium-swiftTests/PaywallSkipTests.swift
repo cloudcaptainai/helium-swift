@@ -55,6 +55,54 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(allocation.experimentInfo.chosenVariantDetails?.allocationId, "synthetic-arm")
     }
 
+    @MainActor
+    func testPresentationConflictEnrollsBothArms() throws {
+        var config = try experimentConfig(shouldShow: true)
+        var skipInfo = try XCTUnwrap(config.triggerToPaywalls["checkout"])
+        skipInfo.shouldShow = false
+        skipInfo.experimentID = "exp-skip"
+        skipInfo.experimentInfo?["experimentId"] = JSON("exp-skip")
+        config.triggerToPaywalls["skip"] = skipInfo
+        injectConfig(config)
+
+        Helium.shared.presentPaywall(trigger: "already_presenting", onPaywallNotShown: { _ in })
+        Helium.shared.presentPaywall(trigger: "checkout", onPaywallNotShown: { _ in })
+        Helium.shared.presentPaywall(trigger: "skip", onPaywallNotShown: { _ in })
+        waitForEventDispatch {
+            self.mockDelegate.receivedEvents.contains { ($0 as? PaywallOpenFailedEvent)?.paywallUnavailableReason == .alreadyPresented }
+                && self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent }
+        }
+        let triggers = mockDelegate.receivedEvents.compactMap { ($0 as? UserAllocatedEvent)?.trigger }
+        XCTAssertEqual(Set(triggers), Set(["checkout", "skip"]))
+    }
+
+    func testMalformedExperimentDoesNotBlockOtherTrigger() throws {
+        var config = try experimentConfig()
+        var broken = try XCTUnwrap(config.triggerToPaywalls["checkout"])
+        broken.experimentID = "broken"
+        broken.experimentInfo = JSON(["experimentId": "broken", "hashDetails": ["hashedUserIdBucket1To100": "invalid"], "chosenVariantDetails": ["allocationMetadata": ["nested": [false, true]]]])
+        config.triggerToPaywalls["broken"] = broken
+        let decoded = try JSONDecoder().decode(HeliumFetchedConfig.self, from: JSONEncoder().encode(config))
+        injectConfig(decoded)
+        XCTAssertTrue(HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "broken", presentationContext: .empty))
+        XCTAssertTrue(HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "checkout", presentationContext: .empty))
+        waitForEventDispatch { self.mockDelegate.receivedEvents.filter { $0 is PaywallSkippedEvent }.count == 2 }
+        XCTAssertEqual(mockDelegate.receivedEvents.compactMap { ($0 as? UserAllocatedEvent)?.experimentInfo.experimentId }, ["exp-flow"])
+    }
+
+    func testAllocationTriggerListUsesRemoteConfigWithFallbackLoaded() throws {
+        var remote = try experimentConfig(shouldShow: true)
+        remote.triggerToPaywalls["remote_alias"] = remote.triggerToPaywalls["checkout"]
+        var bundled = remote
+        bundled.triggerToPaywalls["bundle_only"] = remote.triggerToPaywalls["checkout"]
+        HeliumFallbackViewManager.shared.injectFallbackConfigForTesting(bundled)
+        injectConfig(remote)
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: "checkout", presentationContext: .empty)
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
+        let event = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
+        XCTAssertEqual(Set(event.experimentInfo.allTriggers ?? []), Set(["checkout", "remote_alias"]))
+    }
+
     func testOpeningWithoutDecisionDoesNotAllocate() throws {
         let config = try experimentConfig(shouldShow: true)
         injectConfig(config)

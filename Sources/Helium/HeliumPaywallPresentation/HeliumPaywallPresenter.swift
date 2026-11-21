@@ -183,6 +183,7 @@ class HeliumPaywallPresenter {
     @MainActor
     private func beginPresentation(trigger: String, presentationContext: PaywallPresentationContext) {
         let config = presentationContext.config
+        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger))
         guard let claim = claimPresentation() else {
             // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
             // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
@@ -201,8 +202,6 @@ class HeliumPaywallPresenter {
             )
             return
         }
-
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger))
 
         Task { @MainActor in
             // Check if paywall is ready
