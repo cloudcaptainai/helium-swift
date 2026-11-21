@@ -16,6 +16,7 @@ struct HeliumPreviewConfigurationView: View {
 
     @ObservedObject private var previewSettings = HeliumPreviewConfigurationStore.shared
     @State private var configuration = HeliumPreviewConfigurationStore.shared.configuration
+    @State private var checkoutPaddleClientToken = HeliumFetchedConfigManager.shared.paddleClientToken
 
     private var realPurchaseUnavailable: Bool { previewSettings.forceExternalCheckoutSimulation }
 
@@ -58,6 +59,12 @@ struct HeliumPreviewConfigurationView: View {
             }
 
             actionBar
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HeliumConfigDownloadComplete"))) { _ in
+            checkoutPaddleClientToken = HeliumFetchedConfigManager.shared.paddleClientToken
+        }
+        .onReceive(previewSettings.$eligibilityStatus) { _ in
+            checkoutPaddleClientToken = HeliumFetchedConfigManager.shared.paddleClientToken
         }
     }
 
@@ -179,7 +186,7 @@ struct HeliumPreviewConfigurationView: View {
                             tag("US ONLY")
                         }
                     }
-                    Text(mode.detail)
+                    Text(mode.detail(paddleClientToken: checkoutPaddleClientToken))
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

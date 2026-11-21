@@ -79,15 +79,19 @@ class HeliumControlPanelService {
 
     static func previewUserContext(locale: [String: Any]) -> [String: Any] {
         let config = HeliumSdkConfig.shared
+        var applicationInfo: [String: Any] = [
+            "platform": config.heliumPlatform,
+            "heliumSdk": config.heliumSdk,
+            "heliumSdkVersion": config.heliumSdkVersion,
+            "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
+            "environment": AppReceiptsHelper.shared.getEnvironment(),
+        ]
+        if let webCheckoutAccountOverride = Helium.testing.webCheckoutAccountOverrideRequestValue {
+            applicationInfo["webCheckoutAccountOverride"] = webCheckoutAccountOverride
+        }
         return [
             "locale": locale,
-            "applicationInfo": [
-                "platform": config.heliumPlatform,
-                "heliumSdk": config.heliumSdk,
-                "heliumSdkVersion": config.heliumSdkVersion,
-                "heliumWrapperSdkVersion": config.heliumWrapperSdkVersion,
-                "environment": AppReceiptsHelper.shared.getEnvironment(),
-            ],
+            "applicationInfo": applicationInfo,
         ]
     }
 

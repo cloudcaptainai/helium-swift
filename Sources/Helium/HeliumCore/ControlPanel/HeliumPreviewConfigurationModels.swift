@@ -14,12 +14,18 @@ enum HeliumPreviewPurchaseMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var detail: String {
+    /// `paddleClientToken` is the token checkout uses; without one the account is unknown.
+    func detail(paddleClientToken: String?) -> String {
         switch self {
         case .simulated:
             return "Looks like the normal purchase flow but no transaction occurs and no entitlement granted."
         case .real:
-            return "Complete real purchases. Your card is charged and entitlement granted."
+            guard let paddleClientToken, !paddleClientToken.isEmpty else {
+                return "Complete real purchases. Your card is charged and entitlement granted."
+            }
+            return PaddleBFFClient.isSandboxClientToken(paddleClientToken)
+                ? "Paddle checks out on your Paddle sandbox account, so there's no real charge."
+                : "Paddle checks out on your live Paddle account. Your card is charged and entitlement granted."
         }
     }
 
