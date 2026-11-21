@@ -48,7 +48,7 @@ final class PaywallSkipTests: HeliumTestCase {
 
     func testShowDecisionAllocatesWithoutLoadablePaywall() throws {
         injectConfig(try experimentConfig(shouldShow: true))
-        XCTAssertFalse(HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "checkout", presentationContext: .empty))
+        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: "checkout", presentationContext: .empty)
         waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
         let allocation = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
         XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")

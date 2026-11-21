@@ -192,12 +192,22 @@ class HeliumActionsDelegate: ObservableObject {
             if let uuid, !HeliumFetchedConfigManager.isPreviewTrigger(trigger),
                let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
-                ExperimentAllocationTracker.shared.recordDecision(trigger: foundTrigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(foundTrigger))
+                let secondTryInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(foundTrigger)
+                if secondTryInfo?.shouldShow == false {
+                    HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: foundTrigger, paywallInfo: secondTryInfo)
+                    return
+                }
+                ExperimentAllocationTracker.shared.recordDecision(trigger: foundTrigger, paywallInfo: secondTryInfo)
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
             else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
-                ExperimentAllocationTracker.shared.recordDecision(trigger: secondTryTrigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(secondTryTrigger))
+                let secondTryInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(secondTryTrigger)
+                if secondTryInfo?.shouldShow == false {
+                    HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: secondTryTrigger, paywallInfo: secondTryInfo)
+                    return
+                }
+                ExperimentAllocationTracker.shared.recordDecision(trigger: secondTryTrigger, paywallInfo: secondTryInfo)
                 HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(

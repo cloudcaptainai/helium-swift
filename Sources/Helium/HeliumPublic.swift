@@ -422,6 +422,7 @@ public class Helium {
             onEntitled: nil,
             onPaywallNotShown: nil
         )
+        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger))
         let view = HeliumPaywallPresenter.shared.upsellViewResultFor(
             trigger: trigger, presentationContext: presentationContext
         ).viewAndSession?.view
