@@ -270,7 +270,7 @@ struct PaddlePrefetchAwaitResolved: HeliumObservabilityEvent {
 // MARK: - Web checkout flow
 
 enum WebCheckoutFlowOutcomeKind: String {
-    case opened, preCheckResolved, error
+    case opened, preCheckResolved, cancelled, error
 }
 
 struct WebCheckoutFlowStarted: HeliumObservabilityEvent {

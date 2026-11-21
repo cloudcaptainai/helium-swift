@@ -12,6 +12,7 @@ private final class EmptyPaddleEntitlementsSource: HeliumPaymentEntitlementsSour
 }
 
 private final class RecordingPaddleCheckoutManager: ExternalWebCheckoutManager {
+    private(set) var didOpenBrowser = false
     var openedSecondTry: WebSecondTryConfig?
 
     @MainActor
@@ -21,6 +22,7 @@ private final class RecordingPaddleCheckoutManager: ExternalWebCheckoutManager {
         paywallSession: PaywallSession,
         secondTry: WebSecondTryConfig?
     ) async throws -> WebCheckoutOutcome {
+        didOpenBrowser = true
         openedSecondTry = secondTry
         return .opened
     }
@@ -812,6 +814,22 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
     }
 
     func testStartCheckoutFlowIncludesSecondTryWhenItsPriceFinishesAfterPrimary() async throws {
+        let (outcome, manager) = try await startCheckoutWithPendingSecondTry(closePaywall: false)
+        guard case .opened = outcome else { return XCTFail("Expected browser handoff") }
+        XCTAssertEqual(manager.openedSecondTry?.paywallUUID, "second")
+    }
+
+    func testHostClosingPaywallWhileSecondTryIsPendingPreventsBrowserHandoff() async throws {
+        let (outcome, manager) = try await startCheckoutWithPendingSecondTry(closePaywall: true)
+        XCTAssertFalse(manager.didOpenBrowser)
+        guard case .cancelled = outcome.transactionStatus else {
+            return XCTFail("Closing the native paywall should cancel checkout, not fail it")
+        }
+    }
+
+    private func startCheckoutWithPendingSecondTry(
+        closePaywall: Bool
+    ) async throws -> (WebCheckoutOutcome, RecordingPaddleCheckoutManager) {
         let primaryKey = "pro_primary:pri_primary"
         let secondKey = "pro_second:pri_second"
         let secondTry = WebSecondTryConfig(
@@ -840,17 +858,30 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
         let coordinator = PaddleCheckoutPrefetchCoordinator.shared
         let primary = await coordinator.awaitOutcome(sessionId: session.sessionId, priceId: "pri_primary")
-        guard case .ready = primary else { return XCTFail("Expected the primary price to be ready") }
+        switch primary {
+        case .ready: break
+        default: XCTFail("Expected the primary price to be ready")
+        }
+        let actionsDelegate = HeliumActionsDelegate(
+            paywallInfo: try XCTUnwrap(session.paywallInfoWithBackups), paywallSession: session, trigger: session.trigger
+        )
         HeliumObservabilityManager.shared.unitTestTrackObserver = { event in
             guard let resolved = event as? PaddlePrefetchAwaitResolved, resolved.tappedPriceId == "pri_primary" else { return }
-            releaseSecond.signal()
+            if closePaywall {
+                Task { @MainActor in
+                    actionsDelegate.logClosure()
+                    releaseSecond.signal()
+                }
+            } else {
+                releaseSecond.signal()
+            }
         }
         coordinator.handlePaywallOpen(paywallSession: session)
         await fulfillment(of: [secondRequested], timeout: 2)
 
         let manager = RecordingPaddleCheckoutManager(provider: .paddle, entitlementsSource: EmptyPaddleEntitlementsSource())
-        _ = try await manager.startCheckoutFlow(for: primaryKey, triggerName: session.trigger, paywallSession: session)
-        XCTAssertEqual(manager.openedSecondTry?.paywallUUID, secondTry.paywallUUID)
+        let outcome = try await manager.startCheckoutFlow(for: primaryKey, triggerName: session.trigger, paywallSession: session)
+        return (outcome, manager)
     }
 
     func testStartCheckoutFlowSurfacesNonUSBlockBeforeNotReady() async throws {

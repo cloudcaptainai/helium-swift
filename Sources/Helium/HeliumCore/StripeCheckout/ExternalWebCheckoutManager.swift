@@ -21,11 +21,13 @@ enum WebCheckoutOutcome {
     /// Pre-checkout entitlement check found the user already owns the product;
     /// browser was not opened and the flow is fully resolved.
     case preCheckResolved
+    case cancelled
 
     var transactionStatus: HeliumPaywallTransactionStatus {
         switch self {
         case .opened: return .pending
         case .preCheckResolved: return .restored
+        case .cancelled: return .cancelled
         }
     }
 }
@@ -63,8 +65,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Builds the enriched checkout URL from the paywall's web bundle URL
     /// and opens it in an external browser, then starts observing for purchase completion.
-    /// Returns `.opened` when the browser was launched, or `.preCheckResolved` if the
-    /// pre-checkout entitlement check resolved the flow without opening the browser.
+    /// A Paddle checkout can be cancelled if its paywall closes before browser handoff.
     @MainActor
     func startCheckoutFlow(
         for productKey: String,
@@ -89,6 +90,13 @@ public class ExternalWebCheckoutManager: NSObject {
         paywallSession: PaywallSession,
         paywallTraits: HeliumUserTraits?
     ) async throws -> WebCheckoutOutcome {
+        let isPaddle = provider.kind == .paddle
+        let presentationID = isPaddle ? paywallSession.activePresentationID : nil
+        func paddlePaywallClosed() -> Bool {
+            isPaddle && (presentationID == nil || paywallSession.activePresentationID != presentationID)
+        }
+        guard !paddlePaywallClosed() else { return .cancelled }
+
         guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
               let resolvedCancelURL = provider.getCheckoutCancelURL() else {
             throw WebCheckoutError.checkoutURLsNotConfigured
@@ -114,6 +122,7 @@ public class ExternalWebCheckoutManager: NSObject {
             offeredProductKeys: offeredProductKeys,
             a2wEnabled: a2wEnabled
         )
+        guard !paddlePaywallClosed() else { return .cancelled }
         if Self.preCheckSkipsCheckout(
             entitledIds: entitledBefore,
             productKey: productKey,
@@ -180,6 +189,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 shortCircuited: shortCircuit != nil,
                 paywallSession: paywallSession
             )
+            guard !paddlePaywallClosed() else { return .cancelled }
 
             if let shortCircuit {
                 HeliumLogger.log(.debug, category: .entitlements,
@@ -241,6 +251,7 @@ public class ExternalWebCheckoutManager: NSObject {
             analytics: analytics
         )
 
+        guard !paddlePaywallClosed() else { return .cancelled }
         return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession, secondTry: secondTry?.config)
     }
 

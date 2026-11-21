@@ -40,6 +40,20 @@ struct PaywallSession {
     let isSecondTry: Bool
     let fallbackType: FallbackPaywallType
     let presentationContext: PaywallPresentationContext
+    // Keep in-flight checkouts tied to one appearance, even when an embedded paywall reappears.
+    private let presentationID: HeliumAtomic<UUID?>
+
+    var activePresentationID: UUID? { presentationID.wrappedValue }
+
+    func markOpened() {
+        presentationID.withValue { id in
+            if id == nil { id = UUID() }
+        }
+    }
+
+    func markClosed() {
+        presentationID.wrappedValue = nil
+    }
     
     var isFallback: Bool {
         return fallbackType != .notFallback
@@ -62,6 +76,7 @@ struct PaywallSession {
     
     init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
         self.sessionId = UUID().uuidString
+        self.presentationID = HeliumAtomic(wrappedValue: UUID())
         self.trigger = trigger
         self.isSecondTry = presentationContext.isSecondTry
         self.fallbackType = fallbackType
@@ -77,12 +92,14 @@ struct PaywallSession {
             paywallInfo: self.paywallInfo,
             fallbackType: self.fallbackType,
             presentationContext: context,
-            isSecondTry: self.isSecondTry
+            isSecondTry: self.isSecondTry,
+            presentationID: presentationID
         )
     }
 
-    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool, presentationID: HeliumAtomic<UUID?>) {
         self.sessionId = sessionId
+        self.presentationID = presentationID
         self.trigger = trigger
         self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
