@@ -7,6 +7,24 @@
 
 import StoreKit
 
+enum StoreKit1TransactionSelection {
+    static func latest(
+        in transactions: some Sequence<SKPaymentTransaction>,
+        productId: String,
+        purchasedOnOrAfter: Date? = nil
+    ) -> SKPaymentTransaction? {
+        transactions.filter {
+            guard $0.payment.productIdentifier == productId,
+                  $0.transactionState == .purchased else { return false }
+            guard let purchasedOnOrAfter else { return true }
+            guard let date = $0.transactionDate else { return false }
+            return date >= purchasedOnOrAfter
+        }.max {
+            ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast)
+        }
+    }
+}
+
 private actor StoreKit1TransactionStore {
     // transactionIdentifier -> SKPaymentTransaction
     private var purchaseTransactions: [String: SKPaymentTransaction] = [:]
@@ -16,10 +34,8 @@ private actor StoreKit1TransactionStore {
         purchaseTransactions[transactionId] = transaction
     }
     
-    func getTransactionByProductId(_ productId: String) -> SKPaymentTransaction? {
-        return purchaseTransactions.values.first(where: {
-            $0.payment.productIdentifier == productId
-        })
+    func getTransactionByProductId(_ productId: String, purchasedOnOrAfter: Date?) -> SKPaymentTransaction? {
+        return StoreKit1TransactionSelection.latest(in: purchaseTransactions.values, productId: productId, purchasedOnOrAfter: purchasedOnOrAfter)
     }
 }
 
@@ -51,18 +67,14 @@ class StoreKit1Listener : NSObject, SKPaymentTransactionObserver {
         }
     }
     
-    func getSKPaymentTransactionByProductId(_ productId: String) async -> SKPaymentTransaction? {
+    func getSKPaymentTransactionByProductId(_ productId: String, purchasedOnOrAfter: Date? = nil) async -> SKPaymentTransaction? {
         // Check stored transactions first
-        if let processed = await transactionStore.getTransactionByProductId(productId) {
+        if let processed = await transactionStore.getTransactionByProductId(productId, purchasedOnOrAfter: purchasedOnOrAfter) {
             return processed
         }
         
-        // Fallback: check what's currently in the queue
         let pendingTransactions = SKPaymentQueue.default().transactions
-        return pendingTransactions.first(where: {
-            $0.payment.productIdentifier == productId &&
-            $0.transactionState == .purchased
-        })
+        return StoreKit1TransactionSelection.latest(in: pendingTransactions, productId: productId, purchasedOnOrAfter: purchasedOnOrAfter)
     }
     
 }

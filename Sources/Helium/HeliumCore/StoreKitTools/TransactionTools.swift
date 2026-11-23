@@ -81,13 +81,13 @@ class TransactionTools {
     
     func retrieveTransactionIDs(productId: String, purchasedOnOrAfter: Date) async -> HeliumTransactionIdResult? {
         // Try StoreKit1 first in case a custom StoreKit1 delegate was used.
-        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId),
+        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId, purchasedOnOrAfter: purchasedOnOrAfter),
            let result = HeliumTransactionIdResult(storeKit1Purchase: storeKit1Purchase).forPurchase(productId: productId, purchasedOnOrAfter: purchasedOnOrAfter) {
             return result
         }
         // Yield then try StoreKit1 again
         await Task.yield()
-        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId),
+        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId, purchasedOnOrAfter: purchasedOnOrAfter),
            let result = HeliumTransactionIdResult(storeKit1Purchase: storeKit1Purchase).forPurchase(productId: productId, purchasedOnOrAfter: purchasedOnOrAfter) {
             return result
         }
@@ -99,7 +99,7 @@ class TransactionTools {
         }
         
         // Check StoreKit1 one more time
-        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId),
+        if let storeKit1Purchase = await StoreKit1Listener.shared.getSKPaymentTransactionByProductId(productId, purchasedOnOrAfter: purchasedOnOrAfter),
            let result = HeliumTransactionIdResult(storeKit1Purchase: storeKit1Purchase).forPurchase(productId: productId, purchasedOnOrAfter: purchasedOnOrAfter) {
             return result
         }
