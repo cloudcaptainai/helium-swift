@@ -58,6 +58,13 @@ class TransientDB {
         }
     }
     
+    func appendDurably<T: RawEvent>(data: [T]) -> [Int] {
+        syncQueue.sync {
+            guard let store = store as? DirectoryStore else { return [] }
+            return store.appendDurably(data: data)
+        }
+    }
+
     func fetch(count: Int? = nil, maxBytes: Int? = nil) -> DataResult? {
         var result: DataResult? = nil
         syncQueue.sync {
