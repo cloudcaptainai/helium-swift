@@ -54,6 +54,37 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertFalse(Helium.shared.hidePaywall())
     }
 
+    @MainActor
+    func testModalSkipsConfigArrivingBeforePresentationBegins() throws {
+        try configureFallbackView()
+        XCTAssertNil(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger("checkout"))
+        let dispatched = DispatchSemaphore(value: 0)
+        let notShown = expectation(description: "Targeting holdout callback")
+        DispatchQueue.global().async {
+            Helium.shared.presentPaywall(
+                trigger: "checkout", config: PaywallPresentationConfig(loadingBudget: 0),
+                onPaywallNotShown: {
+                    XCTAssertEqual($0, .targetingHoldout)
+                    notShown.fulfill()
+                }
+            )
+            dispatched.signal()
+        }
+        XCTAssertEqual(dispatched.wait(timeout: .now() + 5), .success)
+        injectConfig(try experimentConfig())
+        waitForEventDispatch {
+            self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent || $0 is PaywallOpenEvent }
+        }
+        drainMainActor()
+        wait(for: [notShown], timeout: 2)
+
+        let events = mockDelegate.receivedEvents
+        XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, 1)
+        XCTAssertEqual(events.filter { $0 is PaywallSkippedEvent }.count, 1)
+        XCTAssertFalse(events.contains { $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent || $0 is PaywallCloseEvent })
+        XCTAssertFalse(Helium.shared.hidePaywall())
+    }
+
     func testSkipArmDecodesAndAllocatesBeforeSkip() throws {
         let config = try experimentConfig()
         injectConfig(config)

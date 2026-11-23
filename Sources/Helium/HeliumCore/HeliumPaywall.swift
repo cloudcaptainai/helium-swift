@@ -305,7 +305,7 @@ fileprivate func resolvePaywallState(
         }
     }
     
-    let result = HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: trigger, presentationContext: presentationContext)
+    let result = HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: trigger, paywallInfo: paywallInfo, presentationContext: presentationContext)
     
     if let viewAndSession = result.viewAndSession {
         return (.ready(viewAndSession), paywallInfo)
