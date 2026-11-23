@@ -82,6 +82,7 @@ class HeliumPaywallDelegateWrapper {
     }
     
     func handlePurchase(productKey: String, triggerName: String, paywallTemplateName: String, paywallSession: PaywallSession, paywallTraits: HeliumUserTraits? = nil) async -> HeliumPaywallTransactionStatus {
+        let purchaseStartedAt = Date()
         // StoreKit APIs all take the bare product id; the composite suffix carries
         // the paired promo offer id.
         let keyParts = HeliumIosProductKey.split(productKey)
@@ -230,7 +231,7 @@ class HeliumPaywallDelegateWrapper {
                 }
             }
             if transactionIds == nil {
-                transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: storeKitProductId)
+                transactionIds = await TransactionTools.shared.retrieveTransactionIDs(productId: storeKitProductId, purchasedOnOrAfter: purchaseStartedAt)
             }
             
             if hadEntitlementBeforePurchase {
