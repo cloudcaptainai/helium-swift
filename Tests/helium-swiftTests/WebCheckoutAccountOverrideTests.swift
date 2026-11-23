@@ -101,6 +101,19 @@ final class WebCheckoutAccountOverrideTests: XCTestCase {
 
     // MARK: - Real purchase copy
 
+    func testSandboxChargeWarning_onlyNamesStripeInSessionSettings() {
+        let previewDetail = HeliumPreviewPurchaseMode.real.detail(paddleClientToken: "test_abc")
+        XCTAssertEqual(previewDetail, "Paddle checks out on your Paddle sandbox account, so there's no real charge.")
+        XCTAssertEqual(
+            HeliumPreviewPurchaseMode.real.detail(paddleClientToken: "test_abc", isSessionSettings: true),
+            previewDetail + " Stripe charges your card."
+        )
+        XCTAssertEqual(
+            HeliumPreviewPurchaseMode.simulated.detail(paddleClientToken: "test_abc", isSessionSettings: true),
+            HeliumPreviewPurchaseMode.simulated.detail(paddleClientToken: "test_abc")
+        )
+    }
+
     func testRealPurchaseDetail_namesTheAccountOfTheCheckoutToken() {
         XCTAssertTrue(HeliumPreviewPurchaseMode.real.detail(paddleClientToken: "test_abc").contains("Paddle sandbox account"))
         XCTAssertTrue(HeliumPreviewPurchaseMode.real.detail(paddleClientToken: "live_abc").contains("live Paddle account"))
