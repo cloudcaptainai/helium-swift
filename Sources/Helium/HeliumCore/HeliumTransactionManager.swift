@@ -248,7 +248,7 @@ actor HeliumTransactionManager {
         ) { ids, organizationId in
             let ids = Set(ids)
             let groups = Dictionary(grouping: eligible.filter { ids.contains($0.id) }) { triggers[$0.id] ?? .history }
-            for (trigger, transactions) in groups {
+            return groups.flatMap { trigger, transactions in
                 client.syncTransactions(transactions, organizationId: organizationId, trigger: trigger,
                                         syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState)
             }
@@ -298,13 +298,14 @@ class TransactionSyncClient {
     }
     
     func syncTransactions(_ transactions: [Transaction], organizationId: String, trigger: TransactionSyncTrigger,
-                          syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState) {
-        guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                          syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState) -> [UInt64] {
+        guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getResolvedUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
         let timestamp = formatAsTimestamp(date: Date())
+        var acceptedIds: [UInt64] = []
         
         for transaction in transactions {
             let rawCountryCode: String
@@ -364,9 +365,27 @@ class TransactionSyncClient {
             }
 #endif
             
-            analytics.track(name: "helium_transactionSynced", properties: properties)
+            if Self.enqueueTransaction(properties: properties, analytics: analytics) {
+                acceptedIds.append(transaction.id)
+            }
         }
         
         analytics.flush()
+        return acceptedIds
+    }
+
+    @discardableResult
+    static func enqueueTransaction(properties: [String: Any], analytics: Analytics) -> Bool {
+        guard analytics.enabled, let properties = try? SegmentJSON(properties) else { return false }
+        var event = TrackEvent(event: "helium_transactionSynced", properties: properties)
+            .applyRawEventData(store: analytics.store, enrichments: nil)
+        if let context = analytics.find(pluginType: SegmentContext.self)?.execute(event: event) {
+            event = context
+        }
+        let metadata = DestinationMetadataPlugin()
+        metadata.analytics = analytics
+        event = metadata.execute(event: event) ?? event
+        // Transaction dedupe may only advance after a complete batch is on disk, even during startup.
+        return analytics.storage.dataStore.appendDurably(data: event)
     }
 }

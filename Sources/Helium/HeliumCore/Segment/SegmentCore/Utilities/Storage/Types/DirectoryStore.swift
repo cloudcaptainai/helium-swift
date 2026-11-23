@@ -85,6 +85,22 @@ class DirectoryStore: DataStore {
         }
     }
     
+    func appendDurably<T: RawEvent>(data: T) -> Bool {
+        do {
+            let event = try JSONSerialization.jsonObject(with: JSONEncoder().encode(data))
+            let batch = try JSONSerialization.data(withJSONObject: [
+                "batch": [event], "sentAt": Date().iso8601(), "writeKey": config.writeKey
+            ])
+            guard batch.count < config.maxFileSize else { return false }
+            try FileManager.default.createDirectory(at: config.storageLocation, withIntermediateDirectories: true)
+            let url = config.storageLocation.appendingPathComponent("transaction-\(UUID().uuidString).\(Self.tempExtension)")
+            try batch.write(to: url, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func fetch(count: Int?, maxBytes: Int?) -> DataResult? {
         if writer != nil {
             finishFile()

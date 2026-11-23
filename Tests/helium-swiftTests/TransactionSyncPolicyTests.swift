@@ -3,6 +3,91 @@ import StoreKit
 @testable import Helium
 
 final class TransactionSyncPolicyTests: XCTestCase {
+    func testRelaunchRecoversTransactionBufferedDuringAnalyticsStartup() throws {
+        try withSyncedIdsStore { fileURL, defaults, writeKey in
+            let eventsURL = fileURL.deletingLastPathComponent().appendingPathComponent("events")
+            let analytics = Analytics(configuration: SegmentConfiguration(writeKey: writeKey)
+                .apiHost("127.0.0.1:9").cdnHost("127.0.0.1:9")
+                .trackApplicationLifecycleEvents(false).autoAddSegmentDestination(false)
+                .storageMode(.diskAtURL(eventsURL)))
+            if let startup = analytics.find(pluginType: StartupQueue.self) {
+                analytics.remove(plugin: startup)
+            }
+            let startup = StartupQueue()
+            analytics.timeline.plugins[.before]?.plugins.insert(startup, at: 0)
+            var ids: [UInt64: Date] = [:]
+            let transactions: [UInt64: Date] = [42: Date()]
+            TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &ids) { ids, _ in
+                return ids.filter { id in
+                    TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": id], analytics: analytics)
+                }
+            }
+            XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
+            startup.syncQueue.sync { startup.queuedEvents.removeAll() }
+
+            let relaunchedStore = DirectoryStore(configuration: .init(
+                writeKey: writeKey, storageLocation: eventsURL, baseFilename: "segment-events",
+                maxFileSize: Storage.MAXFILESIZE, indexKey: Storage.Constants.events.rawValue))
+            var recoveredIds: [UInt64] = []
+            for url in relaunchedStore.fetch(count: nil, maxBytes: nil)?.dataFiles ?? [] {
+                let batch = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+                XCTAssertEqual(batch["writeKey"] as? String, writeKey)
+                for event in batch["batch"] as? [[String: Any]] ?? [] {
+                    XCTAssertEqual(event["event"] as? String, "helium_transactionSynced")
+                    XCTAssertNotNil(event["messageId"] as? String)
+                    XCTAssertNotNil(event["context"] as? [String: Any])
+                    let properties = event["properties"] as? [String: Any]
+                    if let id = properties?["canonicalTransactionId"] as? NSNumber { recoveredIds.append(id.uint64Value) }
+                }
+            }
+            var relaunchedIds = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).ids
+            TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &relaunchedIds) { ids, _ in
+                recoveredIds.append(contentsOf: ids)
+                return ids
+            }
+            XCTAssertEqual(recoveredIds, [42], "Relaunch must recover the queued event or resend the transaction")
+        }
+    }
+
+    func testFailedDurableHandoffIsResentAfterRelaunch() throws {
+        try withSyncedIdsStore { fileURL, defaults, writeKey in
+            let eventsURL = fileURL.deletingLastPathComponent().appendingPathComponent("events")
+            try Data().write(to: eventsURL)
+            let analytics = Analytics(configuration: SegmentConfiguration(writeKey: writeKey)
+                .trackApplicationLifecycleEvents(false).autoAddSegmentDestination(false)
+                .storageMode(.diskAtURL(eventsURL)))
+            let transactions: [UInt64: Date] = [42: Date(timeIntervalSince1970: 100)]
+            var ids: [UInt64: Date] = [:]
+            TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &ids) { ids, _ in
+                ids.filter { TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": $0], analytics: analytics) }
+            }
+            XCTAssertTrue(ids.isEmpty)
+            XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
+
+            try FileManager.default.removeItem(at: eventsURL)
+            var relaunchedIds = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).ids
+            var resentIds: [UInt64] = []
+            TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &relaunchedIds) { ids, _ in
+                resentIds = ids.filter {
+                    TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": $0], analytics: analytics)
+                }
+                return resentIds
+            }
+            XCTAssertEqual(resentIds, [42])
+            XCTAssertEqual(relaunchedIds, transactions)
+            XCTAssertEqual(analytics.storage.dataStore.fetch()?.dataFiles?.count, 1)
+        }
+    }
+
+    func testOnlyDurablyAcceptedIdsAreMarkedSynced() {
+        let purchaseDate = Date(timeIntervalSince1970: 100)
+        var syncedIds: [UInt64: Date] = [:]
+        TransactionSyncPolicy.sync(
+            transactions: [1: purchaseDate, 2: purchaseDate], organizationId: "organization", syncedIds: &syncedIds
+        ) { _, _ in [1, 3] }
+        XCTAssertEqual(syncedIds, [1: purchaseDate])
+    }
+
     func testProductTypeMetadataUsesExistingPayloadSpellings() {
         let cases: [(Product.ProductType?, String)] = [
             (.autoRenewable, "autoRenewable"), (.nonRenewable, "nonRenewable"),
@@ -48,6 +133,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
                         )
                         XCTAssertEqual(properties["syncedIdCount"] as? Int, loaded.ids.count + Int(id) - 2)
                         XCTAssertEqual(properties["syncedIdsState"] as? String, expectedState.rawValue)
+                        return [id]
                     }
                     XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
                 }
@@ -318,6 +404,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
                 transactions: [1: Date()], organizationId: organizationId, syncedIds: &syncedIds
             ) { _, _ in
                 XCTFail("Must not send without an organization")
+                return []
             }
             XCTAssertTrue(syncedIds.isEmpty)
         }
@@ -327,9 +414,10 @@ final class TransactionSyncPolicyTests: XCTestCase {
         let purchaseDate = Date(timeIntervalSince1970: 100)
         var syncedIds: [UInt64: Date] = [:]
         var sentIds: [UInt64] = []
-        let send: ([UInt64], String) -> Void = { ids, organizationId in
+        let send: ([UInt64], String) -> [UInt64] = { ids, organizationId in
             XCTAssertEqual(organizationId, "example-organization")
             sentIds.append(contentsOf: ids)
+            return ids
         }
         TransactionSyncPolicy.sync(
             transactions: [1: purchaseDate], organizationId: nil, syncedIds: &syncedIds, send: send
@@ -352,6 +440,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
                 transactions: transactions, organizationId: "example-organization", syncedIds: &syncedIds
             ) { _, _ in
                 XCTFail("Must not send an empty batch")
+                return []
             }
         }
         XCTAssertEqual(syncedIds, [1: purchaseDate])
@@ -364,6 +453,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
             transactions: [1: Date(), 2: purchaseDate], organizationId: "example-organization", syncedIds: &syncedIds
         ) { ids, _ in
             XCTAssertEqual(ids, [2])
+            return ids
         }
         XCTAssertEqual(syncedIds, [1: purchaseDate, 2: purchaseDate])
     }

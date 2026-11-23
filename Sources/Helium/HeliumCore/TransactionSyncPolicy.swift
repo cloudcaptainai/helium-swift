@@ -91,13 +91,13 @@ enum TransactionSyncPolicy {
         transactions: [UInt64: Date],
         organizationId: String?,
         syncedIds: inout [UInt64: Date],
-        send: ([UInt64], String) -> Void
+        send: ([UInt64], String) -> [UInt64]
     ) {
         guard let organizationId = self.organizationId(organizationId) else { return }
         let unsynced = transactions.filter { syncedIds[$0.key] == nil }
         guard !unsynced.isEmpty else { return }
-        send(Array(unsynced.keys), organizationId)
-        syncedIds.merge(unsynced) { existing, _ in existing }
+        let acceptedIds = Set(send(Array(unsynced.keys), organizationId))
+        syncedIds.merge(unsynced.filter { acceptedIds.contains($0.key) }) { existing, _ in existing }
     }
 }
 
