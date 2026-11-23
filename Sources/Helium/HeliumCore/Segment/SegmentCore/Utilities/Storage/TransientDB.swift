@@ -58,9 +58,9 @@ class TransientDB {
         }
     }
     
-    func appendDurably<T: RawEvent>(data: T) -> Bool {
+    func appendDurably<T: RawEvent>(data: [T]) -> [Int] {
         syncQueue.sync {
-            guard let store = store as? DirectoryStore else { return false }
+            guard let store = store as? DirectoryStore else { return [] }
             return store.appendDurably(data: data)
         }
     }

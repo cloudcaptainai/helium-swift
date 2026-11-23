@@ -85,20 +85,39 @@ class DirectoryStore: DataStore {
         }
     }
     
-    func appendDurably<T: RawEvent>(data: T) -> Bool {
-        do {
-            let event = try JSONSerialization.jsonObject(with: JSONEncoder().encode(data))
-            let batch = try JSONSerialization.data(withJSONObject: [
-                "batch": [event], "sentAt": Date().iso8601(), "writeKey": config.writeKey
-            ])
-            guard batch.count < config.maxFileSize else { return false }
-            try FileManager.default.createDirectory(at: config.storageLocation, withIntermediateDirectories: true)
-            let url = config.storageLocation.appendingPathComponent("transaction-\(UUID().uuidString).\(Self.tempExtension)")
-            try batch.write(to: url, options: .atomic)
-            return true
-        } catch {
-            return false
+    func appendDurably<T: RawEvent>(data: [T]) -> [Int] {
+        guard !data.isEmpty, let fields = try? JSONSerialization.data(withJSONObject: [
+            "sentAt": Date().iso8601(), "writeKey": config.writeKey
+        ]) else { return [] }
+        let header = Data("{\"batch\":[".utf8)
+        let trailer = Data("],".utf8) + fields.dropFirst()
+        var batch = header
+        var indices: [Int] = []
+        var acceptedIndices: [Int] = []
+        func persistBatch() {
+            guard !indices.isEmpty else { return }
+            do {
+                try FileManager.default.createDirectory(at: config.storageLocation, withIntermediateDirectories: true)
+                let url = config.storageLocation.appendingPathComponent("transaction-\(UUID().uuidString).\(Self.tempExtension)")
+                try (batch + trailer).write(to: url, options: .atomic)
+                acceptedIndices.append(contentsOf: indices)
+            } catch {}
+            batch = header
+            indices.removeAll()
         }
+        let encoder = JSONEncoder()
+        for (index, event) in data.enumerated() {
+            guard let event = try? encoder.encode(event),
+                  header.count + event.count + trailer.count <= config.maxFileSize else { continue }
+            if batch.count + (indices.isEmpty ? 0 : 1) + event.count + trailer.count > config.maxFileSize {
+                persistBatch()
+            }
+            if !indices.isEmpty { batch.append(contentsOf: ",".utf8) }
+            batch.append(event)
+            indices.append(index)
+        }
+        persistBatch()
+        return acceptedIndices
     }
 
     func fetch(count: Int?, maxBytes: Int?) -> DataResult? {

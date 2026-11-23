@@ -305,7 +305,7 @@ class TransactionSyncClient {
         let userId = HeliumIdentityManager.shared.getResolvedUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
         let timestamp = formatAsTimestamp(date: Date())
-        var acceptedIds: [UInt64] = []
+        var events: [(id: UInt64, properties: [String: Any])] = []
         
         for transaction in transactions {
             let rawCountryCode: String
@@ -365,27 +365,30 @@ class TransactionSyncClient {
             }
 #endif
             
-            if Self.enqueueTransaction(properties: properties, analytics: analytics) {
-                acceptedIds.append(transaction.id)
-            }
+            events.append((transaction.id, properties))
         }
         
+        let acceptedIds = Self.enqueueTransactions(events, analytics: analytics)
         analytics.flush()
         return acceptedIds
     }
 
-    @discardableResult
-    static func enqueueTransaction(properties: [String: Any], analytics: Analytics) -> Bool {
-        guard analytics.enabled, let properties = try? SegmentJSON(properties) else { return false }
-        var event = TrackEvent(event: "helium_transactionSynced", properties: properties)
-            .applyRawEventData(store: analytics.store, enrichments: nil)
-        if let context = analytics.find(pluginType: SegmentContext.self)?.execute(event: event) {
-            event = context
-        }
+    static func enqueueTransactions(_ transactions: [(id: UInt64, properties: [String: Any])], analytics: Analytics) -> [UInt64] {
+        guard analytics.enabled else { return [] }
+        let context = analytics.find(pluginType: SegmentContext.self)
         let metadata = DestinationMetadataPlugin()
         metadata.analytics = analytics
-        event = metadata.execute(event: event) ?? event
+        var ids: [UInt64] = []
+        let events = transactions.compactMap { transaction -> TrackEvent? in
+            guard let properties = try? SegmentJSON(transaction.properties) else { return nil }
+            var event = TrackEvent(event: "helium_transactionSynced", properties: properties)
+                .applyRawEventData(store: analytics.store, enrichments: nil)
+            event = context?.execute(event: event) ?? event
+            event = metadata.execute(event: event) ?? event
+            ids.append(transaction.id)
+            return event
+        }
         // Transaction dedupe may only advance after a complete batch is on disk, even during startup.
-        return analytics.storage.dataStore.appendDurably(data: event)
+        return analytics.storage.dataStore.appendDurably(data: events).map { ids[$0] }
     }
 }

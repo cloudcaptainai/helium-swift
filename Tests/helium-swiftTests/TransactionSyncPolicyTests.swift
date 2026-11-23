@@ -18,9 +18,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
             var ids: [UInt64: Date] = [:]
             let transactions: [UInt64: Date] = [42: Date()]
             TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &ids) { ids, _ in
-                return ids.filter { id in
-                    TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": id], analytics: analytics)
-                }
+                TransactionSyncClient.enqueueTransactions(ids.map { ($0, ["canonicalTransactionId": $0]) }, analytics: analytics)
             }
             XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
             startup.syncQueue.sync { startup.queuedEvents.removeAll() }
@@ -59,7 +57,7 @@ final class TransactionSyncPolicyTests: XCTestCase {
             let transactions: [UInt64: Date] = [42: Date(timeIntervalSince1970: 100)]
             var ids: [UInt64: Date] = [:]
             TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &ids) { ids, _ in
-                ids.filter { TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": $0], analytics: analytics) }
+                TransactionSyncClient.enqueueTransactions(ids.map { ($0, ["canonicalTransactionId": $0]) }, analytics: analytics)
             }
             XCTAssertTrue(ids.isEmpty)
             XCTAssertTrue(TransactionSyncPolicy.saveSyncedIds(ids, fileURL: fileURL))
@@ -68,14 +66,59 @@ final class TransactionSyncPolicyTests: XCTestCase {
             var relaunchedIds = TransactionSyncPolicy.loadSyncedIds(fileURL: fileURL, defaults: defaults).ids
             var resentIds: [UInt64] = []
             TransactionSyncPolicy.sync(transactions: transactions, organizationId: "organization", syncedIds: &relaunchedIds) { ids, _ in
-                resentIds = ids.filter {
-                    TransactionSyncClient.enqueueTransaction(properties: ["canonicalTransactionId": $0], analytics: analytics)
-                }
+                resentIds = TransactionSyncClient.enqueueTransactions(ids.map { ($0, ["canonicalTransactionId": $0]) }, analytics: analytics)
                 return resentIds
             }
             XCTAssertEqual(resentIds, [42])
             XCTAssertEqual(relaunchedIds, transactions)
             XCTAssertEqual(analytics.storage.dataStore.fetch()?.dataFiles?.count, 1)
+        }
+    }
+
+    func testTransactionPassWritesOneDurableBatch() throws {
+        try withSyncedIdsStore { fileURL, _, writeKey in
+            let eventsURL = fileURL.deletingLastPathComponent().appendingPathComponent("events")
+            let analytics = Analytics(configuration: SegmentConfiguration(writeKey: writeKey)
+                .trackApplicationLifecycleEvents(false).autoAddSegmentDestination(false)
+                .storageMode(.diskAtURL(eventsURL)))
+            XCTAssertTrue(TransactionSyncClient.enqueueTransactions([], analytics: analytics).isEmpty)
+            XCTAssertNil(analytics.storage.dataStore.fetch())
+            let ids = (1...50).map(UInt64.init)
+            let acceptedIds = TransactionSyncClient.enqueueTransactions(
+                ids.map { ($0, ["canonicalTransactionId": $0]) }, analytics: analytics)
+            XCTAssertEqual(acceptedIds, ids)
+            let files = try XCTUnwrap(analytics.storage.dataStore.fetch()?.dataFiles)
+            XCTAssertEqual(files.count, 1)
+            let batch = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: XCTUnwrap(files.first))) as? [String: Any])
+            XCTAssertEqual((batch["batch"] as? [[String: Any]])?.count, ids.count)
+        }
+    }
+
+    func testDurableBatchesSplitAtSizeLimitAndRejectOversizedEvents() throws {
+        try withSyncedIdsStore { fileURL, _, writeKey in
+            let eventsURL = fileURL.deletingLastPathComponent().appendingPathComponent("events")
+            let event = TrackEvent(event: "helium_transactionSynced", properties: try SegmentJSON(["value": String(repeating: "x", count: 200)]))
+            let encodedSize = try JSONEncoder().encode(event).count
+            let overhead = try JSONSerialization.data(withJSONObject: [
+                "batch": [], "sentAt": Date().iso8601(), "writeKey": writeKey
+            ]).count
+            let limit = overhead + 2 * encodedSize + 1
+            let store = DirectoryStore(configuration: .init(
+                writeKey: writeKey, storageLocation: eventsURL, baseFilename: "segment-events",
+                maxFileSize: limit, indexKey: Storage.Constants.events.rawValue))
+            let oversized = TrackEvent(event: "helium_transactionSynced", properties: try SegmentJSON(["value": String(repeating: "x", count: limit)]))
+            let events = [event, event, oversized, event, event, event, event, event]
+            XCTAssertEqual(store.appendDurably(data: events), [0, 1, 3, 4, 5, 6, 7])
+            let files = try XCTUnwrap(store.fetch(count: nil, maxBytes: nil)?.dataFiles)
+            XCTAssertEqual(files.count, 4)
+            var recoveredCount = 0
+            for file in files {
+                let data = try Data(contentsOf: file)
+                XCTAssertLessThanOrEqual(data.count, limit)
+                let batch = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                recoveredCount += try XCTUnwrap(batch["batch"] as? [[String: Any]]).count
+            }
+            XCTAssertEqual(recoveredCount, 7)
         }
     }
 
