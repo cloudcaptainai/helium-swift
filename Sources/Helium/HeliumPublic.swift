@@ -423,10 +423,17 @@ public class Helium {
             onEntitled: nil,
             onPaywallNotShown: nil
         )
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger))
-        let view = HeliumPaywallPresenter.shared.upsellViewResultFor(
-            trigger: trigger, presentationContext: presentationContext
-        ).viewAndSession?.view
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        let view: AnyView?
+        if paywallInfo?.shouldShow == false {
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: paywallInfo)
+            view = nil
+        } else {
+            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+            view = HeliumPaywallPresenter.shared.upsellViewResultFor(
+                trigger: trigger, paywallInfo: paywallInfo, presentationContext: presentationContext
+            ).viewAndSession?.view
+        }
         trackSdkApiCall(.upsellViewForTrigger, upsellViewObservabilityProperties(
             trigger: trigger,
             customPaywallTraits: customPaywallTraits,

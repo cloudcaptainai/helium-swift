@@ -683,7 +683,14 @@ class HeliumPaywallPresenter {
 
 extension HeliumPaywallPresenter {
     func upsellViewResultFor(trigger: String, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
+        upsellViewResultFor(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger), presentationContext: presentationContext)
+    }
+
+    func upsellViewResultFor(trigger: String, paywallInfo: HeliumPaywallInfo?, presentationContext: PaywallPresentationContext) -> PaywallViewResult {
         HeliumLogger.log(.debug, category: .ui, "upsellViewResultFor called", metadata: ["trigger": trigger])
+        if paywallInfo?.shouldShow == false {
+            return PaywallViewResult(viewAndSession: nil, fallbackReason: nil)
+        }
         if !Helium.shared.isInitialized() {
             // Note - no fallback paywall here since fallbacks not initialized yet either
             HeliumLogger.log(.warn, category: .core, "Helium not initialized when presenting paywall")
@@ -700,7 +707,6 @@ extension HeliumPaywallPresenter {
             return fallbackBundleViewFor(trigger: trigger, fallbackReason: .forceShowFallback, presentationContext: presentationContext)
         }
 
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if Helium.shared.paywallsLoaded() {
             guard let templatePaywallInfo = paywallInfo else {
                 return fallbackViewFor(trigger: trigger, paywallInfo: nil, fallbackReason: .triggerHasNoPaywall, presentationContext: presentationContext)

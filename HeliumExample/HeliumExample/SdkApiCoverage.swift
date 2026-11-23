@@ -36,7 +36,8 @@ enum SdkApiCoverage {
             _ = Helium.shared.handleURL(URL(string: "heliumexamplestripe://openapp?transactionId=coverage")!)
             _ = Helium.shared.canShowPaywallFor(trigger: trigger)
             _ = Helium.shared.getPaywallInfo(trigger: trigger)
-            _ = Helium.shared.upsellViewForTrigger(trigger: trigger)
+            // Requesting a view commits experiment allocation, even if the view is discarded.
+            _ = Helium.shared.upsellViewForTrigger
             _ = try? await Helium.shared.createStripePortalSession(returnUrl: "https://example.com")
             _ = try? await Helium.shared.createPaddlePortalSession()
             _ = await Helium.shared.getStripeCustomerId()

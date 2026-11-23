@@ -25,6 +25,35 @@ final class PaywallSkipTests: HeliumTestCase {
         return try JSONDecoder().decode(HeliumFetchedConfig.self, from: data)
     }
 
+    private func configureFallbackView() throws {
+        Helium.shared.markInitializedForTesting()
+        var info = makeTestPaywallInfo(paywallName: "default_fallback_paywall", products: ["fallback.product"])
+        info.resolvedConfig = AnyCodable([
+            "baseStack": ["componentProps": ["bundleURL": "https://cdn.example.com/bundles/bundle_skip_test.html"]]
+        ] as [String: Any])
+        let config = makeTestConfig(
+            triggers: [HeliumFallbackViewManager.defaultFallbackTrigger: info],
+            bundles: ["skip_test": "<html>fallback</html>"]
+        )
+        HeliumFallbackViewManager.shared.injectFallbackConfigForTesting(config, json: try JSON(data: JSONEncoder().encode(config)))
+        XCTAssertNotNil(HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: "unassigned", presentationContext: .empty).viewAndSession)
+    }
+
+    func testDeprecatedViewSkipsInsteadOfReturningConfiguredFallback() throws {
+        try configureFallbackView()
+        injectConfig(try experimentConfig())
+
+        XCTAssertNil(Helium.shared.upsellViewForTrigger(trigger: "checkout"))
+        XCTAssertNil(HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: "checkout", presentationContext: .empty).viewAndSession)
+        drainMainActor()
+
+        let events = mockDelegate.receivedEvents
+        XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, 1)
+        XCTAssertEqual(events.filter { $0 is PaywallSkippedEvent }.count, 1)
+        XCTAssertFalse(events.contains { $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent || $0 is PaywallCloseEvent })
+        XCTAssertFalse(Helium.shared.hidePaywall())
+    }
+
     func testSkipArmDecodesAndAllocatesBeforeSkip() throws {
         let config = try experimentConfig()
         injectConfig(config)
