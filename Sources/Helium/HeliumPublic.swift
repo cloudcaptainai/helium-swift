@@ -62,6 +62,7 @@ public class Helium {
         _ = AppStoreCountryHelper.shared
         
         AppReceiptsHelper.shared.setUp()
+        Helium.testing.lockWebCheckoutAccountForSession()
         
         HeliumFallbackViewManager.shared.setUpFallbackBundle()
         
@@ -1207,6 +1208,25 @@ public class HeliumTesting {
 
     init() {}
 
+    /// Checks a debug or TestFlight build out on your live Paddle account.
+    ///
+    /// Test builds check out on your Paddle sandbox account when your organization has one connected.
+    /// Call this to keep the production experience instead: live prices and a real checkout that
+    /// charges the card. This is a per-build setting: distribute separate TestFlight builds to test
+    /// live and sandbox accounts. App Store builds always use the live account and are unaffected.
+    ///
+    /// Applies to Paddle only. Stripe web checkout always uses the one Stripe account you've configured.
+    ///
+    /// - Important: Call this *before* you call `Helium.shared.initialize(...)`. Later calls are
+    ///   ignored, and the account stays the same until the app relaunches, including across `resetHelium`.
+    public func useLiveWebCheckoutAccount() {
+        guard !webCheckoutAccountLocked else {
+            HeliumLogger.log(.warn, category: .core, "useLiveWebCheckoutAccount() called after initialize, ignoring it until the app relaunches.")
+            return
+        }
+        usesLiveWebCheckoutAccount = true
+    }
+
     /// Returns a stubbed transaction status for the given product ID.
     /// When set, replaces the real purchase flow.
     public var purchaseHandler: ((String) async -> HeliumPaywallTransactionStatus)?
@@ -1232,6 +1252,20 @@ public class HeliumTesting {
         restoreHandler = nil
         introOfferEligibility = nil
         promoOfferEligibility = nil
+    }
+
+    var usesLiveWebCheckoutAccount = false
+    var webCheckoutAccountLocked = false
+
+    /// Locks the web checkout account override for this app launch, so entitlements cannot change within an app launch.
+    /// Re-initializing (see `resetHelium`) keeps the locked override until the app relaunches.
+    func lockWebCheckoutAccountForSession() {
+        webCheckoutAccountLocked = true
+    }
+
+    /// The `applicationInfo.webCheckoutAccountOverride` request value; nil leaves the key out.
+    var webCheckoutAccountOverrideRequestValue: String? {
+        usesLiveWebCheckoutAccount ? "live" : nil
     }
 
     /// True when `purchaseHandler` will replace the real purchase flow.

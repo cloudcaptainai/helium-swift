@@ -50,6 +50,7 @@ struct CodableApplicationInfo: Codable {
     var testingPurchaseHandlerSet: Bool
     var testingRestoreHandlerSet: Bool
     var testingIntroOfferEligibilitySet: Bool
+    var webCheckoutAccountOverride: String?
 }
 
 struct CodableDeviceInfo: Codable {
@@ -104,7 +105,8 @@ func createApplicationInfo() -> CodableApplicationInfo {
         firstInstallTimestamp: firstInstallTime,
         testingPurchaseHandlerSet: Helium.testing.purchaseHandler != nil,
         testingRestoreHandlerSet: Helium.testing.restoreHandler != nil,
-        testingIntroOfferEligibilitySet: Helium.testing.introOfferEligibility != nil
+        testingIntroOfferEligibilitySet: Helium.testing.introOfferEligibility != nil,
+        webCheckoutAccountOverride: Helium.testing.webCheckoutAccountOverrideRequestValue
     )
 }
 
@@ -174,7 +176,7 @@ public struct CodableUserContext: Codable {
             "userInterfaceIdiom": self.deviceInfo.userInterfaceIdiom
         ]
         
-        let applicationInfoDict: [String: Any] = [
+        var applicationInfoDict: [String: Any] = [
             "version": self.applicationInfo.version ?? "",
             "build": self.applicationInfo.build ?? "",
             "completeAppVersion": self.applicationInfo.completeAppVersion ?? "",
@@ -191,6 +193,9 @@ public struct CodableUserContext: Codable {
             "testingRestoreHandlerSet": self.applicationInfo.testingRestoreHandlerSet,
             "testingIntroOfferEligibilitySet": self.applicationInfo.testingIntroOfferEligibilitySet
         ]
+        if let webCheckoutAccountOverride = self.applicationInfo.webCheckoutAccountOverride {
+            applicationInfoDict["webCheckoutAccountOverride"] = webCheckoutAccountOverride
+        }
         
         return [
             "heliumSessionId": HeliumIdentityManager.shared.getHeliumSessionId(),

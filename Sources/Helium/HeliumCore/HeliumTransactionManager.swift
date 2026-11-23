@@ -4,22 +4,35 @@
 //
 
 import StoreKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 actor HeliumTransactionManager {
     static let shared = HeliumTransactionManager()
     
-    private let syncedTransactionIdsKey = "heliumSyncedTransactionIds"
+    private let syncedIdsFileURL = heliumAppSupportDirectory?.appendingPathComponent("helium_synced_transaction_ids.json")
     private let maxSyncedIdsToStore = 1000
     private let maxTransactionAgeDays = 365 * 2  // 2 years
     
     /// Maps transaction ID to the date it was synced
     private var syncedTransactionIds: [UInt64: Date] = [:]
+    private let syncedIdsState: TransactionSyncedIdsState
     private var isConfigured = false
     private let syncClient = TransactionSyncClient()
     private var periodicSyncTask: Task<Void, Never>?
+    private var configDownloadObserver: NSObjectProtocol?
+    private var appActiveObserver: NSObjectProtocol?
+    private var historySyncState = TransactionHistorySyncState()
+    private var foregroundThrottle = TransactionSyncThrottle()
+    private var deferredForegroundTask: Task<Void, Never>?
+    private var pendingTransactions = TransactionSyncPending<Transaction>()
+    private var organizationRetryTask: Task<Void, Never>?
     
     private init() {
-        syncedTransactionIds = loadSyncedIds()
+        let stored = TransactionSyncPolicy.loadSyncedIds(fileURL: syncedIdsFileURL)
+        syncedTransactionIds = stored.ids
+        syncedIdsState = stored.state
     }
     
     // MARK: - Configuration
@@ -28,6 +41,18 @@ actor HeliumTransactionManager {
         guard !isConfigured else { return }
         isConfigured = true
 
+        configDownloadObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("HeliumConfigDownloadComplete"), object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.syncOnConfigDownload() }
+        }
+#if canImport(UIKit)
+        appActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.syncOnForeground() }
+        }
+#endif
         startTransactionListener()
         await loadAndSyncTransactionHistory()
         startPeriodicSync()
@@ -57,7 +82,7 @@ actor HeliumTransactionManager {
                 guard case .verified(let transaction) = verificationResult else {
                     continue
                 }
-                await processTransaction(transaction)
+                await processTransaction(transaction, trigger: .listener)
             }
         }
     }
@@ -67,62 +92,173 @@ actor HeliumTransactionManager {
         guard let transaction else {
             return
         }
-        await processTransaction(transaction)
+        await processTransaction(transaction, trigger: .afterPurchase)
     }
     
     // MARK: - Transaction History
+
+    private func syncOnForeground() async {
+        let hasPending = !pendingTransactions.transactions.isEmpty
+        if organizationId != nil {
+            guard foregroundThrottle.shouldSync(now: ProcessInfo.processInfo.systemUptime, hasPending: hasPending) else {
+                scheduleDeferredForegroundSync()
+                return
+            }
+        }
+        await loadAndSyncTransactionHistory()
+    }
+
+    private func scheduleDeferredForegroundSync() {
+        guard deferredForegroundTask == nil, let deadline = foregroundThrottle.deferredForegroundAt else { return }
+        deferredForegroundTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let remaining = deadline - ProcessInfo.processInfo.systemUptime
+                if remaining > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64((remaining * 1_000_000_000).rounded(.up)))
+                    } catch {
+                        return
+                    }
+                    continue
+                }
+                await self?.loadAndSyncTransactionHistory(isDeferredForeground: true)
+                return
+            }
+        }
+    }
+
+    private func cancelDeferredForegroundSync() {
+        deferredForegroundTask?.cancel()
+        deferredForegroundTask = nil
+        foregroundThrottle.startedScan()
+    }
+
+    private func syncOnConfigDownload() async {
+        let hasPending = !pendingTransactions.transactions.isEmpty
+        if organizationId != nil {
+            guard !historySyncState.isRunning || hasPending else { return }
+            guard foregroundThrottle.shouldSyncOnConfig(hasPending: hasPending) else { return }
+        }
+        await loadAndSyncTransactionHistory()
+    }
+
+    private var organizationId: String? {
+        TransactionSyncPolicy.organizationId(
+            HeliumFetchedConfigManager.shared.getOrganizationID(),
+            HeliumFallbackViewManager.shared.getConfig()?.organizationID
+        )
+    }
     
-    private func loadAndSyncTransactionHistory() async {
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
-        var transactionsToSync: [Transaction] = []
-
-        for await verificationResult in Transaction.all {
-            guard case .verified(let transaction) = verificationResult else {
-                continue
-            }
-            // Skip transactions older than cutoff
-            if transaction.purchaseDate < cutoffDate {
-                continue
-            }
-            if syncedTransactionIds[transaction.id] == nil {
-                transactionsToSync.append(transaction)
-            }
+    @discardableResult
+    private func loadAndSyncTransactionHistory(isOrganizationRetry: Bool = false, isDeferredForeground: Bool = false) async -> Bool {
+        if isDeferredForeground {
+            guard !Task.isCancelled else { return false }
+            deferredForegroundTask = nil
+            guard foregroundThrottle.takeDeferredForeground(now: ProcessInfo.processInfo.systemUptime) else { return false }
         }
-
-        if !transactionsToSync.isEmpty {
-            await syncWithServer(transactions: transactionsToSync)
+        guard organizationId != nil else {
+            scheduleOrganizationRetry()
+            return false
         }
+        guard historySyncState.request() else {
+            cancelDeferredForegroundSync()
+            return false
+        }
+        var didSync = false
+        repeat {
+            cancelDeferredForegroundSync()
+            let cutoffDate = Calendar.current.date(byAdding: .day, value: -maxTransactionAgeDays, to: Date()) ?? Date.distantPast
+            var transactionsToSync: [Transaction] = []
+
+            for await verificationResult in Transaction.all {
+                guard case .verified(let transaction) = verificationResult else {
+                    continue
+                }
+                // Skip transactions older than cutoff
+                if transaction.purchaseDate < cutoffDate {
+                    continue
+                }
+                if syncedTransactionIds[transaction.id] == nil {
+                    transactionsToSync.append(transaction)
+                }
+            }
+
+            transactionsToSync.sort { $0.purchaseDate > $1.purchaseDate }
+            if syncWithServer(transactions: Array(transactionsToSync.prefix(maxSyncedIdsToStore))) {
+                didSync = true
+                foregroundThrottle.completedScan(now: ProcessInfo.processInfo.systemUptime)
+                if !isOrganizationRetry {
+                    organizationRetryTask?.cancel()
+                    organizationRetryTask = nil
+                }
+            }
+        } while historySyncState.finishPass()
+        return didSync
     }
     
     // MARK: - Processing
     
-    private func processTransaction(_ transaction: Transaction) async {
+    private func processTransaction(_ transaction: Transaction, trigger: TransactionSyncTrigger) async {
         guard syncedTransactionIds[transaction.id] == nil else {
             return
         }
-        await syncWithServer(transactions: [transaction])
+        syncWithServer(transactions: [transaction], trigger: trigger)
     }
     
     // MARK: - Server Sync
-    
-    private func syncWithServer(transactions: [Transaction]) async {
-        syncClient.syncTransactions(transactions)
-        
-        for transaction in transactions {
-            syncedTransactionIds[transaction.id] = transaction.purchaseDate
+
+    private func scheduleOrganizationRetry() {
+        guard organizationRetryTask == nil else { return }
+        organizationRetryTask = Task {
+            for delay in TransactionSyncPolicy.organizationRetryDelays {
+                do {
+                    try await Task.sleep(nanoseconds: delay)
+                } catch {
+                    return
+                }
+                if organizationId != nil {
+                    await loadAndSyncTransactionHistory(isOrganizationRetry: true)
+                    guard !Task.isCancelled else { return }
+                    organizationRetryTask = nil
+                    return
+                }
+            }
+            guard !Task.isCancelled else { return }
+            organizationRetryTask = nil
         }
+    }
+    
+    @discardableResult
+    private func syncWithServer(transactions: [Transaction], trigger: TransactionSyncTrigger = .history) -> Bool {
+        for transaction in transactions where syncedTransactionIds[transaction.id] == nil {
+            pendingTransactions.add(transaction, id: transaction.id, trigger: trigger)
+        }
+        guard let organizationId else {
+            scheduleOrganizationRetry()
+            return false
+        }
+        let eligible = Array(pendingTransactions.transactions.values)
+        let dates = eligible.reduce(into: [UInt64: Date]()) { $0[$1.id] = $1.purchaseDate }
+        let client = syncClient
+        let triggers = pendingTransactions.triggers
+        let syncedIdCount = syncedTransactionIds.count
+        let syncedIdsState = self.syncedIdsState
+        TransactionSyncPolicy.sync(
+            transactions: dates, organizationId: organizationId, syncedIds: &syncedTransactionIds
+        ) { ids, organizationId in
+            let ids = Set(ids)
+            let groups = Dictionary(grouping: eligible.filter { ids.contains($0.id) }) { triggers[$0.id] ?? .history }
+            return groups.flatMap { trigger, transactions in
+                client.syncTransactions(transactions, organizationId: organizationId, trigger: trigger,
+                                        syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState)
+            }
+        }
+        pendingTransactions.remove(ids: dates.keys.filter { syncedTransactionIds[$0] != nil })
         pruneAndSave()
+        return true
     }
     
     // MARK: - Persistence
-    
-    private func loadSyncedIds() -> [UInt64: Date] {
-        guard let data = UserDefaults.standard.data(forKey: syncedTransactionIdsKey),
-              let ids = try? JSONDecoder().decode([UInt64: Date].self, from: data) else {
-            return [:]
-        }
-        return ids
-    }
     
     private func pruneAndSave() {
         // Remove entries older than maxTransactionAgeDays
@@ -135,11 +271,10 @@ actor HeliumTransactionManager {
             syncedTransactionIds = Dictionary(uniqueKeysWithValues: sorted.prefix(maxSyncedIdsToStore).map { ($0.key, $0.value) })
         }
         
-        guard let data = try? JSONEncoder().encode(syncedTransactionIds) else {
+        guard TransactionSyncPolicy.saveSyncedIds(syncedTransactionIds, fileURL: syncedIdsFileURL) else {
             HeliumLogger.log(.warn, category: .core, "Failed to persist synced transaction IDs")
             return
         }
-        UserDefaults.standard.set(data, forKey: syncedTransactionIdsKey)
     }
 
 }
@@ -162,20 +297,17 @@ class TransactionSyncClient {
         analytics = Analytics.getOrCreateAnalytics(configuration: configuration)
     }
     
-    func syncTransactions(_ transactions: [Transaction]) {
-        guard !transactions.isEmpty else { return }
+    func syncTransactions(_ transactions: [Transaction], organizationId: String, trigger: TransactionSyncTrigger,
+                          syncedIdCount: Int, syncedIdsState: TransactionSyncedIdsState) -> [UInt64] {
+        guard !transactions.isEmpty, !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         
         let heliumPersistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
         let userId = HeliumIdentityManager.shared.getResolvedUserId()
         let heliumSessionId = HeliumIdentityManager.shared.getHeliumSessionId()
-        // Note that organizationId may not be filled depending on when this is called
-        let organizationId = HeliumFetchedConfigManager.shared.getOrganizationID() ?? HeliumFallbackViewManager.shared.getConfig()?.organizationID ?? ""
         let timestamp = formatAsTimestamp(date: Date())
+        var events: [(id: UInt64, properties: [String: Any])] = []
         
         for transaction in transactions {
-            if transaction.ownershipType == .familyShared {
-                continue // only include purchases by this user
-            }
             let rawCountryCode: String
             if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
                 rawCountryCode = transaction.storefront.countryCode
@@ -196,6 +328,9 @@ class TransactionSyncClient {
                 "storeCountryCode": storeCountryCode,
                 "purchaseDate": formatAsTimestamp(date: transaction.purchaseDate),
                 "platform": HeliumSdkConfig.shared.heliumPlatform,
+                "heliumSdkVersion": BuildConstants.version,
+                "heliumSdk": HeliumSdkConfig.shared.heliumSdk,
+                "heliumWrapperSdkVersion": HeliumSdkConfig.shared.heliumWrapperSdkVersion,
                 "timestamp": timestamp
             ]
             
@@ -203,9 +338,19 @@ class TransactionSyncClient {
                 properties["subscriptionGroupId"] = subscriptionGroupID
             }
             
+            var storeEnvironment: String?
             if #available(iOS 16.0, *) {
+                storeEnvironment = transaction.environment.rawValue.uppercased()
                 properties["environment"] = transaction.environment.rawValue.uppercased()
             }
+            properties.merge(TransactionSyncPolicy.metadata(
+                trigger: trigger, sdkEnvironment: AppReceiptsHelper.shared.getEnvironment(),
+                storeEnvironment: storeEnvironment,
+                ownershipType: transaction.ownershipType == .familyShared ? "FAMILY_SHARED" : transaction.ownershipType.rawValue.uppercased(),
+                revocationDate: transaction.revocationDate, isUpgraded: transaction.isUpgraded,
+                expirationDate: transaction.expirationDate,
+                syncedIdCount: syncedIdCount, syncedIdsState: syncedIdsState, productType: transaction.productType
+            )) { _, value in value }
             
             if let appAccountToken = transaction.appAccountToken {
                 properties["appAttributionToken"] = appAccountToken.uuidString
@@ -220,9 +365,30 @@ class TransactionSyncClient {
             }
 #endif
             
-            analytics.track(name: "helium_transactionSynced", properties: properties)
+            events.append((transaction.id, properties))
         }
         
+        let acceptedIds = Self.enqueueTransactions(events, analytics: analytics)
         analytics.flush()
+        return acceptedIds
+    }
+
+    static func enqueueTransactions(_ transactions: [(id: UInt64, properties: [String: Any])], analytics: Analytics) -> [UInt64] {
+        guard analytics.enabled else { return [] }
+        let context = analytics.find(pluginType: SegmentContext.self)
+        let metadata = DestinationMetadataPlugin()
+        metadata.analytics = analytics
+        var ids: [UInt64] = []
+        let events = transactions.compactMap { transaction -> TrackEvent? in
+            guard let properties = try? SegmentJSON(transaction.properties) else { return nil }
+            var event = TrackEvent(event: "helium_transactionSynced", properties: properties)
+                .applyRawEventData(store: analytics.store, enrichments: nil)
+            event = context?.execute(event: event) ?? event
+            event = metadata.execute(event: event) ?? event
+            ids.append(transaction.id)
+            return event
+        }
+        // Transaction dedupe may only advance after a complete batch is on disk, even during startup.
+        return analytics.storage.dataStore.appendDurably(data: events).map { ids[$0] }
     }
 }
