@@ -204,10 +204,12 @@ public class Helium {
     /// - Parameter trigger: The trigger configured in the Helium dashboard.
     /// - Returns: A ``CanShowPaywallResult`` indicating whether a paywall can show, whether it would be a fallback, and the reason if it is not ready to be shown.
     ///
-    /// - Note: This does not account for entitlement status. A result of `canShow == true` means the paywall content is available, not that it will necessarily be presented to the user.
+    /// - Note: This does not account for entitlement status or targeting holdouts. A result of `canShow == true` means the paywall content is available, not that it will necessarily be presented to the user.
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
+        var paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        paywallInfo?.shouldShow = nil
         let upsellResult = HeliumPaywallPresenter.shared.upsellViewResultFor(
-            trigger: trigger, presentationContext: PaywallPresentationContext.empty)
+            trigger: trigger, paywallInfo: paywallInfo, presentationContext: PaywallPresentationContext.empty)
         
         let canShow = upsellResult.viewAndSession?.view != nil
         let result = CanShowPaywallResult(

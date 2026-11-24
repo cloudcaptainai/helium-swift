@@ -54,6 +54,19 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertFalse(Helium.shared.hidePaywall())
     }
 
+    func testHoldoutInspectionPreservesContentAvailabilityWithoutAllocation() throws {
+        try configureFallbackView()
+        injectConfig(try experimentConfig())
+
+        let result = Helium.shared.canShowPaywallFor(trigger: "checkout")
+        XCTAssertTrue(result.canShow)
+        XCTAssertEqual(result.isFallback, true)
+        XCTAssertEqual(result.paywallUnavailableReason, .noProductsIOS)
+        drainMainActor()
+        XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent || $0 is PaywallSkippedEvent })
+        XCTAssertFalse(Helium.shared.hidePaywall())
+    }
+
     @MainActor
     func testModalSkipsConfigArrivingBeforePresentationBegins() throws {
         try configureFallbackView()
