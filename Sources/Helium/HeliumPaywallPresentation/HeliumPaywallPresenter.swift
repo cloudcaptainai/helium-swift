@@ -202,7 +202,7 @@ class HeliumPaywallPresenter {
             if skipPaywallIfNeeded(trigger: trigger, paywallInfo: paywallInfo, presentationContext: presentationContext) {
                 return
             }
-            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+            let decisionRecorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
             guard let claim = claimPresentation() else {
                 // Only allow one paywall to be presented at a time. (Exception being second try paywalls.)
                 // Note that this is a special "open fail" case -- session and presentationContext are intentionally not availalbe
@@ -248,7 +248,7 @@ class HeliumPaywallPresenter {
             
             // Show loading state with trigger-specific or default loading view
             let loadingView = customLoadingView ?? createDefaultLoadingView(backgroundConfig: fallbackBgConfig)
-            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, isLoading: true, presentationContext: presentationContext, claim: claim)
+            presentPaywall(trigger: trigger, paywallSession: paywallSession, fallbackReason: nil, contentView: loadingView, isLoading: true, presentationContext: presentationContext, claim: claim, decisionPaywallInfo: decisionRecorded ? paywallInfo : nil)
             
             // Schedule timeout with trigger-specific budget
             Task {
@@ -269,19 +269,23 @@ class HeliumPaywallPresenter {
     
     @MainActor
     private func updateLoadingPaywall(trigger: String) async {
-        guard let loadingPaywall = paywallsDisplayed.first(where: { $0.trigger == trigger && $0.isLoading }) else {
+        guard let loadingPaywall = paywallsDisplayed.first(where: { $0.trigger == trigger && $0.isLoading }),
+              !loadingPaywall.hasCommittedLoadingDecision else {
             return
         }
+        loadingPaywall.hasCommittedLoadingDecision = true
         
         // Get context from the loading paywall's stored context
         let context = loadingPaywall.presentationContext
         
-        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        let paywallInfo = loadingPaywall.initialDecisionPaywallInfo ?? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
         if skipPaywallIfNeeded(trigger: trigger, paywallInfo: paywallInfo, presentationContext: context) {
             hideUpsell()
             return
         }
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+        if loadingPaywall.initialDecisionPaywallInfo == nil {
+            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+        }
         
         if await paywallEntitlementsCheck(trigger: trigger, context: context) {
             hideUpsell()
@@ -408,7 +412,7 @@ class HeliumPaywallPresenter {
     }
     
     @MainActor
-    private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext, claim: PresentationClaim? = nil) {
+    private func presentPaywall(trigger: String, paywallSession: PaywallSession, fallbackReason: PaywallUnavailableReason?, contentView: AnyView, isLoading: Bool = false, presentationContext: PaywallPresentationContext, claim: PresentationClaim? = nil, decisionPaywallInfo: HeliumPaywallInfo? = nil) {
         if presentationWasOvertaken(claim) {
             HeliumLogger.log(.warn, category: .ui, "Another paywall was presented first, skipping", metadata: ["trigger": trigger])
             releasePresentationClaim(claim)
@@ -432,7 +436,7 @@ class HeliumPaywallPresenter {
             "isSecondTry": String(presentationContext.isSecondTry),
             "isFallback": String(fallbackReason != nil)
         ])
-        let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext)
+        let modalVC = HeliumViewController(trigger: trigger, paywallSession: paywallSession, fallbackReason: fallbackReason, contentView: contentView, isLoading: isLoading, presentationContext: presentationContext, decisionPaywallInfo: decisionPaywallInfo)
         modalVC.modalPresentationStyle = .fullScreen
         
         var presenter = presentationContext.config.presentFromViewController
