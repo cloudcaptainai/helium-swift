@@ -272,6 +272,47 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
     }
 
+    func testOversizedPaywallTraitsAreOmittedForEveryPriceWithoutBlockingPrefetch() async throws {
+        MockURLProtocol.requestHandler = bothSucceedHandler()
+        let paywall = makeTestSession()
+        let priceIds = ["pri_a", "pri_b"]
+        let lock = NSLock()
+        var droppedEvents: [any HeliumObservabilityEvent] = []
+        HeliumObservabilityManager.shared.unitTestTrackObserver = { event in
+            if event.name == "checkout_paywall_traits_dropped" {
+                lock.withLock { droppedEvents.append(event) }
+            }
+        }
+        defer { HeliumObservabilityManager.shared.unitTestTrackObserver = nil }
+
+        coordinator.prefetch(
+            paywallSession: paywall, priceIds: priceIds, paddleClientToken: "test_xyz", iosBundleId: nil,
+            paywallTraits: HeliumUserTraits(["cohort": String(repeating: "é", count: 8_192)])
+        )
+
+        for priceId in priceIds {
+            let outcome = await coordinator.awaitOutcome(sessionId: paywall.sessionId, priceId: priceId)
+            guard case .ready = outcome else { return XCTFail("Expected checkout to be ready for \(priceId)") }
+        }
+        let calls = MockURLProtocol.capturedRequests.filter {
+            ($0.url?.path ?? "").hasSuffix("/paddle/create-transaction-for-paywall")
+        }
+        XCTAssertEqual(calls.count, priceIds.count)
+        for call in calls {
+            let data = try XCTUnwrap(call.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertNil(body["customPaywallTraits"])
+        }
+
+        let events = lock.withLock { droppedEvents }
+        XCTAssertEqual(events.count, 1)
+        let properties = try XCTUnwrap(events.first).properties
+        XCTAssertEqual(properties["byteCount"] as? Int, 16_397)
+        XCTAssertEqual(properties["limitBytes"] as? Int, 16_384)
+        XCTAssertEqual(properties["traitKeyCount"] as? Int, 1)
+        XCTAssertEqual(Set(properties.keys), ["provider", "surface", "byteCount", "limitBytes", "traitKeyCount"])
+    }
+
     func testCloseBeforeTraitsArePublishedDoesNotStartPrefetch() async {
         HeliumFetchedConfigManager.shared.setPreviewServerProducts(stripeProducts: nil, paddleProducts: [:], paddleClientToken: "test_xyz")
         MockURLProtocol.requestHandler = bothSucceedHandler()

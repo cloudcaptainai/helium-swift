@@ -149,6 +149,24 @@ struct WebSecondTryConfigDecodeFailed: HeliumObservabilityEvent {
     }
 }
 
+struct CheckoutPaywallTraitsDropped: HeliumObservabilityEvent {
+    let byteCount: Int
+    let limitBytes: Int
+    let traitKeyCount: Int
+
+    var name: String { "checkout_paywall_traits_dropped" }
+    var tags: Set<HeliumObservabilityTag> { [.paddlePrefetch, .webCheckout] }
+    var properties: [String: Any] {
+        [
+            "provider": "paddle",
+            "surface": "ios_paddle_prefetch",
+            "byteCount": byteCount,
+            "limitBytes": limitBytes,
+            "traitKeyCount": traitKeyCount,
+        ]
+    }
+}
+
 struct PaddlePrefetchStarted: HeliumObservabilityEvent {
     let priceIds: [String]
     var isSecondTry = false

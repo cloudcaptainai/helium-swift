@@ -139,7 +139,10 @@ final class PaddleCheckoutPrefetchCoordinator {
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
         let traits = paywallTraits ?? paywallSession.resolvedPaywallTraits
-        let traitsData = traits.flatMap { try? JSONEncoder().encode($0) }
+        let encodedTraits = traits.flatMap { try? JSONEncoder().encode($0) }
+        let traitByteCount = encodedTraits?.count ?? 0
+        let traitLimitBytes = 16 * 1024
+        let traitsData = traitByteCount > traitLimitBytes ? nil : encodedTraits
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
@@ -179,6 +182,14 @@ final class PaddleCheckoutPrefetchCoordinator {
             startedPriceIds.append(priceId)
         }
         if !startedPriceIds.isEmpty {
+            if traitByteCount > traitLimitBytes, let traits {
+                HeliumObservabilityManager.shared.track(
+                    CheckoutPaywallTraitsDropped(
+                        byteCount: traitByteCount, limitBytes: traitLimitBytes, traitKeyCount: traits.count
+                    ),
+                    scope: scope
+                )
+            }
             HeliumObservabilityManager.shared.track(
                 PaddlePrefetchStarted(priceIds: startedPriceIds, isSecondTry: surface == .secondTry),
                 scope: scope
