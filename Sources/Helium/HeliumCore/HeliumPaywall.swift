@@ -224,7 +224,9 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         case .alreadyEntitled:
             HeliumPaywallPresenter.shared.handleAlreadyEntitledSkip(trigger: trigger, context: presentationContext)
         case .targetingHoldout:
-            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionPaywallInfo)
+            let shouldRecordDecision = !decisionRecorded
+            decisionRecorded = true
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionPaywallInfo, recordDecision: shouldRecordDecision)
         case .error(unavailableReason: let unavailableReason):
             if unavailableReason == .webviewRenderFail {
                 return

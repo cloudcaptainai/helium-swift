@@ -132,8 +132,10 @@ class HeliumPaywallPresenter {
         return false
     }
     
-    func handlePaywallSkip(trigger: String, paywallInfo: HeliumPaywallInfo?) {
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+    func handlePaywallSkip(trigger: String, paywallInfo: HeliumPaywallInfo?, recordDecision: Bool = true) {
+        if recordDecision {
+            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+        }
         
         HeliumPaywallDelegateWrapper.shared.fireEvent(
             PaywallSkippedEvent(triggerName: trigger),

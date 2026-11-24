@@ -1,5 +1,35 @@
 import XCTest
+import SwiftUI
+import UIKit
 @testable import Helium
+
+private actor SuspendedPaywallEntitlementsSource: ThirdPartyEntitlementsSource {
+    let started: XCTestExpectation
+    private var continuation: CheckedContinuation<Set<String>, Never>?
+    private var released = false
+
+    init(started: XCTestExpectation) {
+        self.started = started
+    }
+
+    func purchasedHeliumProductIds() async -> Set<String> {
+        if released { return [] }
+        return await withCheckedContinuation {
+            continuation = $0
+            started.fulfill()
+        }
+    }
+
+    func release() {
+        released = true
+        continuation?.resume(returning: [])
+        continuation = nil
+    }
+
+    func hasAnyActiveSubscription() async -> Bool { false }
+    func activeSubscriptions() async -> Set<String> { [] }
+    nonisolated func invalidateCache() {}
+}
 
 final class PaywallSkipTests: HeliumTestCase {
 
@@ -65,6 +95,54 @@ final class PaywallSkipTests: HeliumTestCase {
         drainMainActor()
         XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent || $0 is PaywallSkippedEvent })
         XCTAssertFalse(Helium.shared.hidePaywall())
+    }
+
+    @MainActor
+    func testEmbeddedEntitlementRefreshDoesNotAllocateTwice() throws {
+        Helium.shared.markInitializedForTesting()
+        var showConfig = try experimentConfig(shouldShow: true)
+        var showInfo = try XCTUnwrap(showConfig.triggerToPaywalls["checkout"])
+        var experimentInfo = try XCTUnwrap(showInfo.experimentInfo)
+        experimentInfo["chosenVariantDetails"]["allocationId"] = JSON("show-arm")
+        showInfo.experimentInfo = experimentInfo
+        showConfig.triggerToPaywalls["checkout"] = showInfo
+        injectConfig(showConfig)
+
+        let started = expectation(description: "Entitlement check suspended")
+        let source = SuspendedPaywallEntitlementsSource(started: started)
+        Helium.config.thirdPartyEntitlementsSource = source
+        let notShown = expectation(description: "Embedded targeting holdout")
+        let view = HeliumPaywall(
+            trigger: "checkout", config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: true, loadingBudget: 10)
+        ) { reason in
+            Color.clear.onAppear {
+                XCTAssertEqual(reason, .targetingHoldout)
+                notShown.fulfill()
+            }
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        window.rootViewController = UIHostingController(rootView: view)
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            Helium.config.thirdPartyEntitlementsSource = nil
+            Task { await source.release() }
+        }
+        window.layoutIfNeeded()
+        wait(for: [started], timeout: 3)
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
+
+        injectConfig(try experimentConfig())
+        Task { await source.release() }
+        wait(for: [notShown], timeout: 3)
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent } }
+        drainMainActor()
+
+        let allocations = mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }
+        XCTAssertEqual(allocations.map { $0.experimentInfo.chosenVariantDetails?.allocationId }, ["show-arm"])
+        XCTAssertEqual(mockDelegate.receivedEvents.filter { $0 is PaywallSkippedEvent }.count, 1)
+        XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent })
     }
 
     @MainActor
