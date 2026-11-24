@@ -202,7 +202,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     }
 
     private func transitionState(allowLoadingState: Bool) {
-        let resolution = resolvePaywallState(for: trigger, isEntitled: isEntitled, allowLoadingState: allowLoadingState, config: config, presentationContext: presentationContext)
+        let resolution = resolvePaywallState(for: trigger, paywallInfo: decisionRecorded ? decisionPaywallInfo : nil, isEntitled: isEntitled, allowLoadingState: allowLoadingState, config: config, presentationContext: presentationContext)
         let newState = resolution.state
         if state.isLoading && !newState.isLoading {
             resolvedLoadTimeTakenMS = dispatchTimeDifferenceInMS(from: loadingStartTime)
@@ -215,7 +215,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func recordDecisionIfNeeded() {
         guard hasAppeared, !decisionRecorded else { return }
         if case .waitingForPaywallsDownload = state { return }
-        let recorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: decisionPaywallInfo)
+        let recorded = decisionPaywallInfo != nil &&
+            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: decisionPaywallInfo)
         decisionRecorded = recorded || !state.isLoading
     }
     
@@ -283,16 +284,17 @@ enum HeliumPaywallViewState: Equatable {
 /// Returns the current state of a paywall for the trigger
 fileprivate func resolvePaywallState(
     for trigger: String,
+    paywallInfo snapshot: HeliumPaywallInfo? = nil,
     isEntitled: Bool? = nil,
     allowLoadingState: Bool = true,
     config: PaywallPresentationConfig,
     presentationContext: PaywallPresentationContext
 ) -> (state: HeliumPaywallViewState, paywallInfo: HeliumPaywallInfo?) {
-    if allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
+    if snapshot == nil && allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
         return (.waitingForPaywallsDownload, nil)
     }
     
-    let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+    let paywallInfo = snapshot ?? HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
     if paywallInfo?.shouldShow == false {
         return (.noShow(.targetingHoldout), paywallInfo)
     }

@@ -137,7 +137,7 @@ final class PaywallSkipTests: HeliumTestCase {
     }
 
     @MainActor
-    func testEmbeddedEntitlementRefreshDoesNotAllocateTwice() throws {
+    func testEmbeddedDecisionKeepsOriginalShowAssignmentAcrossEntitlementRefresh() throws {
         Helium.shared.markInitializedForTesting()
         var showConfig = try experimentConfig(shouldShow: true)
         var showInfo = try XCTUnwrap(showConfig.triggerToPaywalls["checkout"])
@@ -150,12 +150,12 @@ final class PaywallSkipTests: HeliumTestCase {
         let started = expectation(description: "Entitlement check suspended")
         let source = SuspendedPaywallEntitlementsSource(started: started)
         Helium.config.thirdPartyEntitlementsSource = source
-        let notShown = expectation(description: "Embedded targeting holdout")
+        let notShown = expectation(description: "Original show arm content unavailable")
         let view = HeliumPaywall(
             trigger: "checkout", config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: true, loadingBudget: 10)
         ) { reason in
             Color.clear.onAppear {
-                XCTAssertEqual(reason, .targetingHoldout)
+                XCTAssertEqual(reason, .error(unavailableReason: .noProductsIOS))
                 notShown.fulfill()
             }
         }
@@ -172,16 +172,19 @@ final class PaywallSkipTests: HeliumTestCase {
         wait(for: [started], timeout: 3)
         waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
 
-        injectConfig(try experimentConfig())
+        var replacement = try experimentConfig()
+        replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+        replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+        injectConfig(replacement)
         Task { await source.release() }
         wait(for: [notShown], timeout: 3)
-        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent } }
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent } }
         drainMainActor()
 
         let allocations = mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }
         XCTAssertEqual(allocations.map { $0.experimentInfo.chosenVariantDetails?.allocationId }, ["show-arm"])
-        XCTAssertEqual(mockDelegate.receivedEvents.filter { $0 is PaywallSkippedEvent }.count, 1)
-        XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent })
+        XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenEvent })
+        XCTAssertEqual(mockDelegate.receivedEvents.compactMap { $0 as? PaywallOpenFailedEvent }.map(\.paywallUnavailableReason), [.noProductsIOS])
     }
 
     @MainActor
