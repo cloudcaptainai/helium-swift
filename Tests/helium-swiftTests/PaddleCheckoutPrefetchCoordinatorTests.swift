@@ -285,9 +285,10 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         }
         defer { HeliumObservabilityManager.shared.unitTestTrackObserver = nil }
 
+        let traitValue = String(repeating: "é", count: 4_096)
         coordinator.prefetch(
             paywallSession: paywall, priceIds: priceIds, paddleClientToken: "test_xyz", iosBundleId: nil,
-            paywallTraits: HeliumUserTraits(["cohort": String(repeating: "é", count: 8_192)])
+            paywallTraits: HeliumUserTraits(["cohort": traitValue, "segment": traitValue])
         )
 
         for priceId in priceIds {
@@ -307,9 +308,9 @@ final class PaddleCheckoutPrefetchCoordinatorTests: XCTestCase {
         let events = lock.withLock { droppedEvents }
         XCTAssertEqual(events.count, 1)
         let properties = try XCTUnwrap(events.first).properties
-        XCTAssertEqual(properties["byteCount"] as? Int, 16_397)
+        XCTAssertEqual(properties["byteCount"] as? Int, 16_410)
         XCTAssertEqual(properties["limitBytes"] as? Int, 16_384)
-        XCTAssertEqual(properties["traitKeyCount"] as? Int, 1)
+        XCTAssertEqual(properties["traitKeyCount"] as? Int, 2)
         XCTAssertEqual(Set(properties.keys), ["provider", "surface", "byteCount", "limitBytes", "traitKeyCount"])
     }
 
