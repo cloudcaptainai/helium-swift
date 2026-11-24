@@ -111,7 +111,7 @@ final class ResetDuringConfigLoadTests: XCTestCase {
     }
 }
 
-private final class StalledConfigServer: @unchecked Sendable {
+final class StalledConfigServer: @unchecked Sendable {
 
     private let listener: NWListener
     private let queue = DispatchQueue(label: "com.helium.tests.StalledConfigServer")
