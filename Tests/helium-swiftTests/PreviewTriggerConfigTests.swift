@@ -110,6 +110,21 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertNil(previewInfo?.webPaywallBundleUrl)
     }
 
+    func testPreviewDoesNotInheritDonorHoldout() throws {
+        var donor = makeDonorPaywallInfo()
+        donor.shouldShow = false
+        let config = makeTestConfig(triggers: ["a_trigger": donor])
+        injectConfig(config, json: try JSON(data: JSONEncoder().encode(config)))
+
+        try setPreviewConfig(secondTry: makeSecondTryBundle())
+
+        for trigger in [previewTrigger, secondTryTrigger] {
+            XCTAssertEqual(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)?.shouldShow, true)
+            XCTAssertEqual(HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][trigger]["shouldShow"].bool, true)
+        }
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger("a_trigger")?.shouldShow, false)
+    }
+
     func testPreviewUsesProvidedWebCheckoutUrl() throws {
         injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
         let previewWebCheckoutUrl = "https://bundles-staging.clickthrough.to/x/bundle_1778610753360.html"

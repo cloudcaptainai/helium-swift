@@ -1390,6 +1390,7 @@ public class HeliumFetchedConfigManager {
         identity: PreviewPaywallIdentity?
     ) throws -> HeliumPaywallInfo {
         var previewPaywallInfo = donorPaywallInfo
+        previewPaywallInfo.shouldShow = true
 
         if let identity {
             previewPaywallInfo.paywallID = identity.paywallId ?? 0
@@ -1470,6 +1471,7 @@ public class HeliumFetchedConfigManager {
 
     private static func previewEntryJSON(clonedFrom sourceJSON: JSON, bundleUrl: String, shouldEnableScroll: Bool?, webSecondTryConfig: WebSecondTryConfig? = nil) -> JSON {
         var entryJSON = sourceJSON
+        entryJSON["shouldShow"] = JSON(true)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["bundleURL"] = JSON(bundleUrl)
         entryJSON["resolvedConfig"]["baseStack"]["componentProps"]["shouldEnableScroll"] = JSON(shouldEnableScroll ?? true)
         if let webSecondTryConfig, let data = try? JSONEncoder().encode(webSecondTryConfig), let value = try? JSON(data: data) {
