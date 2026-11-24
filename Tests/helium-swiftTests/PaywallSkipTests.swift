@@ -184,6 +184,52 @@ final class PaywallSkipTests: HeliumTestCase {
     }
 
     @MainActor
+    func testEmbeddedLateExperimentAllocatesAfterOrdinaryOrMissingAssignment() throws {
+        Helium.shared.markInitializedForTesting()
+        for triggers in [["checkout": makeTestPaywallInfo()], [:]] {
+            ExperimentAllocationTracker.shared.reset()
+            injectConfig(makeTestConfig(triggers: triggers))
+            let eventStart = mockDelegate.receivedEvents.count
+            let started = expectation(description: "Ordinary entitlement check suspended")
+            let source = SuspendedPaywallEntitlementsSource(started: started)
+            Helium.config.thirdPartyEntitlementsSource = source
+            let notShown = expectation(description: "Late experiment holdout")
+            let view = HeliumPaywall(
+                trigger: "checkout", config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: true, loadingBudget: 10)
+            ) { reason in
+                Color.clear.onAppear {
+                    XCTAssertEqual(reason, .targetingHoldout)
+                    notShown.fulfill()
+                }
+            }
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+            window.rootViewController = UIHostingController(rootView: view)
+            window.makeKeyAndVisible()
+            defer {
+                window.isHidden = true
+                window.rootViewController = nil
+                Helium.config.thirdPartyEntitlementsSource = nil
+                Task { await source.release() }
+            }
+            window.layoutIfNeeded()
+            wait(for: [started], timeout: 3)
+            drainMainActor()
+            XCTAssertFalse(mockDelegate.receivedEvents.dropFirst(eventStart).contains { $0 is UserAllocatedEvent })
+
+            injectConfig(try experimentConfig())
+            Task { await source.release() }
+            wait(for: [notShown], timeout: 3)
+            waitForEventDispatch { self.mockDelegate.receivedEvents.dropFirst(eventStart).contains { $0 is PaywallSkippedEvent } }
+            drainMainActor()
+
+            let events = Array(mockDelegate.receivedEvents.dropFirst(eventStart))
+            XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, 1)
+            XCTAssertEqual(events.filter { $0 is PaywallSkippedEvent }.count, 1)
+            XCTAssertFalse(events.contains { $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent })
+        }
+    }
+
+    @MainActor
     func testModalSkipsConfigArrivingBeforePresentationBegins() throws {
         try configureFallbackView()
         XCTAssertNil(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger("checkout"))

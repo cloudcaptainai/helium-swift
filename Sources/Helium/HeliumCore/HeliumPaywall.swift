@@ -215,8 +215,8 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func recordDecisionIfNeeded() {
         guard hasAppeared, !decisionRecorded else { return }
         if case .waitingForPaywallsDownload = state { return }
-        decisionRecorded = true
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: decisionPaywallInfo)
+        let recorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: decisionPaywallInfo)
+        decisionRecorded = recorded || !state.isLoading
     }
     
     private func onPaywallUnavailable(reason: PaywallNotShownReason) {

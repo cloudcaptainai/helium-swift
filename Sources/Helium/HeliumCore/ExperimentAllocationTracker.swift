@@ -169,15 +169,16 @@ class ExperimentAllocationTracker {
         return true
     }
     
-    func recordDecision(trigger: String, paywallInfo: HeliumPaywallInfo?) {
+    @discardableResult
+    func recordDecision(trigger: String, paywallInfo: HeliumPaywallInfo?) -> Bool {
         guard let config = HeliumFetchedConfigManager.shared.getConfig(),
               var experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else {
-            return
+            return false
         }
         
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
-            return
+            return false
         }
         
         // Get user's persistent ID
@@ -191,7 +192,7 @@ class ExperimentAllocationTracker {
         // Check both new and legacy keys for existing allocation
         let existingAllocation = storedAllocations[newKey] ?? storedAllocations[legacyKey]
         guard shouldFireAllocationEvent(current: currentAllocation, existing: existingAllocation) else {
-            return  // No change, don't fire event
+            return true  // No change, don't fire event
         }
         
         // Store the new allocation using experiment ID key
@@ -210,6 +211,7 @@ class ExperimentAllocationTracker {
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
+        return true
     }
     
     /// Resets all allocation tracking
