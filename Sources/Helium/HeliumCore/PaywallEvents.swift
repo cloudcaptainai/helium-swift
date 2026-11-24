@@ -1364,11 +1364,18 @@ public struct UserAllocatedEvent: HeliumEvent {
     /// When this event occurred
     /// - Note: Captured using Date() at event creation time
     public let timestamp: Date
+
+    let decisionPaywallInfo: HeliumPaywallInfo?
     
     public init(trigger: String, experimentInfo: ExperimentInfo, timestamp: Date = Date()) {
+        self.init(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: nil, timestamp: timestamp)
+    }
+
+    init(trigger: String, experimentInfo: ExperimentInfo, paywallInfo: HeliumPaywallInfo?, timestamp: Date = Date()) {
         self.trigger = trigger
         self.experimentInfo = experimentInfo
         self.timestamp = timestamp
+        self.decisionPaywallInfo = paywallInfo
     }
     
     public var eventName: String { "userAllocated" }

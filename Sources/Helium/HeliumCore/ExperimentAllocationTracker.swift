@@ -208,7 +208,7 @@ class ExperimentAllocationTracker {
         experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
     }
     

@@ -97,6 +97,44 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertFalse(Helium.shared.hidePaywall())
     }
 
+    func testAllocationSerializationKeepsDecisionSnapshotAfterRefreshOrRemoval() throws {
+        var configA = try experimentConfig(shouldShow: true)
+        var infoA = try XCTUnwrap(configA.triggerToPaywalls["checkout"])
+        infoA.paywallID = 101
+        infoA.paywallUUID = "decision-paywall-A"
+        configA.triggerToPaywalls["checkout"] = infoA
+        injectConfig(configA)
+        ExperimentAllocationTracker.shared.recordDecision(trigger: "checkout", paywallInfo: infoA)
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
+        let allocation = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
+
+        var infoB = infoA
+        infoB.paywallID = 202
+        infoB.paywallUUID = "refreshed-paywall-B"
+        infoB.experimentID = "refreshed-experiment"
+        var experimentB = try XCTUnwrap(infoB.experimentInfo)
+        experimentB["experimentId"] = JSON("refreshed-experiment")
+        experimentB["chosenVariantDetails"]["allocationId"] = JSON("refreshed-arm-B")
+        infoB.experimentInfo = experimentB
+
+        for config in [makeTestConfig(triggers: ["checkout": infoB]), makeTestConfig(triggers: [:])] {
+            injectConfig(config)
+            let payload = testAnalyticsDictionary(HeliumAnalyticsManager.shared.buildLoggedEvent(for: allocation, paywallSession: nil))
+            XCTAssertEqual(payload["experimentID"] as? String, "exp-flow")
+            XCTAssertEqual(payload["paywallID"] as? Int, 101)
+            XCTAssertEqual(payload["paywallUUID"] as? String, "decision-paywall-A")
+            let experiment = try XCTUnwrap(payload["experimentInfo"] as? [String: Any])
+            XCTAssertEqual(experiment["experimentId"] as? String, "exp-flow")
+            let variant = try XCTUnwrap(experiment["chosenVariantDetails"] as? [String: Any])
+            XCTAssertEqual(variant["allocationId"] as? String, "synthetic-arm")
+            XCTAssertEqual(experiment["isEnrolled"] as? Bool, true)
+            let context = try XCTUnwrap(payload["contextTraits"] as? [String: Any])
+            let application = try XCTUnwrap(context["applicationInfo"] as? [String: Any])
+            XCTAssertEqual(application["environment"] as? String, AppReceiptsHelper.shared.getEnvironment())
+            XCTAssertNil(payload["heliumPaywallSessionId"])
+        }
+    }
+
     @MainActor
     func testEmbeddedEntitlementRefreshDoesNotAllocateTwice() throws {
         Helium.shared.markInitializedForTesting()
