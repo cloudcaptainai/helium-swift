@@ -134,6 +134,24 @@ final class PreviewTriggerConfigTests: XCTestCase {
         XCTAssertEqual(previewInfo?.webPaywallBundleUrl, previewWebCheckoutUrl)
     }
 
+    func testBundlelessHoldoutRejectsPreviewWithoutChangingConfig() throws {
+        var donor = makeTestPaywallInfo()
+        donor.shouldShow = false
+        donor.resolvedConfig = AnyCodable([String: Any]())
+        let config = makeTestConfig(triggers: ["a_trigger": donor])
+        injectConfig(config, json: try JSON(data: JSONEncoder().encode(config)))
+
+        XCTAssertThrowsError(try setPreviewConfig(secondTry: makeSecondTryBundle())) { error in
+            guard case HeliumControlPanelError.invalidResolvedConfig = error else {
+                return XCTFail("Expected invalidResolvedConfig, got \(error)")
+            }
+        }
+        XCTAssertNil(previewInfo)
+        XCTAssertNil(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(secondTryTrigger))
+        XCTAssertEqual(HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger("a_trigger")?.shouldShow, false)
+        XCTAssertFalse(HeliumFetchedConfigManager.shared.fetchedConfigJSON?["triggerToPaywalls"][previewTrigger].exists() ?? true)
+    }
+
     func testPreviewTreatsEmptyWebCheckoutUrlAsMissing() throws {
         injectConfig(makeTestConfig(triggers: ["a_trigger": makeDonorPaywallInfo()]))
 
