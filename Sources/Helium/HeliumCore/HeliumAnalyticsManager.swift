@@ -147,7 +147,8 @@ class HeliumAnalyticsManager {
         if let paywallSession {
             isFallback = paywallSession.fallbackType != .notFallback
         }
-        if let allocation = event as? UserAllocatedEvent {
+        let allocation = event as? UserAllocatedEvent
+        if let allocation {
             experimentID = allocation.experimentInfo.experimentId
             experimentInfo = allocation.experimentInfo
             paywallInfo = allocation.decisionPaywallInfo
@@ -172,7 +173,8 @@ class HeliumAnalyticsManager {
             }
         }
         
-        let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
+        let fetchedConfigId = allocation != nil ? allocation?.decisionConfigId
+            : HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
 
         let heliumEventPayload: SegmentJSON

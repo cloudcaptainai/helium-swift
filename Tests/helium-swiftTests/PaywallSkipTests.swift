@@ -120,6 +120,7 @@ final class PaywallSkipTests: HeliumTestCase {
         for config in [makeTestConfig(triggers: ["checkout": infoB]), makeTestConfig(triggers: [:])] {
             injectConfig(config)
             let payload = testAnalyticsDictionary(HeliumAnalyticsManager.shared.buildLoggedEvent(for: allocation, paywallSession: nil))
+            XCTAssertEqual(payload["fetchedConfigId"] as? String, configA.fetchedConfigID.uuidString)
             XCTAssertEqual(payload["experimentID"] as? String, "exp-flow")
             XCTAssertEqual(payload["paywallID"] as? Int, 101)
             XCTAssertEqual(payload["paywallUUID"] as? String, "decision-paywall-A")
