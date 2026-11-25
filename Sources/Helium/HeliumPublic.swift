@@ -179,6 +179,9 @@ public class Helium {
     }
     
     /// Hide the top-most paywall that was shown via presentPaywall, if any are currently displayed.
+    ///
+    /// Paywalls shown with `presentPaywall` hide themselves (for example after a purchase or when
+    /// the user closes them), so a normal presentation flow does not need to call this.
     @discardableResult
     public func hidePaywall() -> Bool {
         let result = HeliumPaywallPresenter.shared.hideUpsell()
@@ -188,6 +191,9 @@ public class Helium {
     
     /// Hide all paywalls shown via ``presentPaywall()``, including any
     /// "second try" paywalls.
+    ///
+    /// Paywalls shown with `presentPaywall` hide themselves (for example after a purchase or when
+    /// the user closes them), so a normal presentation flow does not need to call this.
     ///
     /// This does not dismiss `.heliumPaywall` modifier or embedded paywalls —
     /// those are driven by the host view's state (flip your `isPresented` binding
