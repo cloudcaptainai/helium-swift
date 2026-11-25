@@ -16,6 +16,15 @@ enum DiagnosticCta: Equatable {
     /// Opens `url`; the modal offers a copy-URL affordance alongside it.
     case openUrl(label: String, url: String)
 
+    case copyUrl(label: String, url: String)
+
     /// Copies the diagnostic report. Used where no useful destination URL exists.
     case copyReport
+
+    var url: String? {
+        switch self {
+        case let .openUrl(_, url), let .copyUrl(_, url): return url
+        case .copyReport: return nil
+        }
+    }
 }
