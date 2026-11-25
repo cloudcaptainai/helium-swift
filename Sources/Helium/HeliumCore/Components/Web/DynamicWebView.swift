@@ -269,6 +269,7 @@ struct DynamicWebView: View {
             _ = Date()
             var mergedContext = contextJSON
             let session = actionsDelegate.delegate.paywallSession
+            // Reload attempts reuse the published traits so the WebView and checkout never diverge.
             let traits = session.resolvedPaywallTraits ?? HeliumUserTraits.forPaywall(
                 triggerName: session.trigger,
                 presentationTraits: dynamicPaywallTraits ?? session.presentationContext.customPaywallTraits
