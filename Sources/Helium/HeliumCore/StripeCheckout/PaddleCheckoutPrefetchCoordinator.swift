@@ -177,7 +177,7 @@ final class PaddleCheckoutPrefetchCoordinator {
 
     static let defaultAwaitTimeoutSeconds: TimeInterval = 3.0
 
-    /// Returns `.notStarted` if no prefetch was scheduled; `.failed` with
+    /// Returns `.notStarted` if no prefetch was scheduled or the wait was canceled; `.failed` with
     /// `PaddlePrefetchAwaitTimeout` on timeout.
     func awaitOutcome(
         sessionId: String,
@@ -186,45 +186,45 @@ final class PaddleCheckoutPrefetchCoordinator {
         surface: PaddlePrefetchSurface = .primary
     ) async -> PaddlePrefetchOutcome {
         let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
-        guard let task = cache[key] else {
+        guard !Task.isCancelled, let task = cache[key] else {
             return .notStarted
         }
 
         let timeoutNanos = UInt64(timeout * 1_000_000_000)
 
-        // Continuation, not withTaskGroup: the group waits for ALL children
-        // before returning, and `await task.value` ignores cancellation.
-        return await withCheckedContinuation { (continuation: CheckedContinuation<PaddlePrefetchOutcome, Never>) in
-            let resumeGuard = ResumeGuard()
-
+        // Let cancellation end this wait without canceling the shared prefetch.
+        let outcomes = AsyncStream<PaddlePrefetchOutcome>(bufferingPolicy: .bufferingOldest(1)) { continuation in
             Task.detached(priority: .userInitiated) {
                 let outcome = await task.value
-                if resumeGuard.tryResume() {
-                    continuation.resume(returning: outcome)
-                }
+                continuation.yield(outcome)
+                continuation.finish()
             }
 
-            Task.detached(priority: .userInitiated) {
-                try? await Task.sleep(nanoseconds: timeoutNanos)
-                if resumeGuard.tryResume() {
-                    continuation.resume(returning: .failed(
-                        error: PaddlePrefetchAwaitTimeout(priceId: priceId, timeout: timeout)
-                    ))
-                }
+            let timer = Task.detached(priority: .userInitiated) {
+                guard (try? await Task.sleep(nanoseconds: timeoutNanos)) != nil else { return }
+                continuation.yield(.failed(
+                    error: PaddlePrefetchAwaitTimeout(priceId: priceId, timeout: timeout)
+                ))
+                continuation.finish()
             }
+            continuation.onTermination = { _ in timer.cancel() }
         }
+        var iterator = outcomes.makeAsyncIterator()
+        return await iterator.next() ?? .notStarted
     }
 
     func collectPrefetchOutcomes(
         sessionId: String,
-        priceIds: [String]
+        priceIds: [String],
+        timeout: TimeInterval = PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds,
+        surface: PaddlePrefetchSurface = .primary
     ) async -> [String: PaddlePrefetchOutcome] {
         guard !priceIds.isEmpty else { return [:] }
         return await withTaskGroup(of: (String, PaddlePrefetchOutcome).self) { group in
             for priceId in priceIds {
                 group.addTask { @MainActor in
                     let outcome = await self.awaitOutcome(
-                        sessionId: sessionId, priceId: priceId
+                        sessionId: sessionId, priceId: priceId, timeout: timeout, surface: surface
                     )
                     return (priceId, outcome)
                 }
@@ -232,6 +232,12 @@ final class PaddleCheckoutPrefetchCoordinator {
             var result: [String: PaddlePrefetchOutcome] = [:]
             for await (priceId, outcome) in group {
                 result[priceId] = outcome
+                if surface == .secondTry {
+                    guard case .ready = outcome else {
+                        group.cancelAll()
+                        break
+                    }
+                }
             }
             return result
         }

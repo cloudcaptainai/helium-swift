@@ -20,6 +20,7 @@ extension ExternalWebCheckoutManager {
             switch result {
             case .opened: outcomeKind = .opened
             case .preCheckResolved: outcomeKind = .preCheckResolved
+            case .cancelled: outcomeKind = .cancelled
             }
             HeliumObservabilityManager.shared.track(
                 WebCheckoutFlowResolved(

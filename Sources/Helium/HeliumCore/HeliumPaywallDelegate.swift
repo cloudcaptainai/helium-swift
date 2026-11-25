@@ -443,6 +443,12 @@ class HeliumPaywallDelegateWrapper {
         overridePaywallSessionId: String? = nil,
         sendToAnalytics: Bool = true
     ) {
+        if event is PaywallCloseEvent {
+            paywallSession?.markClosed()
+        } else if event is PaywallOpenEvent {
+            paywallSession?.markOpened()
+        }
+
         Task { @MainActor in
             let context = overridePresentationContext ?? paywallSession?.presentationContext
             

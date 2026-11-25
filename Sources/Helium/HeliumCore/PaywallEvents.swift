@@ -75,7 +75,7 @@ public extension ProductEvent {
 // MARK: - Lifecycle Events
 
 /// Event fired when a paywall is displayed to the user
-/// - Note: Event fired when a paywall becomes visible on screen via onReceive of presentationState.isOpen changing to true. Fired by logImpression() when paywall view's onAppear is called or presentation state changes.
+/// Fired when a paywall becomes visible.
 public struct PaywallOpenEvent: PaywallContextEvent {
     /// The trigger identifier that caused this paywall to be shown
     /// - Note: Corresponds to trigger key in Helium dashboard (e.g., "premium_upgrade", "onboarding")
@@ -147,7 +147,7 @@ public struct PaywallOpenEvent: PaywallContextEvent {
 }
 
 /// Event fired when a paywall is closed
-/// - Note: Event fired when a paywall disappears from screen via onReceive of presentationState.isOpen changing to false. Fired by logClosure() when the paywall view is no longer visible.
+/// Fired when a paywall closes.
 public struct PaywallCloseEvent: PaywallContextEvent {
     /// The trigger identifier for the paywall that was closed
     /// - Note: Corresponds to trigger key in Helium dashboard

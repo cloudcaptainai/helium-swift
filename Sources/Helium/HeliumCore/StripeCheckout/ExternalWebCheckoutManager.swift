@@ -21,11 +21,13 @@ enum WebCheckoutOutcome {
     /// Pre-checkout entitlement check found the user already owns the product;
     /// browser was not opened and the flow is fully resolved.
     case preCheckResolved
+    case cancelled
 
     var transactionStatus: HeliumPaywallTransactionStatus {
         switch self {
         case .opened: return .pending
         case .preCheckResolved: return .restored
+        case .cancelled: return .cancelled
         }
     }
 }
@@ -63,8 +65,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
     /// Builds the enriched checkout URL from the paywall's web bundle URL
     /// and opens it in an external browser, then starts observing for purchase completion.
-    /// Returns `.opened` when the browser was launched, or `.preCheckResolved` if the
-    /// pre-checkout entitlement check resolved the flow without opening the browser.
+    /// A Paddle checkout can be cancelled if its paywall closes before browser handoff.
     @MainActor
     func startCheckoutFlow(
         for productKey: String,
@@ -89,6 +90,13 @@ public class ExternalWebCheckoutManager: NSObject {
         paywallSession: PaywallSession,
         paywallTraits: HeliumUserTraits?
     ) async throws -> WebCheckoutOutcome {
+        let isPaddle = provider.kind == .paddle
+        let presentationID = isPaddle ? paywallSession.activePresentationID : nil
+        func paddlePaywallClosed() -> Bool {
+            isPaddle && (presentationID == nil || paywallSession.activePresentationID != presentationID)
+        }
+        guard !paddlePaywallClosed() else { return .cancelled }
+
         guard let resolvedSuccessURL = provider.getCheckoutSuccessURL(),
               let resolvedCancelURL = provider.getCheckoutCancelURL() else {
             throw WebCheckoutError.checkoutURLsNotConfigured
@@ -114,6 +122,7 @@ public class ExternalWebCheckoutManager: NSObject {
             offeredProductKeys: offeredProductKeys,
             a2wEnabled: a2wEnabled
         )
+        guard !paddlePaywallClosed() else { return .cancelled }
         if Self.preCheckSkipsCheckout(
             entitledIds: entitledBefore,
             productKey: productKey,
@@ -140,6 +149,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         var paddleBootstrapsDict: [String: Any]? = nil
         var paddleAlreadyEntitledDict: [String: Any]? = nil
+        var paddleAwaitDeadline: DispatchTime?
         if provider.kind == .paddle,
            let tappedPriceId = PaddleCheckoutPrefetchCoordinator.extractPriceId(from: productKey) {
             let allPriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(
@@ -155,6 +165,7 @@ public class ExternalWebCheckoutManager: NSObject {
             }
 
             let awaitStart = Date()
+            paddleAwaitDeadline = .now() + PaddleCheckoutPrefetchCoordinator.defaultAwaitTimeoutSeconds
             let outcomes = await PaddleCheckoutPrefetchCoordinator.shared.collectPrefetchOutcomes(
                 sessionId: paywallSession.sessionId,
                 priceIds: priceIdsToAwait
@@ -178,6 +189,7 @@ public class ExternalWebCheckoutManager: NSObject {
                 shortCircuited: shortCircuit != nil,
                 paywallSession: paywallSession
             )
+            guard !paddlePaywallClosed() else { return .cancelled }
 
             if let shortCircuit {
                 HeliumLogger.log(.debug, category: .entitlements,
@@ -217,7 +229,12 @@ public class ExternalWebCheckoutManager: NSObject {
 
         let analyticsData = try JSONEncoder().encode(loggedEvent)
         let analytics = try JSONSerialization.jsonObject(with: analyticsData) as? [String: Any] ?? [:]
-        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analytics: analytics)
+        let secondTry = await readySecondTry(
+            paywallSession: paywallSession,
+            entitledBefore: entitledBefore,
+            analytics: analytics,
+            paddleAwaitDeadline: paddleAwaitDeadline
+        )
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -234,11 +251,17 @@ public class ExternalWebCheckoutManager: NSObject {
             analytics: analytics
         )
 
+        guard !paddlePaywallClosed() else { return .cancelled }
         return try await openEnrichedCheckoutURL(enrichedURL, entitledProductIdsBeforeCheckout: entitledBefore, paywallSession: paywallSession, secondTry: secondTry?.config)
     }
 
     @MainActor
-    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analytics: [String: Any]) -> (config: WebSecondTryConfig, context: [String: Any])? {
+    func readySecondTry(
+        paywallSession: PaywallSession,
+        entitledBefore: Set<String>,
+        analytics: [String: Any],
+        paddleAwaitDeadline: DispatchTime? = nil
+    ) async -> (config: WebSecondTryConfig, context: [String: Any])? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
               let paywallID = second.paywallID, paywallID > 0,
@@ -260,15 +283,36 @@ public class ExternalWebCheckoutManager: NSObject {
         guard !Self.containsEntitledProduct(offered, entitledIds: entitledBefore) else { return nil }
         let paddlePriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: paddleKeys)
         guard paddlePriceIds.count == paddleKeys.count else { return nil }
-        let outcomes = PaddleCheckoutPrefetchCoordinator.shared.completedOutcomes(
-            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
-        )
-        for priceId in paddlePriceIds {
-            guard case .ready = outcomes[priceId] ?? .notStarted else { return nil }
-        }
-
         let prices = provider.getProductsPriceMap() ?? [:]
         guard offered.allSatisfy({ prices[$0] != nil }) else { return nil }
+
+        let coordinator = PaddleCheckoutPrefetchCoordinator.shared
+        var outcomes = coordinator.completedOutcomes(
+            sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
+        )
+        var pendingPriceIds: [String] = []
+        for priceId in paddlePriceIds {
+            switch outcomes[priceId] ?? .notStarted {
+            case .ready: break
+            case .notStarted: pendingPriceIds.append(priceId)
+            case .alreadyEntitled, .failed: return nil
+            }
+        }
+        if !pendingPriceIds.isEmpty {
+            // Primary and web second-try Paddle prices prefetch in parallel.
+            // Pending second-try prices share the primary's prefetch deadline.
+            let now = DispatchTime.now()
+            guard let paddleAwaitDeadline, now < paddleAwaitDeadline else { return nil }
+            let remaining = Double(paddleAwaitDeadline.uptimeNanoseconds - now.uptimeNanoseconds) / 1_000_000_000
+            let pendingOutcomes = await coordinator.collectPrefetchOutcomes(
+                sessionId: paywallSession.sessionId, priceIds: pendingPriceIds,
+                timeout: remaining, surface: .secondTry
+            )
+            for priceId in pendingPriceIds {
+                guard case .ready = pendingOutcomes[priceId] ?? .notStarted else { return nil }
+            }
+            outcomes.merge(pendingOutcomes) { _, awaited in awaited }
+        }
 
         var info = original
         info.webProductsOfferedPaddle = paddleKeys

@@ -13,6 +13,7 @@ public struct DynamicBaseTemplateView: View {
     @Environment(\.heliumLoadTimeTakenMS) var loadTimeTakenMS: UInt64?
     @StateObject private var actionsDelegate: HeliumActionsDelegate
     @StateObject private var actionsDelegateWrapper: ActionsDelegateWrapper
+    @State private var isOpen = false
     let filePath: String
     let backupFilePath: String?
     var componentPropsJSON: JSON
@@ -65,8 +66,8 @@ public struct DynamicBaseTemplateView: View {
             actionsDelegate.setDismissAction(dismissUnlessManual)
             if presentationState.isInline {
                 InlinePaywallDismissRegistry.register(sessionId: actionsDelegate.paywallSession.sessionId, dismissUnlessManual)
-                if !presentationState.isOpen {
-                    presentationState.isOpen = true
+                if !isOpen {
+                    isOpen = true
                     actionsDelegateWrapper.logImpression(viewType: presentationState.viewType, fallbackReason: fallbackReason, loadTimeTakenMS: loadTimeTakenMS)
                     if manualDismissal {
                         HeliumObservabilityManager.shared.track(
@@ -80,8 +81,8 @@ public struct DynamicBaseTemplateView: View {
         .onDisappear {
             if presentationState.isInline {
                 InlinePaywallDismissRegistry.unregister(sessionId: actionsDelegate.paywallSession.sessionId)
-                if presentationState.isOpen {
-                    presentationState.isOpen = false
+                if isOpen {
+                    isOpen = false
                     actionsDelegateWrapper.logClosure()
                 }
             }
