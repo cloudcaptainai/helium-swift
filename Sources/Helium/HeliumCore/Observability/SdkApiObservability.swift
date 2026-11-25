@@ -21,7 +21,6 @@ enum SdkApiMethod: String, CaseIterable {
     case resetStripeEntitlements = "reset_stripe_entitlements"
     case resetPaddleEntitlements = "reset_paddle_entitlements"
     case enableExternalWebCheckout = "enable_external_web_checkout"
-    case disableExternalWebCheckout = "disable_external_web_checkout"
     case setCustomRestoreFailedStrings = "set_custom_restore_failed_strings"
     case disableRestoreFailedDialog = "disable_restore_failed_dialog"
     case identitySetUserId = "identity_set_user_id"
@@ -47,7 +46,7 @@ enum SdkApiMethod: String, CaseIterable {
             tags.formUnion([.webCheckout, .deprecatedApi])
         case .handleURL, .getStripeCustomerId, .getPaddleCustomerId, .resetStripeEntitlements, .resetPaddleEntitlements:
             tags.insert(.webCheckout)
-        case .enableExternalWebCheckout, .disableExternalWebCheckout:
+        case .enableExternalWebCheckout:
             tags.formUnion([.webCheckout, .config])
         case .setCustomRestoreFailedStrings, .disableRestoreFailedDialog:
             tags.insert(.config)

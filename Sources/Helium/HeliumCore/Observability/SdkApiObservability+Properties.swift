@@ -85,16 +85,34 @@ func userTraitsObservabilityProperties(_ traits: HeliumUserTraits, viaMap: Bool)
 
 func webCheckoutObservabilityProperties(
     processors: WebCheckoutProcessors,
-    hasRedirectUrl: Bool,
+    redirectURL: String,
     accepted: Bool,
     deprecatedOverload: Bool
 ) -> [String: Any] {
-    [
+    var p: [String: Any] = [
         "processors": processors.observabilityValue,
-        "hasRedirectUrl": hasRedirectUrl,
         "accepted": accepted,
         "deprecatedOverload": deprecatedOverload,
     ]
+    p["redirectUrl"] = redirectURLForObservability(redirectURL)
+    return p
+}
+
+/// Well-formed URLs report scheme, host, and path. Anything else is still reported so a malformed
+/// value can be diagnosed, with the query, fragment, and credentials cut since they can carry user data.
+func redirectURLForObservability(_ redirectURL: String, maxLength: Int = 200) -> String {
+    if let url = URL(string: redirectURL), let scheme = url.scheme, !scheme.isEmpty,
+       URLComponents(url: url, resolvingAgainstBaseURL: false) != nil {
+        return String(urlForObservability(url).prefix(maxLength))
+    }
+    let withoutQuery = String(redirectURL.prefix { $0 != "?" && $0 != "#" })
+    let schemeParts = withoutQuery.components(separatedBy: "://")
+    let schemePrefix = schemeParts.count > 1 ? schemeParts[0] + "://" : ""
+    let rest = schemeParts.count > 1 ? schemeParts.dropFirst().joined(separator: "://") : withoutQuery
+    let authority = rest.prefix { $0 != "/" }
+    let host = authority.split(separator: "@", omittingEmptySubsequences: false).last ?? ""
+    let path = rest.drop { $0 != "/" }
+    return String((schemePrefix + String(host) + String(path)).prefix(maxLength))
 }
 
 extension PaywallPresentationConfig {

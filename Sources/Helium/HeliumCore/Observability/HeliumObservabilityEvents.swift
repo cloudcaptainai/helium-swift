@@ -35,9 +35,13 @@ func truncatedForObservability(_ s: String?, maxLength: Int = 500) -> String? {
     return String(s.prefix(maxLength)) + "…(truncated)"
 }
 
-/// Cuts a URL at its query/fragment, which can carry user data.
+/// Drops a URL's credentials, query, and fragment, which can carry user data.
 func urlForObservability(_ url: URL) -> String {
-    String(url.absoluteString.prefix { $0 != "?" && $0 != "#" })
+    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    components?.percentEncodedUser = nil
+    components?.percentEncodedPassword = nil
+    let withoutCredentials = components?.string ?? url.absoluteString
+    return String(withoutCredentials.prefix { $0 != "?" && $0 != "#" })
 }
 
 /// Reports the trait key names only, never the trait values, since keys are fixed by the

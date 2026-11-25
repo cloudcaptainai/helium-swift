@@ -886,6 +886,11 @@ public class HeliumConfig {
     /// Register the URL as a deep link (custom scheme or universal link) and forward it to
     /// ``Helium/handleURL(_:)`` from your URL handler.
     ///
+    /// - Important: Call this before ``Helium/initialize(apiKey:)``. It only needs to be called once
+    ///   per app launch.
+    ///
+    /// - SeeAlso: [Paddle onboarding guide](https://docs.tryhelium.com/guides/paddle-onboarding-guide)
+    ///
     /// - Parameters:
     ///   - redirectURL: The URL checkout redirects back to when the user is done.
     ///   - paymentProcessors: Which payment processors to enable. Paddle, Stripe, or both.
@@ -902,7 +907,7 @@ public class HeliumConfig {
         }
         trackSdkApiCall(.enableExternalWebCheckout, webCheckoutObservabilityProperties(
             processors: paymentProcessors,
-            hasRedirectUrl: !redirectURL.isEmpty,
+            redirectURL: redirectURL,
             accepted: accepted,
             deprecatedOverload: false
         ))
@@ -912,6 +917,11 @@ public class HeliumConfig {
     ///
     /// Prefer ``enableExternalWebCheckout(redirectURL:paymentProcessors:)`` — a single redirect
     /// URL covers all checkout outcomes.
+    ///
+    /// - Important: Call this before ``Helium/initialize(apiKey:)``. It only needs to be called once
+    ///   per app launch.
+    ///
+    /// - SeeAlso: [Paddle onboarding guide](https://docs.tryhelium.com/guides/paddle-onboarding-guide)
     @available(*, deprecated, message: "Use enableExternalWebCheckout(redirectURL:paymentProcessors:) instead. A single redirect URL covers success, cancel, and payment failure; the SDK determines the outcome itself.")
     public func enableExternalWebCheckout(
         successURL: String,
@@ -927,7 +937,7 @@ public class HeliumConfig {
         }
         trackSdkApiCall(.enableExternalWebCheckout, webCheckoutObservabilityProperties(
             processors: paymentProcessors,
-            hasRedirectUrl: !successURL.isEmpty,
+            redirectURL: successURL,
             accepted: accepted,
             deprecatedOverload: true
         ))
@@ -948,12 +958,8 @@ public class HeliumConfig {
         return true
     }
 
-    /// Disables External Web Checkout Flow. Paywalls with Paddle or Stripe products
-    /// will not show. Your fallback paywall/s, if provided, will show instead.
-    /// NOTE - if you have existing Paddle/Stripe customers, Helium will attempt to continue respecting their entitlements but is
-    /// not guaranteed to do so.
-    public func disableExternalWebCheckout() {
-        trackSdkApiCall(.disableExternalWebCheckout)
+    /// Only for Helium's internal unit and UI tests; not part of the public API.
+    func clearExternalWebCheckoutForTesting() {
         webCheckoutProcessors = []
         checkoutSuccessURL = nil
         checkoutCancelURL = nil

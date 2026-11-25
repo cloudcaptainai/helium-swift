@@ -23,7 +23,7 @@ final class WebApplePayProbeTests: XCTestCase {
         WebApplePayAvailability.shared.setInBackgroundForTesting(nil)
         ApplePayHelper.shared.setCanMakePaymentsForTesting(nil)
         ApplePayHelper.shared.loadOverrideForTesting = nil
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.clearExternalWebCheckoutForTesting()
         Helium.config.allowWebCheckoutWithoutUserId = false
         Helium.config.enableWebApplePayReadiness = true
         Helium.resetHelium()
@@ -359,7 +359,7 @@ final class WebApplePayProbeTests: XCTestCase {
     }
 
     func testNoProbeRunsForAnAppThatDoesNotUseWebCheckout() {
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.clearExternalWebCheckoutForTesting()
 
         XCTAssertFalse(WebApplePayAvailability.shared.shouldProbe())
     }
@@ -438,7 +438,7 @@ final class WebApplePayProbeTests: XCTestCase {
     func testAStoredMeasurementIsNotReportedOnceWebCheckoutIsDisabled() {
         configureWebCheckout(processor: .paddle)
         WebApplePayAvailability.shared.setReadinessForTesting(.ready)
-        Helium.config.disableExternalWebCheckout()
+        Helium.config.clearExternalWebCheckoutForTesting()
 
         XCTAssertEqual(WebApplePayAvailability.shared.readiness(), .unknown(.notMeasured))
 
