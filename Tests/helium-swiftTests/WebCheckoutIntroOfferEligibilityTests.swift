@@ -1,7 +1,7 @@
 import XCTest
 @testable import Helium
 
-private final class FixedWebEntitlementsSource: HeliumPaymentEntitlementsSource, @unchecked Sendable {
+final class FixedWebEntitlementsSource: HeliumPaymentEntitlementsSource, @unchecked Sendable {
     let productKeys: Set<String>
 
     init(provider: PaymentProviderConfig, productKeys: Set<String>) {
@@ -31,13 +31,15 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         )
         let valid = makeTestSession(paywallInfo: info)
         let analytics = testAnalyticsDictionary(makeTestCheckoutAnalytics(session: valid, provider: .stripe))
-        XCTAssertNotNil(manager.readySecondTry(paywallSession: valid, entitledBefore: [], analytics: analytics))
+        XCTAssertNotNil(manager.resolveSecondTry(paywallSession: valid, entitledBefore: [], analytics: analytics)?.config)
         info.webSecondTryConfig = WebSecondTryConfig(
             paywallUUID: "b", paywallID: 42, paywallTemplateName: "Second", paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
             productsOfferedPaddle: ["pro_b:pri_b"], productsOfferedStripe: [key], showOn: ["dismissed"]
         )
         let mixed = makeTestSession(paywallInfo: info)
-        XCTAssertNil(manager.readySecondTry(paywallSession: mixed, entitledBefore: [], analytics: analytics))
+        let rejected = try XCTUnwrap(manager.resolveSecondTry(paywallSession: mixed, entitledBefore: [], analytics: analytics))
+        XCTAssertNil(rejected.config)
+        XCTAssertEqual(rejected.context["paywallUnavailableReason"] as? String, "webSecondTryProviderMismatch")
     }
 
     @MainActor
@@ -60,7 +62,9 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         let parentEvent = try XCTUnwrap(analyticsDict["heliumEvent"] as? [String: Any])
         XCTAssertEqual(parentEvent["isSecondTry"] as? Bool, false)
         analyticsDict["additionalPaywallFields"] = ["paywallBundleUrl": "https://example.com/native", "webPaywallBundleUrl": "https://example.com/a", "other": "kept"]
-        let ready = try XCTUnwrap(manager.readySecondTry(paywallSession: session, entitledBefore: [], analytics: analyticsDict))
+        let ready = try XCTUnwrap(manager.resolveSecondTry(paywallSession: session, entitledBefore: [], analytics: analyticsDict))
+        XCTAssertNotNil(ready.config)
+        XCTAssertNil(ready.context["paywallUnavailableReason"])
         XCTAssertEqual(ready.context["paywallUUID"] as? String, "b")
         XCTAssertEqual(ready.context["paywallVersionUUID"] as? String, "v")
         let context = try XCTUnwrap(ready.context["perPaywallCtx"] as? [String: Any])
@@ -83,14 +87,18 @@ final class WebCheckoutIntroOfferEligibilityTests: XCTestCase {
         XCTAssertEqual(fields["other"], "kept")
         XCTAssertEqual(event["paywallTemplateName"] as? String, "Second")
         XCTAssertEqual(event["isSecondTry"] as? Bool, true)
-        XCTAssertNil(manager.readySecondTry(paywallSession: session, entitledBefore: ["prod_b:price_other"], analytics: analyticsDict))
         for (id, name) in [(nil, "Second"), (0, "Second"), (42, nil), (42, "")] as [(Int?, String?)] {
             info.webSecondTryConfig = WebSecondTryConfig(
                 paywallUUID: "b", paywallID: id, paywallTemplateName: name, paywallVersionUUID: "v", bundleUrl: "https://example.com/b",
                 productsOfferedPaddle: [], productsOfferedStripe: [key], showOn: ["dismissed"]
             )
             let incompleteSession = makeTestSession(paywallInfo: info)
-            XCTAssertNil(manager.readySecondTry(paywallSession: incompleteSession, entitledBefore: [], analytics: analyticsDict))
+            let unavailable = try XCTUnwrap(manager.resolveSecondTry(paywallSession: incompleteSession, entitledBefore: [], analytics: analyticsDict))
+            XCTAssertNil(unavailable.config)
+            XCTAssertEqual(unavailable.context["paywallUnavailableReason"] as? String, "webSecondTryInvalidPaywall")
+            let perPaywall = try XCTUnwrap(unavailable.context["perPaywallCtx"] as? [String: Any])
+            let target = try XCTUnwrap(perPaywall["analytics"] as? [String: Any])
+            XCTAssertEqual(target["paywallID"] as? Int, id == 42 ? 42 : nil)
         }
     }
 

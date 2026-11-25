@@ -42,6 +42,8 @@ public class ExternalWebCheckoutManager: NSObject {
     private var foregroundCheckTask: Task<Void, Never>?
     private var pendingBackgroundObserver: NSObjectProtocol?
 
+    typealias SecondTryResolution = (config: WebSecondTryConfig?, context: [String: Any])
+
     // Server-managed checkout observation
     private struct CheckoutObservation {
         let paywallSession: PaywallSession
@@ -217,7 +219,7 @@ public class ExternalWebCheckoutManager: NSObject {
 
         let analyticsData = try JSONEncoder().encode(loggedEvent)
         let analytics = try JSONSerialization.jsonObject(with: analyticsData) as? [String: Any] ?? [:]
-        let secondTry = readySecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analytics: analytics)
+        let secondTry = resolveSecondTry(paywallSession: paywallSession, entitledBefore: entitledBefore, analytics: analytics)
         let enrichedURL = try buildEnrichedCheckoutURL(
             baseURL: baseURL,
             analyticsEvent: loggedEvent,
@@ -230,7 +232,7 @@ public class ExternalWebCheckoutManager: NSObject {
             paddleBootstraps: paddleBootstrapsDict,
             paddleAlreadyEntitled: paddleAlreadyEntitledDict,
             paywallTraits: paywallTraits,
-            webSecondTryConfig: secondTry.map { $0.context },
+            webSecondTryConfig: secondTry?.context,
             analytics: analytics
         )
 
@@ -238,61 +240,63 @@ public class ExternalWebCheckoutManager: NSObject {
     }
 
     @MainActor
-    func readySecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analytics: [String: Any]) -> (config: WebSecondTryConfig, context: [String: Any])? {
+    func resolveSecondTry(paywallSession: PaywallSession, entitledBefore: Set<String>, analytics: [String: Any]) -> SecondTryResolution? {
         guard let original = paywallSession.paywallInfoWithBackups,
               let second = original.webSecondTryConfig,
-              let paywallID = second.paywallID, paywallID > 0,
-              let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty else { return nil }
+              let analytics = secondTryAnalytics(analytics, config: second, parentSessionId: paywallSession.sessionId) else { return nil }
+        let sharedContext: [String: Any] = [
+            "showOn": second.showOn, "paywallUUID": second.paywallUUID, "paywallVersionUUID": second.paywallVersionUUID,
+        ]
+        func unavailable(_ reason: SecondTryUnavailableReason) -> SecondTryResolution {
+            var context = sharedContext
+            context["paywallUnavailableReason"] = reason.rawValue
+            context["perPaywallCtx"] = ["analytics": analytics]
+            return (nil, context)
+        }
+
+        guard let paywallID = second.paywallID, paywallID > 0,
+              let paywallTemplateName = second.paywallTemplateName, !paywallTemplateName.isEmpty else {
+            return unavailable(.webSecondTryInvalidPaywall)
+        }
 
         let paddleKeys = second.productsOfferedPaddle
         let stripeKeys = second.productsOfferedStripe
-        let offered: [String]
-        let selected: String
-        if provider.kind == .paddle {
-            guard stripeKeys.isEmpty, let first = paddleKeys.first else { return nil }
-            offered = paddleKeys
-            selected = first
-        } else {
-            guard paddleKeys.isEmpty, let first = stripeKeys.first else { return nil }
-            offered = stripeKeys
-            selected = first
+        guard (provider.kind == .paddle ? stripeKeys : paddleKeys).isEmpty else {
+            return unavailable(.webSecondTryProviderMismatch)
         }
-        guard !Self.containsEntitledProduct(offered, entitledIds: entitledBefore) else { return nil }
+        let offered = provider.kind == .paddle ? paddleKeys : stripeKeys
+        guard let selected = offered.first else { return unavailable(.webSecondTryNoProducts) }
+        guard !Self.containsEntitledProduct(offered, entitledIds: entitledBefore) else {
+            return unavailable(.webSecondTryAlreadyEntitled)
+        }
         let paddlePriceIds = PaddleCheckoutPrefetchCoordinator.extractPriceIds(from: paddleKeys)
-        guard paddlePriceIds.count == paddleKeys.count else { return nil }
+        guard paddlePriceIds.count == paddleKeys.count else { return unavailable(.webSecondTryInvalidPaddlePrices) }
         let outcomes = PaddleCheckoutPrefetchCoordinator.shared.completedOutcomes(
             sessionId: paywallSession.sessionId, priceIds: paddlePriceIds
         )
+        var prefetchFailed = false
+        var prefetchNotReady = false
         for priceId in paddlePriceIds {
-            guard case .ready = outcomes[priceId] ?? .notStarted else { return nil }
+            switch outcomes[priceId] ?? .notStarted {
+            case .ready: break
+            case .alreadyEntitled: return unavailable(.webSecondTryAlreadyEntitled)
+            case .failed: prefetchFailed = true
+            case .notStarted: prefetchNotReady = true
+            }
         }
+        if prefetchFailed { return unavailable(.webSecondTryPaddlePrefetchFailed) }
+        if prefetchNotReady { return unavailable(.webSecondTryPaddlePrefetchNotReady) }
 
         let prices = provider.getProductsPriceMap() ?? [:]
-        guard offered.allSatisfy({ prices[$0] != nil }) else { return nil }
+        guard offered.allSatisfy({ prices[$0] != nil }) else { return unavailable(.webSecondTryMissingPriceDetails) }
 
         var info = original
         info.webProductsOfferedPaddle = paddleKeys
         info.webProductsOfferedStripe = stripeKeys
-        let terms = buildStripeOfferTerms(paywallInfo: info)
-        var analytics = analytics
-        guard var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
-        analytics["paywallID"] = paywallID
-        analytics["paywallUUID"] = second.paywallUUID
-        analytics["paywallVersionUUID"] = second.paywallVersionUUID
-        analytics["heliumPaywallSessionId"] = UUID().uuidString
-        analytics["parentPaywallSessionId"] = paywallSession.sessionId
-        if var fields = analytics["additionalPaywallFields"] as? [String: Any] {
-            fields.removeValue(forKey: "paywallBundleUrl")
-            fields.removeValue(forKey: "webPaywallBundleUrl")
-            analytics["additionalPaywallFields"] = fields
-        }
-        event["paywallTemplateName"] = paywallTemplateName
-        event["isSecondTry"] = true
-        analytics["heliumEvent"] = event
         var perPaywall = perPaywallContext(
             productKey: selected,
             introOfferEligible: isIntroOfferEligibleForWebCheckout(paywallInfo: info),
-            stripeOfferTerms: terms,
+            stripeOfferTerms: buildStripeOfferTerms(paywallInfo: info),
             paddleBootstraps: PaddleCheckoutPrefetchCoordinator.encodeBootstrapsToCtx(outcomesByPriceId: outcomes),
             paddleAlreadyEntitled: nil,
             offeredPaddle: paddleKeys,
@@ -300,9 +304,29 @@ public class ExternalWebCheckoutManager: NSObject {
             completeForChild: true
         )
         perPaywall["analytics"] = analytics
-        return (second, ["bundleUrl": second.bundleUrl, "showOn": second.showOn,
-                         "paywallUUID": second.paywallUUID, "paywallVersionUUID": second.paywallVersionUUID,
-                         "perPaywallCtx": perPaywall])
+        var context = sharedContext
+        context["bundleUrl"] = second.bundleUrl
+        context["perPaywallCtx"] = perPaywall
+        return (second, context)
+    }
+
+    private func secondTryAnalytics(_ analytics: [String: Any], config: WebSecondTryConfig, parentSessionId: String) -> [String: Any]? {
+        var analytics = analytics
+        guard var event = analytics["heliumEvent"] as? [String: Any] else { return nil }
+        analytics["paywallID"] = config.paywallID.flatMap { $0 > 0 ? $0 : nil }
+        analytics["paywallUUID"] = config.paywallUUID
+        analytics["paywallVersionUUID"] = config.paywallVersionUUID
+        analytics["heliumPaywallSessionId"] = UUID().uuidString
+        analytics["parentPaywallSessionId"] = parentSessionId
+        if var fields = analytics["additionalPaywallFields"] as? [String: Any] {
+            fields.removeValue(forKey: "paywallBundleUrl")
+            fields.removeValue(forKey: "webPaywallBundleUrl")
+            analytics["additionalPaywallFields"] = fields
+        }
+        event["paywallTemplateName"] = config.paywallTemplateName
+        event["isSecondTry"] = true
+        analytics["heliumEvent"] = event
+        return analytics
     }
 
     private static func containsEntitledProduct(_ offered: [String], entitledIds: Set<String>) -> Bool {
