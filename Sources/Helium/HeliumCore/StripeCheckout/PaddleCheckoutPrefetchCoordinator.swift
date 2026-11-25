@@ -70,17 +70,22 @@ final class PaddleCheckoutPrefetchCoordinator {
     // MARK: - Paywall lifecycle hooks
 
     func handlePaywallOpen(paywallSession: PaywallSession) {
-        guard let info = paywallSession.paywallInfoWithBackups else { return }
-        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty {
-            prefetch(paywallSession: paywallSession, compositeKeys: webProducts)
-        }
-        if let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty,
-           let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
-            prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry)
+        paywallSession.isOpenForPrefetch = true
+        startPrefetchIfReady(paywallSession: paywallSession)
+    }
+
+    func startPrefetchIfReady(paywallSession: PaywallSession) {
+        guard paywallSession.isOpenForPrefetch,
+              let traits = paywallSession.resolvedPaywallTraits,
+              let info = paywallSession.paywallInfoWithBackups,
+              let webProducts = info.webProductsOfferedPaddle, !webProducts.isEmpty else { return }
+        prefetch(paywallSession: paywallSession, compositeKeys: webProducts, paywallTraits: traits)
+        if let secondTry = info.webSecondTryConfig, secondTry.productsOfferedStripe.isEmpty, !secondTry.productsOfferedPaddle.isEmpty {
+            prefetch(paywallSession: paywallSession, compositeKeys: secondTry.productsOfferedPaddle, surface: .secondTry, paywallTraits: traits)
         }
     }
 
-    func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary) {
+    func prefetch(paywallSession: PaywallSession, compositeKeys: [String], surface: PaddlePrefetchSurface = .primary, paywallTraits: HeliumUserTraits? = nil) {
         guard let clientToken = HeliumFetchedConfigManager.shared.paddleClientToken,
               !clientToken.isEmpty else {
             return
@@ -102,11 +107,13 @@ final class PaddleCheckoutPrefetchCoordinator {
             discountIdByPriceId: discountIdByPriceId,
             paddleClientToken: clientToken,
             iosBundleId: Bundle.main.bundleIdentifier,
-            surface: surface
+            surface: surface,
+            paywallTraits: paywallTraits
         )
     }
 
     func handlePaywallClose(paywallSession: PaywallSession) {
+        paywallSession.isOpenForPrefetch = false
         cancelForSession(sessionId: paywallSession.sessionId)
     }
 
@@ -119,7 +126,8 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountIdByPriceId: [String: String] = [:],
         paddleClientToken: String,
         iosBundleId: String?,
-        surface: PaddlePrefetchSurface = .primary
+        surface: PaddlePrefetchSurface = .primary,
+        paywallTraits: HeliumUserTraits? = nil
     ) {
         let sessionId = paywallSession.sessionId
         let scope = paywallSession.observabilityScope
@@ -130,6 +138,11 @@ final class PaddleCheckoutPrefetchCoordinator {
         let isPreviewRun = HeliumFetchedConfigManager.isPreviewTrigger(paywallSession.trigger)
         let isSimulatedPreviewRun = isPreviewRun &&
             HeliumPreviewConfigurationStore.shared.configuration.purchaseMode == .simulated
+        let traits = paywallTraits ?? paywallSession.resolvedPaywallTraits
+        let encodedTraits = traits.flatMap { try? JSONEncoder().encode($0) }
+        let traitByteCount = encodedTraits?.count ?? 0
+        let traitLimitBytes = 16 * 1024
+        let traitsData = traitByteCount > traitLimitBytes ? nil : encodedTraits
         var startedPriceIds: [String] = []
         for priceId in priceIds {
             let key = CacheKey(sessionId: sessionId, priceId: priceId, surface: surface)
@@ -147,6 +160,7 @@ final class PaddleCheckoutPrefetchCoordinator {
                     discountId: discountId,
                     paywallUUID: paywallUUID,
                     triggerName: triggerName,
+                    customPaywallTraitsJSON: traitsData,
                     paddleClientToken: paddleClientToken,
                     iosBundleId: iosBundleId,
                     isPreviewRun: isPreviewRun,
@@ -168,6 +182,14 @@ final class PaddleCheckoutPrefetchCoordinator {
             startedPriceIds.append(priceId)
         }
         if !startedPriceIds.isEmpty {
+            if traitByteCount > traitLimitBytes, let traits {
+                HeliumObservabilityManager.shared.track(
+                    CheckoutPaywallTraitsDropped(
+                        byteCount: traitByteCount, limitBytes: traitLimitBytes, traitKeyCount: traits.count
+                    ),
+                    scope: scope
+                )
+            }
             HeliumObservabilityManager.shared.track(
                 PaddlePrefetchStarted(priceIds: startedPriceIds, isSecondTry: surface == .secondTry),
                 scope: scope
@@ -537,6 +559,7 @@ final class PaddleCheckoutPrefetchCoordinator {
         discountId: String?,
         paywallUUID: String?,
         triggerName: String,
+        customPaywallTraitsJSON: Data?,
         paddleClientToken: String,
         iosBundleId: String?,
         isPreviewRun: Bool,
@@ -554,7 +577,8 @@ final class PaddleCheckoutPrefetchCoordinator {
                 priceId: priceId,
                 discountId: discountId,
                 paywallUUID: paywallUUID,
-                triggerName: triggerName
+                triggerName: triggerName,
+                customPaywallTraitsJSON: customPaywallTraitsJSON
             )
             if let customerId = banditResponse.paddleCustomerId, !customerId.isEmpty {
                 PaymentProviderConfig.paddle.setCustomerId(customerId)

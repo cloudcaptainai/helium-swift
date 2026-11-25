@@ -113,7 +113,8 @@ public class HeliumPaymentAPIClient {
         priceId: String,
         discountId: String? = nil,
         paywallUUID: String? = nil,
-        triggerName: String? = nil
+        triggerName: String? = nil,
+        customPaywallTraitsJSON: Data? = nil
     ) async throws -> PaddleCreateTransactionForPaywallResponse {
         var body = try baseRequestBody(provider: .paddle)
         var paywallInfo: [String: String] = [:]
@@ -127,6 +128,11 @@ public class HeliumPaymentAPIClient {
             body["paywallInfo"] = paywallInfo
         }
         body["priceId"] = priceId
+        if let customPaywallTraitsJSON,
+           let traits = (try? JSONSerialization.jsonObject(with: customPaywallTraitsJSON)) as? [String: Any],
+           !traits.isEmpty {
+            body["customPaywallTraits"] = traits
+        }
         if let orgId = HeliumFetchedConfigManager.shared.getOrganizationID(), !orgId.isEmpty {
             body["orgId"] = orgId
         }

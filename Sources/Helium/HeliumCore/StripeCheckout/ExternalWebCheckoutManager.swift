@@ -150,7 +150,8 @@ public class ExternalWebCheckoutManager: NSObject {
             if a2wEnabled {
                 PaddleCheckoutPrefetchCoordinator.shared.prefetch(
                     paywallSession: paywallSession,
-                    compositeKeys: [productKey]
+                    compositeKeys: [productKey],
+                    paywallTraits: paywallTraits
                 )
             }
 

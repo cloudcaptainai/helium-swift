@@ -488,9 +488,31 @@ final class PaddleCheckoutPrefetchClientTests: XCTestCase {
         XCTAssertEqual(bodyDict["apiKey"] as? String, "test_api_key_for_prefetch_tests")
 
         XCTAssertNil(bodyDict["productPriceId"])
+        XCTAssertNil(bodyDict["customPaywallTraits"])
 
         XCTAssertEqual(bodyDict["heliumPersistentId"] as? String, HeliumIdentityManager.shared.getHeliumPersistentId())
         XCTAssertEqual(bodyDict["environment"] as? String, AppReceiptsHelper.shared.getEnvironment())
+    }
+
+    func testCreatePaddleTransactionForPaywall_omitsEmptyOrInvalidTraits() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+            return (response, Data(#"{"transactionId":"txn_x","isKnownCustomer":false,"requestId":"req_x"}"#.utf8))
+        }
+
+        for traits in ["{}", "[]", "{"] {
+            _ = try await client.createPaddleTransactionForPaywall(
+                priceId: "pri_test", customPaywallTraitsJSON: Data(traits.utf8)
+            )
+        }
+
+        XCTAssertEqual(MockURLProtocol.capturedRequests.count, 3)
+        for request in MockURLProtocol.capturedRequests {
+            let data = try XCTUnwrap(request.httpBody)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertNil(payload["customPaywallTraits"])
+        }
     }
 
     // MARK: - baseRequestBody
