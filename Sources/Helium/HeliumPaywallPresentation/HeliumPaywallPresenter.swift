@@ -134,7 +134,11 @@ class HeliumPaywallPresenter {
     
     func handlePaywallSkip(trigger: String, paywallInfo: HeliumPaywallInfo?, recordDecision: Bool = true) {
         if recordDecision {
-            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+            if paywallInfo?.hasNoPaywallArm == true {
+                ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+            } else {
+                ExperimentAllocationTracker.shared.trackAllocationIfNeeded(trigger: trigger, isFallback: false, paywallSession: nil)
+            }
         }
         
         HeliumPaywallDelegateWrapper.shared.fireEvent(
@@ -667,6 +671,11 @@ class HeliumPaywallPresenter {
         
         let event: HeliumEvent
         if openEvent {
+            ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+                trigger: paywallVC.trigger,
+                isFallback: paywallVC.isFallback,
+                paywallSession: paywallVC.paywallSession
+            )
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
             let loadingBudgetMS = paywallVC.presentationContext.config.loadingBudgetForAnalyticsMS
             

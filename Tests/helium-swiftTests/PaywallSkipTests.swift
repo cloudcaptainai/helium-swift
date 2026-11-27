@@ -31,6 +31,13 @@ private actor SuspendedPaywallEntitlementsSource: ThirdPartyEntitlementsSource {
     nonisolated func invalidateCache() {}
 }
 
+private actor AllocatedPaywallEntitlementsSource: ThirdPartyEntitlementsSource {
+    func purchasedHeliumProductIds() async -> Set<String> { ["com.test.product"] }
+    func hasAnyActiveSubscription() async -> Bool { true }
+    func activeSubscriptions() async -> Set<String> { ["com.test.product"] }
+    nonisolated func invalidateCache() {}
+}
+
 final class PaywallSkipTests: HeliumTestCase {
 
     override func setUp() {
@@ -43,12 +50,17 @@ final class PaywallSkipTests: HeliumTestCase {
         super.tearDown()
     }
 
-    private func experimentConfig(shouldShow: Bool = false) throws -> HeliumFetchedConfig {
+    private func experimentConfig(shouldShow: Bool = false, hasNoPaywallArm: Bool = true) throws -> HeliumFetchedConfig {
         let fixture = #"""
         {"shouldShow":false,"experimentID":"exp-flow","paywallID":0,"paywallUUID":"synthetic-arm","paywallVersionUUID":"","paywallTemplateName":"Your paywall","productsOffered":[],"productsOfferedIOS":[],"productsOfferedAndroid":[],"productsOfferedStripe":[],"productsOfferedPaddle":[],"webProductsOfferedStripe":[],"webProductsOfferedPaddle":[],"fallbackPaywallName":"","resolvedConfig":{},"additionalPaywallFields":{},"experimentInfo":{"experimentId":"exp-flow","experimentName":"A/A","experimentType":"A/B/n test","experimentMetadata":{},"experimentVersionId":"skip-version","audienceId":"1","audienceData":"{}","chosenVariantDetails":{"allocationId":"synthetic-arm","allocationName":"Your paywall","allocationIndex":0,"allocationMetadata":{"paywall_id":"synthetic-arm","percentage":50,"variant_type":"control","variant_name":"Your paywall","show_paywall":false}},"hashDetails":{"hashedUserId":"u1","hashedUserIdBucket1To100":42,"hashMethod":"HASH_USER_ID"}}}
         """#
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(fixture.utf8)) as? [String: Any])
         object["shouldShow"] = shouldShow
+        if hasNoPaywallArm {
+            var experiment = try XCTUnwrap(object["experimentInfo"] as? [String: Any])
+            experiment["hasNoPaywallArm"] = true
+            object["experimentInfo"] = experiment
+        }
         var envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(makeTestConfig(triggers: [:]))) as? [String: Any])
         envelope["triggerToPaywalls"] = ["checkout": object]
         let data = try JSONSerialization.data(withJSONObject: envelope)
@@ -437,13 +449,152 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(application?["environment"] as? String, AppReceiptsHelper.shared.getEnvironment())
     }
 
-    func testShowDecisionAllocatesWithoutLoadablePaywall() throws {
-        injectConfig(try experimentConfig(shouldShow: true))
-        HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: "checkout", presentationContext: .empty)
-        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent } }
-        let allocation = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
-        XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")
-        XCTAssertEqual(allocation.experimentInfo.chosenVariantDetails?.allocationId, "synthetic-arm")
+    func testShowDecisionEnrollmentDependsOnExperimentTypeWhenOpenFails() throws {
+        Helium.shared.markInitializedForTesting()
+        for hasNoPaywallArm in [false, true] {
+            ExperimentAllocationTracker.shared.reset()
+            let start = mockDelegate.receivedEvents.count
+            injectConfig(try experimentConfig(shouldShow: true, hasNoPaywallArm: hasNoPaywallArm))
+            HeliumPaywallPresenter.shared.presentUpsellWithLoadingBudget(trigger: "checkout", presentationContext: .empty)
+            waitForEventDispatch { self.mockDelegate.receivedEvents.dropFirst(start).contains { $0 is PaywallOpenFailedEvent } }
+            let events = Array(mockDelegate.receivedEvents.dropFirst(start))
+            XCTAssertTrue(events.contains { $0 is PaywallOpenFailedEvent })
+            let allocations = events.compactMap { $0 as? UserAllocatedEvent }
+            XCTAssertEqual(allocations.count, hasNoPaywallArm ? 1 : 0)
+            if hasNoPaywallArm {
+                let allocation = try XCTUnwrap(allocations.first)
+                XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")
+                XCTAssertEqual(allocation.experimentInfo.chosenVariantDetails?.allocationId, "synthetic-arm")
+            }
+        }
+    }
+
+    @MainActor
+    func testEmbeddedEnrollmentAndOrderingForEachPresentationOutcome() throws {
+        Helium.shared.markInitializedForTesting()
+        for hasNoPaywallArm in [false, true] {
+            for outcome in ["open", "fallback", "unavailable", "entitled"] {
+                ExperimentAllocationTracker.shared.reset()
+                HeliumFallbackViewManager.reset()
+                if outcome == "fallback" { try configureFallbackView() }
+                Helium.config.thirdPartyEntitlementsSource = outcome == "entitled" ? AllocatedPaywallEntitlementsSource() : nil
+                defer { Helium.config.thirdPartyEntitlementsSource = nil }
+
+                var config = try experimentConfig(shouldShow: true, hasNoPaywallArm: hasNoPaywallArm)
+                if outcome == "open" || outcome == "entitled" {
+                    config.triggerToPaywalls["checkout"]?.productsOfferedIOS = ["com.test.product"]
+                }
+                if outcome == "open" {
+                    config.triggerToPaywalls["checkout"]?.resolvedConfig = AnyCodable([
+                        "baseStack": ["componentProps": ["bundleURL": "https://example.com/bundle_allocation_order.html"]]
+                    ] as [String: Any])
+                    HeliumAssetManager.shared.writeBundles(bundles: ["allocation_order": "<html><body>Paywall</body></html>"])
+                }
+                injectConfig(config)
+                let start = mockDelegate.receivedEvents.count
+                let view = HeliumPaywall(
+                    trigger: "checkout",
+                    config: PaywallPresentationConfig(dontShowIfAlreadyEntitled: outcome == "entitled", loadingBudget: 10)
+                ) { _ in Color.clear }
+                drainMainActor()
+                XCTAssertFalse(mockDelegate.receivedEvents.dropFirst(start).contains { $0 is UserAllocatedEvent })
+
+                let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+                window.rootViewController = UIHostingController(rootView: view.environment(
+                    \.paywallPresentationState, HeliumPaywallPresentationState(viewType: .embedded)
+                ))
+                window.makeKeyAndVisible()
+                defer {
+                    window.isHidden = true
+                    window.rootViewController = nil
+                }
+                window.layoutIfNeeded()
+                waitForEventDispatch {
+                    self.mockDelegate.receivedEvents.dropFirst(start).contains {
+                        $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent || $0 is PaywallSkippedEvent
+                    }
+                }
+                let events = Array(mockDelegate.receivedEvents.dropFirst(start))
+                let shouldAllocate = hasNoPaywallArm || outcome == "open"
+                XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, shouldAllocate ? 1 : 0, "\(hasNoPaywallArm)/\(outcome)")
+                let terminalIndex = try XCTUnwrap(events.firstIndex {
+                    $0 is PaywallOpenEvent || $0 is PaywallOpenFailedEvent || $0 is PaywallSkippedEvent
+                })
+                if outcome == "unavailable" {
+                    XCTAssertTrue(events[terminalIndex] is PaywallOpenFailedEvent)
+                } else if outcome == "entitled" {
+                    XCTAssertEqual((events[terminalIndex] as? PaywallSkippedEvent)?.skipReason, .alreadyEntitled)
+                } else {
+                    let open = try XCTUnwrap(events[terminalIndex] as? PaywallOpenEvent)
+                    XCTAssertEqual(open.paywallUnavailableReason != nil, outcome == "fallback")
+                }
+                if shouldAllocate {
+                    let allocationIndex = try XCTUnwrap(events.firstIndex { $0 is UserAllocatedEvent })
+                    XCTAssertLessThan(allocationIndex, terminalIndex)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testEmbeddedDecisionSnapshotSurvivesResetBeforeFirstAppearance() throws {
+        Helium.shared.markInitializedForTesting()
+        for shouldShow in [false, true] {
+            for replaceConfig in [false, true] {
+                ExperimentAllocationTracker.shared.reset()
+                var original = try experimentConfig(shouldShow: shouldShow)
+                original.triggerToPaywalls["original_alias"] = original.triggerToPaywalls["checkout"]
+                injectConfig(original)
+                let start = mockDelegate.receivedEvents.count
+                let view = HeliumPaywall(trigger: "checkout", config: PaywallPresentationConfig(loadingBudget: 0)) { _ in Color.clear }
+                drainMainActor()
+                XCTAssertFalse(mockDelegate.receivedEvents.dropFirst(start).contains { $0 is UserAllocatedEvent })
+
+                HeliumFetchedConfigManager.reset()
+                if replaceConfig {
+                    var replacement = try experimentConfig(shouldShow: true)
+                    replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+                    replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+                    injectConfig(replacement)
+                }
+
+                let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+                window.rootViewController = UIHostingController(rootView: view)
+                window.makeKeyAndVisible()
+                defer {
+                    window.isHidden = true
+                    window.rootViewController = nil
+                }
+                window.layoutIfNeeded()
+                waitForEventDispatch {
+                    self.mockDelegate.receivedEvents.dropFirst(start).contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent }
+                }
+                let events = Array(mockDelegate.receivedEvents.dropFirst(start))
+                let allocation = try XCTUnwrap(events.compactMap { $0 as? UserAllocatedEvent }.first)
+                XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, 1)
+                XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")
+                XCTAssertEqual(allocation.experimentInfo.chosenVariantDetails?.allocationId, "synthetic-arm")
+                XCTAssertEqual(Set(allocation.experimentInfo.allTriggers ?? []), Set(["checkout", "original_alias"]))
+                let payload = testAnalyticsDictionary(HeliumAnalyticsManager.shared.buildLoggedEvent(for: allocation, paywallSession: nil))
+                XCTAssertEqual(payload["fetchedConfigId"] as? String, original.fetchedConfigID.uuidString)
+                XCTAssertEqual(payload["paywallUUID"] as? String, "synthetic-arm")
+                let allocationIndex = try XCTUnwrap(events.firstIndex { $0 is UserAllocatedEvent })
+                let terminalIndex = try XCTUnwrap(events.firstIndex { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent })
+                XCTAssertLessThan(allocationIndex, terminalIndex)
+            }
+        }
+    }
+
+    func testRegularTargetingHoldoutStillAllocatesBeforeSkip() throws {
+        injectConfig(try experimentConfig(hasNoPaywallArm: false))
+        XCTAssertTrue(HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "checkout", presentationContext: .empty))
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallSkippedEvent } }
+        let events = mockDelegate.receivedEvents
+        let allocationIndex = try XCTUnwrap(events.firstIndex { $0 is UserAllocatedEvent })
+        let skipIndex = try XCTUnwrap(events.firstIndex { $0 is PaywallSkippedEvent })
+        XCTAssertLessThan(allocationIndex, skipIndex)
+        XCTAssertEqual(events.filter { $0 is UserAllocatedEvent }.count, 1)
+        XCTAssertFalse(events.contains { $0 is PaywallOpenEvent })
     }
 
     @MainActor

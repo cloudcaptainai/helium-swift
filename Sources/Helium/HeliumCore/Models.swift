@@ -104,6 +104,10 @@ public struct HeliumPaywallInfo: Codable {
     var presentationStyle: HeliumPresentationStyle?
     var webCheckoutBrowserStyle: WebCheckoutBrowserStyle?
     var productHapticsEnabled: [String]? = nil
+
+    var hasNoPaywallArm: Bool {
+        experimentInfo?["hasNoPaywallArm"].boolValue ?? false
+    }
     
     var productIdsIOS: [String] {
         productsOfferedIOS ?? productsOffered ?? []

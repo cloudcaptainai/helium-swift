@@ -298,6 +298,12 @@ class HeliumActionsDelegate: ObservableObject {
         if hiddenBehindSecondTry {
             return
         }
+
+        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
+            trigger: trigger,
+            isFallback: fallbackReason != nil,
+            paywallSession: paywallSession
+        )
         
         let event = PaywallOpenEvent(
             triggerName: trigger,

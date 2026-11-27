@@ -7,6 +7,25 @@
 
 import Foundation
 
+struct ExperimentAllocationSnapshot {
+    let paywallInfo: HeliumPaywallInfo
+    let fetchedConfigId: UUID
+    let experimentInfo: ExperimentInfo
+
+    init?(trigger: String, config: HeliumFetchedConfig, paywallInfo: HeliumPaywallInfo?) {
+        guard let paywallInfo,
+              let experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else { return nil }
+        self.paywallInfo = paywallInfo
+        self.fetchedConfigId = config.fetchedConfigID
+        self.experimentInfo = experimentInfo
+    }
+
+    static func capture(trigger: String, paywallInfo: HeliumPaywallInfo?) -> ExperimentAllocationSnapshot? {
+        guard let config = HeliumFetchedConfigManager.shared.getConfig() else { return nil }
+        return ExperimentAllocationSnapshot(trigger: trigger, config: config, paywallInfo: paywallInfo)
+    }
+}
+
 /// Stored allocation details for comparison
 struct StoredAllocation: Codable {
     let experimentId: String?
@@ -169,12 +188,28 @@ class ExperimentAllocationTracker {
         return true
     }
     
+    func trackAllocationIfNeeded(trigger: String, isFallback: Bool, paywallSession: PaywallSession?) {
+        guard !isFallback, paywallSession?.paywallInfoWithBackups?.hasNoPaywallArm != true,
+              let config = HeliumFetchedConfigManager.shared.getConfig(),
+              let snapshot = ExperimentAllocationSnapshot(trigger: trigger, config: config, paywallInfo: config.triggerToPaywalls[trigger]),
+              !snapshot.paywallInfo.hasNoPaywallArm else { return }
+        recordAllocation(trigger: trigger, snapshot: snapshot)
+    }
+
     @discardableResult
     func recordDecision(trigger: String, paywallInfo: HeliumPaywallInfo?) -> Bool {
-        guard let config = HeliumFetchedConfigManager.shared.getConfig(),
-              var experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else {
-            return false
-        }
+        recordDecision(trigger: trigger, snapshot: ExperimentAllocationSnapshot.capture(trigger: trigger, paywallInfo: paywallInfo))
+    }
+
+    @discardableResult
+    func recordDecision(trigger: String, snapshot: ExperimentAllocationSnapshot?) -> Bool {
+        guard let snapshot, snapshot.paywallInfo.hasNoPaywallArm else { return false }
+        return recordAllocation(trigger: trigger, snapshot: snapshot)
+    }
+
+    @discardableResult
+    private func recordAllocation(trigger: String, snapshot: ExperimentAllocationSnapshot) -> Bool {
+        var experimentInfo = snapshot.experimentInfo
         
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
@@ -209,7 +244,7 @@ class ExperimentAllocationTracker {
         experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo, fetchedConfigId: config.fetchedConfigID)
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: snapshot.paywallInfo, fetchedConfigId: snapshot.fetchedConfigId)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
         return true
     }
