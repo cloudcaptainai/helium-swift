@@ -43,12 +43,16 @@ final class PaywallSkipTests: HeliumTestCase {
         super.tearDown()
     }
 
-    private func experimentConfig(shouldShow: Bool = false) throws -> HeliumFetchedConfig {
+    private func experimentConfig(shouldShow: Bool = false, hasNoPaywallArm: Bool? = nil) throws -> HeliumFetchedConfig {
         let fixture = #"""
         {"shouldShow":false,"experimentID":"exp-flow","paywallID":0,"paywallUUID":"synthetic-arm","paywallVersionUUID":"","paywallTemplateName":"Your paywall","productsOffered":[],"productsOfferedIOS":[],"productsOfferedAndroid":[],"productsOfferedStripe":[],"productsOfferedPaddle":[],"webProductsOfferedStripe":[],"webProductsOfferedPaddle":[],"fallbackPaywallName":"","resolvedConfig":{},"additionalPaywallFields":{},"experimentInfo":{"experimentId":"exp-flow","experimentName":"A/A","experimentType":"A/B/n test","experimentMetadata":{},"experimentVersionId":"skip-version","audienceId":"1","audienceData":"{}","chosenVariantDetails":{"allocationId":"synthetic-arm","allocationName":"Your paywall","allocationIndex":0,"allocationMetadata":{"paywall_id":"synthetic-arm","percentage":50,"variant_type":"control","variant_name":"Your paywall","show_paywall":false}},"hashDetails":{"hashedUserId":"u1","hashedUserIdBucket1To100":42,"hashMethod":"HASH_USER_ID"}}}
         """#
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(fixture.utf8)) as? [String: Any])
         object["shouldShow"] = shouldShow
+        if let hasNoPaywallArm, var experimentInfo = object["experimentInfo"] as? [String: Any] {
+            experimentInfo["hasNoPaywallArm"] = hasNoPaywallArm
+            object["experimentInfo"] = experimentInfo
+        }
         var envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(makeTestConfig(triggers: [:]))) as? [String: Any])
         envelope["triggerToPaywalls"] = ["checkout": object]
         let data = try JSONSerialization.data(withJSONObject: envelope)
@@ -67,6 +71,19 @@ final class PaywallSkipTests: HeliumTestCase {
         )
         HeliumFallbackViewManager.shared.injectFallbackConfigForTesting(config, json: try JSON(data: JSONEncoder().encode(config)))
         XCTAssertNotNil(HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: "unassigned", presentationContext: .empty).viewAndSession)
+    }
+
+    func testSkipExperimentFlagSurvivesExperimentInfoRoundTrip() throws {
+        for flag in [nil, false, true] as [Bool?] {
+            let config = try experimentConfig(shouldShow: true, hasNoPaywallArm: flag)
+            let info = try XCTUnwrap(config.extractExperimentInfo(trigger: "checkout"))
+            let encoded = try JSONEncoder().encode(info)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            XCTAssertEqual(object["hasNoPaywallArm"] as? Bool, flag)
+            let restored = try JSONDecoder().decode(ExperimentInfo.self, from: encoded)
+            let restoredObject = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(restored)) as? [String: Any])
+            XCTAssertEqual(restoredObject["hasNoPaywallArm"] as? Bool, flag)
+        }
     }
 
     func testDeprecatedViewSkipsInsteadOfReturningConfiguredFallback() throws {

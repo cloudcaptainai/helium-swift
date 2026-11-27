@@ -277,7 +277,8 @@ public struct HeliumFetchedConfig: Codable {
             chosenVariantDetails: response.chosenVariantDetails,
             hashDetails: response.hashDetails,
             enrolledAt: nil,
-            isEnrolled: false
+            isEnrolled: false,
+            hasNoPaywallArm: response.hasNoPaywallArm
         )
         
         // enrolledAt, isEnrolled, and enrolledTrigger are stored locally by sdk
