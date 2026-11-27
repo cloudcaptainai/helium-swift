@@ -46,8 +46,7 @@ struct PaywallSession {
     }
     
     let paywallInfo: HeliumPaywallInfo?
-    let allocationExperimentInfo: ExperimentInfo?
-    let allocationConfigId: UUID?
+    let allocationSnapshot: ExperimentAllocationSnapshot?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
         if let paywallInfo {
             return paywallInfo
@@ -62,15 +61,13 @@ struct PaywallSession {
         }
     }
     
-    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, allocationSnapshot: ExperimentAllocationSnapshot? = nil) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
         self.isSecondTry = presentationContext.isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
-        let fetchedConfig = HeliumFetchedConfigManager.shared.getConfig()
-        self.allocationExperimentInfo = fetchedConfig?.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo)
-        self.allocationConfigId = fetchedConfig?.fetchedConfigID
+        self.allocationSnapshot = allocationSnapshot ?? ExperimentAllocationSnapshot.capture(trigger: trigger, paywallInfo: paywallInfo)
         self.presentationContext = presentationContext
     }
 
@@ -81,21 +78,19 @@ struct PaywallSession {
             trigger: self.trigger,
             paywallInfo: self.paywallInfo,
             fallbackType: self.fallbackType,
-            allocationExperimentInfo: self.allocationExperimentInfo,
-            allocationConfigId: self.allocationConfigId,
+            allocationSnapshot: self.allocationSnapshot,
             presentationContext: context,
             isSecondTry: self.isSecondTry
         )
     }
 
-    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, allocationExperimentInfo: ExperimentInfo?, allocationConfigId: UUID?, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, allocationSnapshot: ExperimentAllocationSnapshot?, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
         self.sessionId = sessionId
         self.trigger = trigger
         self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
-        self.allocationExperimentInfo = allocationExperimentInfo
-        self.allocationConfigId = allocationConfigId
+        self.allocationSnapshot = allocationSnapshot
         self.presentationContext = presentationContext
     }
 }

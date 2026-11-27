@@ -199,27 +199,28 @@ class ExperimentAllocationTracker {
     @discardableResult
     func recordDecision(trigger: String, snapshot: ExperimentAllocationSnapshot?) -> Bool {
         guard let snapshot, snapshot.generation == generation else { return false }
-        return recordAllocation(trigger: trigger, paywallInfo: snapshot.paywallInfo, experimentInfo: snapshot.experimentInfo, fetchedConfigId: snapshot.fetchedConfigId, atDecision: true)
+        return recordAllocation(trigger: trigger, snapshot: snapshot, atDecision: true)
     }
 
     func recordOpen(paywallSession: PaywallSession, isFallback: Bool) {
         guard !isFallback, !paywallSession.isFallback,
               HeliumFetchedConfigManager.shared.getConfig() != nil,
-              let experimentInfo = paywallSession.allocationExperimentInfo else {
+              let snapshot = paywallSession.allocationSnapshot,
+              snapshot.generation == generation else {
             return
         }
-        recordAllocation(trigger: paywallSession.trigger, paywallInfo: paywallSession.paywallInfo, experimentInfo: experimentInfo, fetchedConfigId: paywallSession.allocationConfigId, atDecision: false)
+        recordAllocation(trigger: paywallSession.trigger, snapshot: snapshot, atDecision: false)
     }
 
     @discardableResult
-    private func recordAllocation(trigger: String, paywallInfo: HeliumPaywallInfo?, experimentInfo: ExperimentInfo, fetchedConfigId: UUID?, atDecision: Bool) -> Bool {
-        var experimentInfo = experimentInfo
+    private func recordAllocation(trigger: String, snapshot: ExperimentAllocationSnapshot, atDecision: Bool) -> Bool {
+        var experimentInfo = snapshot.experimentInfo
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
             return false
         }
 
-        let isSkipExperiment = experimentInfo.hasNoPaywallArm == true || paywallInfo?.shouldShow == false
+        let isSkipExperiment = experimentInfo.hasNoPaywallArm == true || snapshot.paywallInfo.shouldShow == false
         guard isSkipExperiment == atDecision else { return true }
         
         // Get user's persistent ID
@@ -250,7 +251,7 @@ class ExperimentAllocationTracker {
         experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo, fetchedConfigId: fetchedConfigId)
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: snapshot.paywallInfo, fetchedConfigId: snapshot.fetchedConfigId)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
         return true
     }

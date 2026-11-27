@@ -843,13 +843,14 @@ final class PaywallSkipTests: HeliumTestCase {
     }
 
     @MainActor
-    func testRegularModalAllocatesOnlyOnOpen() throws {
+    func testRegularModalAllocationKeepsConfigAcrossEntitlementRefresh() throws {
         Helium.shared.markInitializedForTesting()
         var config = try experimentConfig(shouldShow: true)
         config.triggerToPaywalls["checkout"]?.productsOfferedIOS = ["renderable.product"]
         config.triggerToPaywalls["checkout"]?.resolvedConfig = AnyCodable([
             "baseStack": ["componentProps": ["bundleURL": "https://cdn.example.com/bundles/bundle_regular_modal.html"]]
         ] as [String: Any])
+        config.triggerToPaywalls["original_alias"] = config.triggerToPaywalls["checkout"]
         injectConfig(config)
         let started = expectation(description: "Regular modal waiting for entitlement")
         let source = SuspendedPaywallEntitlementsSource(started: started)
@@ -874,11 +875,19 @@ final class PaywallSkipTests: HeliumTestCase {
         wait(for: [started], timeout: 3)
         drainMainActor()
         XCTAssertFalse(mockDelegate.receivedEvents.contains { $0 is UserAllocatedEvent || $0 is PaywallOpenEvent })
+        var replacement = try experimentConfig(shouldShow: true)
+        replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+        replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+        injectConfig(replacement)
         Task { await source.release() }
         waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallOpenEvent } }
         XCTAssertFalse(try XCTUnwrap(root.presentedViewController as? HeliumViewController).isFallback)
         XCTAssertEqual(mockDelegate.receivedEvents.filter { $0 is PaywallOpenEvent }.count, 1)
         XCTAssertEqual(mockDelegate.receivedEvents.filter { $0 is UserAllocatedEvent }.count, 1)
+        let allocation = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
+        XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")
+        XCTAssertEqual(allocation.decisionConfigId, config.fetchedConfigID)
+        XCTAssertEqual(Set(allocation.experimentInfo.allTriggers ?? []), Set(["checkout", "original_alias"]))
     }
 
     func testRegularOpenWithoutFetchedConfigDoesNotAllocate() throws {
