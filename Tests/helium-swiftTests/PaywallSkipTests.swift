@@ -888,6 +888,56 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(allocation.experimentInfo.experimentId, "exp-flow")
         XCTAssertEqual(allocation.decisionConfigId, config.fetchedConfigID)
         XCTAssertEqual(Set(allocation.experimentInfo.allTriggers ?? []), Set(["checkout", "original_alias"]))
+
+        let session = try XCTUnwrap(root.presentedViewController as? HeliumViewController).paywallSession
+        let open = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? PaywallOpenEvent }.first)
+        let loggedAllocation = HeliumAnalyticsManager.shared.buildLoggedEvent(for: allocation, paywallSession: session)
+        let loggedOpen = HeliumAnalyticsManager.shared.buildLoggedEvent(for: open, paywallSession: session)
+        XCTAssertEqual(loggedAllocation.heliumPaywallSessionId, session.sessionId)
+        XCTAssertEqual(loggedOpen.heliumPaywallSessionId, session.sessionId)
+        XCTAssertEqual(loggedAllocation.experimentID, "exp-flow")
+        XCTAssertEqual(loggedOpen.experimentID, loggedAllocation.experimentID)
+        XCTAssertEqual(loggedOpen.experimentInfo?.experimentId, "exp-flow")
+        XCTAssertEqual(Set(loggedOpen.experimentInfo?.allTriggers ?? []), Set(["checkout", "original_alias"]))
+    }
+
+    func testSessionEventExperimentSnapshotSurvivesRefreshAndRemoval() throws {
+        var config = try experimentConfig(shouldShow: true)
+        config.triggerToPaywalls["original_alias"] = config.triggerToPaywalls["checkout"]
+        injectConfig(config)
+        let info = try XCTUnwrap(config.triggerToPaywalls["checkout"])
+        let session = makeTestSession(trigger: "checkout", paywallInfo: info)
+        let sessionWithoutSnapshot = makeTestSession(trigger: "checkout", paywallInfo: nil)
+        XCTAssertNotNil(session.allocationSnapshot)
+        XCTAssertNil(sessionWithoutSnapshot.allocationSnapshot)
+        let events: [HeliumEvent] = [
+            PaywallOpenEvent(triggerName: "checkout", paywallName: info.paywallTemplateName, viewType: .embedded, secondTry: false),
+            PaywallCloseEvent(triggerName: "checkout", paywallName: info.paywallTemplateName, secondTry: false)
+        ]
+        var replacement = try experimentConfig(shouldShow: true)
+        replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+        replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+
+        for liveConfig in [config, replacement, nil] {
+            if let liveConfig {
+                injectConfig(liveConfig)
+            } else {
+                HeliumFetchedConfigManager.reset()
+            }
+            for event in events {
+                let logged = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: session)
+                XCTAssertEqual(logged.heliumPaywallSessionId, session.sessionId)
+                XCTAssertEqual(logged.experimentID, "exp-flow")
+                XCTAssertEqual(logged.experimentInfo?.experimentId, "exp-flow")
+                XCTAssertEqual(Set(logged.experimentInfo?.allTriggers ?? []), Set(["checkout", "original_alias"]))
+                for unassignedSession in [sessionWithoutSnapshot, nil] {
+                    let unassigned = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: unassignedSession)
+                    let expectedID = liveConfig?.triggerToPaywalls["checkout"]?.experimentID
+                    XCTAssertEqual(unassigned.experimentID, expectedID)
+                    XCTAssertEqual(unassigned.experimentInfo?.experimentId, expectedID)
+                }
+            }
+        }
     }
 
     func testRegularOpenWithoutFetchedConfigDoesNotAllocate() throws {
