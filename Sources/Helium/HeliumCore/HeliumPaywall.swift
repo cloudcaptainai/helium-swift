@@ -223,7 +223,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func recordDecisionIfNeeded() {
         guard hasAppeared, !decisionRecorded else { return }
         if case .waitingForPaywallsDownload = state { return }
-        guard decisionPaywallInfo?.hasNoPaywallArm == true else { return }
+        guard decisionSnapshot?.experimentInfo.hasNoPaywallArm == true else { return }
         let recorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, snapshot: decisionSnapshot)
         decisionRecorded = recorded || !state.isLoading
     }

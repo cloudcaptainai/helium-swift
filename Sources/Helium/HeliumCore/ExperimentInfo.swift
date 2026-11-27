@@ -12,6 +12,7 @@ import Foundation
 /// Structured experiment info from server response
 /// - Note: Matches top-level experimentInfo structure from bandit server
 struct ExperimentInfoResponse: Codable {
+    let hasNoPaywallArm: Bool?
     let experimentId: String?
     let experimentName: String?
     let experimentType: String?
@@ -100,6 +101,7 @@ public enum ExperimentEnrollmentStatus: String, Codable {
 
 /// Complete experiment allocation information for a user
 public struct ExperimentInfo: Codable {
+    let hasNoPaywallArm: Bool?
     /// Trigger where this user was enrolled
     public var enrolledTrigger: String?
     
@@ -181,8 +183,10 @@ public struct ExperimentInfo: Codable {
         chosenVariantDetails: VariantDetails?,
         hashDetails: HashDetails?,
         enrolledAt: Date? = nil,
-        isEnrolled: Bool = false
+        isEnrolled: Bool = false,
+        hasNoPaywallArm: Bool? = nil
     ) {
+        self.hasNoPaywallArm = hasNoPaywallArm
         self.enrolledTrigger = enrolledTrigger
         self.allTriggers = triggers
         self.experimentName = experimentName
@@ -203,6 +207,7 @@ public struct ExperimentInfo: Codable {
     // MARK: - Codable
     
     enum CodingKeys: String, CodingKey {
+        case hasNoPaywallArm
         case trigger
         case enrolledTrigger
         case triggers
@@ -224,6 +229,7 @@ public struct ExperimentInfo: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(hasNoPaywallArm, forKey: .hasNoPaywallArm)
         // keep "trigger" for now, for better backwards-compatibility
         try container.encodeIfPresent(enrolledTrigger, forKey: .trigger)
         try container.encodeIfPresent(enrolledTrigger, forKey: .enrolledTrigger)
@@ -262,6 +268,7 @@ public struct ExperimentInfo: Codable {
     // Note - currently this custom decoder does not seem to be used at all
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        hasNoPaywallArm = try container.decodeIfPresent(Bool.self, forKey: .hasNoPaywallArm)
         enrolledTrigger = try container.decodeIfPresent(String.self, forKey: .enrolledTrigger)
         allTriggers = try container.decodeIfPresent([String].self, forKey: .triggers)
         experimentName = try container.decodeIfPresent(String.self, forKey: .experimentName)
