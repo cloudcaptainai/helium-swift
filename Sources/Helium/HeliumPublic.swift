@@ -212,8 +212,10 @@ public class Helium {
     ///
     /// - Note: This does not account for entitlement status or targeting holdouts. A result of `canShow == true` means the paywall content is available, not that it will necessarily be presented to the user.
     public func canShowPaywallFor(trigger: String) -> CanShowPaywallResult {
+        var paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        paywallInfo?.shouldShow = nil
         let upsellResult = HeliumPaywallPresenter.shared.upsellViewResultFor(
-            trigger: trigger, presentationContext: PaywallPresentationContext.empty)
+            trigger: trigger, paywallInfo: paywallInfo, presentationContext: PaywallPresentationContext.empty)
         
         let canShow = upsellResult.viewAndSession?.view != nil
         let result = CanShowPaywallResult(
@@ -429,10 +431,17 @@ public class Helium {
             onEntitled: nil,
             onPaywallNotShown: nil
         )
-        ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger))
-        let view = HeliumPaywallPresenter.shared.upsellViewResultFor(
-            trigger: trigger, presentationContext: presentationContext
-        ).viewAndSession?.view
+        let paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(trigger)
+        let view: AnyView?
+        if paywallInfo?.shouldShow == false {
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: paywallInfo)
+            view = nil
+        } else {
+            ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, paywallInfo: paywallInfo)
+            view = HeliumPaywallPresenter.shared.upsellViewResultFor(
+                trigger: trigger, paywallInfo: paywallInfo, presentationContext: presentationContext
+            ).viewAndSession?.view
+        }
         trackSdkApiCall(.upsellViewForTrigger, upsellViewObservabilityProperties(
             trigger: trigger,
             customPaywallTraits: customPaywallTraits,

@@ -198,7 +198,7 @@ class HeliumActionsDelegate: ObservableObject {
                     return
                 }
                 ExperimentAllocationTracker.shared.recordDecision(trigger: foundTrigger, paywallInfo: secondTryInfo)
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, presentationContext: presentationContext)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, paywallInfo: secondTryInfo, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
             else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
@@ -208,7 +208,7 @@ class HeliumActionsDelegate: ObservableObject {
                     return
                 }
                 ExperimentAllocationTracker.shared.recordDecision(trigger: secondTryTrigger, paywallInfo: secondTryInfo)
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, presentationContext: presentationContext)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, paywallInfo: secondTryInfo, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
