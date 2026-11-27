@@ -209,11 +209,11 @@ class ExperimentAllocationTracker {
               snapshot.generation == generation else {
             return
         }
-        recordAllocation(trigger: paywallSession.trigger, snapshot: snapshot, atDecision: false)
+        recordAllocation(trigger: paywallSession.trigger, snapshot: snapshot, atDecision: false, paywallSession: paywallSession)
     }
 
     @discardableResult
-    private func recordAllocation(trigger: String, snapshot: ExperimentAllocationSnapshot, atDecision: Bool) -> Bool {
+    private func recordAllocation(trigger: String, snapshot: ExperimentAllocationSnapshot, atDecision: Bool, paywallSession: PaywallSession? = nil) -> Bool {
         var experimentInfo = snapshot.experimentInfo
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
@@ -252,7 +252,7 @@ class ExperimentAllocationTracker {
         
         // Fire the allocation event
         let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: snapshot.paywallInfo, fetchedConfigId: snapshot.fetchedConfigId)
-        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
+        HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: paywallSession)
         return true
     }
     
