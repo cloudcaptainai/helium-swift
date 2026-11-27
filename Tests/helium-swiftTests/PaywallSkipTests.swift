@@ -612,6 +612,42 @@ final class PaywallSkipTests: HeliumTestCase {
     }
 
     @MainActor
+    func testExplicitAllocationResetRejectsEmbeddedSnapshot() throws {
+        for shouldShow in [false, true] {
+            Helium.shared.markInitializedForTesting()
+            injectConfig(try experimentConfig(shouldShow: shouldShow, hasNoPaywallArm: true))
+            let view = HeliumPaywall(trigger: "checkout", config: PaywallPresentationConfig(loadingBudget: 0)) { _ in Color.clear }
+            let reset = expectation(description: "Allocation reset completed")
+            Helium.resetHelium(clearExperimentAllocations: true, onComplete: { reset.fulfill() })
+            wait(for: [reset], timeout: 3)
+            Helium.config.purchaseDelegate = mockDelegate
+            Helium.shared.markInitializedForTesting()
+            var replacement = try experimentConfig()
+            replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+            replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+            injectConfig(replacement)
+            let start = mockDelegate.receivedEvents.count
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+            window.rootViewController = UIHostingController(rootView: view)
+            window.makeKeyAndVisible()
+            defer {
+                window.isHidden = true
+                window.rootViewController = nil
+            }
+            window.layoutIfNeeded()
+            waitForEventDispatch {
+                self.mockDelegate.receivedEvents.dropFirst(start).contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent }
+            }
+            XCTAssertTrue(mockDelegate.receivedEvents.dropFirst(start).contains { $0 is PaywallSkippedEvent || $0 is PaywallOpenFailedEvent })
+            XCTAssertFalse(mockDelegate.receivedEvents.dropFirst(start).contains { $0 is UserAllocatedEvent })
+            XCTAssertTrue(ExperimentAllocationTracker.shared.buildAllocationHistoryRequestPayload().isEmpty)
+            XCTAssertTrue(HeliumPaywallPresenter.shared.skipPaywallIfNeeded(trigger: "checkout", presentationContext: .empty))
+            waitForEventDispatch { self.mockDelegate.receivedEvents.dropFirst(start).contains { $0 is UserAllocatedEvent } }
+            XCTAssertEqual(mockDelegate.receivedEvents.dropFirst(start).compactMap { ($0 as? UserAllocatedEvent)?.experimentInfo.experimentId }, ["experiment-B"])
+        }
+    }
+
+    @MainActor
     func testPresentationConflictEnrollsBothArms() throws {
         var config = try experimentConfig(shouldShow: true, hasNoPaywallArm: true)
         var skipInfo = try XCTUnwrap(config.triggerToPaywalls["checkout"])

@@ -223,7 +223,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func recordDecisionIfNeeded() {
         guard hasAppeared, !decisionRecorded else { return }
         if case .waitingForPaywallsDownload = state { return }
-        guard decisionSnapshot?.experimentInfo.hasNoPaywallArm == true else { return }
+        guard decisionSnapshot?.experimentInfo.hasNoPaywallArm == true || decisionSnapshot?.paywallInfo.shouldShow == false else { return }
         let recorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, snapshot: decisionSnapshot)
         decisionRecorded = recorded || !state.isLoading
     }
@@ -233,9 +233,11 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         case .alreadyEntitled:
             HeliumPaywallPresenter.shared.handleAlreadyEntitledSkip(trigger: trigger, context: presentationContext)
         case .targetingHoldout:
-            let shouldRecordDecision = !decisionRecorded
+            if !decisionRecorded {
+                ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, snapshot: decisionSnapshot)
+            }
             decisionRecorded = true
-            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionPaywallInfo, recordDecision: shouldRecordDecision)
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionPaywallInfo, recordDecision: false)
         case .error(unavailableReason: let unavailableReason):
             if unavailableReason == .webviewRenderFail {
                 return

@@ -8,6 +8,7 @@
 import Foundation
 
 struct ExperimentAllocationSnapshot {
+    let generation: UUID
     let paywallInfo: HeliumPaywallInfo
     let fetchedConfigId: UUID
     let experimentInfo: ExperimentInfo
@@ -16,6 +17,7 @@ struct ExperimentAllocationSnapshot {
         guard let paywallInfo,
               let experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else { return nil }
         self.paywallInfo = paywallInfo
+        self.generation = ExperimentAllocationTracker.shared.generation
         self.fetchedConfigId = config.fetchedConfigID
         self.experimentInfo = experimentInfo
     }
@@ -60,6 +62,7 @@ private struct StoredAllocationEntry: Decodable {
 ///   when experiment details change for the user (by Helium persistent ID)
 class ExperimentAllocationTracker {
     static let shared = ExperimentAllocationTracker()
+    @HeliumAtomic private(set) var generation = UUID()
     
     private init() {
         loadStoredAllocations()
@@ -195,7 +198,7 @@ class ExperimentAllocationTracker {
 
     @discardableResult
     func recordDecision(trigger: String, snapshot: ExperimentAllocationSnapshot?) -> Bool {
-        guard let snapshot else { return false }
+        guard let snapshot, snapshot.generation == generation else { return false }
         return recordAllocation(trigger: trigger, paywallInfo: snapshot.paywallInfo, experimentInfo: snapshot.experimentInfo, fetchedConfigId: snapshot.fetchedConfigId, atDecision: true)
     }
 
@@ -254,6 +257,7 @@ class ExperimentAllocationTracker {
     
     /// Resets all allocation tracking
     func reset() {
+        generation = UUID()
         storedAllocations.removeAll()
         UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
         
