@@ -846,6 +846,7 @@ final class PaywallSkipTests: HeliumTestCase {
     func testRegularModalAllocationKeepsConfigAcrossEntitlementRefresh() throws {
         Helium.shared.markInitializedForTesting()
         var config = try experimentConfig(shouldShow: true)
+        config.triggerToPaywalls["checkout"]?.modelID = "model-A"
         config.triggerToPaywalls["checkout"]?.productsOfferedIOS = ["renderable.product"]
         config.triggerToPaywalls["checkout"]?.resolvedConfig = AnyCodable([
             "baseStack": ["componentProps": ["bundleURL": "https://cdn.example.com/bundles/bundle_regular_modal.html"]]
@@ -878,6 +879,7 @@ final class PaywallSkipTests: HeliumTestCase {
         var replacement = try experimentConfig(shouldShow: true)
         replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
         replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+        replacement.triggerToPaywalls["checkout"]?.modelID = "model-B"
         injectConfig(replacement)
         Task { await source.release() }
         waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallOpenEvent } }
@@ -902,6 +904,10 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(loggedOpen.experimentInfo?.isEnrolled, true)
         XCTAssertEqual(loggedOpen.experimentInfo?.enrolledAt, allocation.experimentInfo.enrolledAt)
         XCTAssertEqual(loggedOpen.experimentInfo?.enrolledTrigger, "checkout")
+        XCTAssertEqual(loggedAllocation.fetchedConfigId, config.fetchedConfigID)
+        XCTAssertEqual(loggedOpen.fetchedConfigId, loggedAllocation.fetchedConfigId)
+        XCTAssertEqual(loggedAllocation.modelID, "model-A")
+        XCTAssertEqual(loggedOpen.modelID, loggedAllocation.modelID)
     }
 
     func testFirstOpenSessionEventsUseCurrentEnrollmentForSnapshotExperiment() throws {
@@ -958,6 +964,7 @@ final class PaywallSkipTests: HeliumTestCase {
         var replacement = try experimentConfig(shouldShow: true)
         replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
         replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+        replacement.triggerToPaywalls["checkout"]?.modelID = "model-B"
 
         for liveConfig in [config, replacement, nil] {
             if let liveConfig {
@@ -971,11 +978,17 @@ final class PaywallSkipTests: HeliumTestCase {
                 XCTAssertEqual(logged.experimentID, "exp-flow")
                 XCTAssertEqual(logged.experimentInfo?.experimentId, "exp-flow")
                 XCTAssertEqual(Set(logged.experimentInfo?.allTriggers ?? []), Set(["checkout", "original_alias"]))
+                XCTAssertEqual(logged.fetchedConfigId, config.fetchedConfigID)
+                XCTAssertNil(logged.modelID)
                 for unassignedSession in [sessionWithoutSnapshot, nil] {
                     let unassigned = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: unassignedSession)
                     let expectedID = liveConfig?.triggerToPaywalls["checkout"]?.experimentID
                     XCTAssertEqual(unassigned.experimentID, expectedID)
                     XCTAssertEqual(unassigned.experimentInfo?.experimentId, expectedID)
+                    XCTAssertEqual(unassigned.modelID, liveConfig?.triggerToPaywalls["checkout"]?.modelID)
+                    if let liveConfig {
+                        XCTAssertEqual(unassigned.fetchedConfigId, liveConfig.fetchedConfigID)
+                    }
                 }
             }
         }

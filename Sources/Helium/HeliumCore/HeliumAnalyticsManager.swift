@@ -139,6 +139,7 @@ class HeliumAnalyticsManager {
     ) -> HeliumPaywallLoggedEvent {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
+        var fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         var experimentID: String? = nil
         var modelID: String? = nil
         var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
@@ -149,12 +150,14 @@ class HeliumAnalyticsManager {
         }
         let allocation = event as? UserAllocatedEvent
         if let allocation {
+            fetchedConfigId = allocation.decisionConfigId
             experimentID = allocation.experimentInfo.experimentId
             experimentInfo = allocation.experimentInfo
             paywallInfo = allocation.decisionPaywallInfo
             modelID = paywallInfo?.modelID
             isFallback = false
         } else if let paywallSession, let snapshot = paywallSession.allocationSnapshot {
+            fetchedConfigId = snapshot.fetchedConfigId
             var info = snapshot.experimentInfo
             let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
                 persistentId: HeliumIdentityManager.shared.getHeliumPersistentId(),
@@ -166,7 +169,7 @@ class HeliumAnalyticsManager {
             info.enrolledTrigger = enrollment.enrolledTrigger
             experimentID = info.experimentId
             experimentInfo = info
-            modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(paywallSession.trigger)
+            modelID = snapshot.paywallInfo.modelID
         } else if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
             experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
             experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
@@ -186,8 +189,6 @@ class HeliumAnalyticsManager {
             }
         }
         
-        let fetchedConfigId = allocation != nil ? allocation?.decisionConfigId
-            : HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
 
         let heliumEventPayload: SegmentJSON
