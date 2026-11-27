@@ -192,11 +192,23 @@ class HeliumActionsDelegate: ObservableObject {
             if let uuid, !HeliumFetchedConfigManager.isPreviewTrigger(trigger),
                let foundTrigger = HeliumFetchedConfigManager.shared.getTriggerFromPaywallUuid(uuid) {
                 lastShownSecondTryTrigger = foundTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, presentationContext: presentationContext)
+                let secondTryInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(foundTrigger)
+                if secondTryInfo?.shouldShow == false {
+                    HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: foundTrigger, paywallInfo: secondTryInfo)
+                    return
+                }
+                ExperimentAllocationTracker.shared.recordDecision(trigger: foundTrigger, paywallInfo: secondTryInfo)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: foundTrigger, paywallInfo: secondTryInfo, presentationContext: presentationContext)
             } // Otherwise try second_try trigger
             else if Helium.shared.fetchedPaywallInfo(trigger: secondTryTrigger) != nil {
                 lastShownSecondTryTrigger = secondTryTrigger
-                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, presentationContext: presentationContext)
+                let secondTryInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(secondTryTrigger)
+                if secondTryInfo?.shouldShow == false {
+                    HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: secondTryTrigger, paywallInfo: secondTryInfo)
+                    return
+                }
+                ExperimentAllocationTracker.shared.recordDecision(trigger: secondTryTrigger, paywallInfo: secondTryInfo)
+                HeliumPaywallPresenter.shared.presentUpsell(trigger: secondTryTrigger, paywallInfo: secondTryInfo, presentationContext: presentationContext)
             } else {
                 let event = PaywallOpenFailedEvent(
                     triggerName: secondTryTrigger,
@@ -286,17 +298,9 @@ class HeliumActionsDelegate: ObservableObject {
         if hiddenBehindSecondTry {
             return
         }
-        
-        // Track experiment allocation for embedded/triggered views
-        // Determine if this is a fallback by checking if it's in the fetched config
-        let isFallback = fallbackReason != nil
-        
-        ExperimentAllocationTracker.shared.trackAllocationIfNeeded(
-            trigger: trigger,
-            isFallback: isFallback,
-            paywallSession: paywallSession
-        )
-        
+
+        ExperimentAllocationTracker.shared.recordOpen(paywallSession: paywallSession, isFallback: fallbackReason != nil)
+
         let event = PaywallOpenEvent(
             triggerName: trigger,
             paywallName: paywallInfo.paywallTemplateName,

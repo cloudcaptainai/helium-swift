@@ -139,6 +139,7 @@ class HeliumAnalyticsManager {
     ) -> HeliumPaywallLoggedEvent {
         let fallbackBundleConfig = HeliumFallbackViewManager.shared.getConfig()
         
+        var fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         var experimentID: String? = nil
         var modelID: String? = nil
         var paywallInfo: HeliumPaywallInfo? = paywallSession?.paywallInfoWithBackups
@@ -147,10 +148,32 @@ class HeliumAnalyticsManager {
         if let paywallSession {
             isFallback = paywallSession.fallbackType != .notFallback
         }
-        if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
+        let allocation = event as? UserAllocatedEvent
+        if let allocation {
+            fetchedConfigId = allocation.decisionConfigId
+            experimentID = allocation.experimentInfo.experimentId
+            experimentInfo = allocation.experimentInfo
+            paywallInfo = allocation.decisionPaywallInfo
+            modelID = paywallInfo?.modelID
+            isFallback = false
+        } else if let paywallSession, let snapshot = paywallSession.allocationSnapshot {
+            fetchedConfigId = snapshot.fetchedConfigId
+            var info = snapshot.experimentInfo
+            let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
+                persistentId: HeliumIdentityManager.shared.getHeliumPersistentId(),
+                trigger: paywallSession.trigger,
+                experimentInfo: info
+            )
+            info.isEnrolled = enrollment.isEnrolled
+            info.enrolledAt = enrollment.enrolledAt
+            info.enrolledTrigger = enrollment.enrolledTrigger
+            experimentID = info.experimentId
+            experimentInfo = info
+            modelID = snapshot.paywallInfo.modelID
+        } else if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
             experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
-            modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
             experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
+            modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
 
             if paywallInfo == nil && paywallSession == nil {
                 paywallInfo = HeliumFetchedConfigManager.shared.getPaywallInfoForTrigger(triggerName)
@@ -166,7 +189,6 @@ class HeliumAnalyticsManager {
             }
         }
         
-        let fetchedConfigId = HeliumFetchedConfigManager.shared.getConfigId() ?? fallbackBundleConfig?.fetchedConfigID
         let organizationID = HeliumFetchedConfigManager.shared.getOrganizationID() ?? fallbackBundleConfig?.organizationID
 
         let heliumEventPayload: SegmentJSON

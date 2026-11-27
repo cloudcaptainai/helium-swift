@@ -7,6 +7,31 @@
 
 import Foundation
 
+struct ExperimentAllocationSnapshot {
+    let generation: UUID
+    let paywallInfo: HeliumPaywallInfo
+    let fetchedConfigId: UUID
+    let experimentInfo: ExperimentInfo
+
+    var isSkipExperiment: Bool {
+        experimentInfo.hasNoPaywallArm == true || paywallInfo.shouldShow == false
+    }
+
+    init?(trigger: String, config: HeliumFetchedConfig, paywallInfo: HeliumPaywallInfo?) {
+        guard let paywallInfo,
+              let experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else { return nil }
+        self.paywallInfo = paywallInfo
+        self.generation = ExperimentAllocationTracker.shared.generation
+        self.fetchedConfigId = config.fetchedConfigID
+        self.experimentInfo = experimentInfo
+    }
+
+    static func capture(trigger: String, paywallInfo: HeliumPaywallInfo?) -> ExperimentAllocationSnapshot? {
+        guard let config = HeliumFetchedConfigManager.shared.getConfig() else { return nil }
+        return ExperimentAllocationSnapshot(trigger: trigger, config: config, paywallInfo: paywallInfo)
+    }
+}
+
 /// Stored allocation details for comparison
 struct StoredAllocation: Codable {
     let experimentId: String?
@@ -28,11 +53,20 @@ struct StoredAllocation: Codable {
     }
 }
 
+private struct StoredAllocationEntry: Decodable {
+    let value: StoredAllocation?
+
+    init(from decoder: Decoder) {
+        value = try? StoredAllocation(from: decoder)
+    }
+}
+
 /// Manages experiment allocation event tracking across all presentation types
 /// - Note: Ensures UserAllocatedEvent fires only when user gets a new allocation or 
 ///   when experiment details change for the user (by Helium persistent ID)
 class ExperimentAllocationTracker {
     static let shared = ExperimentAllocationTracker()
+    @HeliumAtomic private(set) var generation = UUID()
     
     private init() {
         loadStoredAllocations()
@@ -49,21 +83,18 @@ class ExperimentAllocationTracker {
         heliumAppSupportDirectory?.appendingPathComponent(allocationsFileName)
     }
     
-    /// Loads stored allocations - tries UserDefaults first, falls back to file
-    private func loadStoredAllocations() {
-        // Try UserDefaults first
-        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
-           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
-            storedAllocations = decoded
-            return
-        }
-        
-        // Fallback to file
+    func loadStoredAllocations() {
+        var allocations: [String: StoredAllocation] = [:]
         if let fileURL = allocationsFileURL,
            let data = try? Data(contentsOf: fileURL),
-           let decoded = try? JSONDecoder().decode([String: StoredAllocation].self, from: data) {
-            storedAllocations = decoded
+           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
+            allocations = decoded.compactMapValues(\.value)
         }
+        if let data = UserDefaults.standard.data(forKey: allocationsUserDefaultsKey),
+           let decoded = try? JSONDecoder().decode([String: StoredAllocationEntry].self, from: data) {
+            allocations.merge(decoded.compactMapValues(\.value)) { _, current in current }
+        }
+        storedAllocations = allocations
     }
     
     /// Persists allocations to UserDefaults and file (as backup)
@@ -164,31 +195,36 @@ class ExperimentAllocationTracker {
         return true
     }
     
-    /// Tracks allocation and fires UserAllocatedEvent if this is the first time
-    /// this user is allocated to this experiment, or if the experiment details have changed
-    ///
-    /// - Parameters:
-    ///   - trigger: The trigger name being displayed
-    ///   - isFallback: Whether this is a fallback paywall
-    ///
-    /// - Note: This method only fires events when the user doesn't have an existing
-    ///   allocation or when the allocation details have changed
-    func trackAllocationIfNeeded(trigger: String, isFallback: Bool, paywallSession: PaywallSession?) {
-        // Don't fire for fallbacks
-        guard !isFallback else {
+    @discardableResult
+    func recordDecision(trigger: String, paywallInfo: HeliumPaywallInfo?) -> Bool {
+        recordDecision(trigger: trigger, snapshot: ExperimentAllocationSnapshot.capture(trigger: trigger, paywallInfo: paywallInfo))
+    }
+
+    @discardableResult
+    func recordDecision(trigger: String, snapshot: ExperimentAllocationSnapshot?) -> Bool {
+        guard let snapshot, snapshot.generation == generation else { return false }
+        return recordAllocation(trigger: trigger, snapshot: snapshot, atDecision: true)
+    }
+
+    func recordOpen(paywallSession: PaywallSession, isFallback: Bool) {
+        guard !isFallback, !paywallSession.isFallback,
+              HeliumFetchedConfigManager.shared.getConfig() != nil,
+              let snapshot = paywallSession.allocationSnapshot,
+              snapshot.generation == generation else {
             return
         }
-        
-        // Extract experiment info
-        guard let config = HeliumFetchedConfigManager.shared.getConfig(),
-              var experimentInfo = config.extractExperimentInfo(trigger: trigger) else {
-            return
-        }
-        
+        recordAllocation(trigger: paywallSession.trigger, snapshot: snapshot, atDecision: false, paywallSession: paywallSession)
+    }
+
+    @discardableResult
+    private func recordAllocation(trigger: String, snapshot: ExperimentAllocationSnapshot, atDecision: Bool, paywallSession: PaywallSession? = nil) -> Bool {
+        var experimentInfo = snapshot.experimentInfo
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
-            return
+            return false
         }
+
+        guard snapshot.isSkipExperiment == atDecision else { return true }
         
         // Get user's persistent ID
         let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
@@ -201,7 +237,7 @@ class ExperimentAllocationTracker {
         // Check both new and legacy keys for existing allocation
         let existingAllocation = storedAllocations[newKey] ?? storedAllocations[legacyKey]
         guard shouldFireAllocationEvent(current: currentAllocation, existing: existingAllocation) else {
-            return  // No change, don't fire event
+            return true  // No change, don't fire event
         }
         
         // Store the new allocation using experiment ID key
@@ -218,13 +254,14 @@ class ExperimentAllocationTracker {
         experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo)
-        // Include paywall session if available but note that it will not be available for holdouts
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: snapshot.paywallInfo, fetchedConfigId: snapshot.fetchedConfigId)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: paywallSession)
+        return true
     }
     
     /// Resets all allocation tracking
     func reset() {
+        generation = UUID()
         storedAllocations.removeAll()
         UserDefaults.standard.removeObject(forKey: allocationsUserDefaultsKey)
         

@@ -45,7 +45,8 @@ struct PaywallSession {
         return fallbackType != .notFallback
     }
     
-    private let paywallInfo: HeliumPaywallInfo?
+    let paywallInfo: HeliumPaywallInfo?
+    let allocationSnapshot: ExperimentAllocationSnapshot?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
         if let paywallInfo {
             return paywallInfo
@@ -60,12 +61,13 @@ struct PaywallSession {
         }
     }
     
-    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext) {
+    init(trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, allocationSnapshot: ExperimentAllocationSnapshot? = nil) {
         self.sessionId = UUID().uuidString
         self.trigger = trigger
         self.isSecondTry = presentationContext.isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
+        self.allocationSnapshot = allocationSnapshot ?? ExperimentAllocationSnapshot.capture(trigger: trigger, paywallInfo: paywallInfo)
         self.presentationContext = presentationContext
     }
 
@@ -76,17 +78,19 @@ struct PaywallSession {
             trigger: self.trigger,
             paywallInfo: self.paywallInfo,
             fallbackType: self.fallbackType,
+            allocationSnapshot: self.allocationSnapshot,
             presentationContext: context,
             isSecondTry: self.isSecondTry
         )
     }
 
-    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, allocationSnapshot: ExperimentAllocationSnapshot?, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
         self.sessionId = sessionId
         self.trigger = trigger
         self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
+        self.allocationSnapshot = allocationSnapshot
         self.presentationContext = presentationContext
     }
 }
