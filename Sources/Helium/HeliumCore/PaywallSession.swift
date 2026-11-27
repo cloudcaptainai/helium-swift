@@ -45,7 +45,9 @@ struct PaywallSession {
         return fallbackType != .notFallback
     }
     
-    private let paywallInfo: HeliumPaywallInfo?
+    let paywallInfo: HeliumPaywallInfo?
+    let allocationExperimentInfo: ExperimentInfo?
+    let allocationConfigId: UUID?
     var paywallInfoWithBackups: HeliumPaywallInfo? {
         if let paywallInfo {
             return paywallInfo
@@ -66,6 +68,9 @@ struct PaywallSession {
         self.isSecondTry = presentationContext.isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
+        let fetchedConfig = HeliumFetchedConfigManager.shared.getConfig()
+        self.allocationExperimentInfo = fetchedConfig?.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo)
+        self.allocationConfigId = fetchedConfig?.fetchedConfigID
         self.presentationContext = presentationContext
     }
 
@@ -76,17 +81,21 @@ struct PaywallSession {
             trigger: self.trigger,
             paywallInfo: self.paywallInfo,
             fallbackType: self.fallbackType,
+            allocationExperimentInfo: self.allocationExperimentInfo,
+            allocationConfigId: self.allocationConfigId,
             presentationContext: context,
             isSecondTry: self.isSecondTry
         )
     }
 
-    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
+    private init(sessionId: String, trigger: String, paywallInfo: HeliumPaywallInfo?, fallbackType: FallbackPaywallType, allocationExperimentInfo: ExperimentInfo?, allocationConfigId: UUID?, presentationContext: PaywallPresentationContext, isSecondTry: Bool) {
         self.sessionId = sessionId
         self.trigger = trigger
         self.isSecondTry = isSecondTry
         self.fallbackType = fallbackType
         self.paywallInfo = paywallInfo
+        self.allocationExperimentInfo = allocationExperimentInfo
+        self.allocationConfigId = allocationConfigId
         self.presentationContext = presentationContext
     }
 }

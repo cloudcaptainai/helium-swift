@@ -667,6 +667,7 @@ class HeliumPaywallPresenter {
         
         let event: HeliumEvent
         if openEvent {
+            ExperimentAllocationTracker.shared.recordOpen(paywallSession: paywallVC.paywallSession, isFallback: paywallVC.isFallback)
             let loadTimeTakenMS = paywallVC.loadTimeTakenMS
             let loadingBudgetMS = paywallVC.presentationContext.config.loadingBudgetForAnalyticsMS
             

@@ -172,14 +172,31 @@ class ExperimentAllocationTracker {
     @discardableResult
     func recordDecision(trigger: String, paywallInfo: HeliumPaywallInfo?) -> Bool {
         guard let config = HeliumFetchedConfigManager.shared.getConfig(),
-              var experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else {
+              let experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else {
             return false
         }
-        
+        return recordAllocation(trigger: trigger, paywallInfo: paywallInfo, experimentInfo: experimentInfo, fetchedConfigId: config.fetchedConfigID, atDecision: true)
+    }
+
+    func recordOpen(paywallSession: PaywallSession, isFallback: Bool) {
+        guard !isFallback, !paywallSession.isFallback,
+              HeliumFetchedConfigManager.shared.getConfig() != nil,
+              let experimentInfo = paywallSession.allocationExperimentInfo else {
+            return
+        }
+        recordAllocation(trigger: paywallSession.trigger, paywallInfo: paywallSession.paywallInfo, experimentInfo: experimentInfo, fetchedConfigId: paywallSession.allocationConfigId, atDecision: false)
+    }
+
+    @discardableResult
+    private func recordAllocation(trigger: String, paywallInfo: HeliumPaywallInfo?, experimentInfo: ExperimentInfo, fetchedConfigId: UUID?, atDecision: Bool) -> Bool {
+        var experimentInfo = experimentInfo
         // Need experiment ID to track allocations
         guard let experimentId = experimentInfo.experimentId, !experimentId.isEmpty else {
             return false
         }
+
+        let isSkipExperiment = experimentInfo.hasNoPaywallArm == true || paywallInfo?.shouldShow == false
+        guard isSkipExperiment == atDecision else { return true }
         
         // Get user's persistent ID
         let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
@@ -209,7 +226,7 @@ class ExperimentAllocationTracker {
         experimentInfo.enrolledTrigger = trigger
         
         // Fire the allocation event
-        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo, fetchedConfigId: config.fetchedConfigID)
+        let allocationEvent = UserAllocatedEvent(trigger: trigger, experimentInfo: experimentInfo, paywallInfo: paywallInfo, fetchedConfigId: fetchedConfigId)
         HeliumPaywallDelegateWrapper.shared.fireEvent(allocationEvent, paywallSession: nil)
         return true
     }
