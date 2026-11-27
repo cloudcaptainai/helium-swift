@@ -899,6 +899,47 @@ final class PaywallSkipTests: HeliumTestCase {
         XCTAssertEqual(loggedOpen.experimentID, loggedAllocation.experimentID)
         XCTAssertEqual(loggedOpen.experimentInfo?.experimentId, "exp-flow")
         XCTAssertEqual(Set(loggedOpen.experimentInfo?.allTriggers ?? []), Set(["checkout", "original_alias"]))
+        XCTAssertEqual(loggedOpen.experimentInfo?.isEnrolled, true)
+        XCTAssertEqual(loggedOpen.experimentInfo?.enrolledAt, allocation.experimentInfo.enrolledAt)
+        XCTAssertEqual(loggedOpen.experimentInfo?.enrolledTrigger, "checkout")
+    }
+
+    func testFirstOpenSessionEventsUseCurrentEnrollmentForSnapshotExperiment() throws {
+        let config = try experimentConfig(shouldShow: true)
+        injectConfig(config)
+        let info = try XCTUnwrap(config.triggerToPaywalls["checkout"])
+        let session = makeTestSession(trigger: "checkout", paywallInfo: info)
+        XCTAssertEqual(session.allocationSnapshot?.experimentInfo.isEnrolled, false)
+        let actions = HeliumActionsDelegate(paywallInfo: info, paywallSession: session, trigger: "checkout")
+        actions.logImpression(viewType: .embedded, fallbackReason: nil)
+        waitForEventDispatch { self.mockDelegate.receivedEvents.contains { $0 is PaywallOpenEvent } }
+        let allocation = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? UserAllocatedEvent }.first)
+        let open = try XCTUnwrap(mockDelegate.receivedEvents.compactMap { $0 as? PaywallOpenEvent }.first)
+        let close = PaywallCloseEvent(triggerName: "checkout", paywallName: info.paywallTemplateName, secondTry: false)
+        let enrolledSession = makeTestSession(trigger: "checkout", paywallInfo: info)
+        XCTAssertEqual(enrolledSession.allocationSnapshot?.experimentInfo.isEnrolled, true)
+        var replacement = try experimentConfig(shouldShow: true)
+        replacement.triggerToPaywalls["checkout"]?.experimentID = "experiment-B"
+        replacement.triggerToPaywalls["checkout"]?.experimentInfo?["experimentId"] = JSON("experiment-B")
+        injectConfig(replacement)
+
+        for event: HeliumEvent in [open, close] {
+            let logged = HeliumAnalyticsManager.shared.buildLoggedEvent(for: event, paywallSession: session)
+            XCTAssertEqual(logged.experimentID, "exp-flow")
+            XCTAssertEqual(logged.experimentInfo?.isEnrolled, true)
+            XCTAssertNotNil(logged.experimentInfo?.enrolledAt)
+            XCTAssertEqual(logged.experimentInfo?.enrolledAt, allocation.experimentInfo.enrolledAt)
+            XCTAssertEqual(logged.experimentInfo?.enrolledTrigger, "checkout")
+        }
+
+        ExperimentAllocationTracker.shared.reset()
+        for retainedSession in [session, enrolledSession] {
+            let logged = HeliumAnalyticsManager.shared.buildLoggedEvent(for: close, paywallSession: retainedSession)
+            XCTAssertEqual(logged.experimentID, "exp-flow")
+            XCTAssertEqual(logged.experimentInfo?.isEnrolled, false)
+            XCTAssertNil(logged.experimentInfo?.enrolledAt)
+            XCTAssertNil(logged.experimentInfo?.enrolledTrigger)
+        }
     }
 
     func testSessionEventExperimentSnapshotSurvivesRefreshAndRemoval() throws {

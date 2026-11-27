@@ -154,14 +154,22 @@ class HeliumAnalyticsManager {
             paywallInfo = allocation.decisionPaywallInfo
             modelID = paywallInfo?.modelID
             isFallback = false
+        } else if let paywallSession, let snapshot = paywallSession.allocationSnapshot {
+            var info = snapshot.experimentInfo
+            let enrollment = ExperimentAllocationTracker.shared.getEnrollmentInfo(
+                persistentId: HeliumIdentityManager.shared.getHeliumPersistentId(),
+                trigger: paywallSession.trigger,
+                experimentInfo: info
+            )
+            info.isEnrolled = enrollment.isEnrolled
+            info.enrolledAt = enrollment.enrolledAt
+            info.enrolledTrigger = enrollment.enrolledTrigger
+            experimentID = info.experimentId
+            experimentInfo = info
+            modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(paywallSession.trigger)
         } else if let triggerName = HeliumAnalyticsMapper.getTriggerName(event) ?? paywallSession?.trigger {
-            if let snapshot = paywallSession?.allocationSnapshot {
-                experimentID = snapshot.experimentInfo.experimentId
-                experimentInfo = snapshot.experimentInfo
-            } else {
-                experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
-                experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
-            }
+            experimentID = HeliumFetchedConfigManager.shared.getExperimentIDForTrigger(triggerName)
+            experimentInfo = HeliumFetchedConfigManager.shared.extractExperimentInfo(trigger: triggerName)
             modelID = HeliumFetchedConfigManager.shared.getModelIDForTrigger(triggerName)
 
             if paywallInfo == nil && paywallSession == nil {
