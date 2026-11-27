@@ -32,7 +32,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     let presentationContext: PaywallPresentationContext
     
     @State private var state: HeliumPaywallViewState
-    @State private var decisionPaywallInfo: HeliumPaywallInfo?
     @State private var decisionSnapshot: ExperimentAllocationSnapshot?
     @State private var hasAppeared = false
     @State private var decisionRecorded = false
@@ -73,7 +72,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         
         let resolution = resolvePaywallState(for: trigger, config: config, presentationContext: presentationContext)
         self._state = State(initialValue: resolution.state)
-        self._decisionPaywallInfo = State(initialValue: resolution.paywallInfo)
         self._decisionSnapshot = State(initialValue: resolution.snapshot)
     }
     
@@ -109,7 +107,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
         
         let resolution = resolvePaywallState(for: trigger, config: config, presentationContext: presentationContext)
         self._state = State(initialValue: resolution.state)
-        self._decisionPaywallInfo = State(initialValue: resolution.paywallInfo)
         self._decisionSnapshot = State(initialValue: resolution.snapshot)
     }
     
@@ -215,7 +212,6 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
             resolvedLoadTimeTakenMS = dispatchTimeDifferenceInMS(from: loadingStartTime)
         }
         state = newState
-        decisionPaywallInfo = resolution.paywallInfo
         decisionSnapshot = resolution.snapshot
         recordDecisionIfNeeded()
     }
@@ -223,7 +219,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
     private func recordDecisionIfNeeded() {
         guard hasAppeared, !decisionRecorded else { return }
         if case .waitingForPaywallsDownload = state { return }
-        guard decisionSnapshot?.experimentInfo.hasNoPaywallArm == true || decisionSnapshot?.paywallInfo.shouldShow == false else { return }
+        guard decisionSnapshot?.isSkipExperiment == true else { return }
         let recorded = ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, snapshot: decisionSnapshot)
         decisionRecorded = recorded || !state.isLoading
     }
@@ -237,7 +233,7 @@ public struct HeliumPaywall<PaywallNotShownView: View>: View {
                 ExperimentAllocationTracker.shared.recordDecision(trigger: trigger, snapshot: decisionSnapshot)
             }
             decisionRecorded = true
-            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionPaywallInfo, recordDecision: false)
+            HeliumPaywallPresenter.shared.handlePaywallSkip(trigger: trigger, paywallInfo: decisionSnapshot?.paywallInfo, recordDecision: false)
         case .error(unavailableReason: let unavailableReason):
             if unavailableReason == .webviewRenderFail {
                 return
@@ -299,9 +295,9 @@ fileprivate func resolvePaywallState(
     allowLoadingState: Bool = true,
     config: PaywallPresentationConfig,
     presentationContext: PaywallPresentationContext
-) -> (state: HeliumPaywallViewState, paywallInfo: HeliumPaywallInfo?, snapshot: ExperimentAllocationSnapshot?) {
+) -> (state: HeliumPaywallViewState, snapshot: ExperimentAllocationSnapshot?) {
     if snapshot == nil && allowLoadingState && shouldShowLoadingState(for: trigger, config: config) {
-        return (.waitingForPaywallsDownload, nil, nil)
+        return (.waitingForPaywallsDownload, nil)
     }
     
     let fetchedConfig = HeliumFetchedConfigManager.shared.getConfig()
@@ -310,30 +306,30 @@ fileprivate func resolvePaywallState(
         ExperimentAllocationSnapshot(trigger: trigger, config: $0, paywallInfo: paywallInfo)
     }
     if paywallInfo?.shouldShow == false {
-        return (.noShow(.targetingHoldout), paywallInfo, decisionSnapshot)
+        return (.noShow(.targetingHoldout), decisionSnapshot)
     }
     
     let dontShowIfAlreadyEntitled = config.dontShowIfAlreadyEntitled
     if dontShowIfAlreadyEntitled {
         if isEntitled == nil && allowLoadingState {
-            return (.checkingEntitlement, paywallInfo, decisionSnapshot)
+            return (.checkingEntitlement, decisionSnapshot)
         }
         if isEntitled == true {
-            return (.noShow(.alreadyEntitled), paywallInfo, decisionSnapshot)
+            return (.noShow(.alreadyEntitled), decisionSnapshot)
         }
     }
     
     let result = HeliumPaywallPresenter.shared.upsellViewResultFor(trigger: trigger, paywallInfo: paywallInfo, presentationContext: presentationContext, allocationSnapshot: decisionSnapshot)
     
     if let viewAndSession = result.viewAndSession {
-        return (.ready(viewAndSession), paywallInfo, decisionSnapshot)
+        return (.ready(viewAndSession), decisionSnapshot)
     }
     
     if let reason = result.fallbackReason {
-        return (.noShow(.error(unavailableReason: reason)), paywallInfo, decisionSnapshot)
+        return (.noShow(.error(unavailableReason: reason)), decisionSnapshot)
     }
     
-    return (.noShow(.error(unavailableReason: nil)), paywallInfo, decisionSnapshot)
+    return (.noShow(.error(unavailableReason: nil)), decisionSnapshot)
 }
 
 /// Determines if loading state should be shown by checking actual download status

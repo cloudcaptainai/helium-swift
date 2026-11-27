@@ -13,6 +13,10 @@ struct ExperimentAllocationSnapshot {
     let fetchedConfigId: UUID
     let experimentInfo: ExperimentInfo
 
+    var isSkipExperiment: Bool {
+        experimentInfo.hasNoPaywallArm == true || paywallInfo.shouldShow == false
+    }
+
     init?(trigger: String, config: HeliumFetchedConfig, paywallInfo: HeliumPaywallInfo?) {
         guard let paywallInfo,
               let experimentInfo = config.extractExperimentInfo(trigger: trigger, paywallInfo: paywallInfo) else { return nil }
@@ -220,8 +224,7 @@ class ExperimentAllocationTracker {
             return false
         }
 
-        let isSkipExperiment = experimentInfo.hasNoPaywallArm == true || snapshot.paywallInfo.shouldShow == false
-        guard isSkipExperiment == atDecision else { return true }
+        guard snapshot.isSkipExperiment == atDecision else { return true }
         
         // Get user's persistent ID
         let persistentId = HeliumIdentityManager.shared.getHeliumPersistentId()
